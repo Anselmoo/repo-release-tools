@@ -1,0 +1,18 @@
+- id: rrt-branch-name
+  name: repo-release-tools branch name
+  description: Validate branch names against the repo's conventional branch rules
+  entry: python -m repo_release_tools.hooks pre-commit
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-commit-subject
+  name: repo-release-tools commit subject
+  description: Validate commit subjects against Conventional Commits
+  entry: python -m repo_release_tools.hooks commit-msg
+  language: python
+  always_run: true
+  stages: [commit-msg]
+  minimum_pre_commit_version: "3.2.0"
