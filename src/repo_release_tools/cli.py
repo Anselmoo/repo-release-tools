@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from repo_release_tools.commands import branch, bump
+from repo_release_tools.commands import branch, bump, ci_version
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     branch.register(subparsers)
     bump.register(subparsers)
+    ci_version.register(subparsers)
     return parser
 
 
