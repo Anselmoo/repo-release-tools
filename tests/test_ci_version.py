@@ -158,9 +158,7 @@ def test_cmd_compute_main_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(mixed_project)
-    result = cmd_ci_version_compute(
-        _ns(ref="refs/heads/main", run_id="12345678", run_attempt="1")
-    )
+    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12345678", run_attempt="1"))
     captured = capsys.readouterr()
     assert result == 0
     assert captured.out.strip() == "0.2.0.dev1234567801"
@@ -229,9 +227,7 @@ def test_cmd_apply_dry_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(mixed_project)
-    result = cmd_ci_version_apply(
-        argparse.Namespace(version="0.2.0.dev12345601", dry_run=True)
-    )
+    result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0.dev12345601", dry_run=True))
     captured = capsys.readouterr()
     assert result == 0
     assert "Would update" in captured.out
@@ -247,9 +243,7 @@ def test_cmd_apply_writes_correct_formats(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(mixed_project)
-    result = cmd_ci_version_apply(
-        argparse.Namespace(version="0.2.0.dev12345601", dry_run=False)
-    )
+    result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0.dev12345601", dry_run=False))
     assert result == 0
     pyproject_text = (mixed_project / "pyproject.toml").read_text(encoding="utf-8")
     cargo_text = (mixed_project / "Cargo.toml").read_text(encoding="utf-8")

@@ -41,9 +41,7 @@ class VersionTarget:
         if self.pattern:
             re.compile(self.pattern)
         if self.ci_format is not None and self.ci_format not in VALID_CI_FORMATS:
-            raise ValueError(
-                f"ci_format must be 'pep440' or 'semver_pre', got {self.ci_format!r}"
-            )
+            raise ValueError(f"ci_format must be 'pep440' or 'semver_pre', got {self.ci_format!r}")
 
 
 @dataclass(frozen=True)
