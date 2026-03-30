@@ -348,3 +348,88 @@ def test_cli_ci_version_in_help() -> None:
     )
     assert result.returncode == 0
     assert "ci-version" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# New tests for review-comment fixes
+# ---------------------------------------------------------------------------
+
+
+def test_compute_tag_ref_without_ref_name() -> None:
+    """--ref alone (no --ref-name) must still extract the tag version."""
+    ctx = _ctx(ref="refs/tags/v1.7.2", ref_name="")
+    assert compute_published_version("0.9.0", ctx) == "1.7.2"
+
+
+def test_compute_tag_ref_name_takes_priority() -> None:
+    """When both ref and ref_name are set, ref_name is preferred."""
+    ctx = _ctx(ref="refs/tags/v1.7.2", ref_name="v1.7.2")
+    assert compute_published_version("0.9.0", ctx) == "1.7.2"
+
+
+def test_compute_invalid_run_attempt_raises() -> None:
+    """A non-integer run_attempt must raise ValueError with a clear message."""
+    ctx = _ctx(ref="refs/heads/main", run_id="1", run_attempt="not-a-number")
+    with pytest.raises(ValueError, match="GITHUB_RUN_ATTEMPT"):
+        compute_published_version("0.2.0", ctx)
+
+
+def test_cmd_compute_invalid_run_attempt_returns_error(
+    mixed_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(mixed_project)
+    result = cmd_ci_version_compute(
+        _ns(base="0.2.0", ref="refs/heads/main", run_id="1", run_attempt="bad")
+    )
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "GITHUB_RUN_ATTEMPT" in captured.err
+
+
+def test_cmd_sync_invalid_run_attempt_returns_error(
+    mixed_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(mixed_project)
+    result = cmd_ci_version_sync(
+        _ns(ref="refs/heads/main", run_id="1", run_attempt="bad", dry_run=False)
+    )
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "GITHUB_RUN_ATTEMPT" in captured.err
+
+
+def test_version_target_non_string_ci_format_raises() -> None:
+    """A TOML array/object value for ci_format should give a clear error."""
+    # Simulate a mis-configured list value coming from TOML
+    t = VersionTarget(path=Path("x.toml"), kind="pep621", ci_format=["pep440"])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="must be a string"):
+        t.validate()
+
+
+def test_version_target_pep621_with_pattern_validates() -> None:
+    """A pep621 target with a stray pattern field must still load without error."""
+    t = VersionTarget(
+        path=Path("pyproject.toml"),
+        kind="pep621",
+        pattern=r'^(version\s*=\s*")([^"]+)(")',
+    )
+    t.validate()  # must not raise
+
+
+def test_cmd_apply_nonstandard_dev_suffix_rejected(
+    mixed_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Versions like '0.2.0.dev1.post2' must be rejected for semver_pre targets."""
+    monkeypatch.chdir(mixed_project)
+    result = cmd_ci_version_apply(
+        argparse.Namespace(version="0.2.0.dev1.post2", dry_run=False)
+    )
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Cannot convert" in captured.err

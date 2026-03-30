@@ -38,10 +38,18 @@ class VersionTarget:
             raise ValueError(
                 "Each version target must define either kind='pep621', pattern, or section+field"
             )
-        if self.pattern:
+        if self.kind != "pep621" and self.pattern:
             re.compile(self.pattern)
-        if self.ci_format is not None and self.ci_format not in VALID_CI_FORMATS:
-            raise ValueError(f"ci_format must be 'pep440' or 'semver_pre', got {self.ci_format!r}")
+        if self.ci_format is not None:
+            if not isinstance(self.ci_format, str):
+                raise ValueError(
+                    f"ci_format must be a string equal to 'pep440' or 'semver_pre', "
+                    f"got {type(self.ci_format).__name__}: {self.ci_format!r}"
+                )
+            if self.ci_format not in VALID_CI_FORMATS:
+                raise ValueError(
+                    f"ci_format must be 'pep440' or 'semver_pre', got {self.ci_format!r}"
+                )
 
 
 @dataclass(frozen=True)

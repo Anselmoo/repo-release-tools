@@ -88,11 +88,21 @@ def compute_published_version(base_version: str, context: GitHubContext) -> str:
     * All other refs: *base_version* unchanged.
     """
     if context.ref.startswith("refs/tags/v"):
-        tag_version = context.ref_name.removeprefix("v")
+        # Prefer ref_name when available, but fall back to the last path
+        # component of ref (e.g. "refs/tags/v1.2.3" → "v1.2.3") so that
+        # --ref can be used independently of --ref-name.
+        tag_source = context.ref_name or context.ref.rsplit("/", 1)[-1]
+        tag_version = tag_source.removeprefix("v")
         return tag_version or base_version
 
     if context.ref == "refs/heads/main":
-        attempt = int(context.run_attempt)
+        try:
+            attempt = int(context.run_attempt)
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid GitHub run attempt value {context.run_attempt!r}; "
+                "GITHUB_RUN_ATTEMPT/--run-attempt must be an integer."
+            ) from exc
         return f"{base_version}.dev{context.run_id}{attempt:02d}"
 
     return base_version
@@ -145,7 +155,11 @@ def cmd_ci_version_compute(args: argparse.Namespace) -> int:
         return 1
 
     context = _context_from_args(args)
-    version = compute_published_version(base, context)
+    try:
+        version = compute_published_version(base, context)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     print(version)
     return 0
 
@@ -178,7 +192,20 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
 
     print(output.section("Applying CI versions"))
     for target in ci_targets:
-        version_str = to_semver(version) if target.ci_format == "semver_pre" else version
+        if target.ci_format == "semver_pre":
+            version_str = to_semver(version)
+            # If the version contains a PEP 440 dev marker but to_semver() made
+            # no change, the suffix pattern was not a plain `.devN`. Fail fast
+            # rather than writing an invalid Cargo SemVer string.
+            if version_str == version and ".dev" in version:
+                print(
+                    f"Cannot convert {version!r} to a Cargo-compatible SemVer prerelease. "
+                    "Only versions ending in '.dev<digits>' are supported (e.g. 0.2.0.dev42).",
+                    file=sys.stderr,
+                )
+                return 1
+        else:
+            version_str = version
         try:
             replace_version_in_file(target, version_str, dry_run=args.dry_run)
         except (FileNotFoundError, RuntimeError) as exc:
@@ -204,7 +231,11 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
         return 1
 
     context = _context_from_args(args)
-    version = compute_published_version(base, context)
+    try:
+        version = compute_published_version(base, context)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     print(f"Applying published version: {version}")
 
     apply_args = argparse.Namespace(version=version, dry_run=args.dry_run)
