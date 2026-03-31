@@ -14,6 +14,9 @@ DEFAULT_CHANGELOG = "CHANGELOG.md"
 DEFAULT_LOCK_COMMAND = ["uv", "lock", "-U"]
 
 
+VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
+
+
 @dataclass(frozen=True)
 class VersionTarget:
     """A single version target."""
@@ -23,19 +26,30 @@ class VersionTarget:
     pattern: str | None = None
     section: str | None = None
     field: str | None = None
+    ci_format: str | None = None
 
     def validate(self) -> None:
-        """Validate target shape."""
-        if self.kind == "pep621":
-            return
-        if self.pattern:
+        """Validate target shape.
+
+        All checks run unconditionally so that ``ci_format`` is always
+        validated regardless of which replacement mechanism is configured.
+        """
+        if self.kind != "pep621" and not self.pattern and not (self.section and self.field):
+            raise ValueError(
+                "Each version target must define either kind='pep621', pattern, or section+field"
+            )
+        if self.kind != "pep621" and self.pattern:
             re.compile(self.pattern)
-            return
-        if self.section and self.field:
-            return
-        raise ValueError(
-            "Each version target must define either kind='pep621', pattern, or section+field"
-        )
+        if self.ci_format is not None:
+            if not isinstance(self.ci_format, str):
+                raise ValueError(
+                    f"ci_format must be a string equal to 'pep440' or 'semver_pre', "
+                    f"got {type(self.ci_format).__name__}: {self.ci_format!r}"
+                )
+            if self.ci_format not in VALID_CI_FORMATS:
+                raise ValueError(
+                    f"ci_format must be 'pep440' or 'semver_pre', got {self.ci_format!r}"
+                )
 
 
 @dataclass(frozen=True)
@@ -75,6 +89,7 @@ def load_config(root: Path) -> RrtConfig:
             pattern=item.get("pattern"),
             section=item.get("section"),
             field=item.get("field"),
+            ci_format=item.get("ci_format"),
         )
         target.validate()
         targets.append(target)
