@@ -427,9 +427,7 @@ def test_cmd_apply_nonstandard_dev_suffix_rejected(
 ) -> None:
     """Versions like '0.2.0.dev1.post2' must be rejected for semver_pre targets."""
     monkeypatch.chdir(mixed_project)
-    result = cmd_ci_version_apply(
-        argparse.Namespace(version="0.2.0.dev1.post2", dry_run=False)
-    )
+    result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0.dev1.post2", dry_run=False))
     captured = capsys.readouterr()
     assert result == 1
     assert "Cannot convert" in captured.err
