@@ -160,18 +160,21 @@ The same workflow works across all your projects. Feature naming, version increm
 Add to `.pre-commit-config.yaml` for branch/commit validation:
 
 ```yaml
+default_install_hook_types: [pre-commit, commit-msg]
+
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
     rev: v0.1.0
     hooks:
       - id: rrt-branch-name
+      - id: rrt-changelog
       - id: rrt-commit-subject
 ```
 
 Then install and run:
 
 ```bash
-pre-commit install
+pre-commit install --hook-type pre-commit --hook-type commit-msg
 pre-commit run --all-files
 ```
 
@@ -185,14 +188,16 @@ pre-commit run --all-files
 - uses: Anselmoo/repo-release-tools@v0.1.0
   with:
     check-branch-name: "true"
+    check-changelog: "true"
     check-commit-subject: "true"
 ```
 
-**Use case**: Ensure only properly-formatted release PRs merge to `main`.
+**Use case**: Ensure only properly-formatted release PRs merge to `main`. Tag-triggered workflows automatically skip branch-name validation.
 
 ## Configuring Your Repository
 
-Each repository that uses `repo-release-tools` needs a `[tool.rrt]` section in `pyproject.toml`.
+Each repository that uses `repo-release-tools` needs a `[tool.rrt]` section in
+`pyproject.toml`, `.rrt.toml`, or `.config/rrt.toml`.
 
 **Why**: Version bumps must touch every place the version appears—Python files, lock files, package manifests. This config specifies all those targets.
 
@@ -225,6 +230,7 @@ field = "version"
 ### Version Target Modes
 
 - **`kind = "pep621"`**: Update `[project].version` in `pyproject.toml` (Python standard)
+- **`kind = "package_json"`**: Update the top-level `version` field in `package.json`
 - **`pattern`**: Regex with capture groups—updates any file format. Groups 1 & 3 are preserved; group 2 is replaced with new version
 - **`section` + `field`**: TOML path lookup (e.g., `workspace.package` → `[workspace.package]`)
 

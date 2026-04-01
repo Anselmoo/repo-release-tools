@@ -2,6 +2,7 @@ import argparse
 
 from repo_release_tools.commands.branch import BranchName
 from repo_release_tools.commands.branch import cmd_new
+from repo_release_tools.hooks import validate_branch_name
 
 
 def test_branch_name_without_scope() -> None:
@@ -31,3 +32,7 @@ def test_cmd_new_dry_run_uses_summary_panel(capsys) -> None:
     assert "Branch" in captured.out
     assert "feat/add-parser" in captured.out
     assert "[dry-run] complete" in captured.out
+
+
+def test_branch_validation_accepts_magic_ai_types() -> None:
+    assert validate_branch_name("codex/add-parser") is None

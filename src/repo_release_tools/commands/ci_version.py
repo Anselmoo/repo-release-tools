@@ -31,8 +31,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import output
-from repo_release_tools.commands.bump import read_current_version, replace_version_in_file
 from repo_release_tools.config import VALID_CI_FORMATS, load_config
+from repo_release_tools.version_targets import read_group_current_version, replace_version_in_file
 
 
 # Regex that matches the PEP 440 dev-release suffix so it can be converted
@@ -130,7 +130,8 @@ def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
         return args.base
     try:
         config = load_config(root)
-        return str(read_current_version(config))
+        group = config.resolve_group(getattr(args, "group", None))
+        return str(read_group_current_version(group))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return None
@@ -175,15 +176,16 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
 
     try:
         config = load_config(root)
+        group = config.resolve_group(getattr(args, "group", None))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    ci_targets = [t for t in config.version_targets if t.ci_format in VALID_CI_FORMATS]
+    ci_targets = [t for t in group.version_targets if t.ci_format in VALID_CI_FORMATS]
     if not ci_targets:
         print(
             "No version targets with ci_format configured. "
-            'Add ci_format = "pep440" or ci_format = "semver_pre" to [[tool.rrt.version_targets]].',
+            'Add ci_format = "pep440" or ci_format = "semver_pre" to the selected version group.',
             file=sys.stderr,
         )
         return 1
@@ -238,7 +240,7 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
         return 1
     print(f"Applying published version: {version}")
 
-    apply_args = argparse.Namespace(version=version, dry_run=args.dry_run)
+    apply_args = argparse.Namespace(version=version, dry_run=args.dry_run, group=getattr(args, "group", None))
     return cmd_ci_version_apply(apply_args)
 
 
@@ -249,6 +251,12 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
 
 def _add_compute_args(parser: argparse.ArgumentParser) -> None:
     """Add version-computation flags shared by ``compute`` and ``sync``."""
+    parser.add_argument(
+        "--group",
+        default=None,
+        metavar="GROUP",
+        help="Version group to read/apply when multiple release groups are configured.",
+    )
     parser.add_argument(
         "--base",
         default=None,
@@ -312,6 +320,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     apply_parser.add_argument(
         "--dry-run", action="store_true", help="Preview without writing changes."
+    )
+    apply_parser.add_argument(
+        "--group",
+        default=None,
+        metavar="GROUP",
+        help="Version group to update when multiple release groups are configured.",
     )
     apply_parser.set_defaults(handler=cmd_ci_version_apply)
 

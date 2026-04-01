@@ -32,6 +32,7 @@ Source = "https://github.com/Anselmoo/repo-release-tools"
 
 [project.scripts]
 rrt = "repo_release_tools.cli:main"
+rrt-hooks = "repo_release_tools.hooks:main"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.12.0"]

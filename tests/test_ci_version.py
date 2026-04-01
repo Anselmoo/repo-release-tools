@@ -47,6 +47,20 @@ def _ctx(**kwargs: str) -> GitHubContext:
     return GitHubContext(**defaults)  # type: ignore[arg-type]
 
 
+def _ns(**kwargs: object) -> argparse.Namespace:
+    defaults: dict[str, object] = {
+        "base": None,
+        "ref": None,
+        "ref_name": None,
+        "run_id": None,
+        "run_attempt": None,
+        "dry_run": False,
+        "group": None,
+    }
+    defaults.update(kwargs)
+    return argparse.Namespace(**defaults)
+
+
 def test_compute_tag_build() -> None:
     ctx = _ctx(ref="refs/tags/v1.3.0", ref_name="v1.3.0")
     assert compute_published_version("0.9.0", ctx) == "1.3.0"
@@ -134,6 +148,7 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "run_id": None,
         "run_attempt": None,
         "dry_run": False,
+        "group": None,
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
@@ -214,6 +229,37 @@ def test_cmd_compute_no_config_no_base_fails(
     monkeypatch.chdir(tmp_path)
     result = cmd_ci_version_compute(_ns())
     assert result == 1
+
+
+def test_cmd_compute_reads_base_from_rrt_toml(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        """{
+  "name": "example",
+  "version": "0.2.0"
+}
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12", run_attempt="1"))
+    captured = capsys.readouterr()
+    assert result == 0
+    assert captured.out.strip() == "0.2.0.dev1201"
 
 
 # ---------------------------------------------------------------------------
@@ -410,14 +456,15 @@ def test_version_target_non_string_ci_format_raises() -> None:
         t.validate()
 
 
-def test_version_target_pep621_with_pattern_validates() -> None:
-    """A pep621 target with a stray pattern field must still load without error."""
+def test_version_target_pep621_with_pattern_raises() -> None:
+    """A target must not mix kind and pattern selectors."""
     t = VersionTarget(
         path=Path("pyproject.toml"),
         kind="pep621",
         pattern=r'^(version\s*=\s*")([^"]+)(")',
     )
-    t.validate()  # must not raise
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        t.validate()
 
 
 def test_cmd_apply_nonstandard_dev_suffix_rejected(
@@ -431,3 +478,180 @@ def test_cmd_apply_nonstandard_dev_suffix_rejected(
     captured = capsys.readouterr()
     assert result == 1
     assert "Cannot convert" in captured.err
+
+
+def test_cmd_apply_package_json_updates_top_level_version_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+ci_format = "pep440"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        """{
+  "config": {
+    "version": "nested"
+  },
+  "version": "0.2.0"
+}
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_apply(argparse.Namespace(version="1.0.0", dry_run=False))
+
+    updated = (tmp_path / "package.json").read_text(encoding="utf-8")
+    assert result == 0
+    assert '"version": "nested"' in updated
+    assert updated.count('"version": "1.0.0"') == 1
+
+
+def test_cmd_apply_package_json_same_version_returns_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+ci_format = "pep440"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text('{"name":"example","version":"1.0.0"}', encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_apply(argparse.Namespace(version="1.0.0", dry_run=False))
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "version replacement had no effect" in captured.err
+    assert (tmp_path / "package.json").read_text(encoding="utf-8") == '{"name":"example","version":"1.0.0"}'
+
+
+def test_cmd_compute_requires_group_for_multi_group_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+
+[project]
+name = "example"
+version = "0.2.0"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8")
+    (tmp_path / "package.json").write_text('{"name":"example","version":"0.2.0"}', encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12", run_attempt="1", group=None))
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "Multiple version groups configured" in captured.err
+
+
+def test_cmd_compute_uses_selected_group_from_multi_group_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_groups]]
+name = "python"
+version_source = "pyproject.toml"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+version_source = "package.json"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8")
+    (tmp_path / "package.json").write_text('{"name":"example","version":"1.5.0"}', encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12", run_attempt="1", group="web"))
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.out.strip() == "1.5.0.dev1201"
+
+
+def test_cmd_apply_updates_selected_group_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+ci_format = "pep440"
+
+[[tool.rrt.version_groups]]
+name = "web"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+ci_format = "pep440"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8")
+    (tmp_path / "package.json").write_text('{"name":"example","version":"1.5.0"}', encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_apply(argparse.Namespace(version="1.6.0.dev1201", dry_run=False, group="web"))
+
+    assert result == 0
+    assert 'version = "0.2.0"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"version": "1.6.0.dev1201"' in (tmp_path / "package.json").read_text(encoding="utf-8")
