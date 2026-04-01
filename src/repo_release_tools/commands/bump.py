@@ -148,7 +148,9 @@ def cmd_bump(args: argparse.Namespace) -> int:
             files_to_stage.append(str(path.relative_to(root)))
     if group.changelog_file.exists() and not args.no_changelog:
         files_to_stage.append(str(group.changelog_file.relative_to(root)))
-    git.run(["git", "add", *dict.fromkeys(files_to_stage)], root, dry_run=args.dry_run, label="git add")
+    git.run(
+        ["git", "add", *dict.fromkeys(files_to_stage)], root, dry_run=args.dry_run, label="git add"
+    )
 
     if not args.no_commit:
         git.run(["git", "add", "-u"], root, dry_run=args.dry_run, label="git add -u")

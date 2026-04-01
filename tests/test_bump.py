@@ -92,7 +92,9 @@ kind = "package_json"
     assert "Would update" in captured.out
 
 
-def test_cmd_bump_stages_generated_files_from_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_cmd_bump_stages_generated_files_from_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
 [tool.rrt]
@@ -119,8 +121,12 @@ kind = "package_json"
     calls: list[list[str]] = []
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True)
-    monkeypatch.setattr("repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
 
     def fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
@@ -212,7 +218,9 @@ version = "0.1.0"
 """,
         encoding="utf-8",
     )
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "example"\nversion = "0.1.0"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
     (tmp_path / "package.json").write_text('{"name":"example","version":"0.1.0"}', encoding="utf-8")
 
     cwd = Path.cwd()
@@ -261,7 +269,9 @@ kind = "package_json"
 """,
         encoding="utf-8",
     )
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "example"\nversion = "0.1.0"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
     (tmp_path / "package.json").write_text('{"name":"example","version":"2.3.4"}', encoding="utf-8")
 
     cwd = Path.cwd()

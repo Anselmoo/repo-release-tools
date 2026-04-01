@@ -179,11 +179,11 @@ def test_action_installs_from_action_path_and_runs_hooks() -> None:
     assert "working-directory: ${{ github.action_path }}" in action_text
     assert "branch-ref-type:" in action_text
     assert 'if [[ "$ref_type" == "tag" ]]; then' in action_text
-    assert 'Skipping branch-name validation for tag refs.' in action_text
+    assert "Skipping branch-name validation for tag refs." in action_text
     assert "rrt-hooks check-branch-name --branch" in action_text
     assert "rrt-hooks check-commit-subject --subject" in action_text
     assert "check-changelog:" in action_text
     assert "changelog-file:" in action_text
     assert "rrt-hooks check-changelog" in action_text
-    assert "--changelog-file \"$INPUT_CHANGELOG_FILE\"" in action_text
+    assert '--changelog-file "$INPUT_CHANGELOG_FILE"' in action_text
     assert "--ref HEAD" in action_text

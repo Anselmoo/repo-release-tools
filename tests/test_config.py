@@ -29,7 +29,9 @@ def test_load_config_falls_back_to_rrt_toml(tmp_path: Path) -> None:
 
 def test_load_config_prefers_pyproject_toml(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(_RRT_CONFIG, encoding="utf-8")
-    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG.replace("release/v{version}", "ignored"), encoding="utf-8")
+    (tmp_path / ".rrt.toml").write_text(
+        _RRT_CONFIG.replace("release/v{version}", "ignored"), encoding="utf-8"
+    )
 
     config = load_config(tmp_path)
 
@@ -82,7 +84,9 @@ def test_find_config_file_reports_supported_locations(tmp_path: Path) -> None:
     ("target", "message"),
     [
         (
-            VersionTarget(path=Path("x.toml"), kind="pep621", pattern=r"(version = \")([^\"]+)(\")"),
+            VersionTarget(
+                path=Path("x.toml"), kind="pep621", pattern=r"(version = \")([^\"]+)(\")"
+            ),
             "mutually exclusive",
         ),
         (
@@ -98,8 +102,14 @@ def test_find_config_file_reports_supported_locations(tmp_path: Path) -> None:
             ),
             "mutually exclusive",
         ),
-        (VersionTarget(path=Path("x.toml"), section="project"), "section and field must be configured together"),
-        (VersionTarget(path=Path("x.toml"), field="version"), "section and field must be configured together"),
+        (
+            VersionTarget(path=Path("x.toml"), section="project"),
+            "section and field must be configured together",
+        ),
+        (
+            VersionTarget(path=Path("x.toml"), field="version"),
+            "section and field must be configured together",
+        ),
     ],
 )
 def test_version_target_validate_rejects_incomplete_or_conflicting_selectors(

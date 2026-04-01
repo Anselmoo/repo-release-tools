@@ -320,11 +320,15 @@ def _load_version_group(
         raise ValueError("changelog_file must be a string")
 
     lock_command = raw_group.get("lock_command", defaults["lock_command"])
-    if not isinstance(lock_command, list) or not all(isinstance(part, str) for part in lock_command):
+    if not isinstance(lock_command, list) or not all(
+        isinstance(part, str) for part in lock_command
+    ):
         raise ValueError("lock_command must be a list of strings")
 
     generated_files = raw_group.get("generated_files", defaults["generated_files"])
-    if not isinstance(generated_files, list) or not all(isinstance(path, str) for path in generated_files):
+    if not isinstance(generated_files, list) or not all(
+        isinstance(path, str) for path in generated_files
+    ):
         raise ValueError("generated_files must be a list of strings")
 
     raw_version_source = raw_group.get("version_source")

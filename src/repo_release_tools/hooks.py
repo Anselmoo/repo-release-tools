@@ -110,7 +110,11 @@ def commit_type_requires_changelog(commit_type: str, *, breaking: bool = False) 
 
 def branch_requires_changelog(branch_name: str) -> bool:
     """Return whether a branch type should stage a changelog update."""
-    if not branch_name or branch_name in ALLOWED_BRANCH_NAMES or branch_name.startswith("release/v"):
+    if (
+        not branch_name
+        or branch_name in ALLOWED_BRANCH_NAMES
+        or branch_name.startswith("release/v")
+    ):
         return False
     if "/" not in branch_name:
         return False
@@ -153,7 +157,9 @@ def staged_files(cwd: Path) -> list[str]:
 
 def changed_files_for_ref(cwd: Path, ref: str) -> list[str]:
     """Return files changed by a single git ref, typically HEAD."""
-    out = git.capture(["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", ref], cwd)
+    out = git.capture(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", ref], cwd
+    )
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
@@ -259,7 +265,9 @@ def run_changelog_check(
     if not commit_subject_requires_changelog(subject):
         return 0
 
-    effective_changed_files = changed_files if changed_files is not None else changed_files_for_ref(cwd, ref)
+    effective_changed_files = (
+        changed_files if changed_files is not None else changed_files_for_ref(cwd, ref)
+    )
     if changelog_is_updated(effective_changed_files, changelog_file=changelog_file, cwd=cwd):
         return 0
 

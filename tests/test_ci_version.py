@@ -539,7 +539,9 @@ ci_format = "pep440"
 
     assert result == 1
     assert "version replacement had no effect" in captured.err
-    assert (tmp_path / "package.json").read_text(encoding="utf-8") == '{"name":"example","version":"1.0.0"}'
+    assert (tmp_path / "package.json").read_text(
+        encoding="utf-8"
+    ) == '{"name":"example","version":"1.0.0"}'
 
 
 def test_cmd_compute_requires_group_for_multi_group_config(
@@ -571,11 +573,15 @@ version = "0.2.0"
 """,
         encoding="utf-8",
     )
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+    )
     (tmp_path / "package.json").write_text('{"name":"example","version":"0.2.0"}', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
-    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12", run_attempt="1", group=None))
+    result = cmd_ci_version_compute(
+        _ns(ref="refs/heads/main", run_id="12", run_attempt="1", group=None)
+    )
     captured = capsys.readouterr()
 
     assert result == 1
@@ -609,11 +615,15 @@ kind = "package_json"
 """,
         encoding="utf-8",
     )
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+    )
     (tmp_path / "package.json").write_text('{"name":"example","version":"1.5.0"}', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
-    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12", run_attempt="1", group="web"))
+    result = cmd_ci_version_compute(
+        _ns(ref="refs/heads/main", run_id="12", run_attempt="1", group="web")
+    )
     captured = capsys.readouterr()
 
     assert result == 0
@@ -646,11 +656,15 @@ ci_format = "pep440"
 """,
         encoding="utf-8",
     )
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+    )
     (tmp_path / "package.json").write_text('{"name":"example","version":"1.5.0"}', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
-    result = cmd_ci_version_apply(argparse.Namespace(version="1.6.0.dev1201", dry_run=False, group="web"))
+    result = cmd_ci_version_apply(
+        argparse.Namespace(version="1.6.0.dev1201", dry_run=False, group="web")
+    )
 
     assert result == 0
     assert 'version = "0.2.0"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")

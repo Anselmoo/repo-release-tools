@@ -240,7 +240,9 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
         return 1
     print(f"Applying published version: {version}")
 
-    apply_args = argparse.Namespace(version=version, dry_run=args.dry_run, group=getattr(args, "group", None))
+    apply_args = argparse.Namespace(
+        version=version, dry_run=args.dry_run, group=getattr(args, "group", None)
+    )
     return cmd_ci_version_apply(apply_args)
 
 
