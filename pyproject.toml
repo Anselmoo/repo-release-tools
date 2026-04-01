@@ -1,6 +1,6 @@
 [project]
 name = "repo-release-tools"
-version = "0.1.2"
+version = "0.1.3"
 description = "Config-driven branch and release helpers for Git repositories"
 readme = "README.md"
 license = "MIT"
@@ -31,6 +31,7 @@ Issues = "https://github.com/Anselmoo/repo-release-tools/issues"
 Source = "https://github.com/Anselmoo/repo-release-tools"
 
 [project.scripts]
+repo-release-tools = "repo_release_tools.cli:main"
 rrt = "repo_release_tools.cli:main"
 rrt-hooks = "repo_release_tools.hooks:main"
 
