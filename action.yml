@@ -1,5 +1,8 @@
 name: repo-release-tools policy checks
 description: Validate branch names, commit subjects, and changelog updates with repo-release-tools
+branding:
+  icon: 'tag'
+  color: 'green'
 
 inputs:
   python-version:
