@@ -310,7 +310,7 @@ def _detect_lock_and_files(
             return ["npm", "install"], ["package-lock.json"]
         return [], []
 
-    has_poetry = any(t.section is not None and t.section.startswith("tool.poetry") for t in targets)
+    has_poetry = any(t.section == "tool.poetry" for t in targets)
     if has_poetry:
         return ["poetry", "lock"], ["poetry.lock"]
 
