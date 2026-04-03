@@ -33,6 +33,7 @@ version = \"0.1.0\"
             dry_run=True,
             no_commit=True,
             no_changelog=False,
+            no_update=False,
             include_maintenance=False,
             base_branch=None,
             group=None,
@@ -78,6 +79,7 @@ kind = "package_json"
                 dry_run=True,
                 no_commit=True,
                 no_changelog=False,
+                no_update=False,
                 include_maintenance=False,
                 base_branch=None,
                 group=None,
@@ -141,6 +143,7 @@ kind = "package_json"
             dry_run=False,
             no_commit=True,
             no_changelog=True,
+            no_update=False,
             include_maintenance=False,
             base_branch=None,
             group=None,
@@ -179,6 +182,7 @@ pattern = '^(\\\\s*__version__\\\\s*=\\\\s*")([^"]+)(")'
                 dry_run=True,
                 no_commit=True,
                 no_changelog=True,
+                no_update=False,
                 include_maintenance=False,
                 base_branch=None,
                 group=None,
@@ -232,6 +236,7 @@ version = "0.1.0"
                 dry_run=True,
                 no_commit=True,
                 no_changelog=True,
+                no_update=False,
                 include_maintenance=False,
                 base_branch=None,
                 group=None,
@@ -283,6 +288,7 @@ kind = "package_json"
                 dry_run=True,
                 no_commit=True,
                 no_changelog=True,
+                no_update=False,
                 include_maintenance=False,
                 base_branch=None,
                 group="web",
@@ -295,3 +301,133 @@ kind = "package_json"
     assert result == 0
     assert "release/web/v2.3.5" in captured.out
     assert "Would update" in captured.out
+
+
+def test_cmd_bump_no_update_skips_lock_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """--no-update must prevent the lock command from running."""
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = ["npm", "install"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "1.0.0"\n}\n', encoding="utf-8"
+    )
+
+    calls: list[list[str]] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+
+    def fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert not any("npm" in cmd for cmd in calls)
+
+
+def test_cmd_bump_native_pep621_no_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Bump works on a plain PEP 621 project without [tool.rrt] config."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname = \"example\"\nversion = \"0.3.0\"\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    content = (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'version = "0.4.0"' in content
+
+
+def test_cmd_bump_native_package_json_no_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Bump works on a plain JS project (package.json only) without [tool.rrt] config."""
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "2.0.0"\n}\n', encoding="utf-8"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    import json
+
+    pkg = json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))
+    assert pkg["version"] == "2.0.1"

@@ -199,3 +199,165 @@ kind = "pep621"
 
     with pytest.raises(ValueError, match="Use either flat version_targets or version_groups"):
         load_config(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Native auto-detection (no [tool.rrt] config)
+# ---------------------------------------------------------------------------
+
+
+def test_auto_detect_pep621_project(tmp_path: Path) -> None:
+    """A plain PEP 621 pyproject.toml is detected without any [tool.rrt] section."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.config_file == tmp_path / "pyproject.toml"
+    assert len(config.version_groups) == 1
+    group = config.resolve_group()
+    assert group.version_targets[0].kind == "pep621"
+    assert group.lock_command == ["uv", "lock", "-U"]
+    assert group.generated_files == [tmp_path / "uv.lock"]
+
+
+def test_auto_detect_poetry_project(tmp_path: Path) -> None:
+    """A plain Poetry pyproject.toml is detected without any [tool.rrt] section."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry]\nname = "example"\nversion = "0.5.0"\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert group.version_targets[0].section == "tool.poetry"
+    assert group.lock_command == ["poetry", "lock"]
+    assert group.generated_files == [tmp_path / "poetry.lock"]
+
+
+def test_auto_detect_package_json_project_no_lockfile(tmp_path: Path) -> None:
+    """A package.json project without a lockfile gets no lock command."""
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "3.0.0"}', encoding="utf-8"
+    )
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert group.version_targets[0].kind == "package_json"
+    assert group.lock_command == []
+    assert group.generated_files == []
+
+
+def test_auto_detect_package_json_with_npm_lockfile(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "3.0.0"}', encoding="utf-8"
+    )
+    (tmp_path / "package-lock.json").write_text("{}", encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert group.lock_command == ["npm", "install"]
+    assert group.generated_files == [tmp_path / "package-lock.json"]
+
+
+def test_auto_detect_package_json_prefers_pnpm_over_npm(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "3.0.0"}', encoding="utf-8"
+    )
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
+    (tmp_path / "package-lock.json").write_text("{}", encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert group.lock_command == ["pnpm", "install"]
+    assert group.generated_files == [tmp_path / "pnpm-lock.yaml"]
+
+
+def test_auto_detect_package_json_with_yarn_lockfile(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "3.0.0"}', encoding="utf-8"
+    )
+    (tmp_path / "yarn.lock").write_text("# yarn lockfile v1\n", encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert group.lock_command == ["yarn", "install"]
+    assert group.generated_files == [tmp_path / "yarn.lock"]
+
+
+def test_auto_detect_rrt_toml_with_package_json_target_and_pnpm(tmp_path: Path) -> None:
+    """An explicit .rrt.toml with package_json target auto-detects pnpm when pnpm-lock exists."""
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+    )
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert group.lock_command == ["pnpm", "install"]
+    assert group.generated_files == [tmp_path / "pnpm-lock.yaml"]
+
+
+def test_auto_detect_rrt_toml_explicit_lock_command_not_overridden(tmp_path: Path) -> None:
+    """An explicit lock_command in .rrt.toml is never overridden by auto-detection."""
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+    )
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert group.lock_command == []
+
+
+def test_auto_detect_prefers_rrt_config_over_native(tmp_path: Path) -> None:
+    """When [tool.rrt] exists it takes full precedence over native detection."""
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "rel/v{version}"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "9.9.9"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.release_branch == "rel/v{version}"
+    assert config.resolve_group().version_targets[0].kind == "pep621"
