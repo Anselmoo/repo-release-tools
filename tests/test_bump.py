@@ -359,7 +359,7 @@ kind = "package_json"
 def test_cmd_bump_native_pep621_no_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Bump works on a plain PEP 621 project without [tool.rrt] config."""
     (tmp_path / "pyproject.toml").write_text(
-        "[project]\nname = \"example\"\nversion = \"0.3.0\"\n",
+        '[project]\nname = "example"\nversion = "0.3.0"\n',
         encoding="utf-8",
     )
 
@@ -433,9 +433,7 @@ def test_cmd_bump_native_package_json_no_config(
     assert pkg["version"] == "2.0.1"
 
 
-def test_cmd_bump_native_cargo_no_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_cmd_bump_native_cargo_no_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Bump works on a plain Rust project (Cargo.toml only) without explicit rrt config."""
     (tmp_path / "Cargo.toml").write_text(
         """\
