@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import re
 import tomllib
+import json
 
 from dataclasses import dataclass
 from pathlib import Path
+from textwrap import dedent
 
 
 DEFAULT_RELEASE_BRANCH = "release/v{version}"
@@ -29,6 +31,55 @@ _AUTO: list[str] | None = None
 VALID_TARGET_KINDS = frozenset({"pep621", "package_json"})
 
 VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
+
+AUTODETECTED_CONFIG_BASENAME = ".rrt.autodetected.toml"
+
+PYTHON_TOOL_RRT_EXAMPLE = dedent(
+    """\
+    [tool.rrt]
+    release_branch = "release/v{version}"
+
+    [[tool.rrt.version_targets]]
+    path = "pyproject.toml"
+    kind = "pep621"
+    """
+).strip()
+
+NODE_TOOL_RRT_EXAMPLE = dedent(
+    """\
+    [tool.rrt]
+    release_branch = "release/v{version}"
+
+    [[tool.rrt.version_targets]]
+    path = "package.json"
+    kind = "package_json"
+    ci_format = "semver_pre"
+    """
+).strip()
+
+RUST_TOOL_RRT_EXAMPLE = dedent(
+    """\
+    [tool.rrt]
+    release_branch = "release/v{version}"
+
+    [[tool.rrt.version_targets]]
+    path = "Cargo.toml"
+    section = "package"
+    field = "version"
+    ci_format = "semver_pre"
+    """
+).strip()
+
+GO_TOOL_RRT_EXAMPLE = dedent(
+    """\
+    [tool.rrt]
+    release_branch = "release/v{version}"
+
+    [[tool.rrt.version_targets]]
+    path = "internal/version/version.go"
+    pattern = '^(const Version = ")([^"]+)(")$'
+    """
+).strip()
 
 
 @dataclass(frozen=True)
@@ -121,6 +172,7 @@ class RrtConfig:
     config_file: Path
     version_groups: list[VersionGroup]
     default_group_name: str | None = None
+    autodetected: bool = False
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""
@@ -210,6 +262,187 @@ def find_config_file(root: Path) -> Path:
 def iter_config_files(root: Path) -> list[Path]:
     """Return supported config files that exist in discovery order."""
     return [root / candidate for candidate in CONFIG_FILE_CANDIDATES if (root / candidate).exists()]
+
+
+def load_or_autodetect_config(root: Path) -> RrtConfig:
+    """Load explicit config, or fall back to safe auto-detection."""
+    try:
+        return load_config(root)
+    except FileNotFoundError:
+        autodetected = autodetect_config(root)
+        if autodetected is not None:
+            return autodetected
+        raise
+    except ValueError as exc:
+        if not is_missing_tool_rrt_error(exc):
+            raise
+        autodetected = autodetect_config(root)
+        if autodetected is not None:
+            return autodetected
+        raise
+
+
+def autodetect_config(root: Path) -> RrtConfig | None:
+    """Build an implicit config from common root-level version files."""
+    targets = _autodetect_version_targets(root)
+    if not targets:
+        return None
+
+    group = VersionGroup(
+        name="default",
+        release_branch=DEFAULT_RELEASE_BRANCH,
+        changelog_file=root / DEFAULT_CHANGELOG,
+        lock_command=[],
+        generated_files=[],
+        version_targets=targets,
+        version_source=targets[0].path,
+    )
+    return RrtConfig(
+        root=root,
+        config_file=root / AUTODETECTED_CONFIG_BASENAME,
+        version_groups=[group],
+        default_group_name="default",
+        autodetected=True,
+    )
+
+
+def format_autodetected_config_notice(config: RrtConfig) -> str:
+    """Describe the implicit version targets chosen for zero-config mode."""
+    group = config.resolve_group()
+    targets = ", ".join(_describe_version_target(target, root=config.root) for target in group.version_targets)
+    supported = ", ".join(CONFIG_FILE_CANDIDATES)
+    return (
+        "Using auto-detected version targets: "
+        f"{targets}. Add [tool.rrt] in {supported} for optional fine-tuning "
+        "(groups, release branches, changelog path, lock commands, generated files, or custom patterns)."
+    )
+
+
+def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | None = None) -> str:
+    """Render actionable setup guidance when [tool.rrt] is missing."""
+    checked_files = iter_config_files(root) if checked_files is None else checked_files
+
+    lines: list[str] = []
+    if checked_files:
+        checked = ", ".join(str(path.relative_to(root)) for path in checked_files)
+        lines.append(f"No [tool.rrt] configuration was found in supported config files: {checked}")
+    else:
+        supported = ", ".join(CONFIG_FILE_CANDIDATES)
+        lines.append(f"No supported config file was found. Supported locations: {supported}")
+
+    lines.extend(
+        [
+            "",
+            "Zero-config mode auto-detects these root-level version files:",
+            "  - pyproject.toml -> [project].version",
+            "  - package.json -> top-level version",
+            "  - Cargo.toml -> [package].version",
+            "",
+            "If none of those exist, add optional [tool.rrt] config in any supported file:",
+        ]
+    )
+    for candidate in CONFIG_FILE_CANDIDATES:
+        lines.append(f"  - {candidate}")
+
+    lines.extend(
+        [
+            "",
+            "Examples:",
+            "",
+            "Python / PEP 621:",
+            *[f"    {line}" for line in PYTHON_TOOL_RRT_EXAMPLE.splitlines()],
+            "",
+            "Node / package.json:",
+            *[f"    {line}" for line in NODE_TOOL_RRT_EXAMPLE.splitlines()],
+            "",
+            "Rust / Cargo.toml:",
+            *[f"    {line}" for line in RUST_TOOL_RRT_EXAMPLE.splitlines()],
+            "",
+            "Go example (Go has no standard in-file project version, so use an explicit pattern):",
+            *[f"    {line}" for line in GO_TOOL_RRT_EXAMPLE.splitlines()],
+            "",
+            "Local repo config works too: put that table in .rrt.toml or .config/rrt.toml",
+            "if you do not want to keep release-tool config in pyproject.toml.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
+    """Discover common version targets in the repository root."""
+    targets: list[VersionTarget] = []
+
+    pyproject = root / "pyproject.toml"
+    if _toml_string_field_exists(pyproject, section="project", field="version"):
+        targets.append(
+            VersionTarget(path=pyproject, kind="pep621", ci_format="pep440")
+        )
+
+    package_json = root / "package.json"
+    if _json_string_field_exists(package_json, field="version"):
+        targets.append(
+            VersionTarget(path=package_json, kind="package_json", ci_format="semver_pre")
+        )
+
+    cargo_toml = root / "Cargo.toml"
+    if _toml_string_field_exists(cargo_toml, section="package", field="version"):
+        targets.append(
+            VersionTarget(
+                path=cargo_toml,
+                section="package",
+                field="version",
+                ci_format="semver_pre",
+            )
+        )
+
+    return targets
+
+
+def _toml_string_field_exists(path: Path, *, section: str, field: str) -> bool:
+    """Return whether a TOML file contains a string field in a named section."""
+    if not path.exists():
+        return False
+
+    try:
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except (tomllib.TOMLDecodeError, OSError):
+        return False
+
+    current: object = data
+    for part in section.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return False
+        current = current[part]
+
+    return isinstance(current, dict) and isinstance(current.get(field), str)
+
+
+def _json_string_field_exists(path: Path, *, field: str) -> bool:
+    """Return whether a JSON file contains a string field at the top level."""
+    if not path.exists():
+        return False
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+
+    return isinstance(data, dict) and isinstance(data.get(field), str)
+
+
+def _describe_version_target(target: VersionTarget, *, root: Path) -> str:
+    """Render a short human label for a version target."""
+    relative = str(target.path.relative_to(root))
+    if target.kind == "pep621":
+        return f"{relative} ([project].version)"
+    if target.kind == "package_json":
+        return f"{relative} (version)"
+    if target.section and target.field:
+        return f"{relative} ([{target.section}].{target.field})"
+    if target.pattern:
+        return f"{relative} (pattern)"
+    return relative
 
 
 def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:

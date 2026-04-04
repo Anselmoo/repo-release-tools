@@ -59,6 +59,11 @@ def read_group_current_version(group: VersionGroup) -> Version:
     return Version.parse(read_version_string(group.primary_target()))
 
 
+def read_group_version_strings(group: VersionGroup) -> list[tuple[VersionTarget, str]]:
+    """Read the current version string from every target in a group."""
+    return [(target, read_version_string(target)) for target in group.version_targets]
+
+
 def read_version_string(target: VersionTarget) -> str:
     """Read the current version string from a target."""
     text = target.path.read_text(encoding="utf-8")

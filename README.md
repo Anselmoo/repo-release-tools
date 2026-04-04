@@ -24,6 +24,14 @@ Or:
 uvx repo-release-tools branch new feat "add parser"
 ```
 
+For basic versioning, `bump` and `ci-version` can run without `[tool.rrt]` by
+auto-detecting root-level `pyproject.toml`, `package.json`, and `Cargo.toml`.
+If multiple version files are found they are updated together, and explicit
+config becomes optional fine-tuning for groups, release branches, changelog
+paths, lock commands, generated files, or custom patterns. Go repos still need
+explicit config for file updates because Go has no standard in-file project
+version.
+
 Minimal config:
 
 ```toml

@@ -24,6 +24,21 @@ rrt bump minor --dry-run
 rrt bump 1.2.3 --no-changelog
 ```
 
+## Zero-config mode
+
+For basic versioning, `rrt` can work without `[tool.rrt]`.
+
+- `bump` and `ci-version` auto-detect root-level `pyproject.toml`, `package.json`,
+  and `Cargo.toml`
+- If multiple version files are found, they are updated together
+- Auto-detected files must already agree on the current version before `bump`
+- Go does not have a standard in-file project version, so Go repos still need
+  explicit config for file updates
+
+Add `[tool.rrt]` later only when you want fine-tuning such as grouped releases,
+custom release branches, changelog paths, lock commands, generated files, or
+pattern-based targets.
+
 ## Configuration files
 
 `rrt` discovers configuration in this order:
@@ -34,7 +49,9 @@ rrt bump 1.2.3 --no-changelog
 4. `.rrt.toml`
 5. `.config/rrt.toml`
 
-Native config locations:
+All use the same `[tool.rrt]` table.
+Use `.rrt.toml` or `.config/rrt.toml` for local repo config if you do not want
+to keep release-tool settings in `pyproject.toml`.
 
 - `pyproject.toml`, `.rrt.toml`, `.config/rrt.toml`: `[tool.rrt]`
 - `package.json`: top-level `"rrt": { ... }`
