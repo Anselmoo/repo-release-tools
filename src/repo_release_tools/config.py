@@ -335,7 +335,9 @@ def autodetect_config(root: Path) -> RrtConfig | None:
 def format_autodetected_config_notice(config: RrtConfig) -> str:
     """Describe the implicit version targets chosen for zero-config mode."""
     group = config.resolve_group()
-    targets = ", ".join(_describe_version_target(target, root=config.root) for target in group.version_targets)
+    targets = ", ".join(
+        _describe_version_target(target, root=config.root) for target in group.version_targets
+    )
     supported = ", ".join(CONFIG_FILE_CANDIDATES)
     return (
         "Using auto-detected version targets: "
@@ -522,8 +524,8 @@ def _render_recommended_rrt_toml(root: Path, group: VersionGroup) -> str:
     """Render an explicit .rrt.toml mirroring the current recommended defaults."""
     lines = [
         "[tool.rrt]",
-        f'release_branch = {_toml_basic_string(group.release_branch)}',
-        f'changelog_file = {_toml_basic_string(str(group.changelog_file.relative_to(root)))}',
+        f"release_branch = {_toml_basic_string(group.release_branch)}",
+        f"changelog_file = {_toml_basic_string(str(group.changelog_file.relative_to(root)))}",
     ]
 
     lock_command, generated_files = _recommended_lock_settings(root, group.version_targets)
@@ -533,22 +535,22 @@ def _render_recommended_rrt_toml(root: Path, group: VersionGroup) -> str:
         lines.append(f"generated_files = {_toml_string_list(generated_files)}")
     if len(group.version_targets) > 1:
         lines.append(
-            f'version_source = {_toml_basic_string(str(group.primary_target().path.relative_to(root)))}'
+            f"version_source = {_toml_basic_string(str(group.primary_target().path.relative_to(root)))}"
         )
 
     for target in group.version_targets:
         lines.extend(["", "[[tool.rrt.version_targets]]"])
-        lines.append(f'path = {_toml_basic_string(str(target.path.relative_to(root)))}')
+        lines.append(f"path = {_toml_basic_string(str(target.path.relative_to(root)))}")
         if target.kind is not None:
-            lines.append(f'kind = {_toml_basic_string(target.kind)}')
+            lines.append(f"kind = {_toml_basic_string(target.kind)}")
         if target.pattern is not None:
             lines.append(f"pattern = {_toml_literal_string(target.pattern)}")
         if target.section is not None:
-            lines.append(f'section = {_toml_basic_string(target.section)}')
+            lines.append(f"section = {_toml_basic_string(target.section)}")
         if target.field is not None:
-            lines.append(f'field = {_toml_basic_string(target.field)}')
+            lines.append(f"field = {_toml_basic_string(target.field)}")
         if target.ci_format is not None:
-            lines.append(f'ci_format = {_toml_basic_string(target.ci_format)}')
+            lines.append(f"ci_format = {_toml_basic_string(target.ci_format)}")
 
     return "\n".join(lines)
 

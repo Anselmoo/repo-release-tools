@@ -15,7 +15,7 @@ def test_recommend_init_config_for_pep621_repo(tmp_path: Path) -> None:
 
     rendered = recommend_init_config(tmp_path)
 
-    assert '[tool.rrt]' in rendered
+    assert "[tool.rrt]" in rendered
     assert 'changelog_file = "CHANGELOG.md"' in rendered
     assert 'lock_command = ["uv", "lock", "-U"]' in rendered
     assert 'generated_files = ["uv.lock"]' in rendered
