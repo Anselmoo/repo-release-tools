@@ -133,7 +133,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
             dry_run=args.dry_run,
         )
 
-    if group.lock_command:
+    if group.lock_command and not args.no_update:
         print(f"\n{output.section('Refreshing lockfiles')}")
         git.run(group.lock_command, root, dry_run=args.dry_run, label="lock command")
 
@@ -179,6 +179,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing changes.")
     parser.add_argument("--no-commit", action="store_true", help="Skip the git commit step.")
     parser.add_argument("--no-changelog", action="store_true", help="Skip updating the changelog.")
+    parser.add_argument(
+        "--no-update",
+        action="store_true",
+        help="Skip the lockfile update step (do not run the lock command).",
+    )
     parser.add_argument(
         "--include-maintenance",
         action="store_true",
