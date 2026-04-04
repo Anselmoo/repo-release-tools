@@ -53,3 +53,6 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "runtime: end-to-end runtime/toolchain integration tests",
+]

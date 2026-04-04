@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 
@@ -14,7 +15,13 @@ DEFAULT_CHANGELOG = "CHANGELOG.md"
 DEFAULT_LOCK_COMMAND = ["uv", "lock", "-U"]
 DEFAULT_GENERIC_LOCK_COMMAND: list[str] = []
 
-CONFIG_FILE_CANDIDATES = ("pyproject.toml", ".rrt.toml", ".config/rrt.toml")
+CONFIG_FILE_CANDIDATES = (
+    "pyproject.toml",
+    "package.json",
+    "Cargo.toml",
+    ".rrt.toml",
+    ".config/rrt.toml",
+)
 
 # Sentinel: lock_command / generated_files not explicitly configured → auto-detect.
 _AUTO: list[str] | None = None
@@ -162,6 +169,10 @@ class RrtConfig:
         return self.resolve_group().version_targets
 
 
+class MissingRrtConfigError(ValueError):
+    """Raised when a supported config file exists but does not contain rrt config."""
+
+
 def load_config(root: Path) -> RrtConfig:
     """Load [tool.rrt] from the first supported config file in the repository root.
 
@@ -173,10 +184,10 @@ def load_config(root: Path) -> RrtConfig:
     for config_file in iter_config_files(root):
         try:
             return load_config_from_path(root, config_file)
-        except ValueError as exc:
-            if not _is_missing_tool_rrt_error(exc):
-                raise
+        except MissingRrtConfigError:
             missing_tool_rrt.append(config_file)
+        except ValueError:
+            raise
 
     # Native auto-detection: works even when no config file exists at all.
     auto = auto_detect_config(root)
@@ -185,7 +196,7 @@ def load_config(root: Path) -> RrtConfig:
 
     if missing_tool_rrt:
         checked = ", ".join(str(path.relative_to(root)) for path in missing_tool_rrt)
-        raise ValueError(f"Missing [tool.rrt] configuration in supported config files: {checked}")
+        raise ValueError(f"Missing rrt configuration in supported config files: {checked}")
 
     expected = ", ".join(CONFIG_FILE_CANDIDATES)
     raise FileNotFoundError(f"Missing supported config file in {root} (checked: {expected})")
@@ -202,14 +213,10 @@ def iter_config_files(root: Path) -> list[Path]:
 
 
 def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
-    """Load [tool.rrt] from a specific config file."""
-    with config_file.open("rb") as handle:
-        data = tomllib.load(handle)
-
-    tool = data.get("tool", {})
-    raw = tool.get("rrt")
-    if raw is None:
-        raise ValueError(f"Missing [tool.rrt] configuration in {config_file.name}")
+    """Load native rrt configuration from a specific config file."""
+    raw = _load_raw_config(config_file)
+    if not isinstance(raw, dict):
+        raise ValueError(f"rrt configuration in {config_file.name} must be a table/object")
 
     raw_groups = raw.get("version_groups")
     has_flat_targets = "version_targets" in raw
@@ -314,15 +321,29 @@ def _detect_lock_and_files(
     if has_poetry:
         return ["poetry", "lock"], ["poetry.lock"]
 
+    has_cargo = (root / "Cargo.toml").exists() and any(
+        target.path.name == "Cargo.toml" or target.path.suffix == ".rs" for target in targets
+    )
+    if has_cargo:
+        if (root / "Cargo.lock").exists():
+            return ["cargo", "update", "--workspace"], ["Cargo.lock"]
+        return [], []
+
+    has_go = (root / "go.mod").exists() and any(
+        target.path.name == "go.mod" or target.path.suffix == ".go" for target in targets
+    )
+    if has_go:
+        return ["go", "mod", "tidy"], ["go.mod", "go.sum"]
+
     return [], []
 
 
 def auto_detect_config(root: Path) -> RrtConfig | None:
     """Create a synthetic RrtConfig by inspecting well-known project files.
 
-    Supports PEP 621 (``[project]``), Poetry (``[tool.poetry]``), and
-    JS/TS (``package.json``) projects.  Returns *None* when no recognisable
-    project structure is found.
+    Supports PEP 621 (``[project]``), Poetry (``[tool.poetry]``),
+    JS/TS (``package.json``), and Rust (``Cargo.toml``) projects. Returns
+    *None* when no recognisable project structure is found.
     """
     pyproject = root / "pyproject.toml"
 
@@ -392,12 +413,98 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
             default_group_name="default",
         )
 
+    cargo_toml = root / "Cargo.toml"
+    if cargo_toml.exists():
+        with cargo_toml.open("rb") as handle:
+            data = tomllib.load(handle)
+
+        package_section = data.get("package", {})
+        workspace_package_section = data.get("workspace", {}).get("package", {})
+
+        if isinstance(package_section, dict) and "version" in package_section:
+            target = VersionTarget(path=cargo_toml, section="package", field="version")
+        elif isinstance(workspace_package_section, dict) and "version" in workspace_package_section:
+            target = VersionTarget(path=cargo_toml, section="workspace.package", field="version")
+        else:
+            target = None
+
+        if target is not None:
+            lock_cmd, gen_files = _detect_lock_and_files(root, [target])
+            group = VersionGroup(
+                name="default",
+                release_branch=DEFAULT_RELEASE_BRANCH,
+                changelog_file=root / DEFAULT_CHANGELOG,
+                lock_command=lock_cmd,
+                generated_files=[root / f for f in gen_files],
+                version_targets=[target],
+            )
+            return RrtConfig(
+                root=root,
+                config_file=cargo_toml,
+                version_groups=[group],
+                default_group_name="default",
+            )
+
     return None
 
 
-def _is_missing_tool_rrt_error(exc: ValueError) -> bool:
-    """Return whether a config-loading error means [tool.rrt] was absent."""
-    return str(exc).startswith("Missing [tool.rrt] configuration in ")
+def _load_raw_config(config_file: Path) -> dict[str, object]:
+    """Load the raw rrt config object from a supported native config file."""
+    if config_file.name == "package.json":
+        return _load_package_json_config(config_file)
+    if config_file.name == "Cargo.toml":
+        return _load_cargo_toml_config(config_file)
+    return _load_tool_rrt_toml_config(config_file)
+
+
+def _load_tool_rrt_toml_config(config_file: Path) -> dict[str, object]:
+    """Load [tool.rrt] from a TOML-based config file."""
+    with config_file.open("rb") as handle:
+        data = tomllib.load(handle)
+
+    tool = data.get("tool", {})
+    raw = tool.get("rrt")
+    if raw is None:
+        raise MissingRrtConfigError(f"Missing [tool.rrt] configuration in {config_file.name}")
+    if not isinstance(raw, dict):
+        raise ValueError(f"[tool.rrt] in {config_file.name} must be a table")
+    return raw
+
+
+def _load_package_json_config(config_file: Path) -> dict[str, object]:
+    """Load the top-level rrt object from package.json."""
+    data = json.loads(config_file.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{config_file.name} must contain a top-level object")
+
+    raw = data.get("rrt")
+    if raw is None:
+        raise MissingRrtConfigError(f"Missing rrt configuration in {config_file.name}")
+    if not isinstance(raw, dict):
+        raise ValueError(f"rrt in {config_file.name} must be an object")
+    return raw
+
+
+def _load_cargo_toml_config(config_file: Path) -> dict[str, object]:
+    """Load [package.metadata.rrt] or [workspace.metadata.rrt] from Cargo.toml."""
+    with config_file.open("rb") as handle:
+        data = tomllib.load(handle)
+
+    package_rrt = data.get("package", {}).get("metadata", {}).get("rrt")
+    if isinstance(package_rrt, dict):
+        return package_rrt
+
+    workspace_rrt = data.get("workspace", {}).get("metadata", {}).get("rrt")
+    if isinstance(workspace_rrt, dict):
+        return workspace_rrt
+
+    if package_rrt is not None or workspace_rrt is not None:
+        raise ValueError(
+            "[package.metadata.rrt] or [workspace.metadata.rrt] in Cargo.toml must be a table"
+        )
+    raise MissingRrtConfigError(
+        "Missing [package.metadata.rrt] or [workspace.metadata.rrt] configuration in Cargo.toml"
+    )
 
 
 def _load_version_group(

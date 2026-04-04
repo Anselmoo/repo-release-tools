@@ -69,14 +69,17 @@ def test_load_config_raises_after_all_candidates_lack_tool_rrt(tmp_path: Path) -
 
     with pytest.raises(
         ValueError,
-        match=r"Missing \[tool\.rrt\] configuration in supported config files: "
+        match=r"Missing rrt configuration in supported config files: "
         r"pyproject\.toml, \.rrt\.toml, \.config/rrt\.toml",
     ):
         load_config(tmp_path)
 
 
 def test_find_config_file_reports_supported_locations(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError, match="pyproject.toml, .rrt.toml, .config/rrt.toml"):
+    with pytest.raises(
+        FileNotFoundError,
+        match="pyproject.toml, package.json, Cargo.toml, .rrt.toml, .config/rrt.toml",
+    ):
         find_config_file(tmp_path)
 
 
@@ -178,6 +181,91 @@ kind = "package_json"
     assert config.resolve_group("web").primary_target().path == tmp_path / "package.json"
 
 
+def test_load_config_supports_package_json_rrt(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        """{
+  "name": "example",
+  "version": "1.0.0",
+  "rrt": {
+    "release_branch": "release/web/v{version}",
+    "version_targets": [
+      {
+        "path": "package.json",
+        "kind": "package_json"
+      }
+    ]
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package-lock.json").write_text("{}", encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    assert config.config_file == tmp_path / "package.json"
+    assert config.release_branch == "release/web/v{version}"
+    assert config.lock_command == ["npm", "install"]
+    assert config.generated_files == [tmp_path / "package-lock.json"]
+
+
+def test_load_config_supports_cargo_package_metadata_rrt(tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        """\
+[package]
+name = "example"
+version = "1.0.0"
+
+[package.metadata.rrt]
+release_branch = "release/rust/v{version}"
+
+[[package.metadata.rrt.version_targets]]
+path = "Cargo.toml"
+section = "package"
+field = "version"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "Cargo.lock").write_text("# lock\n", encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    assert config.config_file == tmp_path / "Cargo.toml"
+    assert config.release_branch == "release/rust/v{version}"
+    assert config.lock_command == ["cargo", "update", "--workspace"]
+    assert config.generated_files == [tmp_path / "Cargo.lock"]
+
+
+def test_load_config_supports_cargo_workspace_metadata_rrt(tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        """\
+[workspace]
+members = ["crates/example"]
+
+[workspace.package]
+version = "1.0.0"
+
+[workspace.metadata.rrt]
+default_group = "rust"
+
+[[workspace.metadata.rrt.version_groups]]
+name = "rust"
+version_source = "Cargo.toml"
+
+[[workspace.metadata.rrt.version_groups.version_targets]]
+path = "Cargo.toml"
+section = "workspace.package"
+field = "version"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.config_file == tmp_path / "Cargo.toml"
+    assert config.resolve_group().primary_target().section == "workspace.package"
+
+
 def test_load_config_rejects_mixing_flat_targets_and_groups(tmp_path: Path) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -249,6 +337,50 @@ def test_auto_detect_package_json_project_no_lockfile(tmp_path: Path) -> None:
     assert group.version_targets[0].kind == "package_json"
     assert group.lock_command == []
     assert group.generated_files == []
+
+
+def test_auto_detect_cargo_project(tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        """\
+[package]
+name = "example"
+version = "0.5.0"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "Cargo.lock").write_text("# lock\n", encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert config.config_file == tmp_path / "Cargo.toml"
+    assert group.version_targets[0].section == "package"
+    assert group.version_targets[0].field == "version"
+    assert group.lock_command == ["cargo", "update", "--workspace"]
+    assert group.generated_files == [tmp_path / "Cargo.lock"]
+
+
+def test_go_targets_auto_detect_go_mod_tidy_defaults(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "internal/version/version.go"
+pattern = '^(const Version = ")([^"]+)(")$'
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "go.mod").write_text("module example.com/test\n\ngo 1.24.0\n", encoding="utf-8")
+    version_file = tmp_path / "internal" / "version" / "version.go"
+    version_file.parent.mkdir(parents=True)
+    version_file.write_text('const Version = "1.0.0"\n', encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    group = config.resolve_group()
+    assert group.lock_command == ["go", "mod", "tidy"]
+    assert group.generated_files == [tmp_path / "go.mod", tmp_path / "go.sum"]
 
 
 def test_auto_detect_package_json_with_npm_lockfile(tmp_path: Path) -> None:

@@ -29,10 +29,19 @@ rrt bump 1.2.3 --no-changelog
 `rrt` discovers configuration in this order:
 
 1. `pyproject.toml`
-2. `.rrt.toml`
-3. `.config/rrt.toml`
+2. `package.json`
+3. `Cargo.toml`
+4. `.rrt.toml`
+5. `.config/rrt.toml`
 
-All use the same `[tool.rrt]` table.
+Native config locations:
+
+- `pyproject.toml`, `.rrt.toml`, `.config/rrt.toml`: `[tool.rrt]`
+- `package.json`: top-level `"rrt": { ... }`
+- `Cargo.toml`: `[package.metadata.rrt]` or `[workspace.metadata.rrt]`
+
+Go does not have a standard extensible manifest section like `package.json` or
+`Cargo.toml`, so Go repos should use `.rrt.toml` or `.config/rrt.toml`.
 
 ## Minimal config
 
@@ -44,6 +53,36 @@ changelog_file = "CHANGELOG.md"
 [[tool.rrt.version_targets]]
 path = "pyproject.toml"
 kind = "pep621"
+```
+
+Equivalent native examples:
+
+```json
+{
+  "name": "example",
+  "version": "1.2.3",
+  "rrt": {
+    "version_targets": [
+      {
+        "path": "package.json",
+        "kind": "package_json"
+      }
+    ]
+  }
+}
+```
+
+```toml
+[package]
+name = "example"
+version = "1.2.3"
+
+[package.metadata.rrt]
+
+[[package.metadata.rrt.version_targets]]
+path = "Cargo.toml"
+section = "package"
+field = "version"
 ```
 
 ## Version target modes
@@ -63,6 +102,13 @@ staged with a bump:
 lock_command = ["pnpm", "install", "--lockfile-only"]
 generated_files = ["pnpm-lock.yaml"]
 ```
+
+Default lock refresh is auto-detected when possible:
+
+- `package.json`: `pnpm install`, `yarn install`, or `npm install`
+- Poetry: `poetry lock`
+- Rust: `cargo update --workspace` when `Cargo.lock` is present
+- Go-targeted repos: `go mod tidy`, staging `go.mod` and `go.sum`
 
 ## Hybrid repositories
 

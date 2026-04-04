@@ -9,22 +9,16 @@ pre-commit, and Copilot skill entrypoints.
 - [GitHub Action](github-action.md) — CI enforcement for branch, changelog, and commit policy
 - [pre-commit](pre-commit.md) — local hooks for branch, changelog, and commit checks
 - [Skill](skill.md) — Copilot CLI skill usage via `uvx`
-- [Semantic branches](semantic-branches.md) — branch naming model for trunk-based development
+- [Conventional branches](semantic-branches.md) — branch naming model for trunk-based publishing
 
-## Minimal interface
+## What This Docs Set Covers
 
-If you publish `docs/` with GitHub Pages later, this page can stay the landing
-page:
+The docs are intentionally split so the landing page stays short:
 
-- one-line product summary
-- five entry links
-- no deep prose on the front page
-- detailed explanations pushed into leaf documents
+- the CLI and config model live in `rrt-cli.md`
+- branch policy and release naming live in `semantic-branches.md`
+- CI and local enforcement live in `github-action.md` and `pre-commit.md`
+- zero-install guidance lives in `skill.md`
 
-That keeps the interface small and product-oriented.
-
-## GitHub Pages
-
-This docs tree is designed to publish directly from GitHub Pages with the
-repository Pages workflow. Keep the homepage short and move detailed guidance
-into the linked leaf pages.
+That keeps the homepage readable while still giving each workflow a complete
+leaf page.

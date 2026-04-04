@@ -1,7 +1,7 @@
 # repo-release-tools
 
-`repo-release-tools` is a small product for semantic branches, changelog policy,
-and version bumps across local development, CI, and Copilot workflows.
+`repo-release-tools` is a small product for conventional branches, changelog
+policy, and version bumps across local development, CI, and Copilot workflows.
 
 ## Product surfaces
 
@@ -36,6 +36,28 @@ path = "pyproject.toml"
 kind = "pep621"
 ```
 
+Native config is also supported in `package.json` (`"rrt": { ... }`) and
+`Cargo.toml` (`[package.metadata.rrt]` / `[workspace.metadata.rrt]`). Go repos
+should use `.rrt.toml` or `.config/rrt.toml`.
+
+## Conventional Branching
+
+`repo-release-tools` uses conventional branches as the next step after
+trunk-based publishing. The idea is simple: keep branches short-lived, encode
+intent in the branch name, and let release automation stay predictable.
+
+The default pattern is `type/kebab-case-description`, for example
+`feat/add-config-discovery` or `fix/handle-tag-workflows`.
+
+This works well with conventional commits and changelog automation:
+
+- branch type tells reviewers and automation what kind of change is coming
+- commit subjects stay conventional for changelog generation
+- release branches stay explicit, such as `release/v1.2.3`
+
+See [Conventional branches](docs/semantic-branches.md) for the full branch model
+and supported branch types.
+
 ## Documentation
 
 - [Docs index](docs/index.md)
@@ -43,7 +65,7 @@ kind = "pep621"
 - [GitHub Action](docs/github-action.md)
 - [pre-commit](docs/pre-commit.md)
 - [Skill](docs/skill.md)
-- [Semantic branches](docs/semantic-branches.md)
+- [Conventional branches](docs/semantic-branches.md)
 
 ## License
 

@@ -431,3 +431,46 @@ def test_cmd_bump_native_package_json_no_config(
 
     pkg = json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))
     assert pkg["version"] == "2.0.1"
+
+
+def test_cmd_bump_native_cargo_no_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Bump works on a plain Rust project (Cargo.toml only) without explicit rrt config."""
+    (tmp_path / "Cargo.toml").write_text(
+        """\
+[package]
+name = "example"
+version = "0.3.0"
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    content = (tmp_path / "Cargo.toml").read_text(encoding="utf-8")
+    assert 'version = "0.4.0"' in content

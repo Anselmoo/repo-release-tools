@@ -81,7 +81,7 @@ jobs:
         run: uv sync --all-groups
 
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q -m "not runtime"
 
   docker-image-check:
     name: Docker image smoke check
