@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from repo_release_tools.config import VersionTarget, find_config_file, load_config
+from repo_release_tools.config import (
+    VersionTarget,
+    autodetect_config,
+    find_config_file,
+    format_autodetected_config_notice,
+    load_config,
+)
 
 
 _RRT_CONFIG = """\
@@ -48,6 +54,19 @@ def test_load_config_supports_dot_config_path(tmp_path: Path) -> None:
     config = load_config(tmp_path)
 
     assert config.config_file == config_dir / "rrt.toml"
+
+
+def test_autodetected_notice_mentions_init_command(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+
+    config = autodetect_config(tmp_path)
+
+    assert config is not None
+    notice = format_autodetected_config_notice(config)
+    assert "rrt init" in notice
 
 
 def test_load_config_skips_existing_file_without_tool_rrt(tmp_path: Path) -> None:

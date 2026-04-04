@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 import tomllib
-import json
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +32,7 @@ VALID_TARGET_KINDS = frozenset({"pep621", "package_json"})
 VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
 
 AUTODETECTED_CONFIG_BASENAME = ".rrt.autodetected.toml"
+DEFAULT_INIT_CONFIG = ".rrt.toml"
 
 PYTHON_TOOL_RRT_EXAMPLE = dedent(
     """\
@@ -77,6 +77,19 @@ GO_TOOL_RRT_EXAMPLE = dedent(
 
     [[tool.rrt.version_targets]]
     path = "internal/version/version.go"
+    pattern = '^(const Version = ")([^"]+)(")$'
+    """
+).strip()
+
+GENERIC_TOOL_RRT_EXAMPLE = dedent(
+    """\
+    [tool.rrt]
+    release_branch = "release/v{version}"
+    changelog_file = "CHANGELOG.md"
+
+    # Replace this starter target with the file that owns your version string.
+    [[tool.rrt.version_targets]]
+    path = "path/to/version-file"
     pattern = '^(const Version = ")([^"]+)(")$'
     """
 ).strip()
@@ -225,13 +238,17 @@ class MissingRrtConfigError(ValueError):
     """Raised when a supported config file exists but does not contain rrt config."""
 
 
-def load_config(root: Path) -> RrtConfig:
-    """Load [tool.rrt] from the first supported config file in the repository root.
+def is_missing_tool_rrt_error(exc: Exception) -> bool:
+    """Return whether *exc* means supported config files exist without rrt config."""
+    if isinstance(exc, MissingRrtConfigError):
+        return True
 
-    Falls back to native project auto-detection when no [tool.rrt] section is
-    found anywhere, so that plain PEP 621, Poetry, and JS/TS projects work
-    without an explicit rrt config file.
-    """
+    message = str(exc)
+    return message.startswith("Missing rrt configuration in supported config files:")
+
+
+def load_config(root: Path) -> RrtConfig:
+    """Load explicit rrt config, or fall back to supported zero-config detection."""
     missing_tool_rrt: list[Path] = []
     for config_file in iter_config_files(root):
         try:
@@ -241,10 +258,9 @@ def load_config(root: Path) -> RrtConfig:
         except ValueError:
             raise
 
-    # Native auto-detection: works even when no config file exists at all.
-    auto = auto_detect_config(root)
-    if auto is not None:
-        return auto
+    autodetected = autodetect_config(root)
+    if autodetected is not None:
+        return autodetected
 
     if missing_tool_rrt:
         checked = ", ".join(str(path.relative_to(root)) for path in missing_tool_rrt)
@@ -285,25 +301,35 @@ def load_or_autodetect_config(root: Path) -> RrtConfig:
 def autodetect_config(root: Path) -> RrtConfig | None:
     """Build an implicit config from common root-level version files."""
     targets = _autodetect_version_targets(root)
-    if not targets:
-        return None
+    if len(targets) > 1:
+        group = VersionGroup(
+            name="default",
+            release_branch=DEFAULT_RELEASE_BRANCH,
+            changelog_file=root / DEFAULT_CHANGELOG,
+            lock_command=[],
+            generated_files=[],
+            version_targets=targets,
+            version_source=targets[0].path,
+        )
+        return RrtConfig(
+            root=root,
+            config_file=root / AUTODETECTED_CONFIG_BASENAME,
+            version_groups=[group],
+            default_group_name="default",
+            autodetected=True,
+        )
 
-    group = VersionGroup(
-        name="default",
-        release_branch=DEFAULT_RELEASE_BRANCH,
-        changelog_file=root / DEFAULT_CHANGELOG,
-        lock_command=[],
-        generated_files=[],
-        version_targets=targets,
-        version_source=targets[0].path,
-    )
-    return RrtConfig(
-        root=root,
-        config_file=root / AUTODETECTED_CONFIG_BASENAME,
-        version_groups=[group],
-        default_group_name="default",
-        autodetected=True,
-    )
+    single = auto_detect_config(root)
+    if single is not None:
+        return RrtConfig(
+            root=single.root,
+            config_file=single.config_file,
+            version_groups=single.version_groups,
+            default_group_name=single.default_group_name,
+            autodetected=True,
+        )
+
+    return None
 
 
 def format_autodetected_config_notice(config: RrtConfig) -> str:
@@ -314,7 +340,8 @@ def format_autodetected_config_notice(config: RrtConfig) -> str:
     return (
         "Using auto-detected version targets: "
         f"{targets}. Add [tool.rrt] in {supported} for optional fine-tuning "
-        "(groups, release branches, changelog path, lock commands, generated files, or custom patterns)."
+        "(groups, release branches, changelog path, lock commands, generated files, or custom patterns). "
+        f"Run `rrt init` to write the recommended {DEFAULT_INIT_CONFIG}."
     )
 
 
@@ -347,6 +374,8 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
     lines.extend(
         [
             "",
+            f"Run `rrt init` to generate a recommended {DEFAULT_INIT_CONFIG} starter.",
+            "",
             "Examples:",
             "",
             "Python / PEP 621:",
@@ -374,8 +403,15 @@ def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
 
     pyproject = root / "pyproject.toml"
     if _toml_string_field_exists(pyproject, section="project", field="version"):
+        targets.append(VersionTarget(path=pyproject, kind="pep621", ci_format="pep440"))
+    elif _toml_string_field_exists(pyproject, section="tool.poetry", field="version"):
         targets.append(
-            VersionTarget(path=pyproject, kind="pep621", ci_format="pep440")
+            VersionTarget(
+                path=pyproject,
+                section="tool.poetry",
+                field="version",
+                ci_format="pep440",
+            )
         )
 
     package_json = root / "package.json"
@@ -390,6 +426,15 @@ def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
             VersionTarget(
                 path=cargo_toml,
                 section="package",
+                field="version",
+                ci_format="semver_pre",
+            )
+        )
+    elif _toml_string_field_exists(cargo_toml, section="workspace.package", field="version"):
+        targets.append(
+            VersionTarget(
+                path=cargo_toml,
+                section="workspace.package",
                 field="version",
                 ci_format="semver_pre",
             )
@@ -443,6 +488,120 @@ def _describe_version_target(target: VersionTarget, *, root: Path) -> str:
     if target.pattern:
         return f"{relative} (pattern)"
     return relative
+
+
+def find_explicit_config_file(root: Path) -> Path | None:
+    """Return the first config file that contains explicit rrt configuration."""
+    for config_file in iter_config_files(root):
+        try:
+            load_config_from_path(root, config_file)
+        except MissingRrtConfigError:
+            continue
+        return config_file
+    return None
+
+
+def recommend_init_config(root: Path) -> str:
+    """Return a recommended .rrt.toml file for the current repository."""
+    config = autodetect_config(root)
+    if config is not None:
+        return _render_recommended_rrt_toml(root, config.resolve_group())
+
+    if (root / "go.mod").exists():
+        return "\n".join(
+            [
+                "# Edit the starter target below before using `rrt bump`.",
+                GO_TOOL_RRT_EXAMPLE,
+            ]
+        )
+
+    return GENERIC_TOOL_RRT_EXAMPLE
+
+
+def _render_recommended_rrt_toml(root: Path, group: VersionGroup) -> str:
+    """Render an explicit .rrt.toml mirroring the current recommended defaults."""
+    lines = [
+        "[tool.rrt]",
+        f'release_branch = {_toml_basic_string(group.release_branch)}',
+        f'changelog_file = {_toml_basic_string(str(group.changelog_file.relative_to(root)))}',
+    ]
+
+    lock_command, generated_files = _recommended_lock_settings(root, group.version_targets)
+    if lock_command:
+        lines.append(f"lock_command = {_toml_string_list(lock_command)}")
+    if generated_files:
+        lines.append(f"generated_files = {_toml_string_list(generated_files)}")
+    if len(group.version_targets) > 1:
+        lines.append(
+            f'version_source = {_toml_basic_string(str(group.primary_target().path.relative_to(root)))}'
+        )
+
+    for target in group.version_targets:
+        lines.extend(["", "[[tool.rrt.version_targets]]"])
+        lines.append(f'path = {_toml_basic_string(str(target.path.relative_to(root)))}')
+        if target.kind is not None:
+            lines.append(f'kind = {_toml_basic_string(target.kind)}')
+        if target.pattern is not None:
+            lines.append(f"pattern = {_toml_literal_string(target.pattern)}")
+        if target.section is not None:
+            lines.append(f'section = {_toml_basic_string(target.section)}')
+        if target.field is not None:
+            lines.append(f'field = {_toml_basic_string(target.field)}')
+        if target.ci_format is not None:
+            lines.append(f'ci_format = {_toml_basic_string(target.ci_format)}')
+
+    return "\n".join(lines)
+
+
+def _recommended_lock_settings(
+    root: Path,
+    targets: list[VersionTarget],
+) -> tuple[list[str], list[str]]:
+    """Return lockfile settings worth materialising into generated local config."""
+    ecosystems = {_target_ecosystem(target) for target in targets}
+    ecosystems.discard(None)
+    if len(ecosystems) != 1:
+        return [], []
+
+    ecosystem = next(iter(ecosystems))
+    if ecosystem == "python-pep621":
+        return list(DEFAULT_LOCK_COMMAND), ["uv.lock"]
+    if ecosystem == "python-poetry":
+        return ["poetry", "lock"], ["poetry.lock"]
+    if ecosystem in {"node", "rust", "go"}:
+        return _detect_lock_and_files(root, targets)
+    return [], []
+
+
+def _target_ecosystem(target: VersionTarget) -> str | None:
+    """Classify a version target by ecosystem for config recommendations."""
+    if target.kind == "pep621":
+        return "python-pep621"
+    if target.kind == "package_json":
+        return "node"
+    if target.section == "tool.poetry":
+        return "python-poetry"
+    if target.path.name == "Cargo.toml" and target.section in {"package", "workspace.package"}:
+        return "rust"
+    if target.path.name == "go.mod" or target.path.suffix == ".go":
+        return "go"
+    return None
+
+
+def _toml_basic_string(value: str) -> str:
+    """Render a TOML basic string."""
+    return json.dumps(value)
+
+
+def _toml_literal_string(value: str) -> str:
+    """Render a TOML literal string."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _toml_string_list(values: list[str]) -> str:
+    """Render a TOML string list."""
+    rendered = ", ".join(_toml_basic_string(value) for value in values)
+    return f"[{rendered}]"
 
 
 def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
@@ -589,7 +748,7 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
 
         # PEP 621 – requires an explicit version field.
         if isinstance(project_section, dict) and "version" in project_section:
-            target = VersionTarget(path=pyproject, kind="pep621")
+            target = VersionTarget(path=pyproject, kind="pep621", ci_format="pep440")
             group = VersionGroup(
                 name="default",
                 release_branch=DEFAULT_RELEASE_BRANCH,
@@ -607,7 +766,12 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
 
         # Poetry – requires an explicit version field.
         if isinstance(poetry_section, dict) and "version" in poetry_section:
-            target = VersionTarget(path=pyproject, section="tool.poetry", field="version")
+            target = VersionTarget(
+                path=pyproject,
+                section="tool.poetry",
+                field="version",
+                ci_format="pep440",
+            )
             lock_cmd, gen_files = _detect_lock_and_files(root, [target])
             if not lock_cmd:
                 lock_cmd = ["poetry", "lock"]
@@ -629,7 +793,7 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
 
     package_json = root / "package.json"
     if package_json.exists():
-        target = VersionTarget(path=package_json, kind="package_json")
+        target = VersionTarget(path=package_json, kind="package_json", ci_format="semver_pre")
         lock_cmd, gen_files = _detect_lock_and_files(root, [target])
         group = VersionGroup(
             name="default",
@@ -655,9 +819,19 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
         workspace_package_section = data.get("workspace", {}).get("package", {})
 
         if isinstance(package_section, dict) and "version" in package_section:
-            target = VersionTarget(path=cargo_toml, section="package", field="version")
+            target = VersionTarget(
+                path=cargo_toml,
+                section="package",
+                field="version",
+                ci_format="semver_pre",
+            )
         elif isinstance(workspace_package_section, dict) and "version" in workspace_package_section:
-            target = VersionTarget(path=cargo_toml, section="workspace.package", field="version")
+            target = VersionTarget(
+                path=cargo_toml,
+                section="workspace.package",
+                field="version",
+                ci_format="semver_pre",
+            )
         else:
             target = None
 

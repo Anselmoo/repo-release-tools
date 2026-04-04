@@ -14,6 +14,7 @@ policy, and version bumps across local development, CI, and Copilot workflows.
 
 ```bash
 pip install repo-release-tools
+rrt init
 rrt branch new feat "add parser"
 rrt bump patch
 ```
@@ -30,7 +31,7 @@ If multiple version files are found they are updated together, and explicit
 config becomes optional fine-tuning for groups, release branches, changelog
 paths, lock commands, generated files, or custom patterns. Go repos still need
 explicit config for file updates because Go has no standard in-file project
-version.
+version. Run `rrt init` to capture the current recommendation in `.rrt.toml`.
 
 Minimal config:
 

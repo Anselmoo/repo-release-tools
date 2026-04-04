@@ -17,6 +17,7 @@ uvx repo-release-tools branch new feat "add parser"
 ## Core commands
 
 ```bash
+rrt init
 rrt branch new feat "add parser"
 rrt branch rescue fix "recover release work"
 rrt bump patch
@@ -37,7 +38,21 @@ For basic versioning, `rrt` can work without `[tool.rrt]`.
 
 Add `[tool.rrt]` later only when you want fine-tuning such as grouped releases,
 custom release branches, changelog paths, lock commands, generated files, or
-pattern-based targets.
+pattern-based targets. Run `rrt init` when you want `rrt` to write a
+recommended `.rrt.toml` for the current repo shape.
+
+## Init
+
+```bash
+rrt init
+rrt init --dry-run
+rrt init --force
+```
+
+`rrt init` writes a recommended `.rrt.toml` in the repo root. It keeps branch
+creation config-free, preserves zero-config bumping, and gives you an explicit
+file when you want to tune release branches, changelog paths, generated files,
+or custom version targets.
 
 ## Configuration files
 
