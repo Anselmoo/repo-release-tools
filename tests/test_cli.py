@@ -16,4 +16,5 @@ def test_module_help_smoke() -> None:
     assert "repo-release-tools" in result.stdout
     assert "branch" in result.stdout
     assert "bump" in result.stdout
+    assert "git" in result.stdout
     assert "init" in result.stdout

@@ -20,10 +20,39 @@ uvx repo-release-tools branch new feat "add parser"
 rrt init
 rrt branch new feat "add parser"
 rrt branch rescue fix "recover release work"
+rrt git commit "add parser"
+rrt git sync
 rrt bump patch
 rrt bump minor --dry-run
 rrt bump 1.2.3 --no-changelog
 ```
+
+## Git workflows
+
+`rrt git` is intentionally not a full alias layer over raw Git. It focuses on
+repeatable workflows that match `repo-release-tools` policy:
+
+- `rrt git status` shows a compact branch summary and typed worktree entries
+- `rrt git log` shows recent history in a compact `rrt`-styled view
+- `rrt git doctor` checks branch policy, upstream state, dirty tree, latest
+  commit subject, and changelog risk in one report
+- `rrt git commit "message"` builds a conventional commit and infers the type
+  from the current branch when possible
+- `rrt git commit-all "message"` stages all files first, then creates the
+  conventional commit
+- `rrt git sync` fetches, auto-stashes when needed, then pulls with rebase by
+  default, showing a compact branch/worktree summary in the preview panel
+- `rrt git move <branch>` switches branches without dropping local changes
+- `rrt git squash-local "message"` squashes local commits since upstream into
+  one conventional commit
+- `rrt git undo-safe` rewinds a commit while keeping work staged or unstaged
+- `rrt git check-dirty-tree` exits non-zero when the working tree is dirty, for
+  use in hooks and CI, with typed entries for dirty paths
+- `rrt git rebootstrap` destroys history and creates a fresh initial history,
+  guarded by an explicit confirmation flag
+
+See [Git magic](git-magic.md) for the design rationale and the full workflow
+catalog.
 
 ## Zero-config mode
 

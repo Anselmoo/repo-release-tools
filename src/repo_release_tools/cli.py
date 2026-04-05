@@ -5,19 +5,20 @@ from __future__ import annotations
 import argparse
 import sys
 
-from repo_release_tools.commands import branch, bump, ci_version, init
+from repo_release_tools.commands import branch, bump, ci_version, git_cmd, init
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the root parser."""
     parser = argparse.ArgumentParser(
         prog="rrt",
-        description="repo-release-tools: branch and version helpers for Git repositories.",
+        description="repo-release-tools: branch, commit, and version helpers for Git repositories.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     branch.register(subparsers)
     bump.register(subparsers)
     ci_version.register(subparsers)
+    git_cmd.register(subparsers)
     init.register(subparsers)
     return parser
 

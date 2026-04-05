@@ -32,6 +32,9 @@ inputs:
   changelog-file:
     description: Explicit changelog path to validate
     default: "CHANGELOG.md"
+  check-dirty-tree:
+    description: Whether to fail when the checked-out work tree is dirty
+    default: "false"
 
 runs:
   using: composite
@@ -91,3 +94,11 @@ runs:
           --subject "$commit_subject" \
           --changelog-file "$INPUT_CHANGELOG_FILE" \
           --ref HEAD
+
+    - name: Validate clean working tree
+      if: inputs.check-dirty-tree == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        rrt-hooks check-dirty-tree

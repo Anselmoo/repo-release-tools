@@ -101,6 +101,44 @@ def test_main_check_commit_subject_rejects_invalid_subject() -> None:
     assert hooks.main(["check-commit-subject", "--subject", "update stuff"]) == 1
 
 
+def test_run_dirty_tree_check_accepts_clean_tree(monkeypatch) -> None:
+    monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: True)
+
+    assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 0
+
+
+def test_run_dirty_tree_check_rejects_dirty_tree(monkeypatch) -> None:
+    monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(
+        hooks.git,
+        "status_porcelain",
+        lambda cwd: [" M src/repo_release_tools/cli.py", "?? docs/git-magic.md"],
+    )
+
+    assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1
+
+
+def test_run_dirty_tree_check_reports_status_failure(monkeypatch) -> None:
+    monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(
+        hooks.git,
+        "status_porcelain",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("git status --short failed (exit 128)")),
+    )
+
+    assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1
+
+
+def test_main_check_dirty_tree_uses_hook_entrypoint(monkeypatch) -> None:
+    monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: True)
+
+    assert hooks.main(["check-dirty-tree"]) == 0
+
+
 def test_run_pre_commit_changelog_rejects_missing_staged_changelog(monkeypatch) -> None:
     monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "feat/add-hook-checks")
     monkeypatch.setattr(hooks, "staged_files", lambda cwd: ["src/repo_release_tools/hooks.py"])
@@ -171,6 +209,7 @@ def test_pre_commit_hooks_use_console_script_entrypoints() -> None:
     assert "entry: rrt-hooks pre-commit" in manifest
     assert "entry: rrt-hooks pre-commit-changelog" in manifest
     assert "entry: rrt-hooks commit-msg" in manifest
+    assert "entry: rrt-hooks check-dirty-tree" in manifest
 
 
 def test_action_installs_from_action_path_and_runs_hooks() -> None:
@@ -185,5 +224,7 @@ def test_action_installs_from_action_path_and_runs_hooks() -> None:
     assert "check-changelog:" in action_text
     assert "changelog-file:" in action_text
     assert "rrt-hooks check-changelog" in action_text
+    assert "check-dirty-tree:" in action_text
+    assert "rrt-hooks check-dirty-tree" in action_text
     assert '--changelog-file "$INPUT_CHANGELOG_FILE"' in action_text
     assert "--ref HEAD" in action_text
