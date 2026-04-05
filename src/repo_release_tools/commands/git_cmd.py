@@ -12,7 +12,14 @@ from pathlib import Path
 
 from repo_release_tools import git, output
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_description
-from repo_release_tools.hooks import ALLOWED_BRANCH_NAMES, MAGIC_BRANCH_TYPES
+from repo_release_tools.hooks import (
+    ALLOWED_BRANCH_NAMES,
+    MAGIC_BRANCH_TYPES,
+    branch_requires_changelog,
+    changelog_is_updated,
+    validate_branch_name,
+    validate_commit_subject,
+)
 
 
 COMMIT_TYPES = (*CONVENTIONAL_TYPES, "deps")
@@ -186,6 +193,118 @@ def cmd_status(args: argparse.Namespace) -> int:
     for line in status_lines:
         print(render_status_entry(line))
     return 0
+
+
+def cmd_log(args: argparse.Namespace) -> int:
+    """Show a compact git log view using rrt glyphs."""
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        print(f"{root} is not inside a Git work tree.", file=sys.stderr)
+        return 1
+
+    raw = git.capture(
+        ["git", "log", f"-n{args.limit}", "--pretty=format:%h%x09%s%x09%D"],
+        root,
+    )
+    lines = [line for line in raw.splitlines() if line.strip()]
+
+    print()
+    print(output.panel("Git log", [("Count", str(len(lines))), ("Limit", str(args.limit))]))
+    print()
+
+    if not lines:
+        print(output.warning("No commits found."))
+        return 0
+
+    for line in lines:
+        sha, subject, *rest = line.split("\t", 2)
+        refs_raw = rest[0] if rest else ""
+        refs = [ref.strip() for ref in refs_raw.split(",") if ref.strip()]
+        print(
+            output.status(output.GLYPHS.bullet.dot, output.GLYPHS.git.log_line(sha, subject, refs))
+        )
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Run a compact repository health report for rrt workflows."""
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        print(f"{root} is not inside a Git work tree.", file=sys.stderr)
+        return 1
+
+    branch_name = git.current_branch(root) or "<detached>"
+    upstream = git.upstream_branch(root)
+    status_lines = git.status_porcelain(root)
+    latest_subject = git.capture(["git", "log", "-1", "--pretty=%s"], root).strip()
+
+    branch_problem = validate_branch_name(branch_name)
+    subject_problem = (
+        validate_commit_subject(latest_subject) if latest_subject else "No commits found."
+    )
+    dirty_problem = None if not status_lines else "Working tree has uncommitted changes."
+
+    changelog_problem: str | None = None
+    if latest_subject and branch_requires_changelog(branch_name):
+        changed_files = git.capture(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", "HEAD"],
+            root,
+        )
+        changed = [line for line in changed_files.splitlines() if line.strip()]
+        if not changelog_is_updated(changed, changelog_file=args.changelog_file, cwd=root):
+            changelog_problem = (
+                f"Branch {branch_name!r} suggests changelog work, but {args.changelog_file} "
+                "is not part of HEAD."
+            )
+
+    summary = summarize_status(branch_name, status_lines, upstream=upstream)
+    print()
+    print(
+        output.panel(
+            "Git doctor",
+            [
+                ("Branch", branch_name),
+                ("Upstream", upstream or "<none>"),
+                ("Status", summary),
+                ("Commit", latest_subject or "<none>"),
+            ],
+        )
+    )
+    print()
+
+    print(output.section("Checks"))
+    failures = 0
+
+    checks: list[tuple[bool, str]] = [
+        (branch_problem is None, "Branch naming matches rrt policy."),
+        (upstream is not None, "Upstream branch is configured."),
+        (dirty_problem is None, "Working tree is clean."),
+        (subject_problem is None, "Latest commit subject is conventional."),
+        (changelog_problem is None, f"Changelog state is valid for {args.changelog_file}."),
+    ]
+    problems = [
+        branch_problem or "",
+        "No upstream branch configured." if upstream is None else "",
+        dirty_problem or "",
+        subject_problem or "",
+        changelog_problem or "",
+    ]
+
+    for (ok, success), problem in zip(checks, problems, strict=True):
+        if ok:
+            print(output.ok(success))
+            continue
+        failures += 1
+        print(output.error(problem))
+
+    if failures == 0:
+        print()
+        print(output.ok("Doctor checks passed."))
+        return 0
+
+    print()
+    print(output.warning(f"Doctor found {failures} issue(s)."), file=sys.stderr)
+    return 1
 
 
 def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
@@ -592,6 +711,30 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Show a compact branch and worktree status view.",
     )
     status_parser.set_defaults(handler=cmd_status)
+
+    log_parser = git_sub.add_parser(
+        "log",
+        help="Show a compact commit history view.",
+    )
+    log_parser.add_argument(
+        "-n",
+        "--limit",
+        default=10,
+        type=int,
+        help="Number of commits to show.",
+    )
+    log_parser.set_defaults(handler=cmd_log)
+
+    doctor_parser = git_sub.add_parser(
+        "doctor",
+        help="Run a compact repository health report for rrt workflows.",
+    )
+    doctor_parser.add_argument(
+        "--changelog-file",
+        default="CHANGELOG.md",
+        help="Changelog path used for doctor checks.",
+    )
+    doctor_parser.set_defaults(handler=cmd_doctor)
 
     dirty_parser = git_sub.add_parser(
         "check-dirty-tree",

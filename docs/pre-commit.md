@@ -9,7 +9,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v0.1.0
+    rev: v0.1.6
     hooks:
       - id: rrt-branch-name
       - id: rrt-changelog
@@ -39,7 +39,7 @@ clean repository before publishing work:
 ```yaml
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v0.1.0
+    rev: v0.1.6
     hooks:
       - id: rrt-dirty-tree
         stages: [pre-push]

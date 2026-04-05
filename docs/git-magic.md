@@ -51,6 +51,8 @@ the surface around conventional branches, commit policy, and release safety.
 
 ```bash
 rrt git status
+rrt git log -n 12
+rrt git doctor
 rrt git check-dirty-tree
 rrt git commit "handle empty config"
 rrt git commit-all "snapshot parser cleanup"
@@ -86,8 +88,8 @@ That gives one policy model with several entrypoints:
 - `rrt git ...` for interactive workflow
 - `rrt-hooks ...` for local enforcement
 - GitHub Actions for CI enforcement
-- future composite checks that compare branch state, commit subject, and dirty
-  tree status in one report
+- `rrt git doctor` for one-shot cross-checks of branch state, commit subject,
+  dirty tree status, upstream wiring, and changelog risk
 
 ## Design rules
 

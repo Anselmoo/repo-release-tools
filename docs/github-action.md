@@ -7,7 +7,7 @@
 ```yaml
 - uses: actions/checkout@v6
 
-- uses: Anselmoo/repo-release-tools@v0.1.0
+- uses: Anselmoo/repo-release-tools@v0.1.6
   with:
     check-branch-name: "true"
     check-changelog: "true"

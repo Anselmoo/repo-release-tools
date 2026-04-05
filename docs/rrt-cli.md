@@ -33,6 +33,9 @@ rrt bump 1.2.3 --no-changelog
 repeatable workflows that match `repo-release-tools` policy:
 
 - `rrt git status` shows a compact branch summary and typed worktree entries
+- `rrt git log` shows recent history in a compact `rrt`-styled view
+- `rrt git doctor` checks branch policy, upstream state, dirty tree, latest
+  commit subject, and changelog risk in one report
 - `rrt git commit "message"` builds a conventional commit and infers the type
   from the current branch when possible
 - `rrt git commit-all "message"` stages all files first, then creates the
