@@ -9,8 +9,19 @@ from pathlib import Path
 
 from repo_release_tools import git, output
 from repo_release_tools.changelog import build_changelog_section
-from repo_release_tools.config import RrtConfig, load_config
-from repo_release_tools.version_targets import read_group_current_version, replace_version_in_file
+from repo_release_tools.config import (
+    RrtConfig,
+    format_autodetected_config_notice,
+    format_missing_tool_rrt_guidance,
+    is_missing_tool_rrt_error,
+    iter_config_files,
+    load_or_autodetect_config,
+)
+from repo_release_tools.version_targets import (
+    check_autodetected_version_consistency,
+    read_group_current_version,
+    replace_version_in_file,
+)
 from repo_release_tools.versioning import Version
 
 PREVIEW_LINES = 8
@@ -61,10 +72,27 @@ def cmd_bump(args: argparse.Namespace) -> int:
     """Bump project version using [tool.rrt]."""
     root = Path.cwd()
     try:
-        config = load_config(root)
-    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        config = load_or_autodetect_config(root)
+    except FileNotFoundError:
+        print(output.warning("No supported rrt config file found."), file=sys.stderr)
+        print(format_missing_tool_rrt_guidance(root, []), file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            print(output.warning("No [tool.rrt] configuration found."), file=sys.stderr)
+            print(format_missing_tool_rrt_guidance(root, iter_config_files(root)), file=sys.stderr)
+            return 1
         print(str(exc), file=sys.stderr)
         return 1
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if config.autodetected:
+        print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
+        if mismatch := check_autodetected_version_consistency(config):
+            print(mismatch, file=sys.stderr)
+            return 1
 
     try:
         group = config.resolve_group(args.group)

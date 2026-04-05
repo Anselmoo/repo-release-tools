@@ -17,12 +17,42 @@ uvx repo-release-tools branch new feat "add parser"
 ## Core commands
 
 ```bash
+rrt init
 rrt branch new feat "add parser"
 rrt branch rescue fix "recover release work"
 rrt bump patch
 rrt bump minor --dry-run
 rrt bump 1.2.3 --no-changelog
 ```
+
+## Zero-config mode
+
+For basic versioning, `rrt` can work without `[tool.rrt]`.
+
+- `bump` and `ci-version` auto-detect root-level `pyproject.toml`, `package.json`,
+  and `Cargo.toml`
+- If multiple version files are found, they are updated together
+- Auto-detected files must already agree on the current version before `bump`
+- Go does not have a standard in-file project version, so Go repos still need
+  explicit config for file updates
+
+Add `[tool.rrt]` later only when you want fine-tuning such as grouped releases,
+custom release branches, changelog paths, lock commands, generated files, or
+pattern-based targets. Run `rrt init` when you want `rrt` to write a
+recommended `.rrt.toml` for the current repo shape.
+
+## Init
+
+```bash
+rrt init
+rrt init --dry-run
+rrt init --force
+```
+
+`rrt init` writes a recommended `.rrt.toml` in the repo root. It keeps branch
+creation config-free, preserves zero-config bumping, and gives you an explicit
+file when you want to tune release branches, changelog paths, generated files,
+or custom version targets.
 
 ## Configuration files
 
@@ -34,7 +64,9 @@ rrt bump 1.2.3 --no-changelog
 4. `.rrt.toml`
 5. `.config/rrt.toml`
 
-Native config locations:
+All use the same `[tool.rrt]` table.
+Use `.rrt.toml` or `.config/rrt.toml` for local repo config if you do not want
+to keep release-tool settings in `pyproject.toml`.
 
 - `pyproject.toml`, `.rrt.toml`, `.config/rrt.toml`: `[tool.rrt]`
 - `package.json`: top-level `"rrt": { ... }`

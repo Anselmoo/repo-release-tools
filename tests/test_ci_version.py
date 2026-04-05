@@ -228,7 +228,50 @@ def test_cmd_compute_no_config_no_base_fails(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     result = cmd_ci_version_compute(_ns())
+    captured = capsys.readouterr()
     assert result == 1
+    assert "No supported rrt config file found." in captured.err
+
+
+def test_cmd_compute_reads_base_from_autodetected_package_json(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "package.json").write_text(
+        """{
+  "name": "example",
+  "version": "0.2.0"
+}
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12", run_attempt="1"))
+    captured = capsys.readouterr()
+    assert result == 0
+    assert captured.out.strip() == "0.2.0.dev1201"
+    assert "Using auto-detected version targets: package.json (version)." in captured.err
+
+
+def test_cmd_compute_autodetect_mismatch_fails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "example"\nversion = "0.3.0"\n', encoding="utf-8"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12", run_attempt="1"))
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Auto-detected version files do not agree" in captured.err
 
 
 def test_cmd_compute_reads_base_from_rrt_toml(
@@ -338,6 +381,28 @@ version = "1.0.0"
     captured = capsys.readouterr()
     assert result == 1
     assert "ci_format" in captured.err
+
+
+def test_cmd_apply_autodetects_python_and_rust_without_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0.dev12345601", dry_run=False))
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Using auto-detected version targets:" in captured.err
+    assert "0.2.0.dev12345601" in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert "0.2.0-dev.12345601" in (tmp_path / "Cargo.toml").read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------

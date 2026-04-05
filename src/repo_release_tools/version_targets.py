@@ -59,6 +59,32 @@ def read_group_current_version(group: VersionGroup) -> Version:
     return Version.parse(read_version_string(group.primary_target()))
 
 
+def read_group_version_strings(group: VersionGroup) -> list[tuple[VersionTarget, str]]:
+    """Read the current version string from every target in a group."""
+    return [(target, read_version_string(target)) for target in group.version_targets]
+
+
+def check_autodetected_version_consistency(config: RrtConfig) -> str | None:
+    """Return an error message when auto-detected targets disagree on the version.
+
+    Returns ``None`` when all targets agree or config is not auto-detected.
+    """
+    if not config.autodetected:
+        return None
+
+    group = config.resolve_group()
+    versions = read_group_version_strings(group)
+    distinct_versions = {version for _, version in versions}
+    if len(distinct_versions) <= 1:
+        return None
+
+    details = ", ".join(f"{target.path.name}={version}" for target, version in versions)
+    return (
+        "Auto-detected version files do not agree: "
+        f"{details}. Make them consistent, or add rrt config to choose explicit targets/groups."
+    )
+
+
 def read_version_string(target: VersionTarget) -> str:
     """Read the current version string from a target."""
     text = target.path.read_text(encoding="utf-8")
