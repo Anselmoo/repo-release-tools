@@ -19,7 +19,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     """Write a recommended local .rrt.toml file."""
     root = Path.cwd()
     target = root / DEFAULT_INIT_CONFIG
-    explicit_config = find_explicit_config_file(root)
+
+    try:
+        explicit_config = find_explicit_config_file(root)
+    except (ValueError, RuntimeError) as exc:
+        print(output.warning(f"Could not read existing configuration: {exc}"), file=sys.stderr)
+        return 1
 
     if explicit_config is not None and explicit_config != target and not args.force:
         relative = explicit_config.relative_to(root)
@@ -37,7 +42,11 @@ def cmd_init(args: argparse.Namespace) -> int:
         )
         return 1
 
-    config_text = recommend_init_config(root)
+    try:
+        config_text = recommend_init_config(root)
+    except (ValueError, RuntimeError) as exc:
+        print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
+        return 1
 
     print()
     print(

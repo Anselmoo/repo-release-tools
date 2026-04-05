@@ -24,6 +24,15 @@ CONFIG_FILE_CANDIDATES = (
     ".config/rrt.toml",
 )
 
+# Per-file rrt config section names used in user-facing guidance messages.
+CONFIG_SECTION_BY_FILE: dict[str, str] = {
+    "pyproject.toml": "[tool.rrt]",
+    "package.json": "rrt (top-level key)",
+    "Cargo.toml": "[package.metadata.rrt] / [workspace.metadata.rrt]",
+    ".rrt.toml": "[tool.rrt]",
+    ".config/rrt.toml": "[tool.rrt]",
+}
+
 # Sentinel: lock_command / generated_files not explicitly configured → auto-detect.
 _AUTO: list[str] | None = None
 
@@ -338,11 +347,14 @@ def format_autodetected_config_notice(config: RrtConfig) -> str:
     targets = ", ".join(
         _describe_version_target(target, root=config.root) for target in group.version_targets
     )
-    supported = ", ".join(CONFIG_FILE_CANDIDATES)
+    file_guidance = "; ".join(
+        f"{name} \u2192 {section}" for name, section in CONFIG_SECTION_BY_FILE.items()
+    )
     return (
         "Using auto-detected version targets: "
-        f"{targets}. Add [tool.rrt] in {supported} for optional fine-tuning "
-        "(groups, release branches, changelog path, lock commands, generated files, or custom patterns). "
+        f"{targets}. For optional fine-tuning (groups, release branches, changelog path, "
+        "lock commands, generated files, or custom patterns), add rrt config using the "
+        f"appropriate section for your project file: {file_guidance}. "
         f"Run `rrt init` to write the recommended {DEFAULT_INIT_CONFIG}."
     )
 
@@ -354,7 +366,7 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
     lines: list[str] = []
     if checked_files:
         checked = ", ".join(str(path.relative_to(root)) for path in checked_files)
-        lines.append(f"No [tool.rrt] configuration was found in supported config files: {checked}")
+        lines.append(f"No rrt configuration was found in supported config files: {checked}")
     else:
         supported = ", ".join(CONFIG_FILE_CANDIDATES)
         lines.append(f"No supported config file was found. Supported locations: {supported}")
@@ -367,11 +379,11 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
             "  - package.json -> top-level version",
             "  - Cargo.toml -> [package].version",
             "",
-            "If none of those exist, add optional [tool.rrt] config in any supported file:",
+            "If none of those exist, add rrt config using the appropriate section for your project file:",
         ]
     )
-    for candidate in CONFIG_FILE_CANDIDATES:
-        lines.append(f"  - {candidate}")
+    for name, section in CONFIG_SECTION_BY_FILE.items():
+        lines.append(f"  - {name} \u2192 {section}")
 
     lines.extend(
         [

@@ -40,8 +40,8 @@ from repo_release_tools.config import (
     load_or_autodetect_config,
 )
 from repo_release_tools.version_targets import (
+    check_autodetected_version_consistency,
     read_group_current_version,
-    read_group_version_strings,
     replace_version_in_file,
 )
 
@@ -143,7 +143,7 @@ def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
         config = load_or_autodetect_config(root)
         if config.autodetected:
             print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
-            if mismatch := _autodetected_version_mismatch(config):
+            if mismatch := check_autodetected_version_consistency(config):
                 print(mismatch, file=sys.stderr)
                 return None
         group = config.resolve_group(getattr(args, "group", None))
@@ -162,24 +162,6 @@ def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return None
-
-
-def _autodetected_version_mismatch(config) -> str | None:
-    """Return an error message when auto-detected targets disagree."""
-    if not config.autodetected:
-        return None
-
-    group = config.resolve_group()
-    versions = read_group_version_strings(group)
-    distinct_versions = {version for _, version in versions}
-    if len(distinct_versions) <= 1:
-        return None
-
-    details = ", ".join(f"{target.path.name}={version}" for target, version in versions)
-    return (
-        "Auto-detected version files do not agree: "
-        f"{details}. Make them consistent, or add [tool.rrt] to choose explicit targets/groups."
-    )
 
 
 # ---------------------------------------------------------------------------

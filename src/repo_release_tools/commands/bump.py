@@ -18,31 +18,13 @@ from repo_release_tools.config import (
     load_or_autodetect_config,
 )
 from repo_release_tools.version_targets import (
+    check_autodetected_version_consistency,
     read_group_current_version,
-    read_group_version_strings,
     replace_version_in_file,
 )
 from repo_release_tools.versioning import Version
 
 PREVIEW_LINES = 8
-
-
-def _ensure_autodetected_versions_match(config: RrtConfig) -> str | None:
-    """Return an error message when auto-detected targets disagree on the version."""
-    if not config.autodetected:
-        return None
-
-    group = config.resolve_group()
-    versions = read_group_version_strings(group)
-    distinct_versions = {version for _, version in versions}
-    if len(distinct_versions) <= 1:
-        return None
-
-    details = ", ".join(f"{target.path.name}={version}" for target, version in versions)
-    return (
-        "Auto-detected version files do not agree: "
-        f"{details}. Make them consistent, or add [tool.rrt] to choose explicit targets/groups."
-    )
 
 
 def git_log_since_latest_tag(root: Path) -> list[str]:
@@ -108,7 +90,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     if config.autodetected:
         print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
-        if mismatch := _ensure_autodetected_versions_match(config):
+        if mismatch := check_autodetected_version_consistency(config):
             print(mismatch, file=sys.stderr)
             return 1
 
