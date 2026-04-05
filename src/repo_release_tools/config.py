@@ -348,7 +348,7 @@ def format_autodetected_config_notice(config: RrtConfig) -> str:
         _describe_version_target(target, root=config.root) for target in group.version_targets
     )
     file_guidance = "; ".join(
-        f"{name} \u2192 {section}" for name, section in CONFIG_SECTION_BY_FILE.items()
+        f"{name} \u2192 {CONFIG_SECTION_BY_FILE[name]}" for name in CONFIG_FILE_CANDIDATES
     )
     return (
         "Using auto-detected version targets: "
@@ -382,8 +382,8 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
             "If none of those exist, add rrt config using the appropriate section for your project file:",
         ]
     )
-    for name, section in CONFIG_SECTION_BY_FILE.items():
-        lines.append(f"  - {name} \u2192 {section}")
+    for name in CONFIG_FILE_CANDIDATES:
+        lines.append(f"  - {name} \u2192 {CONFIG_SECTION_BY_FILE[name]}")
 
     lines.extend(
         [
