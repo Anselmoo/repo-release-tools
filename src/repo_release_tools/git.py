@@ -99,8 +99,16 @@ def status_porcelain(cwd: Path, *, include_branch: bool = False) -> list[str]:
     command = ["git", "status", "--short"]
     if include_branch:
         command.append("--branch")
-    out = capture(command, cwd)
-    return [line for line in out.splitlines() if line.strip()]
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+    return [line for line in result.stdout.splitlines() if line]
 
 
 def upstream_branch(cwd: Path) -> str | None:

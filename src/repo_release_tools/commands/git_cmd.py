@@ -388,6 +388,9 @@ def cmd_commit_all(args: argparse.Namespace) -> int:
 def cmd_sync(args: argparse.Namespace) -> int:
     """Fetch, stash when needed, and pull the current branch."""
     root = Path.cwd()
+    if not git.is_git_repository(root):
+        print(output.error(f"{root} is not inside a Git work tree."), file=sys.stderr)
+        return 1
     branch_name = git.current_branch(root) or "<detached>"
     upstream = git.upstream_branch(root)
     if upstream is None:
@@ -454,6 +457,9 @@ def cmd_sync(args: argparse.Namespace) -> int:
 def cmd_move(args: argparse.Namespace) -> int:
     """Switch branches safely by stashing and restoring local changes."""
     root = Path.cwd()
+    if not git.is_git_repository(root):
+        print(output.error(f"{root} is not inside a Git work tree."), file=sys.stderr)
+        return 1
     current = git.current_branch(root) or "<detached>"
     dirty = not git.working_tree_clean(root)
     target_label = f"new branch {args.target}" if args.create else args.target

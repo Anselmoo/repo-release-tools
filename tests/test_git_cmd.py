@@ -133,7 +133,30 @@ def test_cmd_doctor_reports_success(monkeypatch, capsys) -> None:
     assert "Doctor checks passed." in captured.out
 
 
+def test_cmd_sync_requires_git_repository(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
+    args = argparse.Namespace(merge=False, dry_run=True)
+
+    assert git_cmd.cmd_sync(args) == 1
+
+    captured = capsys.readouterr()
+    assert "is not inside a Git work tree" in captured.err
+
+
+def test_cmd_move_requires_git_repository(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
+    args = argparse.Namespace(target="feat/add-parser", create=False, dry_run=True)
+
+    assert git_cmd.cmd_move(args) == 1
+
+    captured = capsys.readouterr()
+    assert "is not inside a Git work tree" in captured.err
+
+
 def test_cmd_sync_dry_run_stashes_before_rebase(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
     monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
@@ -172,6 +195,20 @@ def test_cmd_check_dirty_tree_reports_status_lines(monkeypatch, capsys) -> None:
     assert "feat/add-parser" in captured.err
     assert "src/repo_release_tools/cli.py" in captured.err
     assert "docs/git-magic.md" in captured.err
+
+
+def test_cmd_move_dry_run_stashes_before_checkout(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+    args = argparse.Namespace(target="feat/add-parser", create=False, dry_run=True)
+
+    assert git_cmd.cmd_move(args) == 0
+
+    captured = capsys.readouterr()
+    assert "git stash push -u -m rrt git move auto-stash" in captured.out
+    assert "git checkout feat/add-parser" in captured.out
+    assert "git stash pop" in captured.out
 
 
 def test_cmd_rebootstrap_requires_confirmation(tmp_path, monkeypatch, capsys) -> None:
