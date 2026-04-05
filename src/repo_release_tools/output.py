@@ -1,89 +1,11 @@
-"""Terminal output helpers with platform-aware glyph fallbacks."""
+"""Terminal output helpers with a small shared glyph registry."""
 
 from __future__ import annotations
 
-import sys
-
-from dataclasses import dataclass, field
+from repo_release_tools.glyphs import GLYPHS, Glyph
 
 
-IS_LEGACY_TERMINAL = sys.platform == "win32"
 SECTION_WIDTH = 52
-
-
-def _g(windows_ascii: str, unicode_glyph: str) -> str:
-    """Return an ASCII fallback on legacy Windows terminals."""
-    return windows_ascii if IS_LEGACY_TERMINAL else unicode_glyph
-
-
-@dataclass(frozen=True)
-class Glyph:
-    """A platform-aware terminal glyph."""
-
-    symbol: str
-    name: str
-
-    def __str__(self) -> str:
-        return self.symbol
-
-    def __mul__(self, count: int) -> str:
-        return self.symbol * count
-
-    def __rmul__(self, count: int) -> str:
-        return self.symbol * count
-
-
-@dataclass(frozen=True)
-class BoxGlyphs:
-    """Box-drawing glyphs used for summaries and sections."""
-
-    h: Glyph = field(default_factory=lambda: Glyph(_g("-", "─"), "h"))
-    v: Glyph = field(default_factory=lambda: Glyph(_g("|", "│"), "v"))
-    tl: Glyph = field(default_factory=lambda: Glyph(_g("+", "┌"), "top_left"))
-    tr: Glyph = field(default_factory=lambda: Glyph(_g("+", "┐"), "top_right"))
-    bl: Glyph = field(default_factory=lambda: Glyph(_g("+", "└"), "bottom_left"))
-    br: Glyph = field(default_factory=lambda: Glyph(_g("+", "┘"), "bottom_right"))
-    left: Glyph = field(default_factory=lambda: Glyph(_g("+", "├"), "left"))
-    right: Glyph = field(default_factory=lambda: Glyph(_g("+", "┤"), "right"))
-    cross: Glyph = field(default_factory=lambda: Glyph(_g("+", "┼"), "cross"))
-
-
-@dataclass(frozen=True)
-class ArrowGlyphs:
-    """Directional glyphs for transitions and actions."""
-
-    right: Glyph = field(default_factory=lambda: Glyph(_g("->", "→"), "right"))
-
-
-@dataclass(frozen=True)
-class BulletGlyphs:
-    """Status glyphs for successful, skipped, and warning states."""
-
-    dot: Glyph = field(default_factory=lambda: Glyph(_g("*", "•"), "dot"))
-    ok: Glyph = field(default_factory=lambda: Glyph(_g("[OK]", "✔"), "ok"))
-    skip: Glyph = field(default_factory=lambda: Glyph(_g("[-]", "⊖"), "skip"))
-    warning: Glyph = field(default_factory=lambda: Glyph(_g("/!\\", "▲"), "warning"))
-
-
-@dataclass(frozen=True)
-class TypographyGlyphs:
-    """Typography glyphs that benefit from fallbacks."""
-
-    ellipsis: Glyph = field(default_factory=lambda: Glyph(_g("...", "…"), "ellipsis"))
-    mdash: Glyph = field(default_factory=lambda: Glyph(_g("--", "—"), "mdash"))
-
-
-@dataclass(frozen=True)
-class GlyphSet:
-    """Shared glyph registry for terminal output."""
-
-    box: BoxGlyphs = field(default_factory=BoxGlyphs)
-    arrow: ArrowGlyphs = field(default_factory=ArrowGlyphs)
-    bullet: BulletGlyphs = field(default_factory=BulletGlyphs)
-    typography: TypographyGlyphs = field(default_factory=TypographyGlyphs)
-
-
-GLYPHS = GlyphSet()
 
 
 def section(title: str) -> str:
@@ -147,6 +69,11 @@ def ok(message: str, *, indent: int = 2) -> str:
 def warning(message: str, *, indent: int = 2) -> str:
     """Render a warning line."""
     return status(GLYPHS.bullet.warning, message, indent=indent)
+
+
+def error(message: str, *, indent: int = 2) -> str:
+    """Render an error line."""
+    return status(GLYPHS.bullet.error, message, indent=indent)
 
 
 def dry_run(message: str, *, indent: int = 2) -> str:

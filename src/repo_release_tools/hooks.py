@@ -213,6 +213,28 @@ def run_commit_subject_check(subject: str, *, title: str) -> int:
     )
 
 
+def run_dirty_tree_check(cwd: Path, *, title: str) -> int:
+    """Validate that the working tree is clean."""
+    if not git.is_git_repository(cwd):
+        return emit_failure(
+            title,
+            [f"{cwd} is not inside a Git work tree."],
+        )
+
+    if git.working_tree_clean(cwd):
+        return 0
+
+    changed = git.capture(["git", "status", "--short"], cwd)
+    lines = [line for line in changed.splitlines() if line.strip()]
+    return emit_failure(
+        title,
+        [
+            "Working tree has uncommitted changes.",
+            (f"Changed entries: {', '.join(lines) if lines else '<unavailable>'}."),
+        ],
+    )
+
+
 def run_pre_commit(cwd: Path) -> int:
     """Validate the active branch during pre-commit."""
     branch_name = git.current_branch(cwd)
@@ -347,6 +369,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Git ref whose changed files should be inspected when --changed-file is omitted.",
     )
 
+    subparsers.add_parser(
+        "check-dirty-tree",
+        help="Validate that the current working tree is clean.",
+    )
+
     parsed = parser.parse_args(sys.argv[1:] if argv is None else argv)
     if parsed.command == "pre-commit":
         return run_pre_commit(Path.cwd())
@@ -358,6 +385,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_branch_name_check(parsed.branch, title="Branch name validation failed.")
     if parsed.command == "check-commit-subject":
         return run_commit_subject_check(parsed.subject, title="Commit subject validation failed.")
+    if parsed.command == "check-dirty-tree":
+        return run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.")
     return run_changelog_check(
         parsed.subject,
         cwd=Path.cwd(),

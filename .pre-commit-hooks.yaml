@@ -26,3 +26,13 @@
   always_run: true
   stages: [commit-msg]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-dirty-tree
+  name: repo-release-tools dirty tree
+  description: Fail when the repository has uncommitted changes
+  entry: rrt-hooks check-dirty-tree
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual, pre-push]
+  minimum_pre_commit_version: "3.2.0"

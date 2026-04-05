@@ -1,7 +1,8 @@
 # repo-release-tools
 
 `repo-release-tools` is a small product for conventional branches, changelog
-policy, and version bumps across local development, CI, and Copilot workflows.
+policy, version bumps, and opinionated Git workflows across local development,
+CI, and Copilot workflows.
 
 ## Product surfaces
 
@@ -16,6 +17,7 @@ policy, and version bumps across local development, CI, and Copilot workflows.
 pip install repo-release-tools
 rrt init
 rrt branch new feat "add parser"
+rrt git commit "add parser"
 rrt bump patch
 ```
 
@@ -75,9 +77,15 @@ and supported branch types.
 - [pre-commit](docs/pre-commit.md)
 - [Skill](docs/skill.md)
 - [Conventional branches](docs/semantic-branches.md)
+- [Git magic](docs/git-magic.md)
 
 ## License
 
 `repo-release-tools` is released under the MIT License.
+
+Some workflow ideas were initially inspired by
+[`joseluisq/gitnow`](https://github.com/joseluisq/gitnow), but the `rrt git`
+surface is intentionally narrower and reshaped around conventional branching,
+safe commits, and release automation.
 
 Built with ❤️ for safe, simple release automation.
