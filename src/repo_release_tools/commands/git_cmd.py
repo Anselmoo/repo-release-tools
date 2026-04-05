@@ -15,8 +15,8 @@ from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_descript
 from repo_release_tools.hooks import (
     ALLOWED_BRANCH_NAMES,
     MAGIC_BRANCH_TYPES,
-    branch_requires_changelog,
     changelog_is_updated,
+    commit_subject_requires_changelog,
     validate_branch_name,
     validate_commit_subject,
 )
@@ -160,6 +160,14 @@ def summarize_status(branch_name: str, status_lines: list[str], *, upstream: str
     )
 
 
+def load_status_lines(root: Path) -> list[str]:
+    """Load status lines or raise a user-facing runtime error."""
+    try:
+        return git.status_porcelain(root)
+    except RuntimeError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """Show a compact repository status view."""
     root = Path.cwd()
@@ -169,7 +177,11 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     branch_name = git.current_branch(root) or "<detached>"
     upstream = git.upstream_branch(root)
-    status_lines = git.status_porcelain(root)
+    try:
+        status_lines = load_status_lines(root)
+    except RuntimeError as exc:
+        print(output.error(str(exc)), file=sys.stderr)
+        return 1
     summary = summarize_status(branch_name, status_lines, upstream=upstream)
 
     print()
@@ -235,7 +247,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     branch_name = git.current_branch(root) or "<detached>"
     upstream = git.upstream_branch(root)
-    status_lines = git.status_porcelain(root)
+    try:
+        status_lines = load_status_lines(root)
+    except RuntimeError as exc:
+        print(output.error(str(exc)), file=sys.stderr)
+        return 1
     latest_subject = git.capture(["git", "log", "-1", "--pretty=%s"], root).strip()
 
     branch_problem = validate_branch_name(branch_name)
@@ -245,7 +261,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     dirty_problem = None if not status_lines else "Working tree has uncommitted changes."
 
     changelog_problem: str | None = None
-    if latest_subject and branch_requires_changelog(branch_name):
+    if latest_subject and commit_subject_requires_changelog(latest_subject):
         changed_files = git.capture(
             ["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", "HEAD"],
             root,
@@ -327,7 +343,11 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
 
     branch_name = git.current_branch(root) or "<detached>"
     upstream = git.upstream_branch(root)
-    changed = git.status_porcelain(root)
+    try:
+        changed = load_status_lines(root)
+    except RuntimeError as exc:
+        print(output.error(str(exc)), file=sys.stderr)
+        return 1
     print(output.warning("Working tree has uncommitted changes."), file=sys.stderr)
     print(
         output.status(
@@ -402,7 +422,11 @@ def cmd_sync(args: argparse.Namespace) -> int:
         return 1
 
     dirty = not git.working_tree_clean(root)
-    status_lines = git.status_porcelain(root)
+    try:
+        status_lines = load_status_lines(root)
+    except RuntimeError as exc:
+        print(output.error(str(exc)), file=sys.stderr)
+        return 1
     strategy = "merge" if args.merge else "rebase"
     title = "[DRY RUN] Sync" if args.dry_run else "Sync"
     print()

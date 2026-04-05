@@ -61,6 +61,23 @@ def test_cmd_status_renders_clean_tree(monkeypatch, capsys) -> None:
     assert "Working tree is clean." in captured.out
 
 
+def test_cmd_status_reports_status_failure(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/main")
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("git status --short failed (exit 128)")),
+    )
+    args = argparse.Namespace()
+
+    assert git_cmd.cmd_status(args) == 1
+
+    captured = capsys.readouterr()
+    assert "git status --short failed" in captured.err
+
+
 def test_cmd_log_renders_compact_history(monkeypatch, capsys) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(
@@ -122,6 +139,29 @@ def test_cmd_doctor_reports_success(monkeypatch, capsys) -> None:
             return "feat: add parser"
         if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
             return "CHANGELOG.md\nsrc/repo_release_tools/cli.py"
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(git_cmd.git, "capture", fake_capture)
+    args = argparse.Namespace(changelog_file="CHANGELOG.md")
+
+    assert git_cmd.cmd_doctor(args) == 0
+
+    captured = capsys.readouterr()
+    assert "Doctor checks passed." in captured.out
+
+
+def test_cmd_doctor_uses_commit_subject_for_changelog_risk(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [])
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+
+    def fake_capture(cmd, cwd):
+        if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
+            return "chore: update docs tooling"
+        if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
+            raise AssertionError("changelog diff should not be queried for chore commits")
         raise AssertionError(cmd)
 
     monkeypatch.setattr(git_cmd.git, "capture", fake_capture)
@@ -195,6 +235,24 @@ def test_cmd_check_dirty_tree_reports_status_lines(monkeypatch, capsys) -> None:
     assert "feat/add-parser" in captured.err
     assert "src/repo_release_tools/cli.py" in captured.err
     assert "docs/git-magic.md" in captured.err
+
+
+def test_cmd_check_dirty_tree_reports_status_failure(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("git status --short failed (exit 128)")),
+    )
+    args = argparse.Namespace()
+
+    assert git_cmd.cmd_check_dirty_tree(args) == 1
+
+    captured = capsys.readouterr()
+    assert "git status --short failed" in captured.err
 
 
 def test_cmd_move_dry_run_stashes_before_checkout(monkeypatch, capsys) -> None:

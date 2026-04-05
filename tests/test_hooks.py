@@ -113,8 +113,20 @@ def test_run_dirty_tree_check_rejects_dirty_tree(monkeypatch) -> None:
     monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: False)
     monkeypatch.setattr(
         hooks.git,
-        "capture",
-        lambda cmd, cwd: " M src/repo_release_tools/cli.py\n?? docs/git-magic.md",
+        "status_porcelain",
+        lambda cwd: [" M src/repo_release_tools/cli.py", "?? docs/git-magic.md"],
+    )
+
+    assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1
+
+
+def test_run_dirty_tree_check_reports_status_failure(monkeypatch) -> None:
+    monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(
+        hooks.git,
+        "status_porcelain",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("git status --short failed (exit 128)")),
     )
 
     assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1

@@ -224,8 +224,10 @@ def run_dirty_tree_check(cwd: Path, *, title: str) -> int:
     if git.working_tree_clean(cwd):
         return 0
 
-    changed = git.capture(["git", "status", "--short"], cwd)
-    lines = [line for line in changed.splitlines() if line.strip()]
+    try:
+        lines = git.status_porcelain(cwd)
+    except RuntimeError as exc:
+        return emit_failure(title, [str(exc)])
     return emit_failure(
         title,
         [

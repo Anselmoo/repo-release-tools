@@ -107,7 +107,7 @@ def status_porcelain(cwd: Path, *, include_branch: bool = False) -> list[str]:
         check=False,
     )
     if result.returncode != 0:
-        return []
+        raise RuntimeError(f"git status --short failed (exit {result.returncode})")
     return [line for line in result.stdout.splitlines() if line]
 
 
