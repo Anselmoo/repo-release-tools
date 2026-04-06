@@ -1,5 +1,6 @@
 from repo_release_tools.glyphs import GLYPHS
 from repo_release_tools.glyphs import Glyph
+from repo_release_tools.glyphs import display_width
 
 
 def test_glyph_multiplies_like_a_string() -> None:
@@ -28,3 +29,36 @@ def test_diff_line_accepts_line_numbers() -> None:
 
     assert "12" in rendered
     assert "return result" in rendered
+
+
+def test_box_table_renders_consistent_widths() -> None:
+    rendered = GLYPHS.box.table(
+        ["Key", "Value"],
+        [["branch", "feat/v0-15-0"], ["title", "feat: v0.15.0"]],
+    )
+
+    widths = {display_width(line) for line in rendered.splitlines()}
+    assert len(widths) == 1
+    assert "feat/v0-15-0" in rendered
+
+
+def test_tree_render_supports_nested_entries() -> None:
+    rendered = GLYPHS.tree.render(
+        [
+            ("src", True, [("repo_release_tools", True, [("glyphs.py", False, None)])]),
+            ("README.md", False, None),
+        ]
+    )
+
+    assert "src/" in rendered
+    assert "repo_release_tools/" in rendered
+    assert "glyphs.py" in rendered
+    assert "README.md" in rendered
+
+
+def test_progress_bar_and_spinner_are_available() -> None:
+    bar = GLYPHS.progress.render_bar(0.5, width=4)
+    spinner = GLYPHS.progress.spinner("ascii")
+
+    assert "50%" in bar
+    assert len(next(spinner)) >= 1

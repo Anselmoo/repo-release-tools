@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from repo_release_tools.glyphs import GLYPHS, Glyph
+from repo_release_tools.glyphs import GLYPHS, Glyph, display_width, pad_right
 
 
 SECTION_WIDTH = 52
@@ -10,7 +10,7 @@ SECTION_WIDTH = 52
 
 def section(title: str) -> str:
     """Render a section heading."""
-    fill = max(1, SECTION_WIDTH - len(title))
+    fill = max(1, SECTION_WIDTH - display_width(title))
     return f"{GLYPHS.box.h * 2} {title} {GLYPHS.box.h * fill}"
 
 
@@ -19,16 +19,17 @@ def panel(title: str, rows: list[tuple[str, str]]) -> str:
     if not rows:
         return title
 
-    label_width = max(len(label) for label, _ in rows)
-    value_width = max(len(value) for _, value in rows)
+    label_width = max(display_width(label) for label, _ in rows)
+    # Keep one trailing cell in the value column so the body width matches the title bar.
+    value_width = max(display_width(value) for _, value in rows) + 1
     title_text = f" {title} "
-    row_width = label_width + value_width + 8
-    min_width = len(title_text) + 2
+    row_width = label_width + value_width + 7
+    min_width = display_width(title_text) + 2
     if row_width < min_width:
         value_width += min_width - row_width
         row_width = min_width
 
-    top_fill = row_width - len(title_text) - 2
+    top_fill = row_width - display_width(title_text) - 2
     row_sep = (
         f"{GLYPHS.box.left}"
         f"{GLYPHS.box.h * (label_width + 2)}"
@@ -47,8 +48,8 @@ def panel(title: str, rows: list[tuple[str, str]]) -> str:
     lines = [f"{GLYPHS.box.tl}{title_text}{GLYPHS.box.h * top_fill}{GLYPHS.box.tr}"]
     for index, (label, value) in enumerate(rows):
         lines.append(
-            f"{GLYPHS.box.v} {label.ljust(label_width)} {GLYPHS.box.v} "
-            f"{value.ljust(value_width)} {GLYPHS.box.v}"
+            f"{GLYPHS.box.v} {pad_right(label, label_width)} {GLYPHS.box.v} "
+            f"{pad_right(value, value_width)} {GLYPHS.box.v}"
         )
         if index != len(rows) - 1:
             lines.append(row_sep)
