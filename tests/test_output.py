@@ -1,4 +1,5 @@
 from repo_release_tools import output
+from repo_release_tools.glyphs import display_width
 
 
 def test_panel_renders_boxed_summary() -> None:
@@ -37,7 +38,7 @@ def test_panel_uses_display_width_when_padding() -> None:
     rendered = output.panel("Status", [("State", "漢字"), ("ASCII", "ok")])
     lines = rendered.splitlines()
 
-    assert len({output._display_width(line) for line in lines}) == 1
+    assert len({display_width(line) for line in lines}) == 1
 
 
 def test_dry_run_complete_uses_shared_typography() -> None:

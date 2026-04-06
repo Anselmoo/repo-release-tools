@@ -7,9 +7,12 @@ rrt. The public surface is kept compact so CLI output stays predictable.
 
 from __future__ import annotations
 
+import itertools
 import sys
+import unicodedata
 
 from dataclasses import dataclass, field
+from typing import Iterator
 
 
 IS_LEGACY_TERMINAL = sys.platform == "win32"
@@ -18,6 +21,21 @@ IS_LEGACY_TERMINAL = sys.platform == "win32"
 def _g(windows_ascii: str, unicode_glyph: str) -> str:
     """Return an ASCII fallback on legacy Windows terminals."""
     return windows_ascii if IS_LEGACY_TERMINAL else unicode_glyph
+
+
+def display_width(text: str) -> int:
+    """Return the terminal cell width for a string."""
+    width = 0
+    for char in text:
+        if unicodedata.combining(char) or unicodedata.category(char) in {"Cc", "Cf"}:
+            continue
+        width += 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
+    return width
+
+
+def pad_right(text: str, width: int) -> str:
+    """Right-pad text to a terminal cell width."""
+    return text + (" " * max(0, width - display_width(text)))
 
 
 @dataclass(frozen=True)
@@ -47,9 +65,147 @@ class BoxGlyphs:
     tr: Glyph = field(default_factory=lambda: Glyph(_g("+", "┐"), "top_right"))
     bl: Glyph = field(default_factory=lambda: Glyph(_g("+", "└"), "bottom_left"))
     br: Glyph = field(default_factory=lambda: Glyph(_g("+", "┘"), "bottom_right"))
+    top: Glyph = field(default_factory=lambda: Glyph(_g("+", "┬"), "top"))
+    bottom: Glyph = field(default_factory=lambda: Glyph(_g("+", "┴"), "bottom"))
     left: Glyph = field(default_factory=lambda: Glyph(_g("+", "├"), "left"))
     right: Glyph = field(default_factory=lambda: Glyph(_g("+", "┤"), "right"))
     cross: Glyph = field(default_factory=lambda: Glyph(_g("+", "┼"), "cross"))
+    dh: Glyph = field(default_factory=lambda: Glyph(_g("=", "═"), "double_h"))
+    dv: Glyph = field(default_factory=lambda: Glyph(_g("|", "║"), "double_v"))
+    dtl: Glyph = field(default_factory=lambda: Glyph(_g("+", "╔"), "double_top_left"))
+    dtr: Glyph = field(default_factory=lambda: Glyph(_g("+", "╗"), "double_top_right"))
+    dbl: Glyph = field(default_factory=lambda: Glyph(_g("+", "╚"), "double_bottom_left"))
+    dbr: Glyph = field(default_factory=lambda: Glyph(_g("+", "╝"), "double_bottom_right"))
+    dcross: Glyph = field(default_factory=lambda: Glyph(_g("+", "╬"), "double_cross"))
+
+    def box(self, text: str, padding: int = 1) -> str:
+        """Render a simple single-line box around text."""
+        pad = " " * padding
+        inner = f"{pad}{text}{pad}"
+        width = display_width(inner)
+        return "\n".join(
+            [
+                f"{self.tl}{self.h * width}{self.tr}",
+                f"{self.v}{inner}{self.v}",
+                f"{self.bl}{self.h * width}{self.br}",
+            ]
+        )
+
+    def double_box(self, text: str, padding: int = 1) -> str:
+        """Render a simple double-line box around text."""
+        pad = " " * padding
+        inner = f"{pad}{text}{pad}"
+        width = display_width(inner)
+        return "\n".join(
+            [
+                f"{self.dtl}{self.dh * width}{self.dtr}",
+                f"{self.dv}{inner}{self.dv}",
+                f"{self.dbl}{self.dh * width}{self.dbr}",
+            ]
+        )
+
+    def table(self, headers: list[str], rows: list[list[str]]) -> str:
+        """Render a compact single-line table."""
+        if not headers:
+            return ""
+        if any(len(row) != len(headers) for row in rows):
+            raise ValueError("table rows must match header count")
+
+        columns = list(zip(headers, *rows)) if rows else [(header,) for header in headers]
+        widths = [max(display_width(str(cell)) for cell in column) + 2 for column in columns]
+
+        def row_line(cells: list[str] | tuple[str, ...]) -> str:
+            parts = [f" {pad_right(str(cell), width - 2)} " for cell, width in zip(cells, widths)]
+            return f"{self.v}{str(self.v).join(parts)}{self.v}"
+
+        def sep(left: Glyph, mid: Glyph, right: Glyph) -> str:
+            return str(left) + str(mid).join(str(self.h) * width for width in widths) + str(right)
+
+        return "\n".join(
+            [
+                sep(self.tl, self.top, self.tr),
+                row_line(headers),
+                sep(self.left, self.cross, self.right),
+                *(row_line(row) for row in rows),
+                sep(self.bl, self.bottom, self.br),
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class TreeGlyphs:
+    """Tree-drawing glyphs for hierarchical output."""
+
+    branch: Glyph = field(default_factory=lambda: Glyph(_g("|--", "├──"), "branch"))
+    last: Glyph = field(default_factory=lambda: Glyph(_g("`--", "└──"), "last"))
+    pipe: Glyph = field(default_factory=lambda: Glyph(_g("|", "│"), "pipe"))
+    blank: Glyph = field(default_factory=lambda: Glyph(" ", "blank"))
+
+    def render(self, entries: list[tuple[str, bool, list | None]]) -> str:
+        """Render nested entries as a tree."""
+        lines: list[str] = []
+
+        def visit(nodes: list[tuple[str, bool, list | None]], prefix: str = "") -> None:
+            for index, (name, is_dir, children) in enumerate(nodes):
+                is_last = index == len(nodes) - 1
+                connector = self.last if is_last else self.branch
+                suffix = "/" if is_dir else ""
+                lines.append(f"{prefix}{connector} {name}{suffix}")
+                if children:
+                    extension = (str(self.blank) * 4) if is_last else f"{self.pipe}{self.blank * 3}"
+                    visit(children, prefix=f"{prefix}{extension}")
+
+        visit(entries)
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class ProgressGlyphs:
+    """Progress bars and spinner frames for terminal status output."""
+
+    full: Glyph = field(default_factory=lambda: Glyph(_g("#", "█"), "full"))
+    high: Glyph = field(default_factory=lambda: Glyph(_g("=", "▓"), "high"))
+    mid: Glyph = field(default_factory=lambda: Glyph(_g("-", "▒"), "mid"))
+    low: Glyph = field(default_factory=lambda: Glyph(_g(".", "░"), "low"))
+    empty: Glyph = field(default_factory=lambda: Glyph(" ", "empty"))
+    bar_left: Glyph = field(default_factory=lambda: Glyph(_g("[", "▕"), "bar_left"))
+    bar_right: Glyph = field(default_factory=lambda: Glyph(_g("]", "▏"), "bar_right"))
+
+    SPINNER_BRAILLE: tuple[str, ...] = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+    SPINNER_ASCII: tuple[str, ...] = ("|", "/", "-", "\\")
+    SPINNER_ARROW: tuple[str, ...] = ("←", "↖", "↑", "↗", "→", "↘", "↓", "↙")
+    SPINNER_BOUNCE: tuple[str, ...] = (
+        "▁",
+        "▃",
+        "▄",
+        "▅",
+        "▆",
+        "▇",
+        "█",
+        "▇",
+        "▆",
+        "▅",
+        "▄",
+        "▃",
+    )
+
+    def spinner(self, style: str = "braille") -> Iterator[str]:
+        """Return an infinite spinner frame iterator."""
+        frames = {
+            "braille": self.SPINNER_BRAILLE,
+            "ascii": self.SPINNER_ASCII,
+            "arrow": self.SPINNER_ARROW,
+            "bounce": self.SPINNER_BOUNCE,
+        }
+        source = self.SPINNER_ASCII if IS_LEGACY_TERMINAL else frames.get(style, self.SPINNER_BRAILLE)
+        return itertools.cycle(source)
+
+    def render_bar(self, value: float, width: int = 20) -> str:
+        """Render a whole-cell progress bar."""
+        clamped = max(0.0, min(1.0, value))
+        filled = round(clamped * width)
+        bar = str(self.full) * filled + str(self.low) * (width - filled)
+        return f"{self.bar_left}{bar}{self.bar_right} {clamped:.0%}"
 
 
 @dataclass(frozen=True)
@@ -158,6 +314,8 @@ class GlyphSet:
     """Shared glyph registry for terminal output."""
 
     box: BoxGlyphs = field(default_factory=BoxGlyphs)
+    tree: TreeGlyphs = field(default_factory=TreeGlyphs)
+    progress: ProgressGlyphs = field(default_factory=ProgressGlyphs)
     arrow: ArrowGlyphs = field(default_factory=ArrowGlyphs)
     bullet: BulletGlyphs = field(default_factory=BulletGlyphs)
     typography: TypographyGlyphs = field(default_factory=TypographyGlyphs)
