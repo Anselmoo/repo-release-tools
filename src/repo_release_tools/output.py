@@ -7,6 +7,7 @@ from repo_release_tools.glyphs import GLYPHS, Glyph, display_width, pad_right
 
 SECTION_WIDTH = 52
 
+
 def section(title: str) -> str:
     """Render a section heading."""
     fill = max(1, SECTION_WIDTH - display_width(title))

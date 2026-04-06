@@ -197,7 +197,9 @@ class ProgressGlyphs:
             "arrow": self.SPINNER_ARROW,
             "bounce": self.SPINNER_BOUNCE,
         }
-        source = self.SPINNER_ASCII if IS_LEGACY_TERMINAL else frames.get(style, self.SPINNER_BRAILLE)
+        source = (
+            self.SPINNER_ASCII if IS_LEGACY_TERMINAL else frames.get(style, self.SPINNER_BRAILLE)
+        )
         return itertools.cycle(source)
 
     def render_bar(self, value: float, width: int = 20) -> str:
