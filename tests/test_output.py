@@ -1,5 +1,5 @@
 from repo_release_tools import output
-from repo_release_tools.glyphs import display_width
+from repo_release_tools.glyphs import GLYPHS, display_width
 
 
 def test_panel_renders_boxed_summary() -> None:
@@ -23,13 +23,13 @@ def test_panel_keeps_branch_summary_width_consistent() -> None:
 
     assert rendered == "\n".join(
         [
-            "┌ New branch ─────────────┐",
-            "│ Base   │ main           │",
-            "├────────┼────────────────┤",
-            "│ Branch │ feat/v0-15-0   │",
-            "├────────┼────────────────┤",
-            "│ Title  │ feat: v0.15.0  │",
-            "└─────────────────────────┘",
+            f"{GLYPHS.box.tl} New branch {GLYPHS.box.h * 13}{GLYPHS.box.tr}",
+            f"{GLYPHS.box.v} Base   {GLYPHS.box.v} main           {GLYPHS.box.v}",
+            f"{GLYPHS.box.left}{GLYPHS.box.h * 8}{GLYPHS.box.cross}{GLYPHS.box.h * 16}{GLYPHS.box.right}",
+            f"{GLYPHS.box.v} Branch {GLYPHS.box.v} feat/v0-15-0   {GLYPHS.box.v}",
+            f"{GLYPHS.box.left}{GLYPHS.box.h * 8}{GLYPHS.box.cross}{GLYPHS.box.h * 16}{GLYPHS.box.right}",
+            f"{GLYPHS.box.v} Title  {GLYPHS.box.v} feat: v0.15.0  {GLYPHS.box.v}",
+            f"{GLYPHS.box.bl}{GLYPHS.box.h * 25}{GLYPHS.box.br}",
         ]
     )
 
