@@ -261,7 +261,11 @@ def dedup_changelog_entries(added_lines: list[str]) -> list[str]:
             seen_keys.add(key)
 
     # Detect cancelling pairs among the remaining (non-duplicate) bullets
-    remaining_bullets = [(i, added_lines[i].strip()[2:].strip()) for i in bullet_indices if i not in duplicate_indices]
+    remaining_bullets = [
+        (i, added_lines[i].strip()[2:].strip())
+        for i in bullet_indices
+        if i not in duplicate_indices
+    ]
     cancelled_indices: set[int] = set()
     for pos_a, (i, desc_a) in enumerate(remaining_bullets):
         if i in cancelled_indices:
