@@ -378,7 +378,7 @@ def test_apply_dedup_to_changelog_restricts_removal_to_diff_positions(tmp_path: 
     )
     added_lines = ["- add Node 26", "- remove Node 26"]
     deduped_lines: list[str] = []
-    positions: frozenset[int] = frozenset({4, 5})  # 1-based: line 4 and 5 are the new additions
+    positions: frozenset[int] = frozenset({4, 5})  # 1-based: lines 4 and 5 are the new additions
 
     changed = apply_dedup_to_changelog(
         changelog, added_lines, deduped_lines, added_line_positions=positions

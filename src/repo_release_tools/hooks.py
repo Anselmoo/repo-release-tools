@@ -188,7 +188,9 @@ _OPPOSITE_VERB_PAIRS: list[tuple[str, str]] = [
 ]
 
 # Matches a leading "SCOPE: " prefix in a changelog bullet description.
-_SCOPE_PREFIX_RE = re.compile(r"^([^:]+):\s+(.+)$")
+# Scope identifiers are restricted to alphanumeric characters, underscores,
+# and hyphens to avoid false matches on entries that happen to contain a colon.
+_SCOPE_PREFIX_RE = re.compile(r"^([A-Za-z0-9_-]+):\s+(.+)$")
 
 
 def _split_scope(text: str) -> tuple[str | None, str]:
