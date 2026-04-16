@@ -251,6 +251,22 @@ def test_entries_cancel_out_enable_disable() -> None:
     assert _entries_cancel_out("enable caching", "disable caching") is True
 
 
+def test_entries_cancel_out_with_matching_scope_prefix() -> None:
+    assert _entries_cancel_out("CI: add Node 26", "CI: remove Node 26") is True
+
+
+def test_entries_cancel_out_with_matching_scope_prefix_reversed() -> None:
+    assert _entries_cancel_out("CI: remove Node 26", "CI: add Node 26") is True
+
+
+def test_entries_do_not_cancel_different_scope_prefix() -> None:
+    assert _entries_cancel_out("CI: add Node 26", "Deps: remove Node 26") is False
+
+
+def test_entries_do_not_cancel_mixed_prefix() -> None:
+    assert _entries_cancel_out("CI: add Node 26", "add Node 26") is False
+
+
 def test_entries_do_not_cancel_unrelated() -> None:
     assert _entries_cancel_out("add Node 26", "fix typo in workflow") is False
 
@@ -280,6 +296,19 @@ def test_dedup_changelog_entries_removes_cancelling_pairs() -> None:
     assert "- add Node 26" not in result
     assert "- remove Node 26" not in result
     assert "- fix typo in workflow" in result
+
+
+def test_dedup_changelog_entries_removes_cancelling_pairs_with_scope_prefix() -> None:
+    lines = [
+        "### Maintenance",
+        "- CI: add Node 26",
+        "- CI: remove Node 26",
+        "- CI: fix typo in workflow",
+    ]
+    result = dedup_changelog_entries(lines)
+    assert "- CI: add Node 26" not in result
+    assert "- CI: remove Node 26" not in result
+    assert "- CI: fix typo in workflow" in result
 
 
 def test_dedup_changelog_entries_preserves_non_cancelled_entries() -> None:
@@ -339,10 +368,34 @@ def test_apply_dedup_to_changelog_returns_false_when_nothing_removed(tmp_path: P
     assert changelog.read_text(encoding="utf-8") == original
 
 
+def test_apply_dedup_to_changelog_restricts_removal_to_diff_positions(tmp_path: Path) -> None:
+    # Line 8 in the old section has the same content as the noisy new entries;
+    # only lines 4 and 5 (the squash additions) should be removed.
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [0.1.8]\n- add Node 26\n- remove Node 26\n\n## [0.1.7]\n- add Node 26\n",
+        encoding="utf-8",
+    )
+    added_lines = ["- add Node 26", "- remove Node 26"]
+    deduped_lines: list[str] = []
+    positions: frozenset[int] = frozenset({4, 5})  # 1-based: line 4 and 5 are the new additions
+
+    changed = apply_dedup_to_changelog(
+        changelog, added_lines, deduped_lines, added_line_positions=positions
+    )
+
+    assert changed is True
+    content = changelog.read_text(encoding="utf-8")
+    assert content.count("- add Node 26") == 1  # old section entry preserved
+    assert "- remove Node 26" not in content
+
+
 def test_run_post_correct_returns_zero_when_no_diff(monkeypatch, tmp_path: Path) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- feat: something\n", encoding="utf-8")
-    monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: [])
+    monkeypatch.setattr(
+        hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset())
+    )
 
     assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md") == 0
 
@@ -350,7 +403,11 @@ def test_run_post_correct_returns_zero_when_no_diff(monkeypatch, tmp_path: Path)
 def test_run_post_correct_returns_zero_when_already_clean(monkeypatch, tmp_path: Path) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
-    monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ["- fix typo\n"])
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (["- fix typo"], frozenset({3})),
+    )
 
     assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md") == 0
 
@@ -364,7 +421,10 @@ def test_run_post_correct_cleans_contradicting_entries(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(
         hooks,
         "collect_squash_changelog_hunks",
-        lambda *a, **kw: ["### Maintenance", "- add Node 26", "- remove Node 26", "- fix typo"],
+        lambda *a, **kw: (
+            ["### Maintenance", "- add Node 26", "- remove Node 26", "- fix typo"],
+            frozenset({3, 4, 5, 6}),
+        ),
     )
 
     result = run_post_correct(tmp_path, changelog_file="CHANGELOG.md")
@@ -376,17 +436,45 @@ def test_run_post_correct_cleans_contradicting_entries(monkeypatch, tmp_path: Pa
     assert "- fix typo" in content
 
 
+def test_run_post_correct_cleans_scope_prefixed_contradicting_entries(
+    monkeypatch, tmp_path: Path
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- CI: add Node 26\n- CI: remove Node 26\n- CI: fix typo\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- CI: add Node 26", "- CI: remove Node 26", "- CI: fix typo"],
+            frozenset({3, 4, 5, 6}),
+        ),
+    )
+
+    result = run_post_correct(tmp_path, changelog_file="CHANGELOG.md")
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "- CI: add Node 26" not in content
+    assert "- CI: remove Node 26" not in content
+    assert "- CI: fix typo" in content
+
+
 def test_run_post_correct_fails_when_changelog_missing(tmp_path: Path) -> None:
     assert run_post_correct(tmp_path, changelog_file="MISSING.md") == 1
 
 
-def test_main_changelog_post_correct_auto(monkeypatch, tmp_path: Path) -> None:
+def test_main_changelog_post_correct_no_diff(monkeypatch, tmp_path: Path) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
-    monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: [])
+    monkeypatch.setattr(
+        hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset())
+    )
     monkeypatch.chdir(tmp_path)
 
-    assert hooks.main(["changelog", "post-correct", "--auto"]) == 0
+    assert hooks.main(["changelog", "post-correct"]) == 0
 
 
 def test_main_changelog_post_correct_explicit_commit(monkeypatch, tmp_path: Path) -> None:
@@ -395,7 +483,7 @@ def test_main_changelog_post_correct_explicit_commit(monkeypatch, tmp_path: Path
     monkeypatch.setattr(
         hooks,
         "collect_squash_changelog_hunks",
-        lambda *a, **kw: ["- fix typo\n"],
+        lambda *a, **kw: (["- fix typo"], frozenset({3})),
     )
     monkeypatch.chdir(tmp_path)
 

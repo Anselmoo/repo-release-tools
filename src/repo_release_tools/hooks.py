@@ -187,38 +187,75 @@ _OPPOSITE_VERB_PAIRS: list[tuple[str, str]] = [
     ("reverts ", "applies "),
 ]
 
+# Matches a leading "SCOPE: " prefix in a changelog bullet description.
+_SCOPE_PREFIX_RE = re.compile(r"^([^:]+):\s+(.+)$")
+
+
+def _split_scope(text: str) -> tuple[str | None, str]:
+    """Split a bullet description into ``(scope_lower, rest)`` or ``(None, text)``."""
+    m = _SCOPE_PREFIX_RE.match(text)
+    if m:
+        return m.group(1).lower(), m.group(2)
+    return None, text
+
 
 def collect_squash_changelog_hunks(
     cwd: Path,
     ref: str = "HEAD",
     changelog_file: str = DEFAULT_CHANGELOG,
-) -> list[str]:
-    """Return lines added to *changelog_file* by *ref*.
+) -> tuple[list[str], frozenset[int]]:
+    """Return ``(added_lines, added_line_positions)`` for *changelog_file* in *ref*.
 
-    Parses the unified diff produced by ``git show`` and returns the content
-    lines (without the leading ``+``) that the commit introduced.
+    *added_lines* are the content lines (without the leading ``+``) that the
+    commit introduced.  *added_line_positions* is the set of 1-based line
+    numbers those additions occupy in the post-commit file, parsed from the
+    ``@@ ... @@`` hunk headers so that
+    :func:`apply_dedup_to_changelog` can restrict removals to the exact
+    squash hunk rather than scanning the whole file.
     """
     out = git.capture(
         ["git", "show", "--format=", ref, "--", changelog_file],
         cwd,
     )
     added: list[str] = []
+    positions: set[int] = set()
+    current_new_line = 0
+
     for line in out.splitlines():
-        if line.startswith(("diff ", "index ", "--- ", "+++ ", "@@ ")):
+        if line.startswith(("diff ", "index ", "--- ", "+++ ")):
+            continue
+        if line.startswith("@@ "):
+            m = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", line)
+            if m:
+                current_new_line = int(m.group(1)) - 1
             continue
         if line.startswith("+"):
+            current_new_line += 1
             added.append(line[1:])
-    return added
+            positions.add(current_new_line)
+        elif line.startswith(" "):
+            current_new_line += 1
+        # "-" lines: only in old file; new-file counter does not advance
+
+    return added, frozenset(positions)
 
 
 def _entries_cancel_out(a: str, b: str) -> bool:
     """Return ``True`` if two bullet-entry descriptions are semantic opposites.
 
-    For example ``"add Node 26"`` and ``"remove Node 26"`` cancel each other
-    out; so do ``"enable caching"`` / ``"disable caching"``.
+    For example ``"add Node 26"`` / ``"remove Node 26"`` cancel each other
+    out, and so do ``"CI: add Node 26"`` / ``"CI: remove Node 26"``.
+
+    Entries with different scope prefixes (e.g. ``"CI: …"`` vs ``"Deps: …"``)
+    are never considered cancelling pairs even if their verb+subject match.
     """
-    a_lower = a.lower()
-    b_lower = b.lower()
+    a_scope, a_rest = _split_scope(a)
+    b_scope, b_rest = _split_scope(b)
+    if a_scope != b_scope:
+        return False
+
+    a_lower = a_rest.lower()
+    b_lower = b_rest.lower()
     for v1, v2 in _OPPOSITE_VERB_PAIRS:
         rest_a_v1 = a_lower.removeprefix(v1)
         rest_b_v2 = b_lower.removeprefix(v2)
@@ -302,12 +339,16 @@ def apply_dedup_to_changelog(
     changelog_path: Path,
     added_lines: list[str],
     deduped_lines: list[str],
+    *,
+    added_line_positions: frozenset[int] | None = None,
 ) -> bool:
     """Rewrite *changelog_path* removing entries that were filtered out.
 
     Uses a :class:`~collections.Counter` diff to decide how many times each
-    line should be removed, so identical lines that legitimately appear in
-    multiple sections are handled correctly.
+    line should be removed.  When *added_line_positions* is provided (1-based
+    line numbers of the squash-commit additions), removals are restricted to
+    those positions so that identical lines in older release sections are never
+    accidentally deleted.
 
     Returns ``True`` when the file was modified, ``False`` when nothing
     changed.
@@ -323,9 +364,10 @@ def apply_dedup_to_changelog(
     removal_budget: dict[str, int] = dict(to_remove)
 
     result_lines: list[str] = []
-    for raw_line in content.splitlines(keepends=True):
+    for line_idx, raw_line in enumerate(content.splitlines(keepends=True), start=1):
         key = raw_line.rstrip("\n")
-        if removal_budget.get(key, 0) > 0:
+        in_hunk = added_line_positions is None or line_idx in added_line_positions
+        if in_hunk and removal_budget.get(key, 0) > 0:
             removal_budget[key] -= 1
             continue
         result_lines.append(raw_line)
@@ -508,7 +550,7 @@ def run_post_correct(
             [f"Changelog file {changelog_file!r} not found in {cwd}."],
         )
 
-    added_lines = collect_squash_changelog_hunks(cwd, ref=ref, changelog_file=changelog_file)
+    added_lines, positions = collect_squash_changelog_hunks(cwd, ref=ref, changelog_file=changelog_file)
     if not added_lines:
         print(
             output.ok(f"No changelog changes found in {ref!r}. Nothing to correct."),
@@ -518,7 +560,9 @@ def run_post_correct(
 
     deduped_lines = dedup_changelog_entries(added_lines)
 
-    changed = apply_dedup_to_changelog(changelog_path, added_lines, deduped_lines)
+    changed = apply_dedup_to_changelog(
+        changelog_path, added_lines, deduped_lines, added_line_positions=positions
+    )
     if not changed:
         print(
             output.ok("Changelog is already clean. Nothing to correct."),
@@ -640,21 +684,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Consolidate fragmented changelog entries after a squash merge.",
     )
     post_correct_parser.add_argument(
-        "--auto",
-        action="store_true",
-        help="Use HEAD as the squash commit (default behaviour when no --squash-commit is given).",
-    )
-    post_correct_parser.add_argument(
         "--squash-commit",
         default=None,
         metavar="SHA",
         help="Explicit commit SHA to treat as the squash commit (defaults to HEAD).",
-    )
-    post_correct_parser.add_argument(
-        "--base-ref",
-        default=None,
-        metavar="REF",
-        help="Base ref used for context (informational; not yet used in automatic detection).",
     )
     post_correct_parser.add_argument(
         "--output",
@@ -682,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_commit_subject_check(parsed.subject, title="Commit subject validation failed.")
     if parsed.command == "check-dirty-tree":
         return run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.")
-    if parsed.command == "changelog":
+    if parsed.command == "changelog" and parsed.changelog_command == "post-correct":
         ref = parsed.squash_commit or "HEAD"
         return run_post_correct(
             Path.cwd(),

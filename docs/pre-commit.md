@@ -62,9 +62,11 @@ fragmented micro-commit noise in `CHANGELOG.md` — for example several
 
 1. Inspecting the diff that the squash commit introduced to `CHANGELOG.md`.
 2. Removing **exact duplicate** bullet entries (case-insensitive).
-3. Removing **semantically-cancelling pairs** — e.g. `"add X"` followed by
-   `"remove X"`.
-4. Rewriting `CHANGELOG.md` in-place with the cleaned content.
+3. Removing **semantically-cancelling pairs** — e.g. `"CI: add Node 26"` followed by
+   `"CI: remove Node 26"`, or bare `"add X"` / `"remove X"`.  Scope prefixes
+   (e.g. `CI:`, `Deps:`) must match for entries to be considered a pair.
+4. Rewriting `CHANGELOG.md` in-place with the cleaned content, restricting
+   removals to the exact diff hunk so older release sections are never touched.
 5. Optionally creating a follow-up commit (`--commit`).
 
 ### Quick usage
@@ -92,7 +94,6 @@ rrt-hooks changelog post-correct --commit
 
 | Flag | Description |
 |---|---|
-| `--auto` | Use `HEAD` as the squash commit (default) |
-| `--squash-commit SHA` | Explicit commit SHA to inspect |
+| `--squash-commit SHA` | Explicit commit SHA to inspect (defaults to `HEAD`) |
 | `--output PATH` | Changelog file to rewrite (default: `CHANGELOG.md`) |
 | `--commit` | Create a follow-up commit with the corrected changelog |
