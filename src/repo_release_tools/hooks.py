@@ -638,8 +638,7 @@ def main(argv: list[str] | None = None) -> int:
     post_correct_parser.add_argument(
         "--auto",
         action="store_true",
-        default=True,
-        help="Use HEAD as the squash commit (default behaviour).",
+        help="Use HEAD as the squash commit (default behaviour when no --squash-commit is given).",
     )
     post_correct_parser.add_argument(
         "--squash-commit",

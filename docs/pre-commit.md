@@ -70,14 +70,14 @@ fragmented micro-commit noise in `CHANGELOG.md` — for example several
 ### Quick usage
 
 ```bash
-# auto mode — use HEAD as the squash commit
-rrt-hooks changelog post-correct --auto
+# auto mode — use HEAD as the squash commit (default when no SHA given)
+rrt-hooks changelog post-correct
 
 # explicit squash commit SHA
 rrt-hooks changelog post-correct --squash-commit abc1234
 
 # write a follow-up commit automatically
-rrt-hooks changelog post-correct --auto --commit
+rrt-hooks changelog post-correct --commit
 ```
 
 ### As a GitHub Actions step (post-merge on default branch)
@@ -85,7 +85,7 @@ rrt-hooks changelog post-correct --auto --commit
 ```yaml
 - name: Consolidate changelog after squash merge
   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  run: uvx --from repo-release-tools rrt-hooks changelog post-correct --auto --commit
+  run: uvx --from repo-release-tools rrt-hooks changelog post-correct --commit
 ```
 
 ### Options
