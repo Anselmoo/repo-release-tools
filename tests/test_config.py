@@ -512,3 +512,46 @@ version = "9.9.9"
 
     assert config.release_branch == "rel/v{version}"
     assert config.resolve_group().version_targets[0].kind == "pep621"
+
+
+def test_load_config_parses_extra_branch_types(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_branch_types = ["greenkeeper", "Snyk"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.extra_branch_types == ("greenkeeper", "snyk")
+
+
+def test_load_config_defaults_extra_branch_types_empty(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    assert config.extra_branch_types == ()
+
+
+def test_load_config_rejects_non_list_extra_branch_types(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_branch_types = "not-a-list"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="extra_branch_types must be a list of strings"):
+        load_config(tmp_path)

@@ -51,6 +51,37 @@ These are compatibility prefixes for assistant-managed branches. Conventional
 commit semantics still belong in the commit subject, because changelog policy
 and release notes are driven from commit messages.
 
+## Bot branches
+
+Branches created by dependency update bots are accepted out of the box:
+
+- `dependabot/...`
+- `renovate/...`
+
+Bot branch slugs are not validated for kebab-case or length since they use
+externally-generated naming conventions (e.g.
+`dependabot/npm_and_yarn/lodash-4.17.21`).
+
+## Custom branch types
+
+If you need additional branch prefixes beyond the built-in set, add them to
+your rrt configuration:
+
+```toml
+[tool.rrt]
+extra_branch_types = ["greenkeeper", "snyk"]
+```
+
+Custom types follow the same passthrough rules as bot branches — their slugs
+are not validated for kebab-case.
+
+## Release branches
+
+`release/v<semver>` is validated as a special case before the type prefix
+check. The `release` prefix is intentionally not part of the conventional types
+because release branches require a valid semver suffix rather than a free-form
+slug.
+
 ## Why this fits trunk-based publishing
 
 Conventional branches help teams:

@@ -195,6 +195,7 @@ class RrtConfig:
     version_groups: list[VersionGroup]
     default_group_name: str | None = None
     autodetected: bool = False
+    extra_branch_types: tuple[str, ...] = ()
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""
@@ -633,6 +634,13 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
     if default_group_name is not None and not isinstance(default_group_name, str):
         raise ValueError("tool.rrt.default_group must be a string")
 
+    raw_extra_branch_types = raw.get("extra_branch_types", [])
+    if not isinstance(raw_extra_branch_types, list) or not all(
+        isinstance(item, str) for item in raw_extra_branch_types
+    ):
+        raise ValueError("tool.rrt.extra_branch_types must be a list of strings")
+    extra_branch_types = tuple(item.lower() for item in raw_extra_branch_types)
+
     group_defaults = {
         "release_branch": raw.get("release_branch", DEFAULT_RELEASE_BRANCH),
         "changelog_file": raw.get("changelog_file", DEFAULT_CHANGELOG),
@@ -687,6 +695,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         config_file=config_file,
         version_groups=version_groups,
         default_group_name=default_group_name,
+        extra_branch_types=extra_branch_types,
     )
 
 
