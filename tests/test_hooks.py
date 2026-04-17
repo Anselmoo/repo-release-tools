@@ -394,9 +394,7 @@ def test_apply_dedup_to_changelog_restricts_removal_to_diff_positions(tmp_path: 
 def test_run_post_correct_returns_zero_when_no_diff(monkeypatch, tmp_path: Path) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- feat: something\n", encoding="utf-8")
-    monkeypatch.setattr(
-        hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset())
-    )
+    monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset()))
 
     assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md") == 0
 
@@ -470,9 +468,7 @@ def test_run_post_correct_fails_when_changelog_missing(tmp_path: Path) -> None:
 def test_main_changelog_post_correct_no_diff(monkeypatch, tmp_path: Path) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
-    monkeypatch.setattr(
-        hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset())
-    )
+    monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset()))
     monkeypatch.chdir(tmp_path)
 
     assert hooks.main(["changelog", "post-correct"]) == 0
@@ -569,14 +565,7 @@ def test_main_changelog_post_correct_with_commit_flag(monkeypatch, tmp_path: Pat
 
 
 def test_collect_squash_changelog_hunks_parses_single_hunk(monkeypatch, tmp_path: Path) -> None:
-    diff = (
-        "@@ -1,3 +1,5 @@\n"
-        " # Changelog\n"
-        " \n"
-        "+### Maintenance\n"
-        "+- add Node 26\n"
-        " - fix typo\n"
-    )
+    diff = "@@ -1,3 +1,5 @@\n # Changelog\n \n+### Maintenance\n+- add Node 26\n - fix typo\n"
     monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: diff)
 
     added, positions = collect_squash_changelog_hunks(tmp_path)
@@ -624,9 +613,7 @@ def test_run_post_correct_fails_on_invalid_ref(monkeypatch, tmp_path: Path) -> N
     monkeypatch.setattr(
         hooks.git,
         "capture_checked",
-        lambda *a, **kw: (
-            (_ for _ in ()).throw(RuntimeError("git show bad-ref failed (exit 128)"))
-        ),
+        lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("git show bad-ref failed (exit 128)")),
     )
 
     assert run_post_correct(tmp_path, ref="bad-ref", changelog_file="CHANGELOG.md") == 1
