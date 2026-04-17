@@ -215,7 +215,7 @@ def collect_squash_changelog_hunks(
     :func:`apply_dedup_to_changelog` can restrict removals to the exact
     squash hunk rather than scanning the whole file.
     """
-    out = git.capture(
+    out = git.capture_checked(
         ["git", "show", "--format=", ref, "--", changelog_file],
         cwd,
     )
@@ -552,7 +552,12 @@ def run_post_correct(
             [f"Changelog file {changelog_file!r} not found in {cwd}."],
         )
 
-    added_lines, positions = collect_squash_changelog_hunks(cwd, ref=ref, changelog_file=changelog_file)
+    try:
+        added_lines, positions = collect_squash_changelog_hunks(
+            cwd, ref=ref, changelog_file=changelog_file
+        )
+    except RuntimeError as exc:
+        return emit_failure("Changelog post-correction failed.", [str(exc)])
     if not added_lines:
         print(
             output.ok(f"No changelog changes found in {ref!r}. Nothing to correct."),

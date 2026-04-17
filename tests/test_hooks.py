@@ -12,6 +12,7 @@ from repo_release_tools.hooks import validate_commit_subject
 from repo_release_tools.hooks import _entries_cancel_out
 from repo_release_tools.hooks import dedup_changelog_entries
 from repo_release_tools.hooks import apply_dedup_to_changelog
+from repo_release_tools.hooks import collect_squash_changelog_hunks
 from repo_release_tools.hooks import run_post_correct
 
 
@@ -488,3 +489,164 @@ def test_main_changelog_post_correct_explicit_commit(monkeypatch, tmp_path: Path
     monkeypatch.chdir(tmp_path)
 
     assert hooks.main(["changelog", "post-correct", "--squash-commit", "abc1234"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 — --commit path tests
+# ---------------------------------------------------------------------------
+
+
+def test_run_post_correct_commits_when_flag_set(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n- fix typo\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- add Node 26", "- remove Node 26", "- fix typo"],
+            frozenset({3, 4, 5, 6}),
+        ),
+    )
+    git_calls: list[list[str]] = []
+    monkeypatch.setattr(hooks.git, "run", lambda cmd, *a, **kw: git_calls.append(cmd) or "")
+
+    result = run_post_correct(tmp_path, changelog_file="CHANGELOG.md", commit=True)
+
+    assert result == 0
+    assert any(c[1] == "add" for c in git_calls)
+    assert any(c[1] == "commit" for c in git_calls)
+
+
+def test_run_post_correct_returns_failure_on_commit_error(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- add Node 26", "- remove Node 26"],
+            frozenset({3, 4, 5}),
+        ),
+    )
+    monkeypatch.setattr(
+        hooks.git,
+        "run",
+        lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("git commit failed (exit 1)")),
+    )
+
+    assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md", commit=True) == 1
+
+
+def test_main_changelog_post_correct_with_commit_flag(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- add Node 26", "- remove Node 26"],
+            frozenset({3, 4, 5}),
+        ),
+    )
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: "")
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["changelog", "post-correct", "--commit"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — collect_squash_changelog_hunks unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_collect_squash_changelog_hunks_parses_single_hunk(monkeypatch, tmp_path: Path) -> None:
+    diff = (
+        "@@ -1,3 +1,5 @@\n"
+        " # Changelog\n"
+        " \n"
+        "+### Maintenance\n"
+        "+- add Node 26\n"
+        " - fix typo\n"
+    )
+    monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: diff)
+
+    added, positions = collect_squash_changelog_hunks(tmp_path)
+
+    assert added == ["### Maintenance", "- add Node 26"]
+    assert positions == frozenset({3, 4})
+
+
+def test_collect_squash_changelog_hunks_multi_hunk(monkeypatch, tmp_path: Path) -> None:
+    diff = (
+        "@@ -1,2 +1,3 @@\n"
+        " # Changelog\n"
+        "+## [Unreleased]\n"
+        " \n"
+        "@@ -5,2 +7,3 @@\n"
+        " ### Added\n"
+        "+- feat: new feature\n"
+        " - existing\n"
+    )
+    monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: diff)
+
+    added, positions = collect_squash_changelog_hunks(tmp_path)
+
+    assert added == ["## [Unreleased]", "- feat: new feature"]
+    assert positions == frozenset({2, 8})
+
+
+def test_collect_squash_changelog_hunks_empty_diff(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: "")
+
+    added, positions = collect_squash_changelog_hunks(tmp_path)
+
+    assert added == []
+    assert positions == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — invalid ref test
+# ---------------------------------------------------------------------------
+
+
+def test_run_post_correct_fails_on_invalid_ref(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(
+        hooks.git,
+        "capture_checked",
+        lambda *a, **kw: (
+            (_ for _ in ()).throw(RuntimeError("git show bad-ref failed (exit 128)"))
+        ),
+    )
+
+    assert run_post_correct(tmp_path, ref="bad-ref", changelog_file="CHANGELOG.md") == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — dedup_changelog_entries edge-case tests
+# ---------------------------------------------------------------------------
+
+
+def test_dedup_changelog_entries_empty_input() -> None:
+    assert dedup_changelog_entries([]) == []
+
+
+def test_dedup_changelog_entries_headers_only() -> None:
+    lines = ["## [Unreleased]", "### Added", "### Fixed"]
+    assert dedup_changelog_entries(lines) == lines
+
+
+def test_dedup_changelog_entries_all_duplicates() -> None:
+    lines = ["- fix typo", "- fix typo", "- fix typo"]
+    result = dedup_changelog_entries(lines)
+    assert result.count("- fix typo") == 1

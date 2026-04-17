@@ -49,6 +49,21 @@ def capture(cmd: list[str], cwd: Path) -> str:
     return result.stdout.strip()
 
 
+def capture_checked(cmd: list[str], cwd: Path) -> str:
+    """Capture command output, raising RuntimeError on non-zero exit."""
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        label = " ".join(cmd)
+        raise RuntimeError(f"{label} failed (exit {result.returncode})")
+    return result.stdout.strip()
+
+
 def current_branch(cwd: Path) -> str:
     """Return the current branch name."""
     return capture(["git", "branch", "--show-current"], cwd)
