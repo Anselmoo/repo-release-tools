@@ -10,6 +10,7 @@ from repo_release_tools.config import (
     find_config_file,
     format_autodetected_config_notice,
     load_config,
+    load_extra_branch_types,
 )
 
 
@@ -555,3 +556,114 @@ kind = "package_json"
 
     with pytest.raises(ValueError, match="extra_branch_types must be a list of strings"):
         load_config(tmp_path)
+
+
+def test_load_config_rejects_empty_extra_branch_type_entry(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_branch_types = [""]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="non-empty identifiers"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_invalid_identifier_extra_branch_type(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_branch_types = ["123-invalid"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="not a valid identifier"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_reserved_extra_branch_type(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_branch_types = ["feat"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="overlaps with a built-in branch type"):
+        load_config(tmp_path)
+
+
+def test_load_config_deduplicates_extra_branch_types(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_branch_types = ["snyk", "Snyk", "snyk"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.extra_branch_types == ("snyk",)
+
+
+def test_load_extra_branch_types_returns_empty_when_no_config(tmp_path: Path) -> None:
+    assert load_extra_branch_types(tmp_path) == ()
+
+
+def test_load_extra_branch_types_returns_empty_when_no_rrt_section(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[tool.other]\n", encoding="utf-8")
+    assert load_extra_branch_types(tmp_path) == ()
+
+
+def test_load_extra_branch_types_surfaces_invalid_config_error(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_branch_types = ["feat"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Failed to load repo-release-tools config"):
+        load_extra_branch_types(tmp_path)
+
+
+def test_load_extra_branch_types_returns_configured_types(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_branch_types = ["snyk", "greenkeeper"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    assert load_extra_branch_types(tmp_path) == ("snyk", "greenkeeper")

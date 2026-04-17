@@ -12,11 +12,11 @@ from pathlib import Path
 
 from repo_release_tools import git, output
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_description
+from repo_release_tools.config import load_extra_branch_types
 from repo_release_tools.hooks import (
     ALLOWED_BRANCH_NAMES,
     BOT_BRANCH_TYPES,
     MAGIC_BRANCH_TYPES,
-    _load_extra_branch_types,
     changelog_is_updated,
     commit_subject_requires_changelog,
     validate_branch_name,
@@ -256,7 +256,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         return 1
     latest_subject = git.capture(["git", "log", "-1", "--pretty=%s"], root).strip()
 
-    branch_problem = validate_branch_name(branch_name, extra_types=_load_extra_branch_types(root))
+    branch_problem = validate_branch_name(branch_name, extra_types=load_extra_branch_types(root))
     subject_problem = (
         validate_commit_subject(latest_subject) if latest_subject else "No commits found."
     )

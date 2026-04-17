@@ -11,7 +11,7 @@ from pathlib import Path
 
 from repo_release_tools import git, output
 from repo_release_tools.changelog import SECTION_MAP, parse_conventional_commit
-from repo_release_tools.config import DEFAULT_CHANGELOG
+from repo_release_tools.config import DEFAULT_CHANGELOG, load_extra_branch_types
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, SLUG_MAX, normalize_commit_type
 from repo_release_tools.versioning import Version
 
@@ -59,6 +59,8 @@ def validate_branch_name(
     # use externally-generated slugs that may contain slashes and underscores,
     # so skip slug format and length validation for them.
     if type_part in (*BOT_BRANCH_TYPES, *extra_types):
+        if not slug:
+            return f"Branch {branch_name!r} must have a non-empty slug after '/'."
         return None
 
     if len(slug) > SLUG_MAX:
@@ -411,17 +413,6 @@ def emit_failure(title: str, details: list[str]) -> int:
     return 1
 
 
-def _load_extra_branch_types(cwd: Path) -> tuple[str, ...]:
-    """Load extra_branch_types from rrt config if available."""
-    try:
-        from repo_release_tools.config import load_config
-
-        cfg = load_config(cwd)
-        return cfg.extra_branch_types
-    except (FileNotFoundError, ValueError):
-        return ()
-
-
 def run_branch_name_check(
     branch_name: str,
     *,
@@ -492,7 +483,7 @@ def run_dirty_tree_check(cwd: Path, *, title: str) -> int:
 def run_pre_commit(cwd: Path) -> int:
     """Validate the active branch during pre-commit."""
     branch_name = git.current_branch(cwd)
-    extra_types = _load_extra_branch_types(cwd)
+    extra_types = load_extra_branch_types(cwd)
     return run_branch_name_check(
         branch_name,
         title="Commit blocked by branch naming policy.",
@@ -749,7 +740,7 @@ def main(argv: list[str] | None = None) -> int:
     if parsed.command == "commit-msg":
         return run_commit_msg(Path(parsed.message_file))
     if parsed.command == "check-branch-name":
-        extra_types = _load_extra_branch_types(Path.cwd())
+        extra_types = load_extra_branch_types(Path.cwd())
         return run_branch_name_check(
             parsed.branch,
             title="Branch name validation failed.",
