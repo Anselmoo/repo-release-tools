@@ -50,6 +50,9 @@ _RESERVED_BRANCH_TYPES = frozenset({
 })
 
 # Valid identifier pattern for extra_branch_types entries (after normalization).
+# Must start with a lowercase letter; remaining chars may be lowercase letters,
+# digits, hyphens, or underscores.  Empty strings and entries starting with a
+# digit or special character are rejected.
 _BRANCH_TYPE_IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_-]*")
 
 VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
@@ -311,7 +314,7 @@ def load_extra_branch_types(cwd: Path) -> tuple[str, ...]:
         if is_missing_tool_rrt_error(exc):
             return ()
         raise ValueError(
-            f"Failed to load repo-release-tools config for extra_branch_types: {exc}"
+            f"Failed to load extra_branch_types configuration: {exc}"
         ) from exc
 
 

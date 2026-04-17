@@ -649,7 +649,7 @@ kind = "package_json"
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="Failed to load repo-release-tools config"):
+    with pytest.raises(ValueError, match="Failed to load extra_branch_types configuration"):
         load_extra_branch_types(tmp_path)
 
 
