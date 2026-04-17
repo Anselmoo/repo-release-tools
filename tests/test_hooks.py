@@ -9,6 +9,11 @@ from repo_release_tools.hooks import run_changelog_check
 from repo_release_tools.hooks import run_pre_commit_changelog
 from repo_release_tools.hooks import validate_branch_name
 from repo_release_tools.hooks import validate_commit_subject
+from repo_release_tools.hooks import _entries_cancel_out
+from repo_release_tools.hooks import dedup_changelog_entries
+from repo_release_tools.hooks import apply_dedup_to_changelog
+from repo_release_tools.hooks import collect_squash_changelog_hunks
+from repo_release_tools.hooks import run_post_correct
 
 
 def test_validate_branch_name_accepts_feature_branch() -> None:
@@ -228,3 +233,407 @@ def test_action_installs_from_action_path_and_runs_hooks() -> None:
     assert "rrt-hooks check-dirty-tree" in action_text
     assert '--changelog-file "$INPUT_CHANGELOG_FILE"' in action_text
     assert "--ref HEAD" in action_text
+
+
+# ---------------------------------------------------------------------------
+# Post-correction tests
+# ---------------------------------------------------------------------------
+
+
+def test_entries_cancel_out_add_remove() -> None:
+    assert _entries_cancel_out("add Node 26", "remove Node 26") is True
+
+
+def test_entries_cancel_out_remove_add() -> None:
+    assert _entries_cancel_out("remove Node 26", "add Node 26") is True
+
+
+def test_entries_cancel_out_enable_disable() -> None:
+    assert _entries_cancel_out("enable caching", "disable caching") is True
+
+
+def test_entries_cancel_out_with_matching_scope_prefix() -> None:
+    assert _entries_cancel_out("CI: add Node 26", "CI: remove Node 26") is True
+
+
+def test_entries_cancel_out_with_matching_scope_prefix_reversed() -> None:
+    assert _entries_cancel_out("CI: remove Node 26", "CI: add Node 26") is True
+
+
+def test_entries_do_not_cancel_different_scope_prefix() -> None:
+    assert _entries_cancel_out("CI: add Node 26", "Deps: remove Node 26") is False
+
+
+def test_entries_do_not_cancel_mixed_prefix() -> None:
+    assert _entries_cancel_out("CI: add Node 26", "add Node 26") is False
+
+
+def test_entries_do_not_cancel_unrelated() -> None:
+    assert _entries_cancel_out("add Node 26", "fix typo in workflow") is False
+
+
+def test_entries_do_not_cancel_different_subjects() -> None:
+    assert _entries_cancel_out("add Node 26", "add Node 18") is False
+
+
+def test_dedup_changelog_entries_removes_duplicates() -> None:
+    lines = [
+        "### Maintenance",
+        "- CI: fix typo in workflow",
+        "- CI: fix typo in workflow",
+    ]
+    result = dedup_changelog_entries(lines)
+    assert result.count("- CI: fix typo in workflow") == 1
+
+
+def test_dedup_changelog_entries_removes_cancelling_pairs() -> None:
+    lines = [
+        "### Maintenance",
+        "- add Node 26",
+        "- remove Node 26",
+        "- fix typo in workflow",
+    ]
+    result = dedup_changelog_entries(lines)
+    assert "- add Node 26" not in result
+    assert "- remove Node 26" not in result
+    assert "- fix typo in workflow" in result
+
+
+def test_dedup_changelog_entries_removes_cancelling_pairs_with_scope_prefix() -> None:
+    lines = [
+        "### Maintenance",
+        "- CI: add Node 26",
+        "- CI: remove Node 26",
+        "- CI: fix typo in workflow",
+    ]
+    result = dedup_changelog_entries(lines)
+    assert "- CI: add Node 26" not in result
+    assert "- CI: remove Node 26" not in result
+    assert "- CI: fix typo in workflow" in result
+
+
+def test_dedup_changelog_entries_preserves_non_cancelled_entries() -> None:
+    lines = [
+        "### Added",
+        "- feat: new command",
+        "### Maintenance",
+        "- CI: update workflow",
+    ]
+    result = dedup_changelog_entries(lines)
+    assert result == lines
+
+
+def test_dedup_changelog_entries_collapses_blank_lines() -> None:
+    lines = [
+        "### Maintenance",
+        "- add Node 26",
+        "",
+        "- remove Node 26",
+        "",
+        "- fix typo",
+    ]
+    result = dedup_changelog_entries(lines)
+    # Should not have consecutive blank lines after removal
+    blank_count = sum(1 for line in result if not line.strip())
+    assert blank_count <= 1
+
+
+def test_apply_dedup_to_changelog_removes_cancelled_entries(tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Maintenance\n- add Node 26\n- remove Node 26\n- fix typo\n",
+        encoding="utf-8",
+    )
+    added_lines = ["### Maintenance", "- add Node 26", "- remove Node 26", "- fix typo"]
+    deduped_lines = ["### Maintenance", "- fix typo"]
+
+    changed = apply_dedup_to_changelog(changelog, added_lines, deduped_lines)
+
+    assert changed is True
+    content = changelog.read_text(encoding="utf-8")
+    assert "- add Node 26" not in content
+    assert "- remove Node 26" not in content
+    assert "- fix typo" in content
+
+
+def test_apply_dedup_to_changelog_returns_false_when_nothing_removed(tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    original = "# Changelog\n\n## [Unreleased]\n\n- fix typo\n"
+    changelog.write_text(original, encoding="utf-8")
+    added_lines = ["- fix typo"]
+    deduped_lines = ["- fix typo"]
+
+    changed = apply_dedup_to_changelog(changelog, added_lines, deduped_lines)
+
+    assert changed is False
+    assert changelog.read_text(encoding="utf-8") == original
+
+
+def test_apply_dedup_to_changelog_restricts_removal_to_diff_positions(tmp_path: Path) -> None:
+    # Line 8 in the old section has the same content as the noisy new entries;
+    # only lines 4 and 5 (the squash additions) should be removed.
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [0.1.8]\n- add Node 26\n- remove Node 26\n\n## [0.1.7]\n- add Node 26\n",
+        encoding="utf-8",
+    )
+    added_lines = ["- add Node 26", "- remove Node 26"]
+    deduped_lines: list[str] = []
+    positions: frozenset[int] = frozenset({4, 5})  # 1-based: lines 4 and 5 are the new additions
+
+    changed = apply_dedup_to_changelog(
+        changelog, added_lines, deduped_lines, added_line_positions=positions
+    )
+
+    assert changed is True
+    content = changelog.read_text(encoding="utf-8")
+    assert content.count("- add Node 26") == 1  # old section entry preserved
+    assert "- remove Node 26" not in content
+
+
+def test_run_post_correct_returns_zero_when_no_diff(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n- feat: something\n", encoding="utf-8")
+    monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset()))
+
+    assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md") == 0
+
+
+def test_run_post_correct_returns_zero_when_already_clean(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (["- fix typo"], frozenset({3})),
+    )
+
+    assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md") == 0
+
+
+def test_run_post_correct_cleans_contradicting_entries(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n- fix typo\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- add Node 26", "- remove Node 26", "- fix typo"],
+            frozenset({3, 4, 5, 6}),
+        ),
+    )
+
+    result = run_post_correct(tmp_path, changelog_file="CHANGELOG.md")
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "- add Node 26" not in content
+    assert "- remove Node 26" not in content
+    assert "- fix typo" in content
+
+
+def test_run_post_correct_cleans_scope_prefixed_contradicting_entries(
+    monkeypatch, tmp_path: Path
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- CI: add Node 26\n- CI: remove Node 26\n- CI: fix typo\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- CI: add Node 26", "- CI: remove Node 26", "- CI: fix typo"],
+            frozenset({3, 4, 5, 6}),
+        ),
+    )
+
+    result = run_post_correct(tmp_path, changelog_file="CHANGELOG.md")
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "- CI: add Node 26" not in content
+    assert "- CI: remove Node 26" not in content
+    assert "- CI: fix typo" in content
+
+
+def test_run_post_correct_fails_when_changelog_missing(tmp_path: Path) -> None:
+    assert run_post_correct(tmp_path, changelog_file="MISSING.md") == 1
+
+
+def test_main_changelog_post_correct_no_diff(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
+    monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset()))
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["changelog", "post-correct"]) == 0
+
+
+def test_main_changelog_post_correct_explicit_commit(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (["- fix typo"], frozenset({3})),
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["changelog", "post-correct", "--squash-commit", "abc1234"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 — --commit path tests
+# ---------------------------------------------------------------------------
+
+
+def test_run_post_correct_commits_when_flag_set(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n- fix typo\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- add Node 26", "- remove Node 26", "- fix typo"],
+            frozenset({3, 4, 5, 6}),
+        ),
+    )
+    git_calls: list[list[str]] = []
+    monkeypatch.setattr(hooks.git, "run", lambda cmd, *a, **kw: git_calls.append(cmd) or "")
+
+    result = run_post_correct(tmp_path, changelog_file="CHANGELOG.md", commit=True)
+
+    assert result == 0
+    assert any(c[1] == "add" for c in git_calls)
+    assert any(c[1] == "commit" for c in git_calls)
+
+
+def test_run_post_correct_returns_failure_on_commit_error(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- add Node 26", "- remove Node 26"],
+            frozenset({3, 4, 5}),
+        ),
+    )
+    monkeypatch.setattr(
+        hooks.git,
+        "run",
+        lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("git commit failed (exit 1)")),
+    )
+
+    assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md", commit=True) == 1
+
+
+def test_main_changelog_post_correct_with_commit_flag(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda *a, **kw: (
+            ["### Maintenance", "- add Node 26", "- remove Node 26"],
+            frozenset({3, 4, 5}),
+        ),
+    )
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: "")
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["changelog", "post-correct", "--commit"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — collect_squash_changelog_hunks unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_collect_squash_changelog_hunks_parses_single_hunk(monkeypatch, tmp_path: Path) -> None:
+    diff = "@@ -1,3 +1,5 @@\n # Changelog\n \n+### Maintenance\n+- add Node 26\n - fix typo\n"
+    monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: diff)
+
+    added, positions = collect_squash_changelog_hunks(tmp_path)
+
+    assert added == ["### Maintenance", "- add Node 26"]
+    assert positions == frozenset({3, 4})
+
+
+def test_collect_squash_changelog_hunks_multi_hunk(monkeypatch, tmp_path: Path) -> None:
+    diff = (
+        "@@ -1,2 +1,3 @@\n"
+        " # Changelog\n"
+        "+## [Unreleased]\n"
+        " \n"
+        "@@ -5,2 +7,3 @@\n"
+        " ### Added\n"
+        "+- feat: new feature\n"
+        " - existing\n"
+    )
+    monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: diff)
+
+    added, positions = collect_squash_changelog_hunks(tmp_path)
+
+    assert added == ["## [Unreleased]", "- feat: new feature"]
+    assert positions == frozenset({2, 8})
+
+
+def test_collect_squash_changelog_hunks_empty_diff(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: "")
+
+    added, positions = collect_squash_changelog_hunks(tmp_path)
+
+    assert added == []
+    assert positions == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — invalid ref test
+# ---------------------------------------------------------------------------
+
+
+def test_run_post_correct_fails_on_invalid_ref(monkeypatch, tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(
+        hooks.git,
+        "capture_checked",
+        lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("git show bad-ref failed (exit 128)")),
+    )
+
+    assert run_post_correct(tmp_path, ref="bad-ref", changelog_file="CHANGELOG.md") == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — dedup_changelog_entries edge-case tests
+# ---------------------------------------------------------------------------
+
+
+def test_dedup_changelog_entries_empty_input() -> None:
+    assert dedup_changelog_entries([]) == []
+
+
+def test_dedup_changelog_entries_headers_only() -> None:
+    lines = ["## [Unreleased]", "### Added", "### Fixed"]
+    assert dedup_changelog_entries(lines) == lines
+
+
+def test_dedup_changelog_entries_all_duplicates() -> None:
+    lines = ["- fix typo", "- fix typo", "- fix typo"]
+    result = dedup_changelog_entries(lines)
+    assert result.count("- fix typo") == 1
