@@ -73,7 +73,7 @@ extra_branch_types = ["greenkeeper", "snyk"]
 ```
 
 Custom types follow the same passthrough rules as bot branches — their slugs
-are not validated for kebab-case.
+are not validated for kebab-case or length.
 
 ## Release branches
 
