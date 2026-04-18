@@ -40,14 +40,28 @@ VALID_TARGET_KINDS = frozenset({"pep621", "package_json"})
 
 # Branch type prefixes that are built-in and must not appear in extra_branch_types.
 # Mirrors CONVENTIONAL_TYPES, MAGIC_BRANCH_TYPES, and BOT_BRANCH_TYPES from hooks.py.
-_RESERVED_BRANCH_TYPES = frozenset({
-    # conventional commit types
-    "feat", "fix", "chore", "docs", "refactor", "test", "ci", "perf", "style", "build",
-    # AI agent magic types
-    "claude", "codex", "copilot",
-    # dependency bot types
-    "dependabot", "renovate",
-})
+_RESERVED_BRANCH_TYPES = frozenset(
+    {
+        # conventional commit types
+        "feat",
+        "fix",
+        "chore",
+        "docs",
+        "refactor",
+        "test",
+        "ci",
+        "perf",
+        "style",
+        "build",
+        # AI agent magic types
+        "claude",
+        "codex",
+        "copilot",
+        # dependency bot types
+        "dependabot",
+        "renovate",
+    }
+)
 
 # Valid identifier pattern for extra_branch_types entries (after normalization).
 # Must start with a lowercase letter; remaining chars may be lowercase letters,
@@ -313,9 +327,7 @@ def load_extra_branch_types(cwd: Path) -> tuple[str, ...]:
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
             return ()
-        raise ValueError(
-            f"Failed to load extra_branch_types configuration: {exc}"
-        ) from exc
+        raise ValueError(f"Failed to load extra_branch_types configuration: {exc}") from exc
 
 
 def find_config_file(root: Path) -> Path:
@@ -682,9 +694,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
     for raw_item in raw_extra_branch_types:
         normalized = raw_item.strip().lower()
         if not normalized:
-            raise ValueError(
-                "tool.rrt.extra_branch_types entries must be non-empty identifiers"
-            )
+            raise ValueError("tool.rrt.extra_branch_types entries must be non-empty identifiers")
         if not _BRANCH_TYPE_IDENTIFIER_RE.fullmatch(normalized):
             raise ValueError(
                 f"tool.rrt.extra_branch_types entry {raw_item!r} is not a valid identifier "
