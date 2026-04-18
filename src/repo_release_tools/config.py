@@ -43,8 +43,9 @@ _IGNORE_DIR_NAMES: frozenset[str] = frozenset(
     {".venv", "venv", "env", ".env", "node_modules", "__pycache__", ".git", ".tox", "dist", "build"}
 )
 
-# Matches the first occurrence of a `__version__ = "..."` / `'...'` declaration.
-_PYTHON_VERSION_VAR_RE: re.Pattern[str] = re.compile(r"(?m)^__version__\s*=\s*['\"]")
+# Matches the first occurrence of a `__version__ = "..."` / `'...'` declaration,
+# allowing optional leading whitespace before the assignment.
+_PYTHON_VERSION_VAR_RE: re.Pattern[str] = re.compile(r"(?m)^\s*__version__\s*=\s*['\"]")
 
 # Branch type prefixes that are built-in and must not appear in extra_branch_types.
 # Mirrors CONVENTIONAL_TYPES, MAGIC_BRANCH_TYPES, and BOT_BRANCH_TYPES from hooks.py.

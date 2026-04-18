@@ -81,9 +81,72 @@ def test_replace_python_version_same_version_raises(tmp_path: Path) -> None:
         replace_version_in_file(target, "1.0.0", dry_run=False)
 
 
+def test_read_python_version_indented(tmp_path: Path) -> None:
+    f = tmp_path / "__init__.py"
+    f.write_text('    __version__ = "3.0.0"\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="python_version")
+    assert read_version_string(target) == "3.0.0"
+
+
+def test_replace_python_version_indented(tmp_path: Path) -> None:
+    f = tmp_path / "__init__.py"
+    f.write_text('    __version__ = "3.0.0"\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="python_version")
+    replace_version_in_file(target, "3.1.0", dry_run=False)
+    assert '    __version__ = "3.1.0"' in f.read_text(encoding="utf-8")
+
+
+def test_python_version_mismatched_quotes_not_matched(tmp_path: Path) -> None:
+    """A pattern with mismatched opening/closing quotes should not be matched."""
+    f = tmp_path / "__init__.py"
+    # Double-quote open, single-quote close – not a valid Python string literal
+    f.write_text("__version__ = \"1.0.0'\n", encoding="utf-8")
+    target = VersionTarget(path=f, kind="python_version")
+    with pytest.raises(RuntimeError, match="Could not find __version__"):
+        read_version_string(target)
+
+
 # ---------------------------------------------------------------------------
-# go_version – read
+# go_version – leading whitespace and const (...) block
 # ---------------------------------------------------------------------------
+
+
+def test_read_go_version_leading_whitespace(tmp_path: Path) -> None:
+    f = tmp_path / "version.go"
+    f.write_text('package version\n\n\tconst Version = "1.2.3"\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="go_version")
+    assert read_version_string(target) == "1.2.3"
+
+
+def test_replace_go_version_leading_whitespace(tmp_path: Path) -> None:
+    f = tmp_path / "version.go"
+    f.write_text('package version\n\n\tconst Version = "1.2.3"\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="go_version")
+    replace_version_in_file(target, "1.3.0", dry_run=False)
+    assert 'Version = "1.3.0"' in f.read_text(encoding="utf-8")
+
+
+def test_read_go_version_const_block(tmp_path: Path) -> None:
+    f = tmp_path / "version.go"
+    f.write_text(
+        'package version\n\nconst (\n\tVersion = "2.0.0"\n\tOther = "x"\n)\n',
+        encoding="utf-8",
+    )
+    target = VersionTarget(path=f, kind="go_version")
+    assert read_version_string(target) == "2.0.0"
+
+
+def test_replace_go_version_const_block(tmp_path: Path) -> None:
+    f = tmp_path / "version.go"
+    original = 'package version\n\nconst (\n\tVersion = "2.0.0"\n\tOther = "x"\n)\n'
+    f.write_text(original, encoding="utf-8")
+    target = VersionTarget(path=f, kind="go_version")
+    replace_version_in_file(target, "2.1.0", dry_run=False)
+    assert 'Version = "2.1.0"' in f.read_text(encoding="utf-8")
+    assert 'Other = "x"' in f.read_text(encoding="utf-8")
+
+
+
 
 
 def test_read_go_version_const(tmp_path: Path) -> None:

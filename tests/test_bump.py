@@ -496,6 +496,16 @@ kind = "python_version"
     )
 
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
     result = cmd_bump(
         Namespace(
             bump="minor",
