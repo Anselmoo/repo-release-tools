@@ -1,5 +1,5 @@
 from repo_release_tools import output
-from repo_release_tools.glyphs import GLYPHS, display_width
+from repo_release_tools.glyphs import GLYPHS
 
 
 def test_panel_renders_boxed_summary() -> None:
