@@ -122,6 +122,8 @@ rrt init --dry-run
 rrt init --force
 rrt init --target pyproject
 rrt init --target cargo
+rrt init --target node
+rrt init --target go
 rrt init --target pyproject --dry-run
 ```
 
@@ -134,13 +136,19 @@ rrt init --target pyproject --dry-run
 | *(default)* | Creates `.rrt.toml` in the repo root |
 | `--target pyproject` | Appends `[tool.rrt]` to an existing `pyproject.toml` |
 | `--target cargo` | Appends `[package.metadata.rrt]` to an existing `Cargo.toml` |
+| `--target node` | Merges `"rrt": { ... }` into an existing `package.json` |
+| `--target go` | Creates `.rrt.toml` with a `go_version` starter template |
 
-`--target pyproject` and `--target cargo` require the manifest file to already
-exist. Both targets auto-detect current version files to produce a tailored
-config block. Use `--force` to append even if an rrt section is already present.
+`--target pyproject`, `--target cargo`, and `--target node` require the manifest file to already
+exist. All targets auto-detect current version files to produce a tailored
+config block. Use `--force` to overwrite or re-append even if an rrt section is already present.
 
-For **Go** repositories there is no standard extensible manifest section, so
-`rrt init` (default) writes `.rrt.toml` with a `go_version` target template.
+For **Node / JS / TS** repositories, `--target node` reads the existing `package.json`,
+adds a top-level `"rrt"` key, and writes the file back with 2-space JSON indentation.
+
+For **Go** repositories there is no standard extensible manifest section; both
+`--target go` and the default `rrt init` write `.rrt.toml`. Use `--target go`
+to force the `go_version` starter template even if Go files are not yet detected.
 
 ## Configuration files
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json as _json
 import sys
 
 from pathlib import Path
@@ -12,7 +13,9 @@ from repo_release_tools.config import (
     DEFAULT_INIT_CONFIG,
     find_explicit_config_file,
     recommend_init_config,
+    recommend_init_config_for_go,
     recommend_init_section_for_cargo,
+    recommend_init_section_for_node,
     recommend_init_section_for_pyproject,
 )
 
@@ -30,10 +33,14 @@ def cmd_init(args: argparse.Namespace) -> int:
         return _init_manifest(args, manifest="pyproject.toml", section_label="[tool.rrt]")
     if target_fmt == "cargo":
         return _init_manifest(args, manifest="Cargo.toml", section_label="[package.metadata.rrt]")
+    if target_fmt == "node":
+        return _init_package_json(args)
+    if target_fmt == "go":
+        return _init_rrt_toml(args, go=True)
     return _init_rrt_toml(args)
 
 
-def _init_rrt_toml(args: argparse.Namespace) -> int:
+def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     """Write a recommended local .rrt.toml file."""
     root = Path.cwd()
     target = root / DEFAULT_INIT_CONFIG
@@ -61,7 +68,7 @@ def _init_rrt_toml(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        config_text = recommend_init_config(root)
+        config_text = recommend_init_config_for_go(root) if go else recommend_init_config(root)
     except (ValueError, RuntimeError) as exc:
         print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
         return 1
@@ -156,6 +163,67 @@ def _init_manifest(
     return 0
 
 
+def _init_package_json(args: argparse.Namespace) -> int:
+    """Merge the rrt config block into an existing package.json."""
+    root = Path.cwd()
+    manifest_path = root / "package.json"
+
+    if not manifest_path.exists():
+        print(
+            "package.json does not exist in the current directory. "
+            f"Create it first, or run `rrt init` (without --target) to write {DEFAULT_INIT_CONFIG}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        data: dict = _json.loads(manifest_path.read_text(encoding="utf-8"))
+    except _json.JSONDecodeError as exc:
+        print(output.warning(f"Could not parse package.json: {exc}"), file=sys.stderr)
+        return 1
+
+    if not isinstance(data, dict):
+        print(output.warning("package.json must contain a top-level object."), file=sys.stderr)
+        return 1
+
+    if "rrt" in data and not args.force:
+        print(
+            'package.json already contains an "rrt" key. Use --force to overwrite it.',
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        rrt_dict = recommend_init_section_for_node(root)
+    except (ValueError, RuntimeError) as exc:
+        print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
+        return 1
+
+    preview = _json.dumps({"rrt": rrt_dict}, indent=2)
+
+    print()
+    print(
+        output.panel(
+            "[DRY RUN] Init config" if args.dry_run else "Init config",
+            [("File", "package.json"), ("Key", '"rrt"')],
+        )
+    )
+    print()
+
+    if args.dry_run:
+        print(output.dry_run('Would add "rrt" key to package.json:'))
+        print()
+        print(preview)
+        print()
+        print(output.dry_run_complete("no files were modified"))
+        return 0
+
+    data["rrt"] = rrt_dict
+    manifest_path.write_text(_json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    print(output.ok('Added "rrt" to package.json'))
+    return 0
+
+
 def _has_rrt_section(manifest: str, text: str) -> bool:
     """Return True if *text* already contains an rrt configuration section."""
     if manifest == "Cargo.toml":
@@ -177,14 +245,16 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     parser.add_argument(
         "--target",
-        choices=["rrt-toml", "pyproject", "cargo"],
+        choices=["rrt-toml", "pyproject", "cargo", "node", "go"],
         default="rrt-toml",
         metavar="FORMAT",
         help=(
             "Where to write the rrt configuration. "
             "rrt-toml (default): create .rrt.toml; "
             "pyproject: append [tool.rrt] to pyproject.toml; "
-            "cargo: append [package.metadata.rrt] to Cargo.toml."
+            "cargo: append [package.metadata.rrt] to Cargo.toml; "
+            'node: merge "rrt" key into package.json; '
+            "go: create .rrt.toml with a go_version starter template."
         ),
     )
     parser.set_defaults(handler=cmd_init)

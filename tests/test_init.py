@@ -6,7 +6,9 @@ from pathlib import Path
 from repo_release_tools.commands.init import cmd_init
 from repo_release_tools.config import (
     recommend_init_config,
+    recommend_init_config_for_go,
     recommend_init_section_for_cargo,
+    recommend_init_section_for_node,
     recommend_init_section_for_pyproject,
 )
 
@@ -260,3 +262,162 @@ def test_cmd_init_cargo_refuses_if_already_present(monkeypatch, tmp_path: Path, 
     captured = capsys.readouterr()
     assert result == 1
     assert "already contains rrt configuration" in captured.err
+
+
+# ---------------------------------------------------------------------------
+# recommend_init_section_for_node
+# ---------------------------------------------------------------------------
+
+
+def test_recommend_init_section_for_node_detected(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "myapp",\n  "version": "1.0.0"\n}\n',
+        encoding="utf-8",
+    )
+
+    result = recommend_init_section_for_node(tmp_path)
+
+    assert isinstance(result, dict)
+    assert "version_targets" in result
+    targets = result["version_targets"]
+    assert any(t.get("path") == "package.json" for t in targets)
+
+
+def test_recommend_init_section_for_node_fallback(tmp_path: Path) -> None:
+    result = recommend_init_section_for_node(tmp_path)
+
+    assert isinstance(result, dict)
+    assert result["version_targets"][0]["kind"] == "package_json"
+
+
+# ---------------------------------------------------------------------------
+# recommend_init_config_for_go
+# ---------------------------------------------------------------------------
+
+
+def test_recommend_init_config_for_go_with_go_mod(tmp_path: Path) -> None:
+    (tmp_path / "go.mod").write_text("module example.com/mymod\n\ngo 1.22\n", encoding="utf-8")
+
+    result = recommend_init_config_for_go(tmp_path)
+
+    assert "[tool.rrt]" in result
+    assert "go_version" in result or "go" in result.lower()
+
+
+def test_recommend_init_config_for_go_fallback(tmp_path: Path) -> None:
+    result = recommend_init_config_for_go(tmp_path)
+
+    assert "[tool.rrt]" in result
+    assert "go_version" in result
+
+
+# ---------------------------------------------------------------------------
+# cmd_init --target node
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_init_node_merges_rrt_key(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "myapp",\n  "version": "1.0.0"\n}\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="node"))
+
+    assert result == 0
+    import json
+
+    data = json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))
+    assert "name" in data  # original content preserved
+    assert "rrt" in data
+    assert "version_targets" in data["rrt"]
+
+
+def test_cmd_init_node_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+    original = '{\n  "name": "myapp",\n  "version": "1.0.0"\n}\n'
+    (tmp_path / "package.json").write_text(original, encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=True, force=False, target="node"))
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert (tmp_path / "package.json").read_text(encoding="utf-8") == original
+    assert 'Would add "rrt" key to package.json' in captured.out
+
+
+def test_cmd_init_node_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="node"))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "package.json does not exist" in captured.err
+
+
+def test_cmd_init_node_refuses_if_rrt_key_exists(monkeypatch, tmp_path: Path, capsys) -> None:
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "myapp",\n  "version": "1.0.0",\n  "rrt": {"release_branch": "main"}\n}\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="node"))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert '"rrt" key' in captured.err or "already contains" in captured.err
+
+
+def test_cmd_init_node_force_overwrites_rrt_key(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "myapp",\n  "version": "1.0.0",\n  "rrt": {"release_branch": "old"}\n}\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=True, target="node"))
+
+    assert result == 0
+    import json
+
+    data = json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))
+    assert "version_targets" in data["rrt"]  # replaced with full template
+
+
+# ---------------------------------------------------------------------------
+# cmd_init --target go
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_init_go_writes_rrt_toml_with_go_template(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "go.mod").write_text("module example.com/mymod\n\ngo 1.22\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="go"))
+
+    assert result == 0
+    content = (tmp_path / ".rrt.toml").read_text(encoding="utf-8")
+    assert "[tool.rrt]" in content
+    assert "go_version" in content or "go" in content.lower()
+
+
+def test_cmd_init_go_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=True, force=False, target="go"))
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert not (tmp_path / ".rrt.toml").exists()
+    assert "Would write .rrt.toml" in captured.out
+
+
+def test_cmd_init_go_fallback_no_go_mod(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="go"))
+
+    assert result == 0
+    content = (tmp_path / ".rrt.toml").read_text(encoding="utf-8")
+    assert "[tool.rrt]" in content
+    assert "go_version" in content
