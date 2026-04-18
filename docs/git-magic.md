@@ -9,7 +9,7 @@ Some early workflow discussions were inspired by
 [`joseluisq/gitnow`](https://github.com/joseluisq/gitnow), but `rrt` reshapes
 the surface around conventional branches, commit policy, and release safety.
 
-## 10 magic commit frameworks
+## 11 magic workflow patterns
 
 1. Branch-driven commit drafting
    Use `rrt git commit "message"` to infer the conventional commit type from the
@@ -21,31 +21,37 @@ the surface around conventional branches, commit policy, and release safety.
    Use `rrt git sync` to fetch, auto-stash local work, pull, then restore the
    worktree. Rebase is the default path because the product assumes linear
    history where possible.
-4. Safe branch move
+4. Sync analysis
+   Use `rrt git doctor` for the broad repo health view, and `rrt git
+   sync-status` before a pull or after a failed rebase when you want the focused
+   sync preflight: whether a merge/rebase is already in progress, which paths
+   are conflicted, and whether the branch is behind or diverged from its base.
+5. Safe branch move
    Use `rrt git move <branch>` to switch branches without manually juggling a
    stash.
-5. Wrong-branch rescue
+6. Wrong-branch rescue
    Use `rrt branch rescue <type> "description"` when commits landed on the wrong
    branch and need to be moved into a correctly named branch.
-6. Local story squash
+7. Local story squash
    Use `rrt git squash-local "message"` to collapse a local branch into one
    reviewable conventional commit before push.
-7. Safe undo
+8. Safe undo
    Use `rrt git undo-safe` or `rrt git undo-safe --keep-staged` to rewind a bad
    commit without losing the work.
-8. Dirty-tree gate
+9. Dirty-tree gate
    Use `rrt git check-dirty-tree` when a hook, script, or CI job should fail if
    the repo is not clean. The command now prints a compact branch status line
    plus typed change entries for modified, added, removed, renamed, conflicted,
    and untracked paths.
-9. Release bump envelope
+10. Release bump envelope
    Use `rrt bump ...` when the workflow should create the branch, stage the
    version files, refresh generated files, and create the release commit in one
    pass.
-10. History rebootstrap
+11. History rebootstrap
     Use `rrt git rebootstrap` only for deliberate history replacement, such as
     templates or pre-publication cleanup. It stays behind a destructive
-    confirmation flag and remote guard.
+    confirmation flag and remote guard, and `--hard-init` recreates git metadata
+    from scratch while keeping the new history to a single empty commit.
 
 ## Current command surface
 
@@ -53,14 +59,19 @@ the surface around conventional branches, commit policy, and release safety.
 rrt git status
 rrt git log -n 12
 rrt git doctor
+rrt git sync-status
 rrt git check-dirty-tree
 rrt git commit "handle empty config"
 rrt git commit-all "snapshot parser cleanup"
 rrt git sync
+rrt git diff
+rrt git diff --staged
+rrt git diff --against HEAD~3
 rrt git move feat/new-parser
 rrt git squash-local "ship parser cleanup"
 rrt git undo-safe --keep-staged
 rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
+rrt git rebootstrap --yes-i-know-this-destroys-history --hard-init --dry-run
 ```
 
 ## Reuse in hooks and Actions

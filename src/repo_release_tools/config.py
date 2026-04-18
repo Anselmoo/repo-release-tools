@@ -108,10 +108,10 @@ NODE_TOOL_RRT_EXAMPLE = dedent(
 
 RUST_TOOL_RRT_EXAMPLE = dedent(
     """\
-    [tool.rrt]
+    [package.metadata.rrt]
     release_branch = "release/v{version}"
 
-    [[tool.rrt.version_targets]]
+    [[package.metadata.rrt.version_targets]]
     path = "Cargo.toml"
     section = "package"
     field = "version"
@@ -640,10 +640,99 @@ def recommend_init_config(root: Path) -> str:
     return GENERIC_TOOL_RRT_EXAMPLE
 
 
-def _render_recommended_rrt_toml(root: Path, group: VersionGroup) -> str:
-    """Render an explicit .rrt.toml mirroring the current recommended defaults."""
+def recommend_init_section_for_pyproject(root: Path) -> str:
+    """Return a [tool.rrt] TOML snippet to append to an existing pyproject.toml."""
+    config = autodetect_config(root)
+    if config is not None:
+        return _render_recommended_rrt_toml(root, config.resolve_group())
+    return PYTHON_TOOL_RRT_EXAMPLE
+
+
+def recommend_init_section_for_cargo(root: Path) -> str:
+    """Return a [package.metadata.rrt] TOML snippet to append to an existing Cargo.toml."""
+    config = autodetect_config(root)
+    if config is not None:
+        return _render_recommended_rrt_toml(
+            root, config.resolve_group(), prefix="package.metadata.rrt"
+        )
+    return RUST_TOOL_RRT_EXAMPLE
+
+
+def recommend_init_section_for_node(root: Path) -> dict[str, object]:
+    """Return a dict representing the rrt config to embed under the 'rrt' key in package.json."""
+    config = autodetect_config(root)
+    if config is not None:
+        return _render_recommended_rrt_dict(root, config.resolve_group())
+    return {
+        "release_branch": "release/v{version}",
+        "version_targets": [
+            {"path": "package.json", "kind": "package_json", "ci_format": "semver_pre"},
+        ],
+    }
+
+
+def recommend_init_config_for_go(root: Path) -> str:
+    """Return a .rrt.toml config string for a Go repository.
+
+    Uses the Go version-file starter template.  Falls back to auto-detected
+    config when the repo already has discoverable targets (e.g. a ``go.mod``
+    was detected alongside a version file).
+    """
+    config = autodetect_config(root)
+    if config is not None:
+        return _render_recommended_rrt_toml(root, config.resolve_group())
+    return "\n".join(
+        [
+            "# Edit the starter target below before using `rrt bump`.",
+            GO_TOOL_RRT_EXAMPLE,
+        ]
+    )
+
+
+def _render_recommended_rrt_dict(root: Path, group: VersionGroup) -> dict[str, object]:
+    """Render the rrt config as a plain Python dict (for embedding in JSON files)."""
+    result: dict[str, object] = {
+        "release_branch": group.release_branch,
+        "changelog_file": str(group.changelog_file.relative_to(root)),
+    }
+
+    lock_command, generated_files = _recommended_lock_settings(root, group.version_targets)
+    if lock_command:
+        result["lock_command"] = lock_command
+    if generated_files:
+        result["generated_files"] = generated_files
+    if len(group.version_targets) > 1:
+        result["version_source"] = str(group.primary_target().path.relative_to(root))
+
+    targets: list[dict[str, object]] = []
+    for target in group.version_targets:
+        t: dict[str, object] = {"path": str(target.path.relative_to(root))}
+        if target.kind is not None:
+            t["kind"] = target.kind
+        if target.pattern is not None:
+            t["pattern"] = target.pattern
+        if target.section is not None:
+            t["section"] = target.section
+        if target.field is not None:
+            t["field"] = target.field
+        if target.ci_format is not None:
+            t["ci_format"] = target.ci_format
+        targets.append(t)
+    result["version_targets"] = targets
+    return result
+
+
+def _render_recommended_rrt_toml(
+    root: Path, group: VersionGroup, *, prefix: str = "tool.rrt"
+) -> str:
+    """Render an rrt config block mirroring the current recommended defaults.
+
+    *prefix* controls the TOML table header used (e.g. ``tool.rrt`` for
+    ``.rrt.toml`` / ``pyproject.toml``, or ``package.metadata.rrt`` for
+    ``Cargo.toml``).
+    """
     lines = [
-        "[tool.rrt]",
+        f"[{prefix}]",
         f"release_branch = {_toml_basic_string(group.release_branch)}",
         f"changelog_file = {_toml_basic_string(str(group.changelog_file.relative_to(root)))}",
     ]
@@ -659,7 +748,7 @@ def _render_recommended_rrt_toml(root: Path, group: VersionGroup) -> str:
         )
 
     for target in group.version_targets:
-        lines.extend(["", "[[tool.rrt.version_targets]]"])
+        lines.extend(["", f"[[{prefix}.version_targets]]"])
         lines.append(f"path = {_toml_basic_string(str(target.path.relative_to(root)))}")
         if target.kind is not None:
             lines.append(f"kind = {_toml_basic_string(target.kind)}")

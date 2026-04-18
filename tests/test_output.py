@@ -1,3 +1,5 @@
+import pytest
+
 from repo_release_tools import output
 from repo_release_tools.glyphs import GLYPHS
 
@@ -90,3 +92,46 @@ def test_dry_run_complete_uses_shared_typography() -> None:
     assert "[dry-run] complete" in rendered
     assert "no changes made" in rendered
     assert rendered.startswith("[-]") or rendered.startswith("⊖")
+
+
+def test_spinner_lines_noop_on_non_tty(capsys) -> None:
+    """spinner_lines must not crash and must produce no output when not a tty."""
+    import io
+
+    non_tty = io.StringIO()
+    with output.spinner_lines("Working…", file=non_tty):
+        pass
+
+    assert non_tty.getvalue() == ""
+
+
+def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
+    """spinner_lines must skip threading when IS_LEGACY_TERMINAL is True."""
+    import io
+
+    monkeypatch.setattr(output, "IS_LEGACY_TERMINAL", True)
+    non_tty = io.StringIO()
+    with output.spinner_lines("Working…", file=non_tty):
+        pass
+
+    assert non_tty.getvalue() == ""
+
+
+def test_spinner_lines_noop_yields_normally(capsys) -> None:
+    """The body of the with block executes even in no-op mode."""
+    import io
+
+    ran = []
+    with output.spinner_lines("x", file=io.StringIO()):
+        ran.append(True)
+
+    assert ran == [True]
+
+
+def test_spinner_lines_propagates_exception() -> None:
+    """Exceptions raised inside the context propagate out."""
+    import io
+
+    with pytest.raises(ValueError, match="boom"):
+        with output.spinner_lines("x", file=io.StringIO()):
+            raise ValueError("boom")

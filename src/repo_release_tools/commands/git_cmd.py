@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import shutil
 import sys
 
@@ -29,6 +30,7 @@ DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE = "chore: bootstrap repository"
 DEFAULT_REBOOTSTRAP_MESSAGE = "chore: initial commit"
 MOVE_STASH_MESSAGE = "rrt git move auto-stash"
 SYNC_STASH_MESSAGE = "rrt git sync auto-stash"
+_HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old>\d+)(?:,\d+)? \+(?P<new>\d+)(?:,\d+)? @@")
 
 
 @dataclass(frozen=True)
@@ -137,6 +139,11 @@ def render_status_entry(line: str) -> str:
     return output.status(symbol_map[kind], path_text)
 
 
+def conflict_status_lines(status_lines: list[str]) -> list[str]:
+    """Return unresolved-conflict entries from porcelain status lines."""
+    return [line for line in status_lines if classify_status_line(line)[0] == "conflict"]
+
+
 def summarize_status(branch_name: str, status_lines: list[str], *, upstream: str | None) -> str:
     """Render a compact one-line branch status summary."""
     modified = 0
@@ -168,6 +175,31 @@ def load_status_lines(root: Path) -> list[str]:
         return git.status_porcelain(root)
     except RuntimeError as exc:
         raise RuntimeError(str(exc)) from exc
+
+
+def describe_sync_relation(*, ahead: int, behind: int, base_ref: str | None) -> str:
+    """Describe how HEAD relates to the chosen sync base."""
+    if base_ref is None:
+        return "no upstream"
+    if ahead == 0 and behind == 0:
+        return "up to date"
+    if ahead > 0 and behind == 0:
+        return "ahead locally"
+    if ahead == 0 and behind > 0:
+        return "behind base"
+    return "diverged"
+
+
+def sync_problem(branch_name: str, *, base_ref: str | None, ahead: int, behind: int) -> str | None:
+    """Return a user-facing sync problem when the branch needs attention."""
+    if base_ref is None or behind == 0:
+        return None
+    if ahead > 0:
+        return (
+            f"Branch {branch_name!r} has diverged from {base_ref} "
+            f"(ahead {ahead}, behind {behind}). Rebase or merge is needed."
+        )
+    return f"Branch {branch_name!r} is behind {base_ref} by {behind} commit(s). Sync is needed."
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -254,6 +286,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except RuntimeError as exc:
         print(output.error(str(exc)), file=sys.stderr)
         return 1
+    conflicts = conflict_status_lines(status_lines)
+    operation = git.in_progress_operation(root)
+    ahead, behind = (0, 0) if upstream is None else git.ahead_behind(root, upstream)
     latest_subject = git.capture(["git", "log", "-1", "--pretty=%s"], root).strip()
 
     branch_problem = validate_branch_name(branch_name, extra_types=load_extra_branch_types(root))
@@ -261,6 +296,15 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         validate_commit_subject(latest_subject) if latest_subject else "No commits found."
     )
     dirty_problem = None if not status_lines else "Working tree has uncommitted changes."
+    operation_problem = (
+        None
+        if operation is None
+        else f"{operation.capitalize()} is in progress. Resolve or abort it first."
+    )
+    conflict_problem = (
+        None if not conflicts else f"Found {len(conflicts)} conflicted path(s). Resolve them first."
+    )
+    relation_problem = sync_problem(branch_name, base_ref=upstream, ahead=ahead, behind=behind)
 
     changelog_problem: str | None = None
     if latest_subject and commit_subject_requires_changelog(latest_subject):
@@ -283,6 +327,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             [
                 ("Branch", branch_name),
                 ("Upstream", upstream or "<none>"),
+                ("Sync", describe_sync_relation(ahead=ahead, behind=behind, base_ref=upstream)),
                 ("Status", summary),
                 ("Commit", latest_subject or "<none>"),
             ],
@@ -293,27 +338,56 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(output.section("Checks"))
     failures = 0
 
-    checks: list[tuple[bool, str]] = [
-        (branch_problem is None, "Branch naming matches rrt policy."),
-        (upstream is not None, "Upstream branch is configured."),
-        (dirty_problem is None, "Working tree is clean."),
-        (subject_problem is None, "Latest commit subject is conventional."),
-        (changelog_problem is None, f"Changelog state is valid for {args.changelog_file}."),
+    checks: list[tuple[bool, str, str]] = [
+        (branch_problem is None, "Branch naming matches rrt policy.", branch_problem or ""),
+        (
+            upstream is not None,
+            "Upstream branch is configured.",
+            "No upstream branch configured." if upstream is None else "",
+        ),
+        (dirty_problem is None, "Working tree is clean.", dirty_problem or ""),
+        (
+            operation_problem is None,
+            "No merge or rebase is in progress.",
+            operation_problem or "",
+        ),
+        (
+            conflict_problem is None,
+            "No unresolved conflicts detected.",
+            conflict_problem or "",
+        ),
+        (
+            subject_problem is None,
+            "Latest commit subject is conventional.",
+            subject_problem or "",
+        ),
+        (
+            changelog_problem is None,
+            f"Changelog state is valid for {args.changelog_file}.",
+            changelog_problem or "",
+        ),
     ]
-    problems = [
-        branch_problem or "",
-        "No upstream branch configured." if upstream is None else "",
-        dirty_problem or "",
-        subject_problem or "",
-        changelog_problem or "",
-    ]
+    if upstream is not None:
+        checks.append(
+            (
+                relation_problem is None,
+                f"{branch_name} does not need sync from {upstream}.",
+                relation_problem or "",
+            )
+        )
 
-    for (ok, success), problem in zip(checks, problems, strict=True):
+    for ok, success, problem in checks:
         if ok:
             print(output.ok(success))
             continue
         failures += 1
         print(output.error(problem))
+
+    if conflicts:
+        print()
+        print(output.section("Conflicts"))
+        for line in conflicts:
+            print(render_status_entry(line))
 
     if failures == 0:
         print()
@@ -359,6 +433,90 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
     )
     for line in changed:
         print(render_status_entry(line), file=sys.stderr)
+    return 1
+
+
+def cmd_sync_status(args: argparse.Namespace) -> int:
+    """Analyze merge/rebase blockers and divergence against a sync base."""
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        print(output.error(f"{root} is not inside a Git work tree."), file=sys.stderr)
+        return 1
+
+    branch_name = git.current_branch(root) or "<detached>"
+    base_ref = args.base_ref or git.upstream_branch(root)
+    if base_ref is not None and not git.ref_exists(root, base_ref):
+        print(output.error(f"Base ref {base_ref!r} does not exist."), file=sys.stderr)
+        return 1
+    operation = git.in_progress_operation(root)
+    try:
+        status_lines = load_status_lines(root)
+    except RuntimeError as exc:
+        print(output.error(str(exc)), file=sys.stderr)
+        return 1
+
+    conflicts = conflict_status_lines(status_lines)
+    ahead, behind = (0, 0) if base_ref is None else git.ahead_behind(root, base_ref)
+    relation = describe_sync_relation(ahead=ahead, behind=behind, base_ref=base_ref)
+
+    print()
+    print(
+        output.panel(
+            "Sync status",
+            [
+                ("Branch", branch_name),
+                ("Base", base_ref or "<none>"),
+                ("Relation", relation),
+                ("Operation", operation or "idle"),
+                ("Status", summarize_status(branch_name, status_lines, upstream=base_ref)),
+            ],
+        )
+    )
+    print()
+
+    print(output.section("Analysis"))
+    failures = 0
+
+    if operation is None:
+        print(output.ok("No merge or rebase is in progress."))
+    else:
+        failures += 1
+        print(output.error(f"{operation.capitalize()} is in progress. Resolve or abort it first."))
+
+    if not conflicts:
+        print(output.ok("No unresolved conflicts detected."))
+    else:
+        failures += 1
+        print(output.error(f"Found {len(conflicts)} conflicted path(s)."))
+
+    if base_ref is None:
+        failures += 1
+        print(
+            output.error("No upstream branch is configured. Use --base-ref to analyze sync drift.")
+        )
+    elif ahead == 0 and behind == 0:
+        print(output.ok(f"{branch_name} matches {base_ref}."))
+    elif ahead > 0 and behind == 0:
+        print(output.ok(f"{branch_name} is ahead of {base_ref} by {ahead} commit(s)."))
+    else:
+        failures += 1
+        print(
+            output.warning(sync_problem(branch_name, base_ref=base_ref, ahead=ahead, behind=behind))
+        )
+
+    if conflicts:
+        print()
+        print(output.section("Conflicts"))
+        for line in conflicts:
+            print(render_status_entry(line))
+
+    if failures == 0:
+        print()
+        print(output.ok("Sync analysis passed."))
+        return 0
+
+    print()
+    print(output.warning(f"Sync analysis found {failures} issue(s)."), file=sys.stderr)
     return 1
 
 
@@ -429,6 +587,21 @@ def cmd_sync(args: argparse.Namespace) -> int:
     except RuntimeError as exc:
         print(output.error(str(exc)), file=sys.stderr)
         return 1
+    conflicts = conflict_status_lines(status_lines)
+    operation = git.in_progress_operation(root)
+    if operation is not None:
+        print(
+            output.error(
+                f"Cannot sync while a {operation} is in progress. Resolve or abort it first."
+            ),
+            file=sys.stderr,
+        )
+        return 1
+    if conflicts:
+        print(output.error("Cannot sync with unresolved merge conflicts."), file=sys.stderr)
+        for line in conflicts:
+            print(render_status_entry(line), file=sys.stderr)
+        return 1
     strategy = "merge" if args.merge else "rebase"
     title = "[DRY RUN] Sync" if args.dry_run else "Sync"
     print()
@@ -447,7 +620,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
     print()
 
     print(output.section("Syncing"))
-    git.run(["git", "fetch", "--prune"], root, dry_run=args.dry_run, label="git fetch")
+    with output.spinner_lines("Fetching…"):
+        git.run(["git", "fetch", "--prune"], root, dry_run=args.dry_run, label="git fetch")
     if dirty:
         git.run(
             ["git", "stash", "push", "-u", "-m", SYNC_STASH_MESSAGE],
@@ -630,7 +804,7 @@ def cmd_undo_safe(args: argparse.Namespace) -> int:
 def cmd_rebootstrap(args: argparse.Namespace) -> int:
     """Remove repository history and create a fresh initial history."""
     root = Path.cwd()
-    git_dir = root / ".git"
+    git_dir = git.git_dir(root) or (root / ".git")
     if not git_dir.exists():
         print(f"{root} does not look like a Git repository.", file=sys.stderr)
         return 1
@@ -639,6 +813,10 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
             "Refusing to destroy repository history without --yes-i-know-this-destroys-history.",
             file=sys.stderr,
         )
+        return 1
+
+    if args.hard_init and args.empty_first:
+        print("Use either --hard-init or --empty-first, not both.", file=sys.stderr)
         return 1
 
     remotes = git.remote_names(root)
@@ -652,6 +830,11 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
 
     branch_name = args.branch or git.current_branch(root) or "main"
     backup_path = backup_path_for_git_dir(root)
+    commit_message = args.message
+    if commit_message is None:
+        commit_message = (
+            DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE if args.hard_init else DEFAULT_REBOOTSTRAP_MESSAGE
+        )
     title = "[DRY RUN] Rebootstrap history" if args.dry_run else "Rebootstrap history"
     print()
     print(
@@ -659,9 +842,10 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
             title,
             [
                 ("Branch", branch_name),
+                ("Mode", "empty hard-init" if args.hard_init else "snapshot current files"),
                 ("Backup", str(backup_path)),
                 ("Remote guard", "ignored" if args.allow_remote else "enabled"),
-                ("Commit", args.message),
+                ("Commit", commit_message),
             ],
         )
     )
@@ -671,15 +855,23 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(output.dry_run(f"Would move {git_dir} to {backup_path}"))
         git.run(["git", "init", "-b", branch_name], root, dry_run=True, label="git init")
-        if args.empty_first:
+        if args.hard_init:
+            git.run(
+                ["git", "commit", "--allow-empty", "-m", commit_message],
+                root,
+                dry_run=True,
+                label="git commit --allow-empty",
+            )
+        elif args.empty_first:
             git.run(
                 ["git", "commit", "--allow-empty", "-m", args.empty_message],
                 root,
                 dry_run=True,
                 label="git commit --allow-empty",
             )
-        git.run(["git", "add", "."], root, dry_run=True, label="git add")
-        git.run(["git", "commit", "-m", args.message], root, dry_run=True, label="git commit")
+        if not args.hard_init:
+            git.run(["git", "add", "."], root, dry_run=True, label="git add")
+            git.run(["git", "commit", "-m", commit_message], root, dry_run=True, label="git commit")
         print()
         print(output.dry_run_complete("history preserved via preview only"))
         return 0
@@ -689,15 +881,25 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
 
     try:
         git.run(["git", "init", "-b", branch_name], root, dry_run=False, label="git init")
-        if args.empty_first:
+        if args.hard_init:
+            git.run(
+                ["git", "commit", "--allow-empty", "-m", commit_message],
+                root,
+                dry_run=False,
+                label="git commit --allow-empty",
+            )
+        elif args.empty_first:
             git.run(
                 ["git", "commit", "--allow-empty", "-m", args.empty_message],
                 root,
                 dry_run=False,
                 label="git commit --allow-empty",
             )
-        git.run(["git", "add", "."], root, dry_run=False, label="git add")
-        git.run(["git", "commit", "-m", args.message], root, dry_run=False, label="git commit")
+        if not args.hard_init:
+            git.run(["git", "add", "."], root, dry_run=False, label="git add")
+            git.run(
+                ["git", "commit", "-m", commit_message], root, dry_run=False, label="git commit"
+            )
     except RuntimeError as exc:
         print(
             output.warning(f"Rebootstrap failed. Original git data is backed up at {backup_path}."),
@@ -707,8 +909,132 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
         return 1
 
     print()
-    print(output.ok(f"Done. Repository history reinitialized on {branch_name!r}."))
+    if args.hard_init:
+        print(output.ok(f"Done. Repository history hard-initialized on {branch_name!r}."))
+    else:
+        print(output.ok(f"Done. Repository history reinitialized on {branch_name!r}."))
     print(output.status(output.GLYPHS.bullet.dot, f"Original git data: {backup_path}"))
+    return 0
+
+
+def _parse_diff_line(raw: str) -> tuple[str, str, int | None]:
+    """Parse a unified diff header or context line into (kind, text, lineno)."""
+    if raw.startswith("+++") or raw.startswith("---"):
+        return ("unchanged", raw, None)
+    if raw.startswith("@@"):
+        # Extract new-file line number from @@ -a,b +c,d @@ ...
+        try:
+            after_plus = raw.split("+")[1].split(",")[0].split(" ")[0]
+            lineno = int(after_plus)
+        except (IndexError, ValueError):
+            lineno = None
+        return ("unchanged", raw, lineno)
+    if raw.startswith("+"):
+        return ("added", raw[1:], None)
+    if raw.startswith("-"):
+        return ("removed", raw[1:], None)
+    return ("unchanged", raw[1:] if raw.startswith(" ") else raw, None)
+
+
+def _parse_diff_hunk_header(raw: str) -> tuple[int, int] | None:
+    """Return old/new line starts from a unified diff hunk header."""
+    match = _HUNK_HEADER_RE.match(raw)
+    if match is None:
+        return None
+    return (int(match.group("old")), int(match.group("new")))
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """Show a compact git diff using DiffGlyphs."""
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        print(f"{root} is not inside a Git work tree.", file=sys.stderr)
+        return 1
+
+    cmd = ["git", "diff", "--unified=3"]
+    if args.staged:
+        cmd.append("--staged")
+    if args.against:
+        cmd.append(args.against)
+
+    try:
+        raw = git.capture_checked(cmd, root)
+    except RuntimeError as exc:
+        print(output.error(str(exc)), file=sys.stderr)
+        return 1
+    if not raw.strip():
+        print(output.ok("No diff to show."))
+        return 0
+
+    current_file: str = ""
+    old_lineno: int | None = None
+    new_lineno: int | None = None
+
+    print()
+    for raw_line in raw.splitlines():
+        if raw_line.startswith("diff --git "):
+            parts = raw_line.split()
+            if len(parts) >= 4:
+                old_path = parts[2]
+                new_path = parts[3]
+                if new_path.startswith("b/"):
+                    current_file = new_path[2:]
+                elif old_path.startswith("a/"):
+                    current_file = old_path[2:]
+            continue
+        if raw_line.startswith("+++ b/"):
+            current_file = raw_line[6:]
+            print()
+            print(output.section(current_file))
+            old_lineno = None
+            new_lineno = None
+            continue
+        if raw_line.startswith("+++ /dev/null"):
+            if current_file:
+                print()
+                print(output.section(current_file))
+            old_lineno = None
+            new_lineno = None
+            continue
+        if (
+            raw_line.startswith("--- ")
+            or raw_line.startswith("index ")
+            or raw_line.startswith("new file")
+            or raw_line.startswith("deleted file")
+        ):
+            continue
+
+        hunk_lines = _parse_diff_hunk_header(raw_line)
+        if hunk_lines is not None:
+            old_lineno, new_lineno = hunk_lines
+            print(f"  {output.GLYPHS.typography.mdash} {raw_line.strip()}")
+            continue
+
+        kind, text, hunk_start = _parse_diff_line(raw_line)
+        if hunk_start is not None:
+            print(f"  {output.GLYPHS.typography.mdash} {text.strip()}")
+            continue
+
+        rendered_lineno: int | None = None
+        if kind == "added":
+            rendered_lineno = new_lineno
+            if new_lineno is not None:
+                new_lineno += 1
+        elif kind == "removed":
+            if old_lineno is not None:
+                old_lineno += 1
+        elif raw_line.startswith(" "):
+            if old_lineno is not None:
+                old_lineno += 1
+            if new_lineno is not None:
+                new_lineno += 1
+
+        rendered = output.GLYPHS.diff.line(
+            kind, text.rstrip(), lineno=rendered_lineno if kind != "unchanged" else None
+        )
+        print(f"  {rendered}")
+
+    print()
     return 0
 
 
@@ -744,6 +1070,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     status_parser.set_defaults(handler=cmd_status)
 
+    diff_parser = git_sub.add_parser(
+        "diff",
+        help="Show a compact diff using rrt glyph formatting.",
+    )
+    diff_parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Show staged changes instead of working-tree changes.",
+    )
+    diff_parser.add_argument(
+        "--against",
+        metavar="REF",
+        default=None,
+        help="Diff against a specific commit or ref.",
+    )
+    diff_parser.set_defaults(handler=cmd_diff)
+
     log_parser = git_sub.add_parser(
         "log",
         help="Show a compact commit history view.",
@@ -767,6 +1110,18 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Changelog path used for doctor checks.",
     )
     doctor_parser.set_defaults(handler=cmd_doctor)
+
+    sync_status_parser = git_sub.add_parser(
+        "sync-status",
+        help="Analyze unresolved conflicts and whether sync/rebase work is needed.",
+    )
+    sync_status_parser.add_argument(
+        "--base-ref",
+        default=None,
+        metavar="REF",
+        help="Ref to analyze against. Defaults to the current upstream branch.",
+    )
+    sync_status_parser.set_defaults(handler=cmd_sync_status)
 
     dirty_parser = git_sub.add_parser(
         "check-dirty-tree",
@@ -860,6 +1215,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Allow rebootstrap even when remotes are configured.",
     )
     rebootstrap_parser.add_argument(
+        "--hard-init",
+        action="store_true",
+        help="Recreate .git and make only one empty initial commit, leaving files untracked.",
+    )
+    rebootstrap_parser.add_argument(
         "--branch",
         default=None,
         metavar="BRANCH",
@@ -867,7 +1227,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     rebootstrap_parser.add_argument(
         "--message",
-        default=DEFAULT_REBOOTSTRAP_MESSAGE,
+        default=None,
         help="Commit message for the new initial commit.",
     )
     rebootstrap_parser.add_argument(
