@@ -126,7 +126,8 @@ def test_recommend_init_section_for_cargo_fallback(tmp_path: Path) -> None:
     # No Cargo.toml → falls back to the generic Rust example
     rendered = recommend_init_section_for_cargo(tmp_path)
 
-    assert "[tool.rrt]" in rendered  # RUST_TOOL_RRT_EXAMPLE still uses [tool.rrt]
+    assert "[package.metadata.rrt]" in rendered
+    assert "[[package.metadata.rrt.version_targets]]" in rendered
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +190,9 @@ def test_cmd_init_pyproject_refuses_if_already_present(monkeypatch, tmp_path: Pa
     assert "already contains rrt configuration" in captured.err
 
 
-def test_cmd_init_pyproject_force_appends_even_if_present(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_init_pyproject_force_refuses_duplicate_rrt_table(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "mypkg"\nversion = "1.0.0"\n\n[tool.rrt]\nrelease_branch = "main"\n',
         encoding="utf-8",
@@ -198,10 +201,9 @@ def test_cmd_init_pyproject_force_appends_even_if_present(monkeypatch, tmp_path:
     monkeypatch.chdir(tmp_path)
     result = cmd_init(Namespace(dry_run=False, force=True, target="pyproject"))
 
-    assert result == 0
-    content = (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
-    # Two [tool.rrt] occurrences (original + appended)
-    assert content.count("[tool.rrt]") == 2
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Edit the existing rrt section manually" in captured.err
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +264,33 @@ def test_cmd_init_cargo_refuses_if_already_present(monkeypatch, tmp_path: Path, 
     captured = capsys.readouterr()
     assert result == 1
     assert "already contains rrt configuration" in captured.err
+
+
+def test_cmd_init_pyproject_detects_existing_array_only(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\nversion = "1.0.0"\n\n[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="pyproject"))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "already contains rrt configuration" in captured.err
+
+
+def test_cmd_init_refuses_invalid_pyproject_manifest(monkeypatch, tmp_path: Path, capsys) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project\nname = 'broken'\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="pyproject"))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Could not parse pyproject.toml" in captured.err
 
 
 # ---------------------------------------------------------------------------

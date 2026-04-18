@@ -51,16 +51,16 @@ def cmd_config(args: argparse.Namespace) -> int:
 
         # Version targets
         target_children: list[tuple[str, bool, list | None]] = [
-            (f"{t.path.relative_to(root)}  [{t.kind}]", False, None) for t in group.version_targets
+            (cfg._describe_version_target(t, root=root), False, None) for t in group.version_targets
         ]
-        children.append(("version_targets/", True, target_children or None))
+        children.append(("version_targets", True, target_children or None))
 
         # Generated files (only when present)
         if group.generated_files:
             gen_children: list[tuple[str, bool, list | None]] = [
                 (str(f.relative_to(root)), False, None) for f in group.generated_files
             ]
-            children.append(("generated_files/", True, gen_children))
+            children.append(("generated_files", True, gen_children))
 
         tree_entries.append((f"[{group.name}]", True, children))
 

@@ -123,7 +123,7 @@ def test_cmd_config_tree_shows_version_targets(tmp_path: Path, monkeypatch, caps
     config_cmd.cmd_config(_ARGS)
 
     out = capsys.readouterr().out
-    assert "python_version" in out
+    assert "__version__" in out
 
 
 def test_cmd_config_tree_shows_generated_files(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -135,6 +135,30 @@ def test_cmd_config_tree_shows_generated_files(tmp_path: Path, monkeypatch, caps
 
     out = capsys.readouterr().out
     assert "uv.lock" in out
+
+
+def test_cmd_config_tree_describes_pattern_target_without_none_label(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    target = VersionTarget(path=tmp_path / "VERSION.txt", pattern=r"^(version=)(.+)$")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    conf = RrtConfig(root=tmp_path, config_file=tmp_path / ".rrt.toml", version_groups=[group])
+    monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", lambda _: conf)
+
+    rc = config_cmd.cmd_config(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "VERSION.txt (pattern)" in out
+    assert "[None]" not in out
 
 
 def test_cmd_config_multiple_groups(tmp_path: Path, monkeypatch, capsys) -> None:

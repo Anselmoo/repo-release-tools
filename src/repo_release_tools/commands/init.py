@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json as _json
 import sys
+import tomllib
 
 from pathlib import Path
 
@@ -18,12 +19,6 @@ from repo_release_tools.config import (
     recommend_init_section_for_node,
     recommend_init_section_for_pyproject,
 )
-
-# Text guards used to detect whether rrt config is already present in an
-# existing manifest file before appending to it.
-_PYPROJECT_RRT_GUARD = "[tool.rrt]"
-_CARGO_RRT_GUARD_PACKAGE = "package.metadata.rrt"
-_CARGO_RRT_GUARD_WORKSPACE = "workspace.metadata.rrt"
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -122,11 +117,15 @@ def _init_manifest(
 
     existing_text = manifest_path.read_text(encoding="utf-8")
 
-    already_present = _has_rrt_section(manifest, existing_text)
-    if already_present and not args.force:
+    try:
+        already_present = _has_rrt_section(manifest, existing_text)
+    except ValueError as exc:
+        print(output.warning(str(exc)), file=sys.stderr)
+        return 1
+    if already_present:
         print(
             f"{manifest} already contains rrt configuration. "
-            "Use --force to append another block anyway.",
+            "Edit the existing rrt section manually instead of appending a duplicate table.",
             file=sys.stderr,
         )
         return 1
@@ -226,9 +225,16 @@ def _init_package_json(args: argparse.Namespace) -> int:
 
 def _has_rrt_section(manifest: str, text: str) -> bool:
     """Return True if *text* already contains an rrt configuration section."""
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"Could not parse {manifest}: {exc}") from exc
     if manifest == "Cargo.toml":
-        return _CARGO_RRT_GUARD_PACKAGE in text or _CARGO_RRT_GUARD_WORKSPACE in text
-    return _PYPROJECT_RRT_GUARD in text
+        package_rrt = data.get("package", {}).get("metadata", {}).get("rrt")
+        workspace_rrt = data.get("workspace", {}).get("metadata", {}).get("rrt")
+        return isinstance(package_rrt, dict) or isinstance(workspace_rrt, dict)
+    tool_rrt = data.get("tool", {}).get("rrt")
+    return isinstance(tool_rrt, dict)
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -241,7 +247,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite an existing .rrt.toml, or append even if rrt config already exists.",
+        help="Overwrite an existing .rrt.toml or package.json rrt key.",
     )
     parser.add_argument(
         "--target",
@@ -254,7 +260,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "pyproject: append [tool.rrt] to pyproject.toml; "
             "cargo: append [package.metadata.rrt] to Cargo.toml; "
             'node: merge "rrt" key into package.json; '
-            "go: create .rrt.toml with a go_version starter template."
+            "go: create .rrt.toml with the recommended Go config, "
+            "falling back to auto-detected targets when available."
         ),
     )
     parser.set_defaults(handler=cmd_init)

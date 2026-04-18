@@ -141,6 +141,50 @@ def upstream_branch(cwd: Path) -> str | None:
     return value or None
 
 
+def ref_exists(cwd: Path, ref: str) -> bool:
+    """Return whether *ref* resolves to an object in this repository."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", ref],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def git_dir(cwd: Path) -> Path | None:
+    """Return the resolved .git directory for the current work tree, if available."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    raw = result.stdout.strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        path = cwd / path
+    return path.resolve()
+
+
+def in_progress_operation(cwd: Path) -> str | None:
+    """Return the current merge/rebase operation name, if one is in progress."""
+    directory = git_dir(cwd)
+    if directory is None:
+        return None
+    if (directory / "rebase-merge").exists() or (directory / "rebase-apply").exists():
+        return "rebase"
+    if (directory / "MERGE_HEAD").exists():
+        return "merge"
+    return None
+
+
 def merge_base(cwd: Path, left: str, right: str = "HEAD") -> str | None:
     """Return the merge-base sha for two refs, if one exists."""
     result = subprocess.run(

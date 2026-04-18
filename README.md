@@ -18,6 +18,7 @@ pip install repo-release-tools
 rrt init
 rrt branch new feat "add parser"
 rrt git commit "add parser"
+rrt git doctor
 rrt bump patch
 ```
 

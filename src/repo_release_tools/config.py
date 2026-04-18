@@ -108,10 +108,10 @@ NODE_TOOL_RRT_EXAMPLE = dedent(
 
 RUST_TOOL_RRT_EXAMPLE = dedent(
     """\
-    [tool.rrt]
+    [package.metadata.rrt]
     release_branch = "release/v{version}"
 
-    [[tool.rrt.version_targets]]
+    [[package.metadata.rrt.version_targets]]
     path = "Cargo.toml"
     section = "package"
     field = "version"

@@ -37,8 +37,12 @@ repeatable workflows that match `repo-release-tools` policy:
 
 - `rrt git status` shows a compact branch summary and typed worktree entries
 - `rrt git log` shows recent history in a compact `rrt`-styled view
-- `rrt git doctor` checks branch policy, upstream state, dirty tree, latest
-  commit subject, and changelog risk in one report
+- `rrt git doctor` checks branch policy, upstream state, dirty tree,
+  merge/rebase blockers, sync drift, latest commit subject, and changelog risk
+  in one report
+- `rrt git sync-status` is the focused sync preflight view: it analyzes whether a
+  merge/rebase is already in progress, whether unresolved conflicts remain, and
+  whether the branch is behind or diverged from its sync base
 - `rrt git diff` renders the working-tree diff with `rrt` glyph formatting —
   added, removed, and unchanged lines are styled distinctly. Use `--staged` to
   inspect staged changes before a commit, or `--against <ref>` to diff against
@@ -56,7 +60,9 @@ repeatable workflows that match `repo-release-tools` policy:
 - `rrt git check-dirty-tree` exits non-zero when the working tree is dirty, for
   use in hooks and CI, with typed entries for dirty paths
 - `rrt git rebootstrap` destroys history and creates a fresh initial history,
-  guarded by an explicit confirmation flag
+  guarded by an explicit confirmation flag; add `--hard-init` to recreate git
+  metadata from scratch while leaving the working tree untracked behind one
+  empty initial commit
 
 See [Git magic](git-magic.md) for the design rationale and the full workflow
 catalog.
@@ -89,8 +95,8 @@ configuration as loaded.
     ├── changelog       CHANGELOG.md
     ├── lock_command    uv lock -U
     ├── version_targets/
-    │   ├── pyproject.toml  [pep621]
-    │   └── src/pkg/__init__.py  [python_version]
+    │   ├── pyproject.toml ([project].version)
+    │   └── src/pkg/__init__.py (__version__)
     └── generated_files/
         └── uv.lock
 ```
@@ -137,18 +143,21 @@ rrt init --target pyproject --dry-run
 | `--target pyproject` | Appends `[tool.rrt]` to an existing `pyproject.toml` |
 | `--target cargo` | Appends `[package.metadata.rrt]` to an existing `Cargo.toml` |
 | `--target node` | Merges `"rrt": { ... }` into an existing `package.json` |
-| `--target go` | Creates `.rrt.toml` with a `go_version` starter template |
+| `--target go` | Creates `.rrt.toml` with the recommended Go config, falling back to auto-detected targets when available |
 
 `--target pyproject`, `--target cargo`, and `--target node` require the manifest file to already
 exist. All targets auto-detect current version files to produce a tailored
-config block. Use `--force` to overwrite or re-append even if an rrt section is already present.
+config block. Use `--force` to overwrite `.rrt.toml` or the `package.json`
+`"rrt"` key. Existing `pyproject.toml` and `Cargo.toml` rrt sections must be
+edited manually instead of appending a duplicate table.
 
 For **Node / JS / TS** repositories, `--target node` reads the existing `package.json`,
 adds a top-level `"rrt"` key, and writes the file back with 2-space JSON indentation.
 
 For **Go** repositories there is no standard extensible manifest section; both
-`--target go` and the default `rrt init` write `.rrt.toml`. Use `--target go`
-to force the `go_version` starter template even if Go files are not yet detected.
+`--target go` and the default `rrt init` write `.rrt.toml`. `--target go` uses
+the Go-specific starter template when no existing version targets can be
+auto-detected.
 
 ## Configuration files
 
@@ -160,7 +169,7 @@ to force the `go_version` starter template even if Go files are not yet detected
 4. `.rrt.toml`
 5. `.config/rrt.toml`
 
-All use the same `[tool.rrt]` table.
+Each file stores equivalent `rrt` config in its native format.
 Use `.rrt.toml` or `.config/rrt.toml` for local repo config if you do not want
 to keep release-tool settings in `pyproject.toml`.
 
