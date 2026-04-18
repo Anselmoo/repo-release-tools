@@ -9,6 +9,7 @@ from repo_release_tools.glyphs import (
     BoxStyle,
     Glyph,
     RoundedBoxGlyphs,
+    _repeat_to_width,
     display_width,
     pad_right,
 )
@@ -68,22 +69,22 @@ def panel(title: str, rows: list[tuple[str, str]], *, style: BoxStyle = "single"
     # Row separator: ├────────┼─────────────────┤  (inner dividers)
     row_sep = (
         f"{inner.left}"
-        f"{inner.h * (label_width + 2)}"
+        f"{_repeat_to_width(inner.h, label_width + 2)}"
         f"{inner.cross}"
-        f"{inner.h * (value_width + 2)}"
+        f"{_repeat_to_width(inner.h, value_width + 2)}"
         f"{inner.right}"
     )
-    # Bottom border: └────────┴─────────────────┘  (outer corners, inner bottom-T junction)
+    # Bottom border: └────────┴─────────────────┘  (outer corners + outer horizontal, inner bottom-T)
     bottom = (
         f"{outer.bl}"
-        f"{inner.h * (label_width + 2)}"
+        f"{_repeat_to_width(outer.h, label_width + 2)}"
         f"{inner.bottom}"
-        f"{inner.h * (value_width + 2)}"
+        f"{_repeat_to_width(outer.h, value_width + 2)}"
         f"{outer.br}"
     )
 
     # Top border uses outer corners + outer horizontal; rows use inner vertical for column divider.
-    lines = [f"{outer.tl}{title_text}{outer.h * top_fill}{outer.tr}"]
+    lines = [f"{outer.tl}{title_text}{_repeat_to_width(outer.h, top_fill)}{outer.tr}"]
     for index, (label, value) in enumerate(rows):
         lines.append(
             f"{outer.v} {pad_right(label, label_width)} {inner.v} "

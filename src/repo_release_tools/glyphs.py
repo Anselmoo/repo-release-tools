@@ -42,7 +42,7 @@ def _detect_cjk_locale() -> bool:
     if os.environ.get("RRT_WIDE_AMBIGUOUS") == "0":
         return False
     try:
-        lang, encoding = locale.getlocale()
+        lang, _encoding = locale.getlocale()
     except Exception:  # pragma: no cover
         return False
     if lang is None:
@@ -83,6 +83,22 @@ def display_width(text: str) -> int:
 def pad_right(text: str, width: int) -> str:
     """Right-pad text to a terminal cell width."""
     return text + (" " * max(0, width - display_width(text)))
+
+
+def _repeat_to_width(glyph: "Glyph | str", target_cells: int) -> str:
+    """Repeat *glyph* until exactly *target_cells* terminal columns are filled.
+
+    When the glyph's display width does not evenly divide *target_cells*, the
+    remainder is filled with spaces so the total cell count equals *target_cells*.
+    """
+    glyph_str = str(glyph)
+    glyph_width = display_width(glyph_str)
+    if glyph_width <= 0:
+        return " " * target_cells
+    count = target_cells // glyph_width
+    result = glyph_str * count
+    remaining = target_cells - display_width(result)
+    return result + " " * remaining
 
 
 @dataclass(frozen=True)
@@ -132,9 +148,9 @@ class BoxGlyphs:
         width = display_width(inner)
         return "\n".join(
             [
-                f"{self.tl}{self.h * width}{self.tr}",
+                f"{self.tl}{_repeat_to_width(self.h, width)}{self.tr}",
                 f"{self.v}{inner}{self.v}",
-                f"{self.bl}{self.h * width}{self.br}",
+                f"{self.bl}{_repeat_to_width(self.h, width)}{self.br}",
             ]
         )
 
@@ -145,9 +161,9 @@ class BoxGlyphs:
         width = display_width(inner)
         return "\n".join(
             [
-                f"{self.dtl}{self.dh * width}{self.dtr}",
+                f"{self.dtl}{_repeat_to_width(self.dh, width)}{self.dtr}",
                 f"{self.dv}{inner}{self.dv}",
-                f"{self.dbl}{self.dh * width}{self.dbr}",
+                f"{self.dbl}{_repeat_to_width(self.dh, width)}{self.dbr}",
             ]
         )
 
@@ -166,7 +182,11 @@ class BoxGlyphs:
             return f"{self.v}{str(self.v).join(parts)}{self.v}"
 
         def sep(left: Glyph, mid: Glyph, right: Glyph) -> str:
-            return str(left) + str(mid).join(str(self.h) * width for width in widths) + str(right)
+            return (
+                str(left)
+                + str(mid).join(_repeat_to_width(self.h, width) for width in widths)
+                + str(right)
+            )
 
         return "\n".join(
             [
@@ -202,23 +222,12 @@ class RoundedBoxGlyphs:
         """Render a simple rounded-corner box around text."""
         pad = " " * padding
         inner = f"{pad}{text}{pad}"
-        inner_dw = display_width(inner)
-        h_dw = display_width(str(self.h))
-        v_dw = display_width(str(self.v))
-        corner_dw = display_width(str(self.tl))
-        # display columns needed for the horizontal fill inside the corners
-        fill_dw = 2 * v_dw + inner_dw - 2 * corner_dw
-        # if h chars are wide (e.g. CJK ambiguous=2), pad inner so fill divides evenly
-        if h_dw > 1 and fill_dw % h_dw:
-            extra = h_dw - (fill_dw % h_dw)
-            inner = inner + " " * extra
-            fill_dw += extra
-        h_count = fill_dw // h_dw
+        width = display_width(inner)
         return "\n".join(
             [
-                f"{self.tl}{self.h * h_count}{self.tr}",
+                f"{self.tl}{_repeat_to_width(self.h, width)}{self.tr}",
                 f"{self.v}{inner}{self.v}",
-                f"{self.bl}{self.h * h_count}{self.br}",
+                f"{self.bl}{_repeat_to_width(self.h, width)}{self.br}",
             ]
         )
 
@@ -243,21 +252,12 @@ class BoldBoxGlyphs:
         """Render a simple bold-border box around text."""
         pad = " " * padding
         inner = f"{pad}{text}{pad}"
-        inner_dw = display_width(inner)
-        h_dw = display_width(str(self.h))
-        v_dw = display_width(str(self.v))
-        corner_dw = display_width(str(self.tl))
-        fill_dw = 2 * v_dw + inner_dw - 2 * corner_dw
-        if h_dw > 1 and fill_dw % h_dw:
-            extra = h_dw - (fill_dw % h_dw)
-            inner = inner + " " * extra
-            fill_dw += extra
-        h_count = fill_dw // h_dw
+        width = display_width(inner)
         return "\n".join(
             [
-                f"{self.tl}{self.h * h_count}{self.tr}",
+                f"{self.tl}{_repeat_to_width(self.h, width)}{self.tr}",
                 f"{self.v}{inner}{self.v}",
-                f"{self.bl}{self.h * h_count}{self.br}",
+                f"{self.bl}{_repeat_to_width(self.h, width)}{self.br}",
             ]
         )
 
