@@ -1,3 +1,9 @@
+## [0.1.8] - 2026-04-18
+
+### Added
+- add support for custom branch types and enhance validation for bot branches (#15)
+- post-correction mode for changelog hook after squash merges (#13)
+
 # Changelog
 
 ## [0.1.7] - 2026-04-06
