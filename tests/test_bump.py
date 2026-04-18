@@ -472,3 +472,184 @@ version = "0.3.0"
     assert result == 0
     content = (tmp_path / "Cargo.toml").read_text(encoding="utf-8")
     assert 'version = "0.4.0"' in content
+
+
+def test_cmd_bump_python_version_kind_explicit_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+) -> None:
+    """bump updates __version__ in a Python file when kind='python_version' is configured."""
+    init_file = tmp_path / "src" / "mypkg" / "__init__.py"
+    init_file.parent.mkdir(parents=True)
+    init_file.write_text('__version__ = "0.1.0"\n', encoding="utf-8")
+
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "src/mypkg/__init__.py"
+kind = "python_version"
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=True,
+            no_commit=True,
+            no_changelog=True,
+            no_update=False,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "release/v0.2.0" in captured.out
+    assert "Would update" in captured.out
+
+
+def test_cmd_bump_python_version_kind_writes_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """bump actually writes the new __version__ when not in dry-run mode."""
+    init_file = tmp_path / "src" / "mypkg" / "__init__.py"
+    init_file.parent.mkdir(parents=True)
+    init_file.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "src/mypkg/__init__.py"
+kind = "python_version"
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert '__version__ = "1.0.1"' in init_file.read_text(encoding="utf-8")
+
+
+def test_cmd_bump_autodetects_python_version_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Zero-config bump auto-detects __version__ in src/<pkg>/__init__.py."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.5.0"\n',
+        encoding="utf-8",
+    )
+    init_file = tmp_path / "src" / "example" / "__init__.py"
+    init_file.parent.mkdir(parents=True)
+    init_file.write_text('__version__ = "0.5.0"\n', encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert 'version = "0.6.0"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert '__version__ = "0.6.0"' in init_file.read_text(encoding="utf-8")
+
+
+def test_cmd_bump_go_version_kind(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """bump updates const Version in a Go file when kind='go_version' is configured."""
+    ver_file = tmp_path / "internal" / "version" / "version.go"
+    ver_file.parent.mkdir(parents=True)
+    ver_file.write_text('package version\n\nconst Version = "0.1.0"\n', encoding="utf-8")
+
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "internal/version/version.go"
+kind = "go_version"
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="major",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert 'const Version = "1.0.0"' in ver_file.read_text(encoding="utf-8")

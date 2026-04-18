@@ -14,6 +14,8 @@ from repo_release_tools.versioning import Version
 
 
 PEP621_PATTERN = re.compile(r'(?ms)(^\[project\]\s.*?^version\s*=\s*")([^"]+)(")')
+PYTHON_VERSION_PATTERN = re.compile(r'(?m)^(__version__\s*=\s*["\'])([^"\']+)(["\'])')
+GO_VERSION_PATTERN = re.compile(r'(?m)^((?:const|var)\s+Version\s*=\s*")([^"]+)(")')
 
 
 def replace_version_in_file(
@@ -34,6 +36,10 @@ def replace_version_in_file(
         updated = PEP621_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
     elif target.kind == "package_json":
         updated = replace_package_json_version(text, new_version)
+    elif target.kind == "python_version":
+        updated = PYTHON_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+    elif target.kind == "go_version":
+        updated = GO_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
     elif target.pattern:
         updated = replace_pattern_version(text, target.pattern, new_version)
     else:
@@ -96,6 +102,16 @@ def read_version_string(target: VersionTarget) -> str:
         return match.group(2)
     if target.kind == "package_json":
         return read_package_json_version(target.path)
+    if target.kind == "python_version":
+        match = PYTHON_VERSION_PATTERN.search(text)
+        if match is None:
+            raise RuntimeError(f"Could not find __version__ in {target.path}")
+        return match.group(2)
+    if target.kind == "go_version":
+        match = GO_VERSION_PATTERN.search(text)
+        if match is None:
+            raise RuntimeError(f"Could not find Version constant/variable in {target.path}")
+        return match.group(2)
 
     if target.pattern:
         match = search_pattern(text, target.pattern)
