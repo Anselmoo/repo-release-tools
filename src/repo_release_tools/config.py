@@ -36,7 +36,16 @@ CONFIG_SECTION_BY_FILE: dict[str, str] = {
 # Sentinel: lock_command / generated_files not explicitly configured → auto-detect.
 _AUTO: list[str] | None = None
 
-VALID_TARGET_KINDS = frozenset({"pep621", "package_json"})
+VALID_TARGET_KINDS = frozenset({"pep621", "package_json", "python_version", "go_version"})
+
+# Directory names to skip when scanning for Python __version__ files.
+_IGNORE_DIR_NAMES: frozenset[str] = frozenset(
+    {".venv", "venv", "env", ".env", "node_modules", "__pycache__", ".git", ".tox", "dist", "build"}
+)
+
+# Matches the first occurrence of a `__version__ = "..."` / `'...'` declaration,
+# allowing optional leading whitespace before the assignment.
+_PYTHON_VERSION_VAR_RE: re.Pattern[str] = re.compile(r"(?m)^\s*__version__\s*=\s*['\"]")
 
 # Branch type prefixes that are built-in and must not appear in extra_branch_types.
 # Mirrors CONVENTIONAL_TYPES, MAGIC_BRANCH_TYPES, and BOT_BRANCH_TYPES from hooks.py.
@@ -117,7 +126,7 @@ GO_TOOL_RRT_EXAMPLE = dedent(
 
     [[tool.rrt.version_targets]]
     path = "internal/version/version.go"
-    pattern = '^(const Version = ")([^"]+)(")$'
+    kind = "go_version"
     """
 ).strip()
 
@@ -167,9 +176,9 @@ class VersionTarget:
         has_section_field = has_section and has_field
         configured_modes = sum((has_kind, has_pattern, has_section_field))
         if configured_modes == 0:
+            kind_opts = " or ".join(f"kind={k!r}" for k in sorted(VALID_TARGET_KINDS))
             raise ValueError(
-                "Each version target must define either "
-                "kind='pep621', kind='package_json', pattern, or section+field"
+                f"Each version target must define either {kind_opts}, pattern, or section+field"
             )
         if configured_modes > 1:
             raise ValueError(
@@ -362,12 +371,13 @@ def autodetect_config(root: Path) -> RrtConfig | None:
     """Build an implicit config from common root-level version files."""
     targets = _autodetect_version_targets(root)
     if len(targets) > 1:
+        lock_cmd, gen_files = _recommended_lock_settings(root, targets)
         group = VersionGroup(
             name="default",
             release_branch=DEFAULT_RELEASE_BRANCH,
             changelog_file=root / DEFAULT_CHANGELOG,
-            lock_command=[],
-            generated_files=[],
+            lock_command=lock_cmd,
+            generated_files=[root / f for f in gen_files],
             version_targets=targets,
             version_source=targets[0].path,
         )
@@ -425,8 +435,9 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
     lines.extend(
         [
             "",
-            "Zero-config mode auto-detects these root-level version files:",
+            "Zero-config mode auto-detects these version files:",
             "  - pyproject.toml -> [project].version",
+            "  - src/<package>/__init__.py, src/<package>/__version__.py -> __version__",
             "  - package.json -> top-level version",
             "  - Cargo.toml -> [package].version",
             "",
@@ -452,7 +463,7 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
             "Rust / Cargo.toml:",
             *[f"    {line}" for line in RUST_TOOL_RRT_EXAMPLE.splitlines()],
             "",
-            "Go example (Go has no standard in-file project version, so use an explicit pattern):",
+            "Go example (Go projects with an in-file version constant or variable):",
             *[f"    {line}" for line in GO_TOOL_RRT_EXAMPLE.splitlines()],
             "",
             "Local repo config works too: put that table in .rrt.toml or .config/rrt.toml",
@@ -460,6 +471,40 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
         ]
     )
     return "\n".join(lines)
+
+
+def _find_python_version_files(root: Path) -> list[Path]:
+    """Find Python files that declare ``__version__`` in common src/flat package layouts.
+
+    Scans one level deep under ``src/`` and directly under *root* for
+    ``__version__.py`` and ``__init__.py`` files that contain a
+    ``__version__ = ...`` assignment.  Common non-package directories are
+    skipped.
+    """
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for base in (root / "src", root):
+        if not base.is_dir():
+            continue
+        try:
+            children = sorted(base.iterdir())
+        except OSError:
+            continue
+        for pkg_dir in children:
+            if not pkg_dir.is_dir() or pkg_dir.name in _IGNORE_DIR_NAMES:
+                continue
+            for name in ("__version__.py", "__init__.py"):
+                candidate = pkg_dir / name
+                if candidate in seen or not candidate.exists():
+                    continue
+                try:
+                    text = candidate.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                if _PYTHON_VERSION_VAR_RE.search(text):
+                    seen.add(candidate)
+                    found.append(candidate)
+    return found
 
 
 def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
@@ -505,6 +550,14 @@ def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
             )
         )
 
+    # Python __version__ variable files (secondary targets alongside pep621/poetry).
+    has_python = any(t.kind == "pep621" or t.section == "tool.poetry" for t in targets)
+    if has_python:
+        for py_file in _find_python_version_files(root):
+            if any(t.path == py_file for t in targets):
+                continue
+            targets.append(VersionTarget(path=py_file, kind="python_version", ci_format="pep440"))
+
     return targets
 
 
@@ -548,6 +601,10 @@ def _describe_version_target(target: VersionTarget, *, root: Path) -> str:
         return f"{relative} ([project].version)"
     if target.kind == "package_json":
         return f"{relative} (version)"
+    if target.kind == "python_version":
+        return f"{relative} (__version__)"
+    if target.kind == "go_version":
+        return f"{relative} (Version)"
     if target.section and target.field:
         return f"{relative} ([{target.section}].{target.field})"
     if target.pattern:
@@ -644,6 +701,12 @@ def _target_ecosystem(target: VersionTarget) -> str | None:
         return "python-pep621"
     if target.kind == "package_json":
         return "node"
+    if target.kind == "python_version":
+        # Ecosystem-neutral: a secondary __version__ file inherits the lock
+        # settings of whatever primary target (pep621/poetry) it accompanies.
+        return None
+    if target.kind == "go_version":
+        return "go"
     if target.section == "tool.poetry":
         return "python-poetry"
     if target.path.name == "Cargo.toml" and target.section in {"package", "workspace.package"}:

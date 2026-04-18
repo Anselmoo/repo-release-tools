@@ -14,6 +14,18 @@ from repo_release_tools.versioning import Version
 
 
 PEP621_PATTERN = re.compile(r'(?ms)(^\[project\]\s.*?^version\s*=\s*")([^"]+)(")')
+# Allows optional leading whitespace; uses a backreference (\2) to enforce matching
+# opening/closing quote types (both " or both ').
+PYTHON_VERSION_PATTERN = re.compile(r'(?m)^(\s*__version__\s*=\s*)(["\'])([^"\']+)\2')
+# Allows optional leading whitespace for simple declarations and also matches
+# Version inside a const (...) grouped block via the (?ms) (DOTALL) alternation.
+GO_VERSION_PATTERN = re.compile(
+    r"(?ms)^("
+    r"\s*(?:const|var)\s+Version\s*=\s*\""
+    r"|"
+    r"\s*(?:const|var)\s*\(\s*.*?^\s*Version\s*=\s*\""
+    r')([^"]+)(")'
+)
 
 
 def replace_version_in_file(
@@ -34,6 +46,10 @@ def replace_version_in_file(
         updated = PEP621_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
     elif target.kind == "package_json":
         updated = replace_package_json_version(text, new_version)
+    elif target.kind == "python_version":
+        updated = PYTHON_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
+    elif target.kind == "go_version":
+        updated = GO_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
     elif target.pattern:
         updated = replace_pattern_version(text, target.pattern, new_version)
     else:
@@ -96,6 +112,16 @@ def read_version_string(target: VersionTarget) -> str:
         return match.group(2)
     if target.kind == "package_json":
         return read_package_json_version(target.path)
+    if target.kind == "python_version":
+        match = PYTHON_VERSION_PATTERN.search(text)
+        if match is None:
+            raise RuntimeError(f"Could not find __version__ in {target.path}")
+        return match.group(3)
+    if target.kind == "go_version":
+        match = GO_VERSION_PATTERN.search(text)
+        if match is None:
+            raise RuntimeError(f"Could not find Version constant/variable in {target.path}")
+        return match.group(2)
 
     if target.pattern:
         match = search_pattern(text, target.pattern)
