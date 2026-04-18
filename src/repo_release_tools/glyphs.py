@@ -8,14 +8,50 @@ rrt. The public surface is kept compact so CLI output stays predictable.
 from __future__ import annotations
 
 import itertools
+import locale
+import os
 import sys
 import unicodedata
 
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Iterator, Literal
 
 
-IS_LEGACY_TERMINAL = sys.platform == "win32"
+def _detect_legacy_terminal() -> bool:
+    """Return True when the terminal cannot reliably render Unicode box-drawing glyphs."""
+    if sys.platform == "win32":
+        return True
+    if os.environ.get("TERM") == "dumb":
+        return True
+    if "NO_COLOR" in os.environ:
+        return True
+    return False
+
+
+IS_LEGACY_TERMINAL: bool = _detect_legacy_terminal()
+
+
+def _detect_cjk_locale() -> bool:
+    """Return True when the active locale uses wide (CJK) ambiguous-width rendering.
+
+    Respects the ``RRT_WIDE_AMBIGUOUS=1`` environment override for testing or
+    explicit opt-in on setups where locale detection is unreliable.
+    """
+    if os.environ.get("RRT_WIDE_AMBIGUOUS") == "1":
+        return True
+    if os.environ.get("RRT_WIDE_AMBIGUOUS") == "0":
+        return False
+    try:
+        lang, encoding = locale.getlocale()
+    except Exception:  # pragma: no cover
+        return False
+    if lang is None:
+        return False
+    lang_lower = lang.lower()
+    return any(lang_lower.startswith(prefix) for prefix in ("zh", "ja", "ko"))
+
+
+_AMBIGUOUS_IS_WIDE: bool = _detect_cjk_locale()
 
 
 def _g(windows_ascii: str, unicode_glyph: str) -> str:
@@ -24,12 +60,23 @@ def _g(windows_ascii: str, unicode_glyph: str) -> str:
 
 
 def display_width(text: str) -> int:
-    """Return the terminal cell width for a string."""
+    """Return the terminal cell width for a string.
+
+    Handles full-width (F/W) and, when the active locale uses CJK wide rendering
+    or ``RRT_WIDE_AMBIGUOUS=1`` is set, ambiguous-width (A) characters as well.
+    Combining marks and invisible control characters are counted as zero-width.
+    """
     width = 0
     for char in text:
         if unicodedata.combining(char) or unicodedata.category(char) in {"Cc", "Cf"}:
             continue
-        width += 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
+        eaw = unicodedata.east_asian_width(char)
+        if eaw in {"F", "W"}:
+            width += 2
+        elif eaw == "A" and _AMBIGUOUS_IS_WIDE:
+            width += 2
+        else:
+            width += 1
     return width
 
 
@@ -128,6 +175,89 @@ class BoxGlyphs:
                 sep(self.left, self.cross, self.right),
                 *(row_line(row) for row in rows),
                 sep(self.bl, self.bottom, self.br),
+            ]
+        )
+
+
+BoxStyle = Literal["single", "rounded", "bold", "mixed"]
+
+
+@dataclass(frozen=True)
+class RoundedBoxGlyphs:
+    """Box-drawing glyphs with rounded corners (╭╮╰╯)."""
+
+    h: Glyph = field(default_factory=lambda: Glyph(_g("-", "─"), "h"))
+    v: Glyph = field(default_factory=lambda: Glyph(_g("|", "│"), "v"))
+    tl: Glyph = field(default_factory=lambda: Glyph(_g("+", "╭"), "top_left"))
+    tr: Glyph = field(default_factory=lambda: Glyph(_g("+", "╮"), "top_right"))
+    bl: Glyph = field(default_factory=lambda: Glyph(_g("+", "╰"), "bottom_left"))
+    br: Glyph = field(default_factory=lambda: Glyph(_g("+", "╯"), "bottom_right"))
+    top: Glyph = field(default_factory=lambda: Glyph(_g("+", "┬"), "top"))
+    bottom: Glyph = field(default_factory=lambda: Glyph(_g("+", "┴"), "bottom"))
+    left: Glyph = field(default_factory=lambda: Glyph(_g("+", "├"), "left"))
+    right: Glyph = field(default_factory=lambda: Glyph(_g("+", "┤"), "right"))
+    cross: Glyph = field(default_factory=lambda: Glyph(_g("+", "┼"), "cross"))
+
+    def box(self, text: str, padding: int = 1) -> str:
+        """Render a simple rounded-corner box around text."""
+        pad = " " * padding
+        inner = f"{pad}{text}{pad}"
+        inner_dw = display_width(inner)
+        h_dw = display_width(str(self.h))
+        v_dw = display_width(str(self.v))
+        corner_dw = display_width(str(self.tl))
+        # display columns needed for the horizontal fill inside the corners
+        fill_dw = 2 * v_dw + inner_dw - 2 * corner_dw
+        # if h chars are wide (e.g. CJK ambiguous=2), pad inner so fill divides evenly
+        if h_dw > 1 and fill_dw % h_dw:
+            extra = h_dw - (fill_dw % h_dw)
+            inner = inner + " " * extra
+            fill_dw += extra
+        h_count = fill_dw // h_dw
+        return "\n".join(
+            [
+                f"{self.tl}{self.h * h_count}{self.tr}",
+                f"{self.v}{inner}{self.v}",
+                f"{self.bl}{self.h * h_count}{self.br}",
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class BoldBoxGlyphs:
+    """Box-drawing glyphs with bold/thick borders (┏┓┗┛┃━)."""
+
+    h: Glyph = field(default_factory=lambda: Glyph(_g("-", "━"), "h"))
+    v: Glyph = field(default_factory=lambda: Glyph(_g("|", "┃"), "v"))
+    tl: Glyph = field(default_factory=lambda: Glyph(_g("+", "┏"), "top_left"))
+    tr: Glyph = field(default_factory=lambda: Glyph(_g("+", "┓"), "top_right"))
+    bl: Glyph = field(default_factory=lambda: Glyph(_g("+", "┗"), "bottom_left"))
+    br: Glyph = field(default_factory=lambda: Glyph(_g("+", "┛"), "bottom_right"))
+    top: Glyph = field(default_factory=lambda: Glyph(_g("+", "┳"), "top"))
+    bottom: Glyph = field(default_factory=lambda: Glyph(_g("+", "┻"), "bottom"))
+    left: Glyph = field(default_factory=lambda: Glyph(_g("+", "┣"), "left"))
+    right: Glyph = field(default_factory=lambda: Glyph(_g("+", "┫"), "right"))
+    cross: Glyph = field(default_factory=lambda: Glyph(_g("+", "╋"), "cross"))
+
+    def box(self, text: str, padding: int = 1) -> str:
+        """Render a simple bold-border box around text."""
+        pad = " " * padding
+        inner = f"{pad}{text}{pad}"
+        inner_dw = display_width(inner)
+        h_dw = display_width(str(self.h))
+        v_dw = display_width(str(self.v))
+        corner_dw = display_width(str(self.tl))
+        fill_dw = 2 * v_dw + inner_dw - 2 * corner_dw
+        if h_dw > 1 and fill_dw % h_dw:
+            extra = h_dw - (fill_dw % h_dw)
+            inner = inner + " " * extra
+            fill_dw += extra
+        h_count = fill_dw // h_dw
+        return "\n".join(
+            [
+                f"{self.tl}{self.h * h_count}{self.tr}",
+                f"{self.v}{inner}{self.v}",
+                f"{self.bl}{self.h * h_count}{self.br}",
             ]
         )
 
@@ -316,6 +446,8 @@ class GlyphSet:
     """Shared glyph registry for terminal output."""
 
     box: BoxGlyphs = field(default_factory=BoxGlyphs)
+    rounded_box: RoundedBoxGlyphs = field(default_factory=RoundedBoxGlyphs)
+    bold_box: BoldBoxGlyphs = field(default_factory=BoldBoxGlyphs)
     tree: TreeGlyphs = field(default_factory=TreeGlyphs)
     progress: ProgressGlyphs = field(default_factory=ProgressGlyphs)
     arrow: ArrowGlyphs = field(default_factory=ArrowGlyphs)

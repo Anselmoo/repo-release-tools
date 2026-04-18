@@ -1,5 +1,6 @@
 from repo_release_tools.glyphs import GLYPHS
 from repo_release_tools.glyphs import Glyph
+from repo_release_tools.glyphs import _detect_legacy_terminal
 from repo_release_tools.glyphs import display_width
 
 
@@ -62,3 +63,100 @@ def test_progress_bar_and_spinner_are_available() -> None:
 
     assert "50%" in bar
     assert len(next(spinner)) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Terminal detection
+# ---------------------------------------------------------------------------
+
+
+def test_detect_legacy_terminal_dumb(monkeypatch) -> None:
+    monkeypatch.setenv("TERM", "dumb")
+    assert _detect_legacy_terminal() is True
+
+
+def test_detect_legacy_terminal_no_color(monkeypatch) -> None:
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert _detect_legacy_terminal() is True
+
+
+def test_detect_legacy_terminal_normal(monkeypatch) -> None:
+    monkeypatch.delenv("TERM", raising=False)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    # Patch sys.platform so this test works on Windows CI too.
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert _detect_legacy_terminal() is False
+
+
+# ---------------------------------------------------------------------------
+# display_width – ambiguous-width characters
+# ---------------------------------------------------------------------------
+
+
+def test_display_width_ascii_unchanged() -> None:
+    assert display_width("hello") == 5
+
+
+def test_display_width_cjk_full_width() -> None:
+    # 漢字 – each char is W (wide), width 2 each
+    assert display_width("漢字") == 4
+
+
+def test_display_width_ambiguous_narrow_by_default(monkeypatch) -> None:
+    # Bullet '•' has east_asian_width 'A' – counted as 1 in a non-CJK locale.
+    monkeypatch.setenv("RRT_WIDE_AMBIGUOUS", "0")
+    from importlib import reload
+    import repo_release_tools.glyphs as g
+
+    reload(g)
+    assert g.display_width("•") == 1
+    reload(g)  # restore original state
+
+
+def test_display_width_ambiguous_wide_when_override(monkeypatch) -> None:
+    monkeypatch.setenv("RRT_WIDE_AMBIGUOUS", "1")
+    from importlib import reload
+    import repo_release_tools.glyphs as g
+
+    reload(g)
+    assert g.display_width("•") == 2
+    reload(g)  # restore original state
+
+
+# ---------------------------------------------------------------------------
+# New box glyph sets – RoundedBoxGlyphs and BoldBoxGlyphs
+# ---------------------------------------------------------------------------
+
+
+def test_rounded_box_renders_consistent_width() -> None:
+    rendered = GLYPHS.rounded_box.box("test string")
+    lines = rendered.splitlines()
+    assert len(lines) == 3
+    widths = {display_width(line) for line in lines}
+    assert len(widths) == 1
+
+
+def test_rounded_box_has_rounded_corners() -> None:
+    rendered = GLYPHS.rounded_box.box("x")
+    top_line = rendered.splitlines()[0]
+    bot_line = rendered.splitlines()[2]
+    assert top_line.startswith("╭") or top_line.startswith("+")
+    assert bot_line.startswith("╰") or bot_line.startswith("+")
+
+
+def test_bold_box_renders_consistent_width() -> None:
+    rendered = GLYPHS.bold_box.box("test string")
+    lines = rendered.splitlines()
+    assert len(lines) == 3
+    widths = {display_width(line) for line in lines}
+    assert len(widths) == 1
+
+
+def test_bold_box_has_bold_corners() -> None:
+    rendered = GLYPHS.bold_box.box("x")
+    top_line = rendered.splitlines()[0]
+    bot_line = rendered.splitlines()[2]
+    assert top_line.startswith("┏") or top_line.startswith("+")
+    assert bot_line.startswith("┗") or bot_line.startswith("+")
