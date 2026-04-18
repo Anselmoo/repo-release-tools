@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import sys
+import threading
+from contextlib import contextmanager
+from typing import IO, Generator
+
 from repo_release_tools.glyphs import (
     GLYPHS,
     BoldBoxGlyphs,
     BoxGlyphs,
     BoxStyle,
     Glyph,
+    IS_LEGACY_TERMINAL,
     RoundedBoxGlyphs,
     _repeat_to_width,
     display_width,
@@ -129,3 +135,40 @@ def action(message: str, *, indent: int = 0) -> str:
 def dry_run_complete(message: str) -> str:
     """Render the dry-run completion line."""
     return dry_run(f"complete {GLYPHS.typography.mdash} {message}", indent=0)
+
+
+@contextmanager
+def spinner_lines(label: str, *, file: IO[str] | None = None) -> Generator[None, None, None]:
+    """Context manager that animates a spinner on *file* (default: sys.stderr).
+
+    The spinner runs in a background thread and is cleared on exit.
+    When the output is not a tty (CI, pipes) or the terminal is legacy
+    (Windows cmd), the context manager is a no-op so nothing is printed.
+    """
+    out = file if file is not None else sys.stderr
+    if IS_LEGACY_TERMINAL or not out.isatty():
+        yield
+        return
+
+    frames = GLYPHS.progress.spinner()
+    stop_event = threading.Event()
+    success: list[bool] = [True]
+
+    def _animate() -> None:
+        while not stop_event.is_set():
+            frame = next(frames)
+            print(f"\r  {frame}  {label}", end="", flush=True, file=out)
+            stop_event.wait(timeout=0.08)
+
+    thread = threading.Thread(target=_animate, daemon=True)
+    thread.start()
+    try:
+        yield
+    except Exception:
+        success[0] = False
+        raise
+    finally:
+        stop_event.set()
+        thread.join(timeout=0.5)
+        check = GLYPHS.bullet.ok if success[0] else GLYPHS.bullet.error
+        print(f"\r  {check}  {label}  ", file=out)

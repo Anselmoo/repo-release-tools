@@ -278,3 +278,104 @@ def test_cmd_rebootstrap_requires_confirmation(tmp_path, monkeypatch, capsys) ->
 
     captured = capsys.readouterr()
     assert "--yes-i-know-this-destroys-history" in captured.err
+
+
+def test_parse_diff_line_added() -> None:
+    kind, text, lineno = git_cmd._parse_diff_line("+hello world")
+    assert kind == "added"
+    assert text == "hello world"
+    assert lineno is None
+
+
+def test_parse_diff_line_removed() -> None:
+    kind, text, lineno = git_cmd._parse_diff_line("-goodbye")
+    assert kind == "removed"
+    assert text == "goodbye"
+    assert lineno is None
+
+
+def test_parse_diff_line_unchanged_context() -> None:
+    kind, text, lineno = git_cmd._parse_diff_line(" context line")
+    assert kind == "unchanged"
+    assert lineno is None
+
+
+def test_parse_diff_line_hunk_header() -> None:
+    kind, text, lineno = git_cmd._parse_diff_line("@@ -10,4 +20,6 @@ def foo():")
+    assert kind == "unchanged"
+    assert lineno == 20
+
+
+def test_parse_diff_line_file_headers() -> None:
+    for prefix in ("+++", "---"):
+        kind, _, lineno = git_cmd._parse_diff_line(f"{prefix} a/file.py")
+        assert kind == "unchanged"
+        assert lineno is None
+
+
+def test_cmd_diff_not_git_repo(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: False)
+    args = argparse.Namespace(staged=False, against=None)
+
+    assert git_cmd.cmd_diff(args) == 1
+    assert tmp_path.name in capsys.readouterr().err
+
+
+def test_cmd_diff_no_changes(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
+    monkeypatch.setattr(git_cmd.git, "capture", lambda cmd, cwd: "")
+    args = argparse.Namespace(staged=False, against=None)
+
+    assert git_cmd.cmd_diff(args) == 0
+    assert "No diff" in capsys.readouterr().out
+
+
+def test_cmd_diff_renders_added_and_removed(monkeypatch, capsys) -> None:
+    diff_output = (
+        "diff --git a/foo.py b/foo.py\n"
+        "index abc..def 100644\n"
+        "--- a/foo.py\n"
+        "+++ b/foo.py\n"
+        "@@ -1,2 +1,3 @@\n"
+        " unchanged\n"
+        "-removed line\n"
+        "+added line\n"
+    )
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
+    monkeypatch.setattr(git_cmd.git, "capture", lambda cmd, cwd: diff_output)
+    args = argparse.Namespace(staged=False, against=None)
+
+    rc = git_cmd.cmd_diff(args)
+    captured = capsys.readouterr().out
+
+    assert rc == 0
+    assert "foo.py" in captured
+
+
+def test_cmd_diff_staged_flag(monkeypatch) -> None:
+    captured_cmd = {}
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
+
+    def fake_capture(cmd, cwd):
+        captured_cmd["cmd"] = cmd
+        return ""
+
+    monkeypatch.setattr(git_cmd.git, "capture", fake_capture)
+    args = argparse.Namespace(staged=True, against=None)
+    git_cmd.cmd_diff(args)
+    assert "--staged" in captured_cmd["cmd"]
+
+
+def test_cmd_diff_against_ref(monkeypatch) -> None:
+    captured_cmd = {}
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
+
+    def fake_capture(cmd, cwd):
+        captured_cmd["cmd"] = cmd
+        return ""
+
+    monkeypatch.setattr(git_cmd.git, "capture", fake_capture)
+    args = argparse.Namespace(staged=False, against="HEAD~2")
+    git_cmd.cmd_diff(args)
+    assert "HEAD~2" in captured_cmd["cmd"]

@@ -4,7 +4,11 @@ from argparse import Namespace
 from pathlib import Path
 
 from repo_release_tools.commands.init import cmd_init
-from repo_release_tools.config import recommend_init_config
+from repo_release_tools.config import (
+    recommend_init_config,
+    recommend_init_section_for_cargo,
+    recommend_init_section_for_pyproject,
+)
 
 
 def test_recommend_init_config_for_pep621_repo(tmp_path: Path) -> None:
@@ -71,3 +75,188 @@ def test_cmd_init_dry_run_does_not_write_file(monkeypatch, tmp_path: Path, capsy
     assert result == 0
     assert not (tmp_path / ".rrt.toml").exists()
     assert "Would write .rrt.toml" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# recommend_init_section_for_pyproject
+# ---------------------------------------------------------------------------
+
+
+def test_recommend_init_section_for_pyproject_pep621(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\nversion = "1.0.0"\n',
+        encoding="utf-8",
+    )
+
+    rendered = recommend_init_section_for_pyproject(tmp_path)
+
+    assert rendered.startswith("[tool.rrt]")
+    assert 'kind = "pep621"' in rendered
+    assert 'path = "pyproject.toml"' in rendered
+
+
+def test_recommend_init_section_for_pyproject_fallback(tmp_path: Path) -> None:
+    # No version file → falls back to the generic Python example
+    rendered = recommend_init_section_for_pyproject(tmp_path)
+
+    assert "[tool.rrt]" in rendered
+
+
+# ---------------------------------------------------------------------------
+# recommend_init_section_for_cargo
+# ---------------------------------------------------------------------------
+
+
+def test_recommend_init_section_for_cargo_detected(tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "mylib"\nversion = "0.2.0"\n',
+        encoding="utf-8",
+    )
+
+    rendered = recommend_init_section_for_cargo(tmp_path)
+
+    assert rendered.startswith("[package.metadata.rrt]")
+    assert "[[package.metadata.rrt.version_targets]]" in rendered
+    assert 'path = "Cargo.toml"' in rendered
+
+
+def test_recommend_init_section_for_cargo_fallback(tmp_path: Path) -> None:
+    # No Cargo.toml → falls back to the generic Rust example
+    rendered = recommend_init_section_for_cargo(tmp_path)
+
+    assert "[tool.rrt]" in rendered  # RUST_TOOL_RRT_EXAMPLE still uses [tool.rrt]
+
+
+# ---------------------------------------------------------------------------
+# cmd_init --target pyproject
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_init_pyproject_appends_section(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\nversion = "1.0.0"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="pyproject"))
+
+    assert result == 0
+    content = (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert "[project]" in content  # original content preserved
+    assert "[tool.rrt]" in content
+    assert "[[tool.rrt.version_targets]]" in content
+
+
+def test_cmd_init_pyproject_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\nversion = "1.0.0"\n',
+        encoding="utf-8",
+    )
+    original = (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=True, force=False, target="pyproject"))
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == original
+    assert "Would append to pyproject.toml" in captured.out
+
+
+def test_cmd_init_pyproject_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="pyproject"))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "pyproject.toml does not exist" in captured.err
+
+
+def test_cmd_init_pyproject_refuses_if_already_present(monkeypatch, tmp_path: Path, capsys) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\nversion = "1.0.0"\n\n[tool.rrt]\nrelease_branch = "main"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="pyproject"))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "already contains rrt configuration" in captured.err
+
+
+def test_cmd_init_pyproject_force_appends_even_if_present(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\nversion = "1.0.0"\n\n[tool.rrt]\nrelease_branch = "main"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=True, target="pyproject"))
+
+    assert result == 0
+    content = (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    # Two [tool.rrt] occurrences (original + appended)
+    assert content.count("[tool.rrt]") == 2
+
+
+# ---------------------------------------------------------------------------
+# cmd_init --target cargo
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_init_cargo_appends_section(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "mylib"\nversion = "0.2.0"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="cargo"))
+
+    assert result == 0
+    content = (tmp_path / "Cargo.toml").read_text(encoding="utf-8")
+    assert "[package]" in content  # original content preserved
+    assert "[package.metadata.rrt]" in content
+    assert "[[package.metadata.rrt.version_targets]]" in content
+
+
+def test_cmd_init_cargo_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "mylib"\nversion = "0.2.0"\n',
+        encoding="utf-8",
+    )
+    original = (tmp_path / "Cargo.toml").read_text(encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=True, force=False, target="cargo"))
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert (tmp_path / "Cargo.toml").read_text(encoding="utf-8") == original
+    assert "Would append to Cargo.toml" in captured.out
+
+
+def test_cmd_init_cargo_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="cargo"))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Cargo.toml does not exist" in captured.err
+
+
+def test_cmd_init_cargo_refuses_if_already_present(monkeypatch, tmp_path: Path, capsys) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "mylib"\nversion = "0.2.0"\n\n[package.metadata.rrt]\nrelease_branch = "main"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = cmd_init(Namespace(dry_run=False, force=False, target="cargo"))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "already contains rrt configuration" in captured.err

@@ -163,7 +163,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     if group.lock_command and not args.no_update:
         print(f"\n{output.section('Refreshing lockfiles')}")
-        git.run(group.lock_command, root, dry_run=args.dry_run, label="lock command")
+        with output.spinner_lines("Running lock command…"):
+            git.run(group.lock_command, root, dry_run=args.dry_run, label="lock command")
 
     print(f"\n{output.section('Git')}")
     git.run(

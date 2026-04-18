@@ -640,10 +640,35 @@ def recommend_init_config(root: Path) -> str:
     return GENERIC_TOOL_RRT_EXAMPLE
 
 
-def _render_recommended_rrt_toml(root: Path, group: VersionGroup) -> str:
-    """Render an explicit .rrt.toml mirroring the current recommended defaults."""
+def recommend_init_section_for_pyproject(root: Path) -> str:
+    """Return a [tool.rrt] TOML snippet to append to an existing pyproject.toml."""
+    config = autodetect_config(root)
+    if config is not None:
+        return _render_recommended_rrt_toml(root, config.resolve_group())
+    return PYTHON_TOOL_RRT_EXAMPLE
+
+
+def recommend_init_section_for_cargo(root: Path) -> str:
+    """Return a [package.metadata.rrt] TOML snippet to append to an existing Cargo.toml."""
+    config = autodetect_config(root)
+    if config is not None:
+        return _render_recommended_rrt_toml(
+            root, config.resolve_group(), prefix="package.metadata.rrt"
+        )
+    return RUST_TOOL_RRT_EXAMPLE
+
+
+def _render_recommended_rrt_toml(
+    root: Path, group: VersionGroup, *, prefix: str = "tool.rrt"
+) -> str:
+    """Render an rrt config block mirroring the current recommended defaults.
+
+    *prefix* controls the TOML table header used (e.g. ``tool.rrt`` for
+    ``.rrt.toml`` / ``pyproject.toml``, or ``package.metadata.rrt`` for
+    ``Cargo.toml``).
+    """
     lines = [
-        "[tool.rrt]",
+        f"[{prefix}]",
         f"release_branch = {_toml_basic_string(group.release_branch)}",
         f"changelog_file = {_toml_basic_string(str(group.changelog_file.relative_to(root)))}",
     ]
@@ -659,7 +684,7 @@ def _render_recommended_rrt_toml(root: Path, group: VersionGroup) -> str:
         )
 
     for target in group.version_targets:
-        lines.extend(["", "[[tool.rrt.version_targets]]"])
+        lines.extend(["", f"[[{prefix}.version_targets]]"])
         lines.append(f"path = {_toml_basic_string(str(target.path.relative_to(root)))}")
         if target.kind is not None:
             lines.append(f"kind = {_toml_basic_string(target.kind)}")

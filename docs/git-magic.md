@@ -57,6 +57,9 @@ rrt git check-dirty-tree
 rrt git commit "handle empty config"
 rrt git commit-all "snapshot parser cleanup"
 rrt git sync
+rrt git diff
+rrt git diff --staged
+rrt git diff --against HEAD~3
 rrt git move feat/new-parser
 rrt git squash-local "ship parser cleanup"
 rrt git undo-safe --keep-staged

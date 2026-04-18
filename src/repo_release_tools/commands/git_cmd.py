@@ -447,7 +447,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
     print()
 
     print(output.section("Syncing"))
-    git.run(["git", "fetch", "--prune"], root, dry_run=args.dry_run, label="git fetch")
+    with output.spinner_lines("Fetching…"):
+        git.run(["git", "fetch", "--prune"], root, dry_run=args.dry_run, label="git fetch")
     if dirty:
         git.run(
             ["git", "stash", "push", "-u", "-m", SYNC_STASH_MESSAGE],
@@ -712,6 +713,81 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_diff_line(raw: str) -> tuple[str, str, int | None]:
+    """Parse a unified diff header or context line into (kind, text, lineno)."""
+    if raw.startswith("+++") or raw.startswith("---"):
+        return ("unchanged", raw, None)
+    if raw.startswith("@@"):
+        # Extract new-file line number from @@ -a,b +c,d @@ ...
+        try:
+            after_plus = raw.split("+")[1].split(",")[0].split(" ")[0]
+            lineno = int(after_plus)
+        except (IndexError, ValueError):
+            lineno = None
+        return ("unchanged", raw, lineno)
+    if raw.startswith("+"):
+        return ("added", raw[1:], None)
+    if raw.startswith("-"):
+        return ("removed", raw[1:], None)
+    return ("unchanged", raw[1:] if raw.startswith(" ") else raw, None)
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """Show a compact git diff using DiffGlyphs."""
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        print(f"{root} is not inside a Git work tree.", file=sys.stderr)
+        return 1
+
+    cmd = ["git", "diff", "--unified=3"]
+    if args.staged:
+        cmd.append("--staged")
+    if args.against:
+        cmd.append(args.against)
+
+    raw = git.capture(cmd, root)
+    if not raw.strip():
+        print(output.ok("No diff to show."))
+        return 0
+
+    current_file: str = ""
+    lineno: int = 0
+
+    print()
+    for raw_line in raw.splitlines():
+        # File header
+        if raw_line.startswith("+++ b/"):
+            current_file = raw_line[6:]
+            print()
+            print(output.section(current_file))
+            lineno = 0
+            continue
+        if (
+            raw_line.startswith("--- ")
+            or raw_line.startswith("diff ")
+            or raw_line.startswith("index ")
+            or raw_line.startswith("new file")
+            or raw_line.startswith("deleted file")
+        ):
+            continue
+
+        kind, text, hunk_start = _parse_diff_line(raw_line)
+        if hunk_start is not None:
+            lineno = hunk_start
+            print(f"  {output.GLYPHS.typography.mdash} {text.strip()}")
+            continue
+
+        rendered = output.GLYPHS.diff.line(
+            kind, text.rstrip(), lineno=lineno if kind != "unchanged" else None
+        )
+        print(f"  {rendered}")
+        if kind != "removed":
+            lineno += 1
+
+    print()
+    return 0
+
+
 def add_dry_run_flag(parser: argparse.ArgumentParser) -> None:
     """Register a shared dry-run flag."""
     parser.add_argument("--dry-run", action="store_true", help="Preview without changing git.")
@@ -743,6 +819,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Show a compact branch and worktree status view.",
     )
     status_parser.set_defaults(handler=cmd_status)
+
+    diff_parser = git_sub.add_parser(
+        "diff",
+        help="Show a compact diff using rrt glyph formatting.",
+    )
+    diff_parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Show staged changes instead of working-tree changes.",
+    )
+    diff_parser.add_argument(
+        "--against",
+        metavar="REF",
+        default=None,
+        help="Diff against a specific commit or ref.",
+    )
+    diff_parser.set_defaults(handler=cmd_diff)
 
     log_parser = git_sub.add_parser(
         "log",

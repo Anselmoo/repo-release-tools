@@ -18,10 +18,13 @@ uvx repo-release-tools branch new feat "add parser"
 
 ```bash
 rrt init
+rrt config
 rrt branch new feat "add parser"
 rrt branch rescue fix "recover release work"
 rrt git commit "add parser"
 rrt git sync
+rrt git diff
+rrt git diff --staged
 rrt bump patch
 rrt bump minor --dry-run
 rrt bump 1.2.3 --no-changelog
@@ -36,6 +39,10 @@ repeatable workflows that match `repo-release-tools` policy:
 - `rrt git log` shows recent history in a compact `rrt`-styled view
 - `rrt git doctor` checks branch policy, upstream state, dirty tree, latest
   commit subject, and changelog risk in one report
+- `rrt git diff` renders the working-tree diff with `rrt` glyph formatting —
+  added, removed, and unchanged lines are styled distinctly. Use `--staged` to
+  inspect staged changes before a commit, or `--against <ref>` to diff against
+  any commit or ref
 - `rrt git commit "message"` builds a conventional commit and infers the type
   from the current branch when possible
 - `rrt git commit-all "message"` stages all files first, then creates the
@@ -53,6 +60,43 @@ repeatable workflows that match `repo-release-tools` policy:
 
 See [Git magic](git-magic.md) for the design rationale and the full workflow
 catalog.
+
+## Config inspection
+
+```bash
+rrt config
+```
+
+`rrt config` reads the resolved configuration for the current repository and
+prints it as a tree. It covers every version group: release branch, changelog
+path, lock command, version targets (file path and detection kind), and
+generated files.
+
+When no explicit config exists, `rrt config` shows what `rrt` would auto-detect
+in zero-config mode — the same picture that `bump` and `ci-version` would act
+on. When a `[tool.rrt]` section is found, the output reflects the explicit
+configuration as loaded.
+
+```
+┌ rrt config ────────────────────────┐
+│ config file    │ (auto-detected)   │
+├────────────────┼───────────────────┤
+│ version groups │ 1 group           │
+└────────────────┴───────────────────┘
+
+└── [default]/
+    ├── release_branch  release/v{version}
+    ├── changelog       CHANGELOG.md
+    ├── lock_command    uv lock -U
+    ├── version_targets/
+    │   ├── pyproject.toml  [pep621]
+    │   └── src/pkg/__init__.py  [python_version]
+    └── generated_files/
+        └── uv.lock
+```
+
+Run `rrt config` to answer "what does rrt know about this repo?" before your
+first `rrt bump`.
 
 ## Zero-config mode
 
@@ -76,12 +120,27 @@ recommended `.rrt.toml` for the current repo shape.
 rrt init
 rrt init --dry-run
 rrt init --force
+rrt init --target pyproject
+rrt init --target cargo
+rrt init --target pyproject --dry-run
 ```
 
-`rrt init` writes a recommended `.rrt.toml` in the repo root. It keeps branch
-creation config-free, preserves zero-config bumping, and gives you an explicit
-file when you want to tune release branches, changelog paths, generated files,
-or custom version targets.
+`rrt init` writes a recommended rrt configuration block for the current repository.
+
+### Targets
+
+| Flag | Output |
+|---|---|
+| *(default)* | Creates `.rrt.toml` in the repo root |
+| `--target pyproject` | Appends `[tool.rrt]` to an existing `pyproject.toml` |
+| `--target cargo` | Appends `[package.metadata.rrt]` to an existing `Cargo.toml` |
+
+`--target pyproject` and `--target cargo` require the manifest file to already
+exist. Both targets auto-detect current version files to produce a tailored
+config block. Use `--force` to append even if an rrt section is already present.
+
+For **Go** repositories there is no standard extensible manifest section, so
+`rrt init` (default) writes `.rrt.toml` with a `go_version` target template.
 
 ## Configuration files
 
