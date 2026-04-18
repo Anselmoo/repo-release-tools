@@ -38,6 +38,37 @@ _AUTO: list[str] | None = None
 
 VALID_TARGET_KINDS = frozenset({"pep621", "package_json"})
 
+# Branch type prefixes that are built-in and must not appear in extra_branch_types.
+# Mirrors CONVENTIONAL_TYPES, MAGIC_BRANCH_TYPES, and BOT_BRANCH_TYPES from hooks.py.
+_RESERVED_BRANCH_TYPES = frozenset(
+    {
+        # conventional commit types
+        "feat",
+        "fix",
+        "chore",
+        "docs",
+        "refactor",
+        "test",
+        "ci",
+        "perf",
+        "style",
+        "build",
+        # AI agent magic types
+        "claude",
+        "codex",
+        "copilot",
+        # dependency bot types
+        "dependabot",
+        "renovate",
+    }
+)
+
+# Valid identifier pattern for extra_branch_types entries (after normalization).
+# Must start with a lowercase letter; remaining chars may be lowercase letters,
+# digits, hyphens, or underscores.  Empty strings and entries starting with a
+# digit or special character are rejected.
+_BRANCH_TYPE_IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_-]*")
+
 VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
 
 AUTODETECTED_CONFIG_BASENAME = ".rrt.autodetected.toml"
@@ -195,6 +226,7 @@ class RrtConfig:
     version_groups: list[VersionGroup]
     default_group_name: str | None = None
     autodetected: bool = False
+    extra_branch_types: tuple[str, ...] = ()
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""
@@ -277,6 +309,25 @@ def load_config(root: Path) -> RrtConfig:
 
     expected = ", ".join(CONFIG_FILE_CANDIDATES)
     raise FileNotFoundError(f"Missing supported config file in {root} (checked: {expected})")
+
+
+def load_extra_branch_types(cwd: Path) -> tuple[str, ...]:
+    """Load extra_branch_types from the rrt config in *cwd*, if available.
+
+    Returns an empty tuple when no config file exists or when the config does not
+    contain an ``[tool.rrt]`` section.  Raises ``ValueError`` for any other
+    configuration error (e.g. TOML parse errors or invalid ``extra_branch_types``
+    values) so that misconfiguration is visible rather than silently ignored.
+    """
+    try:
+        cfg = load_config(cwd)
+        return cfg.extra_branch_types
+    except FileNotFoundError:
+        return ()
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return ()
+        raise ValueError(f"Failed to load extra_branch_types configuration: {exc}") from exc
 
 
 def find_config_file(root: Path) -> Path:
@@ -633,6 +684,32 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
     if default_group_name is not None and not isinstance(default_group_name, str):
         raise ValueError("tool.rrt.default_group must be a string")
 
+    raw_extra_branch_types = raw.get("extra_branch_types", [])
+    if not isinstance(raw_extra_branch_types, list) or not all(
+        isinstance(item, str) for item in raw_extra_branch_types
+    ):
+        raise ValueError("tool.rrt.extra_branch_types must be a list of strings")
+    seen_extra: set[str] = set()
+    extra_branch_types_list: list[str] = []
+    for raw_item in raw_extra_branch_types:
+        normalized = raw_item.strip().lower()
+        if not normalized:
+            raise ValueError("tool.rrt.extra_branch_types entries must be non-empty identifiers")
+        if not _BRANCH_TYPE_IDENTIFIER_RE.fullmatch(normalized):
+            raise ValueError(
+                f"tool.rrt.extra_branch_types entry {raw_item!r} is not a valid identifier "
+                "(use lowercase letters, digits, hyphens, or underscores, starting with a letter)"
+            )
+        if normalized in _RESERVED_BRANCH_TYPES:
+            raise ValueError(
+                f"tool.rrt.extra_branch_types entry {normalized!r} overlaps with a built-in "
+                "branch type and must not be listed here"
+            )
+        if normalized not in seen_extra:
+            seen_extra.add(normalized)
+            extra_branch_types_list.append(normalized)
+    extra_branch_types = tuple(extra_branch_types_list)
+
     group_defaults = {
         "release_branch": raw.get("release_branch", DEFAULT_RELEASE_BRANCH),
         "changelog_file": raw.get("changelog_file", DEFAULT_CHANGELOG),
@@ -687,6 +764,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         config_file=config_file,
         version_groups=version_groups,
         default_group_name=default_group_name,
+        extra_branch_types=extra_branch_types,
     )
 
 

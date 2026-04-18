@@ -116,6 +116,20 @@ path = "pyproject.toml"
 kind = "pep621"
 ```
 
+## Custom branch types
+
+By default the branch name validator accepts the standard conventional types
+(`feat`, `fix`, `chore`, …), AI helper prefixes (`claude`, `codex`, `copilot`),
+and bot prefixes (`dependabot`, `renovate`). To allow additional prefixes:
+
+```toml
+[tool.rrt]
+extra_branch_types = ["greenkeeper", "snyk"]
+```
+
+Custom types follow the same passthrough rules as bot branches — their slugs
+are not validated for kebab-case format or length.
+
 Equivalent native examples:
 
 ```json

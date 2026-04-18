@@ -12,8 +12,10 @@ from pathlib import Path
 
 from repo_release_tools import git, output
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_description
+from repo_release_tools.config import load_extra_branch_types
 from repo_release_tools.hooks import (
     ALLOWED_BRANCH_NAMES,
+    BOT_BRANCH_TYPES,
     MAGIC_BRANCH_TYPES,
     changelog_is_updated,
     commit_subject_requires_changelog,
@@ -67,7 +69,7 @@ def infer_commit_type(branch_name: str) -> str | None:
         return None
 
     type_part, _ = branch_name.split("/", 1)
-    if type_part in MAGIC_BRANCH_TYPES:
+    if type_part in MAGIC_BRANCH_TYPES or type_part in BOT_BRANCH_TYPES:
         return None
     if type_part in CONVENTIONAL_TYPES:
         return type_part
@@ -254,7 +256,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         return 1
     latest_subject = git.capture(["git", "log", "-1", "--pretty=%s"], root).strip()
 
-    branch_problem = validate_branch_name(branch_name)
+    branch_problem = validate_branch_name(branch_name, extra_types=load_extra_branch_types(root))
     subject_problem = (
         validate_commit_subject(latest_subject) if latest_subject else "No commits found."
     )

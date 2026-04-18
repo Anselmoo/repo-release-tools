@@ -11,18 +11,23 @@ from pathlib import Path
 
 from repo_release_tools import git, output
 from repo_release_tools.changelog import SECTION_MAP, parse_conventional_commit
-from repo_release_tools.config import DEFAULT_CHANGELOG
+from repo_release_tools.config import DEFAULT_CHANGELOG, load_extra_branch_types
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, SLUG_MAX, normalize_commit_type
 from repo_release_tools.versioning import Version
 
 
 ALLOWED_BRANCH_NAMES = ("main", "master", "develop")
 MAGIC_BRANCH_TYPES = ("claude", "codex", "copilot")
-ALLOWED_BRANCH_TYPES = (*CONVENTIONAL_TYPES, *MAGIC_BRANCH_TYPES)
+BOT_BRANCH_TYPES = ("dependabot", "renovate")
+ALLOWED_BRANCH_TYPES = (*CONVENTIONAL_TYPES, *MAGIC_BRANCH_TYPES, *BOT_BRANCH_TYPES)
 BRANCH_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
-def validate_branch_name(branch_name: str) -> str | None:
+def validate_branch_name(
+    branch_name: str,
+    *,
+    extra_types: tuple[str, ...] = (),
+) -> str | None:
     """Validate the current branch name."""
     if not branch_name:
         return None
@@ -42,12 +47,21 @@ def validate_branch_name(branch_name: str) -> str | None:
         return f"Branch {branch_name!r} must use <type>/<kebab-case-description>."
 
     type_part, slug = branch_name.split("/", 1)
-    if type_part not in MAGIC_BRANCH_TYPES:
+    passthrough_types = (*MAGIC_BRANCH_TYPES, *BOT_BRANCH_TYPES, *extra_types)
+    if type_part not in passthrough_types:
         try:
             normalize_commit_type(type_part)
         except argparse.ArgumentTypeError:
-            allowed = ", ".join(ALLOWED_BRANCH_TYPES)
+            allowed = ", ".join((*ALLOWED_BRANCH_TYPES, *extra_types))
             return f"Branch type {type_part!r} is invalid. Choose one of: {allowed}."
+
+    # Bot and passthrough branches (dependabot, renovate, extra_branch_types)
+    # use externally-generated slugs that may contain slashes and underscores,
+    # so skip slug format and length validation for them.
+    if type_part in (*BOT_BRANCH_TYPES, *extra_types):
+        if not slug:
+            return f"Branch {branch_name!r} must have a non-empty slug after '/'."
+        return None
 
     if len(slug) > SLUG_MAX:
         return f"Branch slug {slug!r} is too long ({len(slug)} > {SLUG_MAX})."
@@ -399,12 +413,18 @@ def emit_failure(title: str, details: list[str]) -> int:
     return 1
 
 
-def run_branch_name_check(branch_name: str, *, title: str) -> int:
+def run_branch_name_check(
+    branch_name: str,
+    *,
+    title: str,
+    extra_types: tuple[str, ...] = (),
+) -> int:
     """Validate an explicit branch name."""
-    problem = validate_branch_name(branch_name)
+    problem = validate_branch_name(branch_name, extra_types=extra_types)
     if problem is None:
         return 0
 
+    all_types = (*ALLOWED_BRANCH_TYPES, *extra_types)
     return emit_failure(
         title,
         [
@@ -412,8 +432,9 @@ def run_branch_name_check(branch_name: str, *, title: str) -> int:
             "Expected: <type>/<kebab-case-description>.",
             (
                 "Allowed types: "
-                f"{', '.join(ALLOWED_BRANCH_TYPES)} "
-                "(including AI helper branches: claude, codex, copilot)."
+                f"{', '.join(all_types)} "
+                "(including AI helper branches: claude, codex, copilot"
+                " and bot branches: dependabot, renovate)."
             ),
             f"Also allowed: {', '.join(ALLOWED_BRANCH_NAMES)}, release/v<semver>.",
         ],
@@ -462,9 +483,11 @@ def run_dirty_tree_check(cwd: Path, *, title: str) -> int:
 def run_pre_commit(cwd: Path) -> int:
     """Validate the active branch during pre-commit."""
     branch_name = git.current_branch(cwd)
+    extra_types = load_extra_branch_types(cwd)
     return run_branch_name_check(
         branch_name,
         title="Commit blocked by branch naming policy.",
+        extra_types=extra_types,
     )
 
 
@@ -717,7 +740,12 @@ def main(argv: list[str] | None = None) -> int:
     if parsed.command == "commit-msg":
         return run_commit_msg(Path(parsed.message_file))
     if parsed.command == "check-branch-name":
-        return run_branch_name_check(parsed.branch, title="Branch name validation failed.")
+        extra_types = load_extra_branch_types(Path.cwd())
+        return run_branch_name_check(
+            parsed.branch,
+            title="Branch name validation failed.",
+            extra_types=extra_types,
+        )
     if parsed.command == "check-commit-subject":
         return run_commit_subject_check(parsed.subject, title="Commit subject validation failed.")
     if parsed.command == "check-dirty-tree":

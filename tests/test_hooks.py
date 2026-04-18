@@ -1,3 +1,5 @@
+import pytest
+
 from pathlib import Path
 
 from repo_release_tools import hooks
@@ -637,3 +639,101 @@ def test_dedup_changelog_entries_all_duplicates() -> None:
     lines = ["- fix typo", "- fix typo", "- fix typo"]
     result = dedup_changelog_entries(lines)
     assert result.count("- fix typo") == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — Bot branch types and extra_branch_types
+# ---------------------------------------------------------------------------
+
+
+def test_validate_branch_name_accepts_dependabot_branch() -> None:
+    assert validate_branch_name("dependabot/npm_and_yarn/lodash-4.17.21") is None
+
+
+def test_validate_branch_name_accepts_renovate_branch() -> None:
+    assert validate_branch_name("renovate/lodash-4.x") is None
+
+
+def test_validate_branch_name_accepts_extra_type() -> None:
+    assert validate_branch_name("snyk/fix-vuln", extra_types=("snyk",)) is None
+
+
+def test_validate_branch_name_rejects_unknown_type_without_extra() -> None:
+    problem = validate_branch_name("snyk/fix-vuln")
+    assert problem is not None
+    assert "snyk" in problem
+
+
+def test_validate_branch_name_lists_bot_types_in_error() -> None:
+    problem = validate_branch_name("wizard/fix-something")
+    assert problem is not None
+    assert "dependabot" in problem
+    assert "renovate" in problem
+
+
+def test_validate_branch_name_lists_extra_types_in_error() -> None:
+    problem = validate_branch_name("wizard/fix-something", extra_types=("greenkeeper",))
+    assert problem is not None
+    assert "greenkeeper" in problem
+
+
+def test_main_check_branch_name_accepts_dependabot_branch() -> None:
+    assert hooks.main(["check-branch-name", "--branch", "dependabot/npm_and_yarn/foo-1.0"]) == 0
+
+
+def test_main_check_branch_name_accepts_renovate_branch() -> None:
+    assert hooks.main(["check-branch-name", "--branch", "renovate/lodash-4.x"]) == 0
+
+
+def test_validate_branch_name_rejects_empty_slug_for_bot_branch() -> None:
+    problem = validate_branch_name("dependabot/")
+    assert problem is not None
+    assert "non-empty slug" in problem
+
+
+def test_validate_branch_name_rejects_empty_slug_for_extra_type() -> None:
+    problem = validate_branch_name("snyk/", extra_types=("snyk",))
+    assert problem is not None
+    assert "non-empty slug" in problem
+
+
+def test_main_check_branch_name_accepts_custom_prefix_from_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Extra branch types loaded from config are accepted without explicit --extra-types."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """\
+[tool.rrt]
+extra_branch_types = ["snyk"]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["check-branch-name", "--branch", "snyk/fix-vuln-123"]) == 0
+
+
+def test_main_check_branch_name_rejects_custom_prefix_not_in_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A branch type absent from config is rejected even if other custom types are configured."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """\
+[tool.rrt]
+extra_branch_types = ["greenkeeper"]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["check-branch-name", "--branch", "snyk/fix-vuln-123"]) == 1
