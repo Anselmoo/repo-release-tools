@@ -146,7 +146,9 @@ def test_replace_go_version_const_block(tmp_path: Path) -> None:
     assert 'Other = "x"' in f.read_text(encoding="utf-8")
 
 
-
+# ---------------------------------------------------------------------------
+# go_version – read
+# ---------------------------------------------------------------------------
 
 
 def test_read_go_version_const(tmp_path: Path) -> None:
