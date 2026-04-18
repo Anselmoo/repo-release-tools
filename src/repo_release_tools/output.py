@@ -2,10 +2,34 @@
 
 from __future__ import annotations
 
-from repo_release_tools.glyphs import GLYPHS, Glyph, display_width, pad_right
+from repo_release_tools.glyphs import (
+    GLYPHS,
+    BoldBoxGlyphs,
+    BoxGlyphs,
+    BoxStyle,
+    Glyph,
+    RoundedBoxGlyphs,
+    _repeat_to_width,
+    display_width,
+    pad_right,
+)
 
 
 SECTION_WIDTH = 52
+
+# Union type for the box-drawing glyph sets accepted by panel().
+_AnyBoxGlyphs = BoxGlyphs | RoundedBoxGlyphs | BoldBoxGlyphs
+
+
+def _resolve_box(style: BoxStyle) -> _AnyBoxGlyphs:
+    """Return the glyph set matching the requested panel style."""
+    if style == "rounded":
+        return GLYPHS.rounded_box
+    if style == "bold":
+        return GLYPHS.bold_box
+    # "mixed" and "single" both use single-line corners as the base;
+    # for "mixed" the outer frame is switched to bold_box inside panel().
+    return GLYPHS.box
 
 
 def section(title: str) -> str:
@@ -14,10 +38,22 @@ def section(title: str) -> str:
     return f"{GLYPHS.box.h * 2} {title} {GLYPHS.box.h * fill}"
 
 
-def panel(title: str, rows: list[tuple[str, str]]) -> str:
-    """Render a compact two-column summary panel."""
+def panel(title: str, rows: list[tuple[str, str]], *, style: BoxStyle = "single") -> str:
+    """Render a compact two-column summary panel.
+
+    ``style`` selects the box-drawing character set:
+
+    * ``"single"``  — thin lines (┌ ┐ └ ┘ │ ─)  *default*
+    * ``"rounded"`` — rounded corners (╭ ╮ ╰ ╯ │ ─)
+    * ``"bold"``    — thick/heavy borders (┏ ┓ ┗ ┛ ┃ ━)
+    * ``"mixed"``   — bold outer frame + thin inner dividers
+    """
     if not rows:
         return title
+
+    # Resolve outer (frame) and inner (divider) glyph sets.
+    outer: _AnyBoxGlyphs = GLYPHS.bold_box if style == "mixed" else _resolve_box(style)
+    inner: _AnyBoxGlyphs = GLYPHS.box if style in {"mixed", "single"} else outer
 
     label_width = max(display_width(label) for label, _ in rows)
     # Keep one trailing cell in the value column so the body width matches the title bar.
@@ -30,26 +66,29 @@ def panel(title: str, rows: list[tuple[str, str]]) -> str:
         row_width = min_width
 
     top_fill = row_width - display_width(title_text) - 2
+    # Row separator: ├────────┼─────────────────┤  (inner dividers)
     row_sep = (
-        f"{GLYPHS.box.left}"
-        f"{GLYPHS.box.h * (label_width + 2)}"
-        f"{GLYPHS.box.cross}"
-        f"{GLYPHS.box.h * (value_width + 2)}"
-        f"{GLYPHS.box.right}"
+        f"{inner.left}"
+        f"{_repeat_to_width(inner.h, label_width + 2)}"
+        f"{inner.cross}"
+        f"{_repeat_to_width(inner.h, value_width + 2)}"
+        f"{inner.right}"
     )
+    # Bottom border: └────────┴─────────────────┘  (outer corners + outer horizontal, inner bottom-T)
     bottom = (
-        f"{GLYPHS.box.bl}"
-        f"{GLYPHS.box.h * (label_width + 2)}"
-        f"{GLYPHS.box.h}"
-        f"{GLYPHS.box.h * (value_width + 2)}"
-        f"{GLYPHS.box.br}"
+        f"{outer.bl}"
+        f"{_repeat_to_width(outer.h, label_width + 2)}"
+        f"{inner.bottom}"
+        f"{_repeat_to_width(outer.h, value_width + 2)}"
+        f"{outer.br}"
     )
 
-    lines = [f"{GLYPHS.box.tl}{title_text}{GLYPHS.box.h * top_fill}{GLYPHS.box.tr}"]
+    # Top border uses outer corners + outer horizontal; rows use inner vertical for column divider.
+    lines = [f"{outer.tl}{title_text}{_repeat_to_width(outer.h, top_fill)}{outer.tr}"]
     for index, (label, value) in enumerate(rows):
         lines.append(
-            f"{GLYPHS.box.v} {pad_right(label, label_width)} {GLYPHS.box.v} "
-            f"{pad_right(value, value_width)} {GLYPHS.box.v}"
+            f"{outer.v} {pad_right(label, label_width)} {inner.v} "
+            f"{pad_right(value, value_width)} {outer.v}"
         )
         if index != len(rows) - 1:
             lines.append(row_sep)
