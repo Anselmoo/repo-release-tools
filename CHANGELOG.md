@@ -1,3 +1,9 @@
+## [0.1.9] - 2026-04-18
+
+### Added
+- enhance glyph rendering with support for rounded and bold box styles, and improve terminal detection (#19)
+- add support for python_version and go_version target kinds with… (#17)
+
 ## [0.1.8] - 2026-04-18
 
 ### Added
