@@ -6,6 +6,7 @@ import pytest
 
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
+    DEFAULT_CHANGELOG_WORKFLOW,
     VersionTarget,
     autodetect_config,
     find_changelog_file,
@@ -201,6 +202,81 @@ kind = "package_json"
     assert config.resolve_group().name == "python"
     assert config.resolve_group("web").generated_files == [tmp_path / "pnpm-lock.yaml"]
     assert config.resolve_group("web").primary_target().path == tmp_path / "package.json"
+
+
+def test_load_config_parses_changelog_workflow(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+changelog_workflow = "squash"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.changelog_workflow == "squash"
+    assert config.resolve_group().changelog_workflow == "squash"
+
+
+def test_group_inherits_default_changelog_workflow(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+changelog_workflow = "squash"
+default_group = "python"
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+changelog_workflow = "incremental"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.resolve_group("python").changelog_workflow == "squash"
+    assert config.resolve_group("web").changelog_workflow == "incremental"
+
+
+def test_load_config_defaults_changelog_workflow_incremental(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    assert config.changelog_workflow == DEFAULT_CHANGELOG_WORKFLOW
+
+
+def test_load_config_rejects_invalid_changelog_workflow(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+changelog_workflow = "mystery"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="changelog_workflow must be one of"):
+        load_config(tmp_path)
 
 
 def test_load_config_supports_package_json_rrt(tmp_path: Path) -> None:

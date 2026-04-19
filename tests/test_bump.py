@@ -867,7 +867,7 @@ def test_update_changelog_adds_unreleased_placeholder_when_absent(
 # ---------------------------------------------------------------------------
 
 
-def _make_config(tmp_path: Path, changelog: Path) -> "object":
+def _make_config(tmp_path: Path, changelog: Path) -> RrtConfig:
     from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
 
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
@@ -970,6 +970,75 @@ def test_update_changelog_mode_generate_ignores_unreleased(
     content = changelog.read_text(encoding="utf-8")
     assert "from git log" in content
     assert "## [1.1.0]" in content
+
+
+def test_cmd_bump_defaults_to_generate_for_squash_workflow(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="squash",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+    changelog_modes: list[str] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.read_group_current_version",
+        lambda grp: Version.parse("1.0.0"),
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.replace_version_in_file",
+        lambda target, version, dry_run: None,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.update_changelog",
+        lambda config, version, *, include_maintenance, dry_run, changelog_mode: (
+            changelog_modes.append(changelog_mode)
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=False,
+            no_commit=True,
+            no_changelog=False,
+            no_update=True,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert changelog_modes == ["generate"]
 
 
 # ---------------------------------------------------------------------------

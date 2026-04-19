@@ -17,7 +17,13 @@ from repo_release_tools.changelog import (
     get_unreleased_entries,
     parse_conventional_commit,
 )
-from repo_release_tools.config import DEFAULT_CHANGELOG, load_extra_branch_types
+from repo_release_tools.config import (
+    DEFAULT_CHANGELOG,
+    DEFAULT_CHANGELOG_WORKFLOW,
+    is_missing_tool_rrt_error,
+    load_extra_branch_types,
+    load_or_autodetect_config,
+)
 from repo_release_tools.commands.branch import (
     BRANCH_SLUG_RE,
     CONVENTIONAL_TYPES,
@@ -220,6 +226,26 @@ def changelog_is_updated(changed_files: list[str], *, changelog_file: str, cwd: 
     """Return whether the changelog file is included in the changed files."""
     target = _normalize_repo_path(changelog_file, cwd=cwd)
     return any(_normalize_repo_path(path, cwd=cwd) == target for path in changed_files)
+
+
+def _detect_changelog_workflow(cwd: Path) -> str:
+    """Return the configured changelog workflow, defaulting to incremental."""
+    try:
+        return load_or_autodetect_config(cwd).changelog_workflow
+    except FileNotFoundError:
+        return DEFAULT_CHANGELOG_WORKFLOW
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return DEFAULT_CHANGELOG_WORKFLOW
+        raise RuntimeError(f"Failed to load changelog_workflow configuration: {exc}") from exc
+
+
+def _resolve_changelog_strategy(cwd: Path, strategy: str) -> str:
+    """Resolve an explicit or workflow-derived changelog enforcement strategy."""
+    if strategy != "auto":
+        return strategy
+    workflow = _detect_changelog_workflow(cwd)
+    return "release-only" if workflow == "squash" else "per-commit"
 
 
 # ---------------------------------------------------------------------------
@@ -531,6 +557,12 @@ def run_pre_commit(cwd: Path) -> int:
 
 def run_pre_commit_changelog(cwd: Path, *, changelog_file: str = DEFAULT_CHANGELOG) -> int:
     """Validate staged changelog updates during pre-commit."""
+    try:
+        if _detect_changelog_workflow(cwd) == "squash":
+            return 0
+    except RuntimeError as exc:
+        return emit_failure("Commit blocked by changelog policy.", [str(exc)])
+
     branch_name = git.current_branch(cwd)
     if not branch_requires_changelog(branch_name):
         return 0
@@ -573,6 +605,12 @@ def run_update_unreleased(
     updates, but returns ``emit_failure(...)`` if the changelog file is
     missing.
     """
+    try:
+        if _detect_changelog_workflow(cwd) == "squash":
+            return 0
+    except RuntimeError as exc:
+        return emit_failure("Changelog update failed.", [str(exc)])
+
     if not commit_subject_requires_changelog(subject):
         return 0
     if is_changelog_meta_commit(subject):
@@ -606,14 +644,17 @@ def run_changelog_check(
     changed_files: list[str] | None = None,
     ref: str = "HEAD",
     title: str,
-    strategy: str = "per-commit",
+    strategy: str = "auto",
     branch: str = "",
 ) -> int:
     """Validate that changelog-relevant commits update the changelog file.
 
     *strategy* controls what constitutes a valid changelog update:
 
-    ``per-commit`` (default)
+    ``auto`` (default)
+        Derives the strategy from ``changelog_workflow``. ``incremental`` maps
+        to ``per-commit`` and ``squash`` maps to ``release-only``.
+    ``per-commit``
         The changelog file must appear in the commit's changed file list.
     ``unreleased``
         The changelog file must contain a non-empty ``[Unreleased]`` section.
@@ -632,12 +673,17 @@ def run_changelog_check(
         if branch_prefix in BOT_BRANCH_TYPES:
             return 0
 
-    if strategy == "release-only":
+    try:
+        effective_strategy = _resolve_changelog_strategy(cwd, strategy)
+    except RuntimeError as exc:
+        return emit_failure(title, [str(exc)])
+
+    if effective_strategy == "release-only":
         return 0
 
     normalized_path = _normalize_repo_path(changelog_file, cwd=cwd)
 
-    if strategy == "unreleased":
+    if effective_strategy == "unreleased":
         changelog_path = cwd / changelog_file
         if changelog_path.exists():
             content = changelog_path.read_text(encoding="utf-8")
@@ -653,7 +699,7 @@ def run_changelog_check(
             ],
         )
 
-    # strategy == "per-commit" (default)
+    # effective_strategy == "per-commit"
     effective_changed_files = (
         changed_files if changed_files is not None else changed_files_for_ref(cwd, ref)
     )
@@ -816,11 +862,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     changelog_check_parser.add_argument(
         "--strategy",
-        default="per-commit",
-        choices=["per-commit", "unreleased", "release-only"],
+        default="auto",
+        choices=["auto", "per-commit", "unreleased", "release-only"],
         help=(
             "Changelog enforcement strategy: "
-            "'per-commit' (default) requires the changelog in the changed-file list; "
+            "'auto' (default) derives from changelog_workflow; "
+            "'per-commit' requires the changelog in the changed-file list; "
             "'unreleased' requires a non-empty [Unreleased] section; "
             "'release-only' skips the check entirely."
         ),

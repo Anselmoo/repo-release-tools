@@ -242,6 +242,7 @@ def test_action_installs_from_action_path_and_runs_hooks() -> None:
     assert '--changelog-file "$INPUT_CHANGELOG_FILE"' in action_text
     assert "--ref HEAD" in action_text
     assert '--strategy "${INPUT_CHANGELOG_STRATEGY' in action_text
+    assert 'default: "auto"' in action_text
     assert "--branch" in action_text
 
 
@@ -791,6 +792,30 @@ def test_run_changelog_check_strategy_release_only_skips_check() -> None:
     )
 
 
+def test_run_changelog_check_auto_uses_squash_workflow(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+changelog_workflow = "squash"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    assert (
+        run_changelog_check(
+            "feat: brand new feature",
+            cwd=tmp_path,
+            changed_files=[],
+            title="Changelog validation failed.",
+        )
+        == 0
+    )
+
+
 def test_run_changelog_check_strategy_unreleased_passes_when_section_nonempty(
     tmp_path: Path,
 ) -> None:
@@ -878,6 +903,48 @@ def test_run_update_unreleased_skips_non_changelog_commits(
 
     assert result == 0
     assert changelog.read_text(encoding="utf-8") == original
+
+
+def test_run_update_unreleased_skips_for_squash_workflow(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+changelog_workflow = "squash"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    changelog = tmp_path / "CHANGELOG.md"
+    original = "# Changelog\n"
+    changelog.write_text(original, encoding="utf-8")
+
+    result = run_update_unreleased(tmp_path, subject="feat: new widget")
+
+    assert result == 0
+    assert changelog.read_text(encoding="utf-8") == original
+
+
+def test_run_pre_commit_changelog_skips_for_squash_workflow(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+changelog_workflow = "squash"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "feat/add-hook-checks")
+    monkeypatch.setattr(hooks, "staged_files", lambda cwd: ["src/repo_release_tools/hooks.py"])
+
+    assert run_pre_commit_changelog(tmp_path) == 0
 
 
 def test_run_update_unreleased_returns_one_when_changelog_missing(
