@@ -157,7 +157,9 @@ def commit_subject_requires_changelog(subject: str) -> bool:
 
 
 _CHANGELOG_META_RE = re.compile(
+    # "verb changelog[...]" — maintenance actions on the changelog file itself
     r"\b(?:update|bump|revise|amend|correct|trim)\s+changelog\b"
+    # "changelog noun" — specific meta-nouns that describe changelog maintenance
     r"|\bchangelog\s+(?:entries?|updates?|corrections?|formatting?)\b",
     re.IGNORECASE,
 )

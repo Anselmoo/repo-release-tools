@@ -195,7 +195,7 @@ def replace_pattern_version(text: str, pattern: str, new_version: str, *, count:
     """Replace a regex-based version, tolerating legacy TOML double escaping.
 
     *count* defaults to 1 (replace only the first occurrence).  Pass ``count=0``
-    to replace all occurrences (used for pin-target substitutions).
+    for unlimited replacements, i.e. all occurrences (used for pin-target substitutions).
     """
     for compiled in compile_pattern_variants(pattern):
         updated, n = compiled.subn(rf"\g<1>{new_version}\g<3>", text, count=count)
