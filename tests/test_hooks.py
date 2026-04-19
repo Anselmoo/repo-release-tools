@@ -928,7 +928,9 @@ def test_run_update_unreleased_creates_rst_unreleased_section(
     changelog.write_text("Changelog\n=========\n", encoding="utf-8")
     monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
 
-    result = run_update_unreleased(tmp_path, subject="feat: rst feature", changelog_file="CHANGELOG.rst")
+    result = run_update_unreleased(
+        tmp_path, subject="feat: rst feature", changelog_file="CHANGELOG.rst"
+    )
 
     assert result == 0
     content = changelog.read_text(encoding="utf-8")

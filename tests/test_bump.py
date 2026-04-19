@@ -791,13 +791,14 @@ def test_update_changelog_mode_promote_with_entries(
 
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
-        "# Changelog\n\n## [Unreleased]\n\n### Added\n- great thing\n\n"
-        "## [1.0.0] - 2025-01-01\n",
+        "# Changelog\n\n## [Unreleased]\n\n### Added\n- great thing\n\n## [1.0.0] - 2025-01-01\n",
         encoding="utf-8",
     )
     config = _make_config(tmp_path, changelog)
 
-    update_changelog(config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote")
+    update_changelog(
+        config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote"
+    )
 
     content = changelog.read_text(encoding="utf-8")
     assert "## [1.1.0]" in content
@@ -816,7 +817,9 @@ def test_update_changelog_mode_promote_empty_section_warns(
     changelog.write_text(original, encoding="utf-8")
     config = _make_config(tmp_path, changelog)
 
-    update_changelog(config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote")
+    update_changelog(
+        config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote"
+    )
 
     assert changelog.read_text(encoding="utf-8") == original  # unchanged
 
@@ -832,7 +835,9 @@ def test_update_changelog_mode_promote_no_section_warns(
     changelog.write_text(original, encoding="utf-8")
     config = _make_config(tmp_path, changelog)
 
-    update_changelog(config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote")
+    update_changelog(
+        config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote"
+    )
 
     assert changelog.read_text(encoding="utf-8") == original  # unchanged
 
@@ -854,7 +859,9 @@ def test_update_changelog_mode_generate_ignores_unreleased(
     )
     config = _make_config(tmp_path, changelog)
 
-    update_changelog(config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="generate")
+    update_changelog(
+        config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="generate"
+    )
 
     content = changelog.read_text(encoding="utf-8")
     assert "from git log" in content

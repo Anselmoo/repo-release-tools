@@ -115,8 +115,8 @@ UNRELEASED_PLACEHOLDER = "## [Unreleased]\n"
 # ---------------------------------------------------------------------------
 
 # Underline characters for each heading level in generated RST changelogs.
-_RST_SECTION_CHAR = "-"      # version / Unreleased level  (## in Markdown)
-_RST_SUBSECTION_CHAR = "~"   # sub-section level           (### in Markdown)
+_RST_SECTION_CHAR = "-"  # version / Unreleased level  (## in Markdown)
+_RST_SUBSECTION_CHAR = "~"  # sub-section level           (### in Markdown)
 
 # "Unreleased" or "[Unreleased]" heading followed immediately by a dash underline.
 # The optional trailing \n? is consumed so that m.end() lands after the underline line.
@@ -328,9 +328,7 @@ def _append_to_unreleased_rst(content: str, section: str, bullet: str) -> str:
             new_body = section_body[:sub_pos] + f"\n{bullet}" + section_body[sub_pos:]
         else:
             stripped = section_body.rstrip("\n")
-            new_body = (
-                stripped + f"\n\n{_rst_heading(section, _RST_SUBSECTION_CHAR)}{bullet}\n"
-            )
+            new_body = stripped + f"\n\n{_rst_heading(section, _RST_SUBSECTION_CHAR)}{bullet}\n"
 
         return content[:insert_pos] + new_body + content[section_body_end:]
     else:
@@ -415,9 +413,7 @@ def promote_unreleased(
         m = _RST_UNRELEASED_HEADER_RE.search(content)
         assert m is not None  # guaranteed by has_unreleased_section
         versioned_text = f"{version} - {today}"
-        versioned_heading = (
-            f"{versioned_text}\n{_RST_SECTION_CHAR * max(len(versioned_text), 3)}"
-        )
+        versioned_heading = f"{versioned_text}\n{_RST_SECTION_CHAR * max(len(versioned_text), 3)}"
         updated = content[: m.start()] + versioned_heading + content[m.end() :]
         updated = updated.replace(
             versioned_heading,
