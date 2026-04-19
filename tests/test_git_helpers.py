@@ -38,6 +38,27 @@ def test_run_prints_stdout_on_success(monkeypatch, tmp_path: Path, capsys) -> No
     assert "line two" in captured
 
 
+def test_run_can_suppress_initial_command_announcement(monkeypatch, tmp_path: Path, capsys) -> None:
+    def fake_run(cmd, cwd, capture_output, text, check):
+        assert cmd == ["git", "status"]
+        return subprocess.CompletedProcess(cmd, 0, stdout="line one\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = git.run(
+        ["git", "status"],
+        tmp_path,
+        dry_run=False,
+        label="git status",
+        suppress_announce=True,
+    )
+
+    captured = capsys.readouterr().out
+    assert result == "line one"
+    assert "git status" not in captured
+    assert "line one" in captured
+
+
 def test_run_prints_stdout_and_stderr_before_raising(monkeypatch, tmp_path: Path, capsys) -> None:
     def fake_run(cmd, cwd, capture_output, text, check):
         return subprocess.CompletedProcess(cmd, 2, stdout="out line\n", stderr="err line\n")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from pathlib import Path
 
@@ -893,3 +894,29 @@ def test_cmd_ci_version_sync_invalid_run_attempt(
     result = cmd_ci_version_sync(args)
 
     assert result == 1
+
+
+def test_cmd_apply_uses_shared_progress_line(
+    mixed_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    updates: list[tuple[float, int, object]] = []
+
+    class _FakeProgressLine:
+        def __init__(self, *, file=None) -> None:
+            self.file = file
+
+        def update_bar(self, value: float, *, width: int = 20, lines_since_last: int = 0) -> None:
+            updates.append((value, lines_since_last, self.file))
+
+    monkeypatch.chdir(mixed_project)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
+    )
+
+    result = cmd_ci_version_apply(
+        argparse.Namespace(version="0.2.0.dev12345601", dry_run=False, group=None)
+    )
+
+    assert result == 0
+    assert updates == [(0.5, 0, sys.stdout), (1.0, 1, sys.stdout)]
