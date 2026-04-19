@@ -1,3 +1,5 @@
+import io
+
 import pytest
 
 from repo_release_tools import output
@@ -136,8 +138,70 @@ def test_spinner_lines_noop_yields_normally(capsys) -> None:
 
 def test_spinner_lines_propagates_exception() -> None:
     """Exceptions raised inside the context propagate out."""
-    import io
-
     with pytest.raises(ValueError, match="boom"):
         with output.spinner_lines("x", file=io.StringIO()):
             raise ValueError("boom")
+
+
+class _TtyBuffer(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+class _FakeEvent:
+    def __init__(self) -> None:
+        self._is_set = False
+
+    def is_set(self) -> bool:
+        return self._is_set
+
+    def wait(self, timeout: float | None = None) -> bool:
+        self._is_set = True
+        return True
+
+    def set(self) -> None:
+        self._is_set = True
+
+
+class _FakeThread:
+    def __init__(self, target, daemon: bool) -> None:
+        self._target = target
+        self.daemon = daemon
+        self.join_timeout: float | None = None
+
+    def start(self) -> None:
+        self._target()
+
+    def join(self, timeout: float | None = None) -> None:
+        self.join_timeout = timeout
+
+
+def test_spinner_lines_writes_success_status_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    tty = _TtyBuffer()
+
+    monkeypatch.setattr(output.threading, "Event", _FakeEvent)
+    monkeypatch.setattr(output.threading, "Thread", _FakeThread)
+
+    with output.spinner_lines("Working", file=tty):
+        pass
+
+    rendered = tty.getvalue()
+    assert "Working" in rendered
+    assert f"{output.GLYPHS.bullet.ok}  Working" in rendered
+
+
+def test_spinner_lines_writes_error_status_on_tty_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tty = _TtyBuffer()
+
+    monkeypatch.setattr(output.threading, "Event", _FakeEvent)
+    monkeypatch.setattr(output.threading, "Thread", _FakeThread)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with output.spinner_lines("Exploding", file=tty):
+            raise RuntimeError("boom")
+
+    rendered = tty.getvalue()
+    assert "Exploding" in rendered
+    assert f"{output.GLYPHS.bullet.error}  Exploding" in rendered

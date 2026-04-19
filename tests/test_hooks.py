@@ -20,6 +20,8 @@ from repo_release_tools.hooks import dedup_changelog_entries
 from repo_release_tools.hooks import apply_dedup_to_changelog
 from repo_release_tools.hooks import collect_squash_changelog_hunks
 from repo_release_tools.hooks import run_post_correct
+from repo_release_tools.hooks import _detect_changelog_workflow
+from repo_release_tools.hooks import _resolve_changelog_strategy
 
 
 def test_validate_branch_name_accepts_feature_branch() -> None:
@@ -28,6 +30,10 @@ def test_validate_branch_name_accepts_feature_branch() -> None:
 
 def test_validate_branch_name_accepts_release_branch() -> None:
     assert validate_branch_name("release/v1.2.3") is None
+
+
+def test_validate_branch_name_accepts_main_branch() -> None:
+    assert validate_branch_name("main") is None
 
 
 def test_validate_branch_name_accepts_magic_ai_branch() -> None:
@@ -39,6 +45,27 @@ def test_validate_branch_name_rejects_invalid_slug() -> None:
 
     assert problem is not None
     assert "lowercase letters, digits, and hyphens" in problem
+
+
+def test_validate_branch_name_rejects_invalid_release_version() -> None:
+    problem = validate_branch_name("release/vbanana")
+
+    assert problem is not None
+    assert "release/v<semver>" in problem
+
+
+def test_validate_branch_name_rejects_missing_separator() -> None:
+    problem = validate_branch_name("feat-add-parser")
+
+    assert problem is not None
+    assert "<type>/<kebab-case-description>" in problem
+
+
+def test_validate_branch_name_rejects_too_long_slug() -> None:
+    problem = validate_branch_name(f"feat/{'a' * 65}")
+
+    assert problem is not None
+    assert "too long" in problem
 
 
 def test_validate_branch_name_lists_magic_ai_types_in_error() -> None:
@@ -58,6 +85,14 @@ def test_validate_commit_subject_accepts_fixup_commit() -> None:
     assert validate_commit_subject("fixup! feat(cli): add hook checks") is None
 
 
+def test_validate_commit_subject_accepts_merge_commit() -> None:
+    assert validate_commit_subject("Merge branch 'feat/add-parser'") is None
+
+
+def test_validate_commit_subject_rejects_empty_subject() -> None:
+    assert validate_commit_subject("") == "Commit message is empty."
+
+
 def test_validate_commit_subject_rejects_invalid_commit() -> None:
     problem = validate_commit_subject("update stuff")
 
@@ -73,12 +108,20 @@ def test_branch_requires_changelog_skips_maintenance_branch() -> None:
     assert branch_requires_changelog("chore/update-tooling") is False
 
 
+def test_branch_requires_changelog_skips_invalid_branch_type() -> None:
+    assert branch_requires_changelog("wizard/update-tooling") is False
+
+
 def test_commit_subject_requires_changelog_for_breaking_change() -> None:
     assert commit_subject_requires_changelog("chore!: remove deprecated flow") is True
 
 
 def test_commit_subject_requires_changelog_skips_chore_commit() -> None:
     assert commit_subject_requires_changelog("chore: update tooling") is False
+
+
+def test_commit_subject_requires_changelog_skips_invalid_subject() -> None:
+    assert commit_subject_requires_changelog("just do the thing") is False
 
 
 def test_changelog_is_updated_accepts_relative_and_absolute_paths(tmp_path: Path) -> None:
@@ -117,6 +160,37 @@ def test_run_dirty_tree_check_accepts_clean_tree(monkeypatch) -> None:
     monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: True)
 
     assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 0
+
+
+def test_run_dirty_tree_check_rejects_non_git_directory(monkeypatch) -> None:
+    monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: False)
+
+    assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1
+
+
+def test_run_pre_commit_uses_current_branch_and_extra_types(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "snyk/fix-vuln")
+    monkeypatch.setattr(hooks, "load_extra_branch_types", lambda cwd: ("snyk",))
+
+    def fake_run_branch_name_check(
+        branch_name: str, *, title: str, extra_types: tuple[str, ...]
+    ) -> int:
+        captured["branch_name"] = branch_name
+        captured["title"] = title
+        captured["extra_types"] = extra_types
+        return 7
+
+    monkeypatch.setattr(hooks, "run_branch_name_check", fake_run_branch_name_check)
+
+    assert hooks.run_pre_commit(Path.cwd()) == 7
+    assert captured == {
+        "branch_name": "snyk/fix-vuln",
+        "title": "Commit blocked by branch naming policy.",
+        "extra_types": ("snyk",),
+    }
 
 
 def test_run_dirty_tree_check_rejects_dirty_tree(monkeypatch) -> None:
@@ -168,6 +242,29 @@ def test_run_pre_commit_changelog_accepts_staged_changelog(monkeypatch) -> None:
     assert run_pre_commit_changelog(Path.cwd()) == 0
 
 
+def test_run_pre_commit_changelog_skips_non_changelog_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "chore/update-guide")
+    monkeypatch.setattr(
+        hooks, "staged_files", lambda cwd: pytest.fail("staged_files should not run")
+    )
+
+    assert run_pre_commit_changelog(Path.cwd()) == 0
+
+
+def test_run_pre_commit_changelog_reports_workflow_load_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        hooks,
+        "_detect_changelog_workflow",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("bad config")),
+    )
+
+    assert run_pre_commit_changelog(Path.cwd()) == 1
+
+
 def test_run_changelog_check_accepts_commit_with_changelog_file() -> None:
     assert (
         run_changelog_check(
@@ -177,6 +274,38 @@ def test_run_changelog_check_accepts_commit_with_changelog_file() -> None:
             title="Changelog validation failed.",
         )
         == 0
+    )
+
+
+def test_run_changelog_check_skips_non_changelog_subject() -> None:
+    assert (
+        run_changelog_check(
+            "chore: rewrite docs",
+            cwd=Path.cwd(),
+            changed_files=[],
+            title="Changelog validation failed.",
+        )
+        == 0
+    )
+
+
+def test_run_changelog_check_reports_strategy_resolution_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        hooks,
+        "_resolve_changelog_strategy",
+        lambda cwd, strategy: (_ for _ in ()).throw(RuntimeError("bad workflow")),
+    )
+
+    assert (
+        run_changelog_check(
+            "feat: add parser",
+            cwd=Path.cwd(),
+            changed_files=[],
+            title="Changelog validation failed.",
+        )
+        == 1
     )
 
 
@@ -927,6 +1056,16 @@ kind = "package_json"
     assert changelog.read_text(encoding="utf-8") == original
 
 
+def test_run_update_unreleased_reports_workflow_load_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        hooks,
+        "_detect_changelog_workflow",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("bad config")),
+    )
+
+    assert run_update_unreleased(Path.cwd(), subject="feat: parser") == 1
+
+
 def test_run_pre_commit_changelog_skips_for_squash_workflow(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1128,6 +1267,99 @@ def test_main_update_unreleased_message_file_unreadable(tmp_path: Path) -> None:
         os.chdir(old_cwd)
 
     assert result == 1
+
+
+def test_main_pre_commit_dispatch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hooks, "run_pre_commit", lambda cwd: 11)
+
+    assert hooks.main(["pre-commit"]) == 11
+
+
+def test_main_pre_commit_changelog_dispatch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hooks, "run_pre_commit_changelog", lambda cwd, *, changelog_file: 12)
+
+    assert hooks.main(["pre-commit-changelog", "--changelog-file", "NEWS.md"]) == 12
+
+
+def test_main_update_unreleased_falls_back_to_commit_editmsg(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    (git_dir / "COMMIT_EDITMSG").write_text("feat: fallback subject\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+    monkeypatch.chdir(tmp_path)
+
+    result = hooks.main(["update-unreleased"])
+
+    assert result == 0
+    assert "fallback subject" in changelog.read_text(encoding="utf-8")
+
+
+def test_main_update_unreleased_uses_empty_subject_when_no_commit_editmsg(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, str] = {}
+    monkeypatch.chdir(tmp_path)
+
+    def fake_run_update_unreleased(cwd: Path, *, subject: str, changelog_file: str) -> int:
+        captured["subject"] = subject
+        captured["changelog_file"] = changelog_file
+        return 0
+
+    monkeypatch.setattr(hooks, "run_update_unreleased", fake_run_update_unreleased)
+
+    assert hooks.main(["update-unreleased"]) == 0
+    assert captured == {"subject": "", "changelog_file": "CHANGELOG.md"}
+
+
+def test_detect_changelog_workflow_defaults_when_config_missing(tmp_path: Path) -> None:
+    assert _detect_changelog_workflow(tmp_path) == "incremental"
+
+
+def test_detect_changelog_workflow_defaults_for_missing_tool_rrt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        hooks,
+        "load_or_autodetect_config",
+        lambda cwd: (_ for _ in ()).throw(
+            ValueError("Missing rrt configuration in supported config files: pyproject.toml")
+        ),
+    )
+
+    assert _detect_changelog_workflow(Path.cwd()) == "incremental"
+
+
+def test_detect_changelog_workflow_raises_runtime_error_for_invalid_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        hooks,
+        "load_or_autodetect_config",
+        lambda cwd: (_ for _ in ()).throw(ValueError("totally broken config")),
+    )
+
+    with pytest.raises(RuntimeError, match="Failed to load changelog_workflow configuration"):
+        _detect_changelog_workflow(Path.cwd())
+
+
+def test_resolve_changelog_strategy_returns_explicit_strategy() -> None:
+    assert _resolve_changelog_strategy(Path.cwd(), "unreleased") == "unreleased"
+
+
+def test_resolve_changelog_strategy_uses_incremental_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
+
+    assert _resolve_changelog_strategy(Path.cwd(), "auto") == "per-commit"
 
 
 # ---------------------------------------------------------------------------

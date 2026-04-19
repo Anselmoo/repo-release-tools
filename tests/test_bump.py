@@ -6,7 +6,148 @@ import pytest
 
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.commands.bump import cmd_bump
+from repo_release_tools.commands.bump import git_log_since_latest_tag
+from repo_release_tools.commands.bump import resolve_changelog_mode
+from repo_release_tools.commands.bump import update_changelog
 from repo_release_tools.versioning import Version
+
+
+def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="incremental",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    assert resolve_changelog_mode(config, "promote") == "promote"
+
+
+def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="incremental",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    assert resolve_changelog_mode(config, None) == "auto"
+
+
+def test_git_log_since_latest_tag_uses_latest_tag_range(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], root: Path) -> str:
+        calls.append(cmd)
+        if cmd[:2] == ["git", "tag"]:
+            return "v1.2.0\nv1.1.0\n"
+        return "feat: add parser\nfix: tighten validation\n"
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.capture", fake_capture)
+
+    assert git_log_since_latest_tag(tmp_path) == ["feat: add parser", "fix: tighten validation"]
+    assert calls[1] == ["git", "log", "v1.2.0..HEAD", "--pretty=format:%s"]
+
+
+def test_git_log_since_latest_tag_uses_head_when_no_tags(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], root: Path) -> str:
+        calls.append(cmd)
+        if cmd[:2] == ["git", "tag"]:
+            return ""
+        return "feat: add parser\n"
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.capture", fake_capture)
+
+    assert git_log_since_latest_tag(tmp_path) == ["feat: add parser"]
+    assert calls[1] == ["git", "log", "HEAD", "--pretty=format:%s"]
+
+
+def test_update_changelog_skips_missing_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "MISSING.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    update_changelog(config, "1.2.3", include_maintenance=False, dry_run=False)
+
+    assert "MISSING.md not found" in capsys.readouterr().out
+
+
+def test_update_changelog_promote_dry_run_shows_preview(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Added\n- parser\n\n## [1.0.0] - 2025-01-01\n",
+        encoding="utf-8",
+    )
+    config = _make_config(tmp_path, changelog)
+
+    update_changelog(
+        config, "1.1.0", include_maintenance=False, dry_run=True, changelog_mode="promote"
+    )
+
+    output = capsys.readouterr().out
+    assert "Would promote [Unreleased] to [1.1.0]" in output
+
+
+def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git_log_since_latest_tag",
+        lambda root: [f"feat: item {i}" for i in range(12)],
+    )
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n## [Unreleased]\n\n", encoding="utf-8")
+    config = _make_config(tmp_path, changelog)
+
+    update_changelog(
+        config, "1.1.0", include_maintenance=True, dry_run=True, changelog_mode="generate"
+    )
+
+    output = capsys.readouterr().out
+    assert "Would prepend to" in output
+    assert "…" in output or "..." in output
 
 
 def test_cmd_bump_dry_run_from_pep621_config(tmp_path, capsys) -> None:
@@ -352,6 +493,226 @@ version = "0.1.0"
     captured = capsys.readouterr()
     assert result == 1
     assert "Multiple version groups configured" in captured.err
+
+
+def test_cmd_bump_reports_missing_config_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: (_ for _ in ()).throw(FileNotFoundError("missing")),
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 1
+    assert "No supported rrt config file found" in capsys.readouterr().err
+
+
+def test_cmd_bump_reports_missing_tool_rrt_guidance(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: (_ for _ in ()).throw(
+            ValueError("Missing rrt configuration in supported config files: pyproject.toml")
+        ),
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.iter_config_files",
+        lambda root: [tmp_path / "pyproject.toml"],
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 1
+    assert "No [tool.rrt] configuration found" in capsys.readouterr().err
+
+
+def test_cmd_bump_reports_runtime_error_loading_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: (_ for _ in ()).throw(RuntimeError("broken environment")),
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 1
+    assert "broken environment" in capsys.readouterr().err
+
+
+def test_cmd_bump_rejects_invalid_explicit_version(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+    )
+
+    monkeypatch.chdir(tmp_path)
+
+    result = cmd_bump(
+        Namespace(
+            bump="not-a-version",
+            dry_run=True,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 1
+    assert "Invalid semver" in capsys.readouterr().err
+
+
+def test_cmd_bump_refuses_dirty_working_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: False
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 1
+    assert "Working tree has uncommitted changes" in capsys.readouterr().err
+
+
+def test_cmd_bump_checks_out_base_branch_before_release_branch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+    )
+
+    calls: list[list[str]] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.current_branch", lambda root: "feature/current"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: calls.append(cmd),
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch="main",
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert ["git", "checkout", "main"] in calls
 
 
 def test_cmd_bump_updates_selected_group_only(tmp_path: Path, capsys) -> None:

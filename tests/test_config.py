@@ -279,6 +279,16 @@ kind = "package_json"
         load_config(tmp_path)
 
 
+def test_load_config_rejects_non_table_tool_rrt(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        'tool = { rrt = "oops" }\n[project]\nname = "example"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"\[tool\.rrt\].*must be a table"):
+        load_config(tmp_path)
+
+
 def test_load_config_supports_package_json_rrt(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
         """{
@@ -305,6 +315,23 @@ def test_load_config_supports_package_json_rrt(tmp_path: Path) -> None:
     assert config.release_branch == "release/web/v{version}"
     assert config.lock_command == ["npm", "install"]
     assert config.generated_files == [tmp_path / "package-lock.json"]
+
+
+def test_load_config_rejects_package_json_top_level_non_object(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="top-level object"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_package_json_rrt_non_object(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "1.0.0", "rrt": "oops"}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="rrt in package.json must be an object"):
+        load_config(tmp_path)
 
 
 def test_load_config_supports_cargo_package_metadata_rrt(tmp_path: Path) -> None:
@@ -362,6 +389,131 @@ field = "version"
 
     assert config.config_file == tmp_path / "Cargo.toml"
     assert config.resolve_group().primary_target().section == "workspace.package"
+
+
+def test_load_config_rejects_non_table_cargo_rrt_metadata(tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        """\
+[package]
+name = \"example\"
+version = \"1.0.0\"
+
+[package.metadata]
+rrt = \"oops\"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must be a table"):
+        load_config(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("release_branch = 1", "release_branch must be a string"),
+        ("changelog_file = 1", "changelog_file must be a string"),
+        ("changelog_workflow = 1", "changelog_workflow must be a string"),
+        ('lock_command = "uv lock"', "lock_command must be a list of strings"),
+        ('generated_files = "uv.lock"', "generated_files must be a list of strings"),
+        ("version_source = 1", "version_source must be a string when provided"),
+    ],
+)
+def test_load_config_rejects_invalid_group_scalar_types(
+    tmp_path: Path, body: str, message: str
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        f"""\
+[tool.rrt]
+{body}
+
+[[tool.rrt.version_targets]]
+path = \"package.json\"
+kind = \"package_json\"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        load_config(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("target_body", "message"),
+    [
+        ('path = "package.json"\nkind = 1', "kind must be a string when provided"),
+        ('path = "package.json"\npattern = 1', "pattern must be a string when provided"),
+        (
+            'path = "package.json"\nsection = 1\nfield = "version"',
+            "section must be a string when provided",
+        ),
+        (
+            'path = "package.json"\nsection = "package"\nfield = 1',
+            "field must be a string when provided",
+        ),
+        ('path = "package.json"\nci_format = 1', "ci_format must be a string when provided"),
+    ],
+)
+def test_load_config_rejects_invalid_target_field_types(
+    tmp_path: Path, target_body: str, message: str
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        f"""\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+{target_body}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_missing_version_targets_in_group(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text("[tool.rrt]\nversion_targets = []\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match=r"Missing \[\[tool\.rrt\.version_targets\]\] configuration"
+    ):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_non_table_target_entry(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        '[tool.rrt]\nversion_targets = ["package.json"]\n', encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="Each version target must be a table"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_target_without_non_empty_path(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        '[tool.rrt]\n\n[[tool.rrt.version_targets]]\npath = ""\nkind = "package_json"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="non-empty 'path' string"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_version_source_not_matching_any_target(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+version_source = "other.json"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="does not match any target path"):
+        load_config(tmp_path)
 
 
 def test_load_config_rejects_mixing_flat_targets_and_groups(tmp_path: Path) -> None:
