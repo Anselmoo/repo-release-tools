@@ -103,19 +103,28 @@ rrt-hooks changelog post-correct --commit
 ## Lefthook setup
 
 [Lefthook](https://github.com/evilmartians/lefthook) is a fast, language-agnostic
-hook runner. Unlike pre-commit it does not require a Python environment — hooks
-run via `uvx` for zero-install execution.
+hook runner. Unlike pre-commit it does not require a Python environment, but the
+reference `lefthook.yml` for `repo-release-tools` uses an installed `rrt-hooks`
+binary provided by `uv tool install repo-release-tools`.
 
 `repo-release-tools` ships a reference `lefthook.yml` at the repo root.
 
 ### Install
 
 ```bash
+# install lefthook
 # macOS
 brew install lefthook
 
 # or via npm / npx
 npm install --save-dev lefthook
+
+# install uv if needed
+# macOS
+brew install uv
+
+# install repo-release-tools so `rrt-hooks` is available to lefthook
+uv tool install repo-release-tools
 
 lefthook install
 ```
@@ -127,22 +136,19 @@ lefthook install
 commit-msg:
   commands:
     rrt-update-unreleased:
-      run: uvx --from repo-release-tools rrt-hooks update-unreleased --message-file {1}
+      run: rrt-hooks update-unreleased --message-file {1}
     rrt-commit-subject:
-      run: uvx --from repo-release-tools rrt-hooks commit-msg {1}
+      run: rrt-hooks commit-msg {1}
 
 pre-commit:
   commands:
     rrt-branch-name:
-      run: uvx --from repo-release-tools rrt-hooks pre-commit
+      run: rrt-hooks pre-commit
 
 pre-push:
   commands:
     rrt-changelog:
-      run: >-
-        uvx --from repo-release-tools rrt-hooks check-changelog
-        --subject "$(git log -1 --format=%s)"
-        --strategy unreleased
+      run: rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
 ```
 
 ### How the auto-write flow works
@@ -159,7 +165,7 @@ When you commit, lefthook runs two `commit-msg` commands:
 2. **`rrt-commit-subject`** — validates the subject follows Conventional Commits.
    If this fails the commit is aborted and the changelog write has no effect.
 
-The `pre-push` guard (`rrt-changelog --strategy unreleased`) catches the rare case
+The `pre-push` guard (`rrt-hooks check-changelog --strategy unreleased`) catches the rare case
 where someone committed with `--no-verify`: it checks that `## [Unreleased]` is
 non-empty before the push is allowed.
 
@@ -170,4 +176,4 @@ non-empty before the push is allowed.
 | Auto-write changelog | `rrt-update-unreleased` (commit-msg) | `rrt-update-unreleased --message-file {1}` |
 | Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` |
 | Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-branch-name` |
-| Pre-push guard | `rrt-dirty-tree` (pre-push) | `rrt-changelog --strategy unreleased` |
+| Pre-push guard | `rrt-dirty-tree` (pre-push) | `rrt-hooks check-changelog --strategy unreleased` |

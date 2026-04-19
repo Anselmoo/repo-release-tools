@@ -882,7 +882,16 @@ def main(argv: list[str] | None = None) -> int:
     if parsed.command == "update-unreleased":
         if parsed.message_file is not None:
             # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
-            subject = read_commit_subject(Path(parsed.message_file))
+            msg_path = Path(parsed.message_file)
+            if not msg_path.exists():
+                return emit_failure(
+                    "update-unreleased failed.",
+                    [f"Message file not found: {parsed.message_file}"],
+                )
+            try:
+                subject = read_commit_subject(msg_path)
+            except (OSError, UnicodeDecodeError) as exc:
+                return emit_failure("update-unreleased failed.", [f"Could not read message file: {exc}"])
         elif parsed.subject is not None:
             subject = parsed.subject
         else:

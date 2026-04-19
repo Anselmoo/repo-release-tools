@@ -1031,3 +1031,36 @@ def test_main_update_unreleased_message_file_takes_priority_over_subject(
     content = changelog.read_text(encoding="utf-8")
     assert "from file wins" in content
     assert "from subject ignored" not in content
+
+
+def test_main_update_unreleased_message_file_missing(tmp_path: Path) -> None:
+    """--message-file with a non-existent path returns failure exit code."""
+    missing = tmp_path / "no-such-file.txt"
+
+    import os
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result = hooks.main(["update-unreleased", "--message-file", str(missing)])
+    finally:
+        os.chdir(old_cwd)
+
+    assert result == 1
+
+
+def test_main_update_unreleased_message_file_unreadable(tmp_path: Path) -> None:
+    """--message-file with an unreadable file returns failure exit code."""
+    import os
+
+    bad_file = tmp_path / "COMMIT_EDITMSG"
+    bad_file.write_bytes(b"\xff\xfe invalid utf-8 \x80")
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result = hooks.main(["update-unreleased", "--message-file", str(bad_file)])
+    finally:
+        os.chdir(old_cwd)
+
+    assert result == 1

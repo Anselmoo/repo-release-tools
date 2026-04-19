@@ -49,4 +49,4 @@ See [docs/](../docs/) for detailed usage of each surface.
 - [CLI reference](../docs/rrt-cli.md)
 - [Semantic branch naming](../docs/semantic-branches.md)
 - [Git workflow helpers](../docs/git-magic.md)
-- [Agent implementation guide](../docs/agent-intructions.md)
+- [Agent implementation guide](../docs/agent-instructions.md)
