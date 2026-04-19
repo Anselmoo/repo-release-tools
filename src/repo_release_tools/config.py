@@ -16,6 +16,19 @@ DEFAULT_CHANGELOG = "CHANGELOG.md"
 DEFAULT_LOCK_COMMAND = ["uv", "lock", "-U"]
 DEFAULT_GENERIC_LOCK_COMMAND: list[str] = []
 
+# Well-known changelog filenames probed in order when autodetecting.
+CHANGELOG_CANDIDATES = (
+    "CHANGELOG.md",
+    "CHANGELOG.rst",
+    "CHANGELOG.txt",
+    "CHANGELOG",
+    "changelog.md",
+    "changelog.rst",
+    "CHANGES.md",
+    "CHANGES.rst",
+    "CHANGES",
+)
+
 CONFIG_FILE_CANDIDATES = (
     "pyproject.toml",
     "package.json",
@@ -142,6 +155,18 @@ GENERIC_TOOL_RRT_EXAMPLE = dedent(
     pattern = '^(const Version = ")([^"]+)(")$'
     """
 ).strip()
+
+
+def find_changelog_file(root: Path) -> str:
+    """Return the name of the first existing changelog file under *root*.
+
+    Searches ``CHANGELOG_CANDIDATES`` in order.  Falls back to
+    ``DEFAULT_CHANGELOG`` when none of the candidates are found.
+    """
+    for name in CHANGELOG_CANDIDATES:
+        if (root / name).exists():
+            return name
+    return DEFAULT_CHANGELOG
 
 
 @dataclass(frozen=True)
@@ -375,7 +400,7 @@ def autodetect_config(root: Path) -> RrtConfig | None:
         group = VersionGroup(
             name="default",
             release_branch=DEFAULT_RELEASE_BRANCH,
-            changelog_file=root / DEFAULT_CHANGELOG,
+            changelog_file=root / find_changelog_file(root),
             lock_command=lock_cmd,
             generated_files=[root / f for f in gen_files],
             version_targets=targets,
@@ -996,7 +1021,7 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
             group = VersionGroup(
                 name="default",
                 release_branch=DEFAULT_RELEASE_BRANCH,
-                changelog_file=root / DEFAULT_CHANGELOG,
+                changelog_file=root / find_changelog_file(root),
                 lock_command=list(DEFAULT_LOCK_COMMAND),
                 generated_files=[root / "uv.lock"],
                 version_targets=[target],
@@ -1023,7 +1048,7 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
             group = VersionGroup(
                 name="default",
                 release_branch=DEFAULT_RELEASE_BRANCH,
-                changelog_file=root / DEFAULT_CHANGELOG,
+                changelog_file=root / find_changelog_file(root),
                 lock_command=lock_cmd,
                 generated_files=[root / f for f in gen_files],
                 version_targets=[target],
@@ -1042,7 +1067,7 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
         group = VersionGroup(
             name="default",
             release_branch=DEFAULT_RELEASE_BRANCH,
-            changelog_file=root / DEFAULT_CHANGELOG,
+            changelog_file=root / find_changelog_file(root),
             lock_command=lock_cmd,
             generated_files=[root / f for f in gen_files],
             version_targets=[target],
@@ -1084,7 +1109,7 @@ def auto_detect_config(root: Path) -> RrtConfig | None:
             group = VersionGroup(
                 name="default",
                 release_branch=DEFAULT_RELEASE_BRANCH,
-                changelog_file=root / DEFAULT_CHANGELOG,
+                changelog_file=root / find_changelog_file(root),
                 lock_command=lock_cmd,
                 generated_files=[root / f for f in gen_files],
                 version_targets=[target],

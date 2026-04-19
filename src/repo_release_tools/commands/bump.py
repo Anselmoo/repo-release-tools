@@ -8,7 +8,14 @@ import sys
 from pathlib import Path
 
 from repo_release_tools import git, output
-from repo_release_tools.changelog import build_changelog_section
+from repo_release_tools.changelog import (
+    build_changelog_section,
+    detect_changelog_format,
+    get_unreleased_entries,
+    has_unreleased_section,
+    insert_generated_section,
+    promote_unreleased,
+)
 from repo_release_tools.config import (
     RrtConfig,
     format_autodetected_config_notice,
@@ -42,29 +49,98 @@ def update_changelog(
     *,
     include_maintenance: bool,
     dry_run: bool,
+    changelog_mode: str = "auto",
 ) -> None:
-    """Prepend a generated changelog section."""
+    """Update the changelog for a new version.
+
+    Three modes are supported via *changelog_mode*:
+
+    ``auto`` (default)
+        Promotes the ``[Unreleased]`` section when it contains entries;
+        otherwise generates a new section from the git log.
+    ``promote``
+        Requires a non-empty ``[Unreleased]`` section and renames it to the
+        versioned heading.  Prints a warning and returns early when no entries
+        are found.
+    ``generate``
+        Always generates a new section from the git log, ignoring any
+        ``[Unreleased]`` section.
+
+    When the changelog contains an empty ``[Unreleased]`` placeholder (e.g.
+    after a previous release), the generated section is inserted *after* that
+    placeholder so it stays at the top.  When no ``[Unreleased]`` section is
+    present at all, a fresh empty placeholder is prepended (health-mode).
+
+    The changelog format (Markdown vs. RST/plain-text underline notation) is
+    inferred automatically from the file extension.
+    """
     path = config.changelog_file
     if not path.exists():
         print(output.warning(f"{path} not found {output.GLYPHS.typography.mdash} skipping"))
         return
 
+    existing = path.read_text(encoding="utf-8")
+    fmt = detect_changelog_format(path.name)
+    has_entries = bool(get_unreleased_entries(existing, fmt))
+
+    # ---- Decide mode -------------------------------------------------------
+    if changelog_mode == "generate":
+        do_promote = False
+    elif changelog_mode == "promote":
+        if not has_entries:
+            if has_unreleased_section(existing, fmt):
+                print(
+                    output.warning(
+                        f"[Unreleased] section in {path} is empty"
+                        f" {output.GLYPHS.typography.mdash} nothing to promote."
+                    )
+                )
+            else:
+                print(
+                    output.warning(
+                        f"No [Unreleased] section found in {path}"
+                        f" {output.GLYPHS.typography.mdash} nothing to promote."
+                    )
+                )
+            return
+        do_promote = True
+    else:  # "auto"
+        do_promote = has_entries
+
+    # ---- Promote [Unreleased] → versioned section --------------------------
+    if do_promote:
+        section_text = promote_unreleased(existing, version, fmt)
+        if dry_run:
+            print(output.dry_run(f"Would promote [Unreleased] to [{version}] in {path}:"))
+            for line in section_text.splitlines()[:PREVIEW_LINES]:
+                print(output.status(">", line, indent=4))
+            if len(section_text.splitlines()) > PREVIEW_LINES:
+                print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
+            return
+        path.write_text(section_text, encoding="utf-8")
+        print(output.ok(f"{path} updated (promoted [Unreleased] to [{version}])"))
+        return
+
+    # ---- Generate section from git log (heading / hash notation) -----------
     section = build_changelog_section(
         version,
         git_log_since_latest_tag(config.root),
         include_maintenance=include_maintenance,
+        fmt=fmt,
     )
+    # insert_generated_section handles both an empty [Unreleased] placeholder
+    # (inserts after it) and a missing [Unreleased] section (health-mode prepend).
+    section_text = insert_generated_section(existing, section, fmt)
 
     if dry_run:
         print(output.dry_run(f"Would prepend to {path}:"))
-        for line in section.splitlines()[:PREVIEW_LINES]:
+        for line in section_text.splitlines()[:PREVIEW_LINES]:
             print(output.status(">", line, indent=4))
-        if len(section.splitlines()) > PREVIEW_LINES:
+        if len(section_text.splitlines()) > PREVIEW_LINES:
             print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
         return
 
-    existing = path.read_text(encoding="utf-8")
-    path.write_text(section + "\n" + existing, encoding="utf-8")
+    path.write_text(section_text, encoding="utf-8")
     print(output.ok(f"{path} updated"))
 
 
@@ -159,6 +235,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
             str(new),
             include_maintenance=args.include_maintenance,
             dry_run=args.dry_run,
+            changelog_mode=getattr(args, "changelog_mode", "auto"),
         )
 
     if group.lock_command and not args.no_update:
@@ -217,6 +294,20 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--include-maintenance",
         action="store_true",
         help="Include chore/ci/build/test entries in the changelog.",
+    )
+    parser.add_argument(
+        "--changelog-mode",
+        choices=["auto", "promote", "generate"],
+        default="auto",
+        metavar="MODE",
+        help=(
+            "How to update the changelog: "
+            "'auto' (default) promotes [Unreleased] when it has entries, "
+            "otherwise generates from the git log; "
+            "'promote' requires a non-empty [Unreleased] section and renames it; "
+            "'generate' always writes a new section from the git log "
+            "(heading/hash notation)."
+        ),
     )
     parser.add_argument(
         "--base-branch",

@@ -32,6 +32,13 @@ inputs:
   changelog-file:
     description: Explicit changelog path to validate
     default: "CHANGELOG.md"
+  changelog-strategy:
+    description: |
+      Changelog enforcement strategy:
+        per-commit   – (default) the changelog file must appear in the commit's changed-file list.
+        unreleased   – a non-empty [Unreleased] section must exist in the changelog.
+        release-only – the check is skipped (changelog is updated only at release time).
+    default: "per-commit"
   check-dirty-tree:
     description: Whether to fail when the checked-out work tree is dirty
     default: "false"
@@ -81,18 +88,25 @@ runs:
         rrt-hooks check-commit-subject --subject "$commit_subject"
 
     - name: Validate changelog update
-      if: inputs.check-changelog == 'true'
+      if: inputs.check-changelog == 'true' && inputs.changelog-strategy != 'release-only'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
         INPUT_COMMIT_SUBJECT: ${{ inputs.commit-subject }}
         INPUT_CHANGELOG_FILE: ${{ inputs.changelog-file }}
+        INPUT_CHANGELOG_STRATEGY: ${{ inputs.changelog-strategy }}
+        INPUT_BRANCH_NAME: ${{ inputs.branch-name }}
+        GITHUB_HEAD_REF: ${{ github.head_ref }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
       run: |
         set -euo pipefail
         commit_subject="${INPUT_COMMIT_SUBJECT:-$(git log -1 --pretty=%s)}"
+        branch_name="${INPUT_BRANCH_NAME:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}"
         rrt-hooks check-changelog \
           --subject "$commit_subject" \
           --changelog-file "$INPUT_CHANGELOG_FILE" \
+          --strategy "${INPUT_CHANGELOG_STRATEGY:-per-commit}" \
+          --branch "$branch_name" \
           --ref HEAD
 
     - name: Validate clean working tree

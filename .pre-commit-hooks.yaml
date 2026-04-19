@@ -18,6 +18,16 @@
   stages: [pre-commit]
   minimum_pre_commit_version: "3.2.0"
 
+- id: rrt-update-unreleased
+  name: repo-release-tools update unreleased changelog
+  description: Auto-append conventional commit bullets to the [Unreleased] section
+  entry: rrt-hooks update-unreleased
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [commit-msg]
+  minimum_pre_commit_version: "3.2.0"
+
 - id: rrt-commit-subject
   name: repo-release-tools commit subject
   description: Validate commit subjects against Conventional Commits

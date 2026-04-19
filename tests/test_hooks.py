@@ -9,6 +9,7 @@ from repo_release_tools.hooks import commit_subject_requires_changelog
 from repo_release_tools.hooks import read_commit_subject
 from repo_release_tools.hooks import run_changelog_check
 from repo_release_tools.hooks import run_pre_commit_changelog
+from repo_release_tools.hooks import run_update_unreleased
 from repo_release_tools.hooks import validate_branch_name
 from repo_release_tools.hooks import validate_commit_subject
 from repo_release_tools.hooks import _entries_cancel_out
@@ -217,6 +218,7 @@ def test_pre_commit_hooks_use_console_script_entrypoints() -> None:
     assert "entry: rrt-hooks pre-commit-changelog" in manifest
     assert "entry: rrt-hooks commit-msg" in manifest
     assert "entry: rrt-hooks check-dirty-tree" in manifest
+    assert "entry: rrt-hooks update-unreleased" in manifest
 
 
 def test_action_installs_from_action_path_and_runs_hooks() -> None:
@@ -230,11 +232,14 @@ def test_action_installs_from_action_path_and_runs_hooks() -> None:
     assert "rrt-hooks check-commit-subject --subject" in action_text
     assert "check-changelog:" in action_text
     assert "changelog-file:" in action_text
+    assert "changelog-strategy:" in action_text
     assert "rrt-hooks check-changelog" in action_text
     assert "check-dirty-tree:" in action_text
     assert "rrt-hooks check-dirty-tree" in action_text
     assert '--changelog-file "$INPUT_CHANGELOG_FILE"' in action_text
     assert "--ref HEAD" in action_text
+    assert '--strategy "${INPUT_CHANGELOG_STRATEGY' in action_text
+    assert "--branch" in action_text
 
 
 # ---------------------------------------------------------------------------
@@ -737,3 +742,217 @@ kind = "pep621"
     monkeypatch.chdir(tmp_path)
 
     assert hooks.main(["check-branch-name", "--branch", "snyk/fix-vuln-123"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# run_changelog_check – strategy and branch
+# ---------------------------------------------------------------------------
+
+
+def test_run_changelog_check_skips_renovate_branch() -> None:
+    assert (
+        run_changelog_check(
+            "fix(deps): update dependency foo",
+            cwd=Path.cwd(),
+            changed_files=[],
+            title="Changelog validation failed.",
+            branch="renovate/foo-1.x",
+        )
+        == 0
+    )
+
+
+def test_run_changelog_check_skips_dependabot_branch() -> None:
+    assert (
+        run_changelog_check(
+            "fix(deps): update dependency bar",
+            cwd=Path.cwd(),
+            changed_files=[],
+            title="Changelog validation failed.",
+            branch="dependabot/npm_and_yarn/bar-2.x",
+        )
+        == 0
+    )
+
+
+def test_run_changelog_check_strategy_release_only_skips_check() -> None:
+    assert (
+        run_changelog_check(
+            "feat: brand new feature",
+            cwd=Path.cwd(),
+            changed_files=[],
+            title="Changelog validation failed.",
+            strategy="release-only",
+        )
+        == 0
+    )
+
+
+def test_run_changelog_check_strategy_unreleased_passes_when_section_nonempty(
+    tmp_path: Path,
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Fixed\n- fix null pointer\n",
+        encoding="utf-8",
+    )
+    assert (
+        run_changelog_check(
+            "fix: handle null case",
+            cwd=tmp_path,
+            changed_files=[],
+            changelog_file="CHANGELOG.md",
+            title="Changelog validation failed.",
+            strategy="unreleased",
+        )
+        == 0
+    )
+
+
+def test_run_changelog_check_strategy_unreleased_fails_when_section_empty(
+    tmp_path: Path,
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2025-01-01\n",
+        encoding="utf-8",
+    )
+    assert (
+        run_changelog_check(
+            "feat: add new widget",
+            cwd=tmp_path,
+            changed_files=[],
+            changelog_file="CHANGELOG.md",
+            title="Changelog validation failed.",
+            strategy="unreleased",
+        )
+        == 1
+    )
+
+
+def test_run_changelog_check_default_strategy_still_requires_file_in_changeset() -> None:
+    # per-commit strategy: changelog not in changed_files → fail
+    assert (
+        run_changelog_check(
+            "feat: add dark mode",
+            cwd=Path.cwd(),
+            changed_files=["src/main.py"],
+            title="Changelog validation failed.",
+        )
+        == 1
+    )
+
+
+# ---------------------------------------------------------------------------
+# run_update_unreleased
+# ---------------------------------------------------------------------------
+
+
+def test_run_update_unreleased_appends_bullet_and_stages_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    staged: list[list[str]] = []
+    monkeypatch.setattr(hooks.git, "run", lambda cmd, cwd, **kw: staged.append(cmd))
+
+    result = run_update_unreleased(tmp_path, subject="feat: add dark mode")
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "add dark mode" in content
+    assert any("git" in cmd[0] and "add" in cmd for cmd in staged)
+
+
+def test_run_update_unreleased_skips_non_changelog_commits(
+    tmp_path: Path,
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    original = "# Changelog\n"
+    changelog.write_text(original, encoding="utf-8")
+
+    result = run_update_unreleased(tmp_path, subject="chore: update lockfile")
+
+    assert result == 0
+    assert changelog.read_text(encoding="utf-8") == original
+
+
+def test_run_update_unreleased_returns_one_when_changelog_missing(
+    tmp_path: Path,
+) -> None:
+    result = run_update_unreleased(tmp_path, subject="feat: new widget")
+    assert result == 1
+
+
+def test_run_update_unreleased_no_write_when_content_unchanged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When the bullet is already present the file should not be rewritten."""
+    existing = "# Changelog\n\n## [Unreleased]\n\n### Added\n- new widget\n"
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(existing, encoding="utf-8")
+    staged: list[list[str]] = []
+    monkeypatch.setattr(hooks.git, "run", lambda cmd, cwd, **kw: staged.append(cmd))
+
+    result = run_update_unreleased(tmp_path, subject="feat: new widget")
+
+    assert result == 0
+    assert changelog.read_text(encoding="utf-8") == existing
+    assert staged == []
+
+
+def test_main_update_unreleased_accepts_explicit_subject(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+    monkeypatch.chdir(tmp_path)
+
+    result = hooks.main(["update-unreleased", "--subject", "feat: shiny new thing"])
+
+    assert result == 0
+    assert "shiny new thing" in changelog.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# run_update_unreleased – RST / TXT format
+# ---------------------------------------------------------------------------
+
+
+def test_run_update_unreleased_creates_rst_unreleased_section(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With a .rst changelog the Unreleased section must use RST underline notation."""
+    changelog = tmp_path / "CHANGELOG.rst"
+    changelog.write_text("Changelog\n=========\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+
+    result = run_update_unreleased(
+        tmp_path, subject="feat: rst feature", changelog_file="CHANGELOG.rst"
+    )
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "## [" not in content
+    assert "### " not in content
+    assert "Unreleased\n" in content
+    assert "~" in content  # RST subsection underline
+    assert "rst feature" in content
+
+
+def test_run_update_unreleased_creates_txt_unreleased_section(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With a .txt changelog the Unreleased section must use RST underline notation."""
+    changelog = tmp_path / "CHANGELOG.txt"
+    changelog.write_text("Changelog\n=========\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+
+    result = run_update_unreleased(tmp_path, subject="fix: txt fix", changelog_file="CHANGELOG.txt")
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "## [" not in content
+    assert "txt fix" in content
+    assert "~" in content  # RST subsection underline
