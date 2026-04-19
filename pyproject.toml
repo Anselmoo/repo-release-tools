@@ -66,7 +66,7 @@ pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.pin_targets]]
 path = "README.md"
-pattern = '(rev: v)(\d+\.\d+\.\d+)()'
+pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
 
 [tool.ruff]
 line-length = 100
