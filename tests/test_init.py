@@ -3,6 +3,7 @@ from __future__ import annotations
 from argparse import Namespace
 from pathlib import Path
 
+from repo_release_tools.commands import init as init_cmd
 from repo_release_tools.commands.init import cmd_init
 from repo_release_tools.config import (
     recommend_init_config,
@@ -450,3 +451,113 @@ def test_cmd_init_go_fallback_no_go_mod(monkeypatch, tmp_path: Path) -> None:
     content = (tmp_path / ".rrt.toml").read_text(encoding="utf-8")
     assert "[tool.rrt]" in content
     assert "go_version" in content
+
+
+def test_cmd_init_reports_config_discovery_error(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        init_cmd,
+        "find_explicit_config_file",
+        lambda root: (_ for _ in ()).throw(ValueError("broken config discovery")),
+    )
+
+    assert cmd_init(Namespace(dry_run=False, force=False)) == 1
+    assert "Could not read existing configuration" in capsys.readouterr().err
+
+
+def test_cmd_init_refuses_when_other_explicit_config_exists(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='example'\n", encoding="utf-8")
+    monkeypatch.setattr(
+        init_cmd, "find_explicit_config_file", lambda root: tmp_path / "pyproject.toml"
+    )
+
+    assert cmd_init(Namespace(dry_run=False, force=False)) == 1
+    assert "Refusing to add .rrt.toml" in capsys.readouterr().err
+
+
+def test_cmd_init_refuses_existing_rrt_toml_without_force(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".rrt.toml").write_text("[tool.rrt]\n", encoding="utf-8")
+    monkeypatch.setattr(init_cmd, "find_explicit_config_file", lambda root: None)
+
+    assert cmd_init(Namespace(dry_run=False, force=False)) == 1
+    assert ".rrt.toml already exists" in capsys.readouterr().err
+
+
+def test_cmd_init_reports_generation_error(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(init_cmd, "find_explicit_config_file", lambda root: None)
+    monkeypatch.setattr(
+        init_cmd,
+        "recommend_init_config",
+        lambda root: (_ for _ in ()).throw(RuntimeError("cannot recommend")),
+    )
+
+    assert cmd_init(Namespace(dry_run=False, force=False)) == 1
+    assert "Could not generate init config" in capsys.readouterr().err
+
+
+def test_cmd_init_pyproject_reports_generation_error(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "mypkg"\nversion = "1.0.0"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        init_cmd,
+        "recommend_init_section_for_pyproject",
+        lambda root: (_ for _ in ()).throw(RuntimeError("pyproject detection failed")),
+    )
+
+    assert cmd_init(Namespace(dry_run=False, force=False, target="pyproject")) == 1
+    assert "Could not generate init config" in capsys.readouterr().err
+
+
+def test_cmd_init_force_write_warns_when_other_config_still_precedes(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='example'\n", encoding="utf-8")
+    monkeypatch.setattr(
+        init_cmd, "find_explicit_config_file", lambda root: tmp_path / "pyproject.toml"
+    )
+    monkeypatch.setattr(init_cmd, "recommend_init_config", lambda root: "[tool.rrt]\n")
+
+    assert cmd_init(Namespace(dry_run=False, force=True)) == 0
+    assert "still takes precedence" in capsys.readouterr().out
+
+
+def test_cmd_init_node_rejects_invalid_json(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "package.json").write_text("{broken", encoding="utf-8")
+
+    assert cmd_init(Namespace(dry_run=False, force=False, target="node")) == 1
+    assert "Could not parse package.json" in capsys.readouterr().err
+
+
+def test_cmd_init_node_rejects_non_object_json(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "package.json").write_text("[]", encoding="utf-8")
+
+    assert cmd_init(Namespace(dry_run=False, force=False, target="node")) == 1
+    assert "top-level object" in capsys.readouterr().err
+
+
+def test_cmd_init_node_reports_generation_error(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "package.json").write_text(
+        '{"name": "myapp", "version": "1.0.0"}', encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        init_cmd,
+        "recommend_init_section_for_node",
+        lambda root: (_ for _ in ()).throw(RuntimeError("node detection failed")),
+    )
+
+    assert cmd_init(Namespace(dry_run=False, force=False, target="node")) == 1
+    assert "Could not generate init config" in capsys.readouterr().err

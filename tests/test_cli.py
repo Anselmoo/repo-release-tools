@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import runpy
 import subprocess
 import sys
 
@@ -46,3 +47,25 @@ def test_main_dispatches_to_selected_handler(monkeypatch: pytest.MonkeyPatch) ->
         cli.main()
 
     assert exc.value.code == 7
+
+
+def test_package_module_executes_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    called: list[str] = []
+    monkeypatch.setattr("repo_release_tools.cli.main", lambda: called.append("ran"))
+
+    runpy.run_module("repo_release_tools", run_name="__main__")
+
+    assert called == ["ran"]
+
+
+def test_cli_module_main_block_exits_with_handler_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        argparse.ArgumentParser,
+        "parse_args",
+        lambda self: argparse.Namespace(handler=lambda args: 9),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_module("repo_release_tools.cli", run_name="__main__")
+
+    assert exc.value.code == 9

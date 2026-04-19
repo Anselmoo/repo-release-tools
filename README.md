@@ -1,17 +1,46 @@
 # repo-release-tools
 
-`repo-release-tools` is a small product for conventional branches, changelog
-policy, version bumps, and opinionated Git workflows across local development,
-CI, and Copilot workflows.
+`repo-release-tools` keeps release policy boring in the best possible way.
 
-## Product surfaces
+Use it from **GitHub Marketplace** when you want CI to validate branch names,
+commit subjects, and changelog policy. Install it from **PyPI** when you want a
+local CLI, hook integration, version bumps, and release-branch automation.
 
-- `rrt` CLI for branch and release commands
-- [GitHub Action](https://github.com/features/actions) for policy checks in CI
-- [pre-commit](https://pre-commit.com) hooks for local enforcement
-- [Copilot CLI](https://github.com/features/copilot/cli) skill for zero-install guidance
+- GitHub Marketplace action: <https://github.com/marketplace/actions/repo-release-tools-policy-checks>
+- PyPI package: <https://pypi.org/project/repo-release-tools/>
 
-## Minimal quickstart
+## Choose your entry point
+
+### Use the GitHub Action for CI policy checks
+
+Choose the action if you want pull requests and pushes to fail fast when a repo
+drifts from your release policy.
+
+- validates branch names such as `feat/add-parser`
+- validates Conventional Commit subjects
+- validates changelog policy in CI
+- optionally checks that the working tree stays clean
+- can run `rrt doctor` as a pre-release health gate
+
+```yaml
+- uses: actions/checkout@v6
+  with:
+    fetch-depth: 0
+
+- uses: Anselmoo/repo-release-tools@v0.1.10
+  with:
+    check-branch-name: "true"
+    check-commit-subject: "true"
+    check-changelog: "true"
+```
+
+See the full action guide:
+<https://github.com/Anselmoo/repo-release-tools/blob/main/docs/github-action.md>
+
+### Use the Python package for local workflow automation
+
+Choose the package if you want the developer-side tools: branch helpers,
+version bumps, config inspection, pre-commit hooks, and release automation.
 
 ```bash
 pip install repo-release-tools
@@ -22,7 +51,7 @@ rrt git doctor
 rrt bump patch
 ```
 
-Or:
+Or run the CLI without installing it permanently:
 
 ```bash
 uvx repo-release-tools branch new feat "add parser"
@@ -30,11 +59,19 @@ uvx repo-release-tools branch new feat "add parser"
 
 For basic versioning, `bump` and `ci-version` can run without `[tool.rrt]` by
 auto-detecting root-level `pyproject.toml`, `package.json`, and `Cargo.toml`.
-If multiple version files are found they are updated together, and explicit
-config becomes optional fine-tuning for groups, release branches, changelog
-paths, lock commands, generated files, or custom patterns. Go repos still need
-explicit config for file updates because Go has no standard in-file project
-version. Run `rrt init` to capture the current recommendation in `.rrt.toml`.
+If multiple version files are found, they are updated together. Explicit config
+is for the nice extras: grouped releases, changelog paths, release branches,
+lock commands, generated files, and custom patterns.
+
+## Changelog workflows
+
+The same project can be used in two release styles. Pick the one that matches
+how your repository actually lands changes.
+
+| Workflow | Best for | Hook behavior | Action `changelog-strategy: auto` | `rrt bump` default |
+|---|---|---|---|---|
+| `incremental` *(default)* | teams that maintain changelog entries during development | `rrt-update-unreleased` and `rrt-changelog` stay active | resolves to `per-commit` | `auto` |
+| `squash` | repositories that squash many commits into one PR merge | changelog write/check hooks skip changelog enforcement | resolves to `release-only` | `generate` |
 
 Minimal config:
 
@@ -42,6 +79,7 @@ Minimal config:
 [tool.rrt]
 release_branch = "release/v{version}"
 changelog_file = "CHANGELOG.md"
+changelog_workflow = "incremental"  # or "squash"
 
 [[tool.rrt.version_targets]]
 path = "pyproject.toml"
@@ -52,33 +90,22 @@ Native config is also supported in `package.json` (`"rrt": { ... }`) and
 `Cargo.toml` (`[package.metadata.rrt]` / `[workspace.metadata.rrt]`). Go repos
 should use `.rrt.toml` or `.config/rrt.toml`.
 
-## Conventional Branching
+## What the project includes
 
-`repo-release-tools` uses conventional branches as the next step after
-trunk-based publishing. The idea is simple: keep branches short-lived, encode
-intent in the branch name, and let release automation stay predictable.
+- `rrt` CLI for branches, bumps, config inspection, and Git helpers
+- `rrt-hooks` for `pre-commit`, `lefthook`, and CI validation
+- a reusable GitHub Action in `action.yml`
+- docs for branch policy, hook setup, and release workflows
 
-The default pattern is `type/kebab-case-description`, for example
-`feat/add-config-discovery` or `fix/handle-tag-workflows`.
+## Start with the doc that matches your task
 
-This works well with conventional commits and changelog automation:
-
-- branch type tells reviewers and automation what kind of change is coming
-- commit subjects stay conventional for changelog generation
-- release branches stay explicit, such as `release/v1.2.3`
-
-See [Conventional branches](docs/semantic-branches.md) for the full branch model
-and supported branch types.
-
-## Documentation
-
-- [Docs index](docs/index.md)
-- [RRT CLI](docs/rrt-cli.md)
-- [GitHub Action](docs/github-action.md)
-- [pre-commit](docs/pre-commit.md)
-- [Skill](docs/skill.md)
-- [Conventional branches](docs/semantic-branches.md)
-- [Git magic](docs/git-magic.md)
+- Docs index: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md>
+- GitHub Action: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/github-action.md>
+- CLI reference: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/rrt-cli.md>
+- Hook setup: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/pre-commit.md>
+- Conventional branches: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/semantic-branches.md>
+- Git workflow helpers: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/git-magic.md>
+- Copilot skill: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/skill.md>
 
 ## License
 

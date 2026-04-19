@@ -35,10 +35,11 @@ inputs:
   changelog-strategy:
     description: |
       Changelog enforcement strategy:
-        per-commit   – (default) the changelog file must appear in the commit's changed-file list.
+        auto         – (default) derive from changelog_workflow in repo config.
+        per-commit   – the changelog file must appear in the commit's changed-file list.
         unreleased   – a non-empty [Unreleased] section must exist in the changelog.
         release-only – the check is skipped (changelog is updated only at release time).
-    default: "per-commit"
+    default: "auto"
   check-dirty-tree:
     description: Whether to fail when the checked-out work tree is dirty
     default: "false"
@@ -108,7 +109,7 @@ runs:
         rrt-hooks check-changelog \
           --subject "$commit_subject" \
           --changelog-file "$INPUT_CHANGELOG_FILE" \
-          --strategy "${INPUT_CHANGELOG_STRATEGY:-per-commit}" \
+          --strategy "${INPUT_CHANGELOG_STRATEGY:-auto}" \
           --branch "$branch_name" \
           --ref HEAD
 

@@ -1,4 +1,7 @@
 import argparse
+import contextlib
+
+import pytest
 
 from repo_release_tools.commands import git_cmd
 
@@ -623,3 +626,643 @@ def test_cmd_diff_handles_deleted_file_headers(monkeypatch, capsys) -> None:
     captured = capsys.readouterr().out
     assert "deleted.txt" in captured
     assert "removed line" in captured
+
+
+def test_commit_subject_render_includes_scope_and_breaking_marker() -> None:
+    subject = git_cmd.CommitSubject(
+        type="feat", description="ship parser", scope="cli", breaking=True
+    )
+
+    assert subject.render() == "feat(cli)!: ship parser"
+
+
+def test_normalize_commit_subject_type_accepts_and_rejects_values() -> None:
+    assert git_cmd.normalize_commit_subject_type("FIX") == "fix"
+    assert git_cmd.infer_commit_type("wizard/add-parser") is None
+
+    with pytest.raises(argparse.ArgumentTypeError, match="invalid commit type"):
+        git_cmd.normalize_commit_subject_type("wizard")
+
+
+def test_resolve_commit_subject_requires_explicit_type_for_uninferable_branch(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    args = argparse.Namespace(description=["ship", "it"], type=None, scope=None, breaking=False)
+
+    with pytest.raises(ValueError, match="Use --type explicitly"):
+        git_cmd.resolve_commit_subject(args, tmp_path)
+
+
+def test_classify_status_line_covers_all_status_kinds() -> None:
+    assert git_cmd.classify_status_line("?? docs/new.md") == ("untracked", "docs/new.md")
+    assert git_cmd.classify_status_line("UU src/conflict.py") == ("conflict", "src/conflict.py")
+    assert git_cmd.classify_status_line("R  old.py -> new.py") == ("renamed", "old.py -> new.py")
+    assert git_cmd.classify_status_line("A  src/new.py") == ("added", "src/new.py")
+    assert git_cmd.classify_status_line("D  src/old.py") == ("removed", "src/old.py")
+
+
+def test_describe_sync_relation_and_sync_problem_cover_remaining_states() -> None:
+    assert (
+        git_cmd.describe_sync_relation(ahead=0, behind=2, base_ref="origin/main") == "behind base"
+    )
+    assert git_cmd.describe_sync_relation(ahead=1, behind=2, base_ref="origin/main") == "diverged"
+    assert (
+        git_cmd.sync_problem("feat/add-parser", base_ref="origin/main", ahead=0, behind=2)
+        == "Branch 'feat/add-parser' is behind origin/main by 2 commit(s). Sync is needed."
+    )
+
+
+def test_cmd_status_requires_git_repository(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
+
+    assert git_cmd.cmd_status(argparse.Namespace()) == 1
+    assert "is not inside a Git work tree" in capsys.readouterr().err
+
+
+def test_cmd_log_requires_git_repository(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
+
+    assert git_cmd.cmd_log(argparse.Namespace(limit=5)) == 1
+    assert "is not inside a Git work tree" in capsys.readouterr().err
+
+
+def test_cmd_log_handles_empty_history(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "capture", lambda cmd, cwd: "")
+
+    assert git_cmd.cmd_log(argparse.Namespace(limit=5)) == 0
+    assert "No commits found." in capsys.readouterr().out
+
+
+def test_cmd_doctor_requires_git_repository(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
+
+    assert git_cmd.cmd_doctor(argparse.Namespace(changelog_file="CHANGELOG.md")) == 1
+    assert "is not inside a Git work tree" in capsys.readouterr().err
+
+
+def test_cmd_doctor_reports_status_failure(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/main")
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("git status --short failed (exit 128)")),
+    )
+
+    assert git_cmd.cmd_doctor(argparse.Namespace(changelog_file="CHANGELOG.md")) == 1
+    assert "git status --short failed" in capsys.readouterr().err
+
+
+def test_cmd_doctor_reports_missing_changelog_entry(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [])
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+    monkeypatch.setattr(git_cmd, "load_extra_branch_types", lambda cwd: ())
+
+    def fake_capture(cmd, cwd):
+        if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
+            return "feat: add parser"
+        if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
+            return "src/repo_release_tools/cli.py"
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(git_cmd.git, "capture", fake_capture)
+
+    assert git_cmd.cmd_doctor(argparse.Namespace(changelog_file="CHANGELOG.md")) == 1
+    assert "is not part of HEAD" in capsys.readouterr().out
+
+
+def test_cmd_check_dirty_tree_requires_git_repository(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
+
+    assert git_cmd.cmd_check_dirty_tree(argparse.Namespace()) == 1
+    assert "is not inside a Git work tree" in capsys.readouterr().err
+
+
+def test_cmd_check_dirty_tree_reports_clean_tree(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/main")
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+
+    assert git_cmd.cmd_check_dirty_tree(argparse.Namespace()) == 0
+    assert "Working tree is clean." in capsys.readouterr().out
+
+
+def test_cmd_sync_status_requires_git_repository(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
+
+    assert git_cmd.cmd_sync_status(argparse.Namespace(base_ref=None)) == 1
+    assert "is not inside a Git work tree" in capsys.readouterr().err
+
+
+def test_cmd_sync_status_reports_status_failure(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "ref_exists", lambda cwd, ref: True)
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("git status --short failed (exit 128)")),
+    )
+
+    assert git_cmd.cmd_sync_status(argparse.Namespace(base_ref=None)) == 1
+    assert "git status --short failed" in capsys.readouterr().err
+
+
+def test_cmd_sync_status_reports_branch_ahead(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "ref_exists", lambda cwd, ref: True)
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [])
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (2, 0))
+
+    assert git_cmd.cmd_sync_status(argparse.Namespace(base_ref=None)) == 0
+    assert "is ahead of origin/feat/add-parser by 2 commit(s)." in capsys.readouterr().out
+
+
+def test_cmd_commit_requires_explicit_type_when_branch_not_inferable(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    args = argparse.Namespace(
+        description=["ship", "parser"],
+        type=None,
+        scope=None,
+        breaking=False,
+        dry_run=False,
+    )
+
+    assert git_cmd.cmd_commit(args) == 1
+    assert "Use --type explicitly" in capsys.readouterr().err
+
+
+def test_cmd_commit_all_stages_and_commits(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+    args = argparse.Namespace(
+        description=["ship", "parser"],
+        type=None,
+        scope=None,
+        breaking=False,
+        dry_run=False,
+    )
+
+    assert git_cmd.cmd_commit_all(args) == 0
+    assert commands == [["git", "add", "."], ["git", "commit", "-m", "feat: ship parser"]]
+
+
+def test_cmd_sync_requires_upstream_branch(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: None)
+
+    assert git_cmd.cmd_sync(argparse.Namespace(merge=False, dry_run=False)) == 1
+    assert "No upstream branch is configured" in capsys.readouterr().err
+
+
+def test_cmd_sync_reports_status_failure(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: (_ for _ in ()).throw(RuntimeError("git status --short failed (exit 128)")),
+    )
+
+    assert git_cmd.cmd_sync(argparse.Namespace(merge=False, dry_run=False)) == 1
+    assert "git status --short failed" in capsys.readouterr().err
+
+
+def test_cmd_sync_rejects_in_progress_operation(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [])
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: "merge")
+
+    assert git_cmd.cmd_sync(argparse.Namespace(merge=False, dry_run=False)) == 1
+    assert "Cannot sync while a merge is in progress" in capsys.readouterr().err
+
+
+def test_cmd_sync_warns_when_pull_fails_after_auto_stash(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [" M src/file.py"])
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (1, 0))
+    monkeypatch.setattr(git_cmd.output, "spinner_lines", lambda *a, **k: contextlib.nullcontext())
+
+    def fake_run(cmd, cwd, *, dry_run, label):
+        if cmd[:2] == ["git", "pull"]:
+            raise RuntimeError("pull failed")
+        return ""
+
+    monkeypatch.setattr(git_cmd.git, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="pull failed"):
+        git_cmd.cmd_sync(argparse.Namespace(merge=True, dry_run=False))
+
+    assert "auto-stash remains on the stash stack" in capsys.readouterr().err
+
+
+def test_cmd_move_warns_when_checkout_fails_after_stash(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+
+    def fake_run(cmd, cwd, *, dry_run, label):
+        if cmd[:2] == ["git", "checkout"]:
+            raise RuntimeError("checkout failed")
+        return ""
+
+    monkeypatch.setattr(git_cmd.git, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="checkout failed"):
+        git_cmd.cmd_move(argparse.Namespace(target="feat/add-parser", create=False, dry_run=False))
+
+    assert "auto-stash remains on the stash stack" in capsys.readouterr().err
+
+
+def test_cmd_squash_local_rejects_dirty_tree(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+
+    result = git_cmd.cmd_squash_local(
+        argparse.Namespace(
+            base_ref=None,
+            description=["squash"],
+            type="feat",
+            scope=None,
+            breaking=False,
+            dry_run=False,
+        )
+    )
+
+    assert result == 1
+    assert "Working tree has uncommitted changes" in capsys.readouterr().err
+
+
+def test_cmd_squash_local_requires_upstream_or_base(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: None)
+
+    result = git_cmd.cmd_squash_local(
+        argparse.Namespace(
+            base_ref=None,
+            description=["squash"],
+            type="feat",
+            scope=None,
+            breaking=False,
+            dry_run=False,
+        )
+    )
+
+    assert result == 1
+    assert "No upstream branch is configured" in capsys.readouterr().err
+
+
+def test_cmd_squash_local_requires_commits_ahead(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
+    monkeypatch.setattr(
+        git_cmd, "resolve_commit_subject", lambda args, root: ("feat/add", "feat: add")
+    )
+    monkeypatch.setattr(git_cmd.git, "commits_ahead", lambda cwd, base_ref: [])
+
+    result = git_cmd.cmd_squash_local(
+        argparse.Namespace(
+            base_ref="origin/main",
+            description=["squash"],
+            type="feat",
+            scope=None,
+            breaking=False,
+            dry_run=False,
+        )
+    )
+
+    assert result == 1
+    assert "Nothing to squash" in capsys.readouterr().err
+
+
+def test_cmd_squash_local_requires_merge_base(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
+    monkeypatch.setattr(
+        git_cmd, "resolve_commit_subject", lambda args, root: ("feat/add", "feat: add")
+    )
+    monkeypatch.setattr(git_cmd.git, "commits_ahead", lambda cwd, base_ref: ["abc123 feat: add"])
+    monkeypatch.setattr(git_cmd.git, "merge_base", lambda cwd, base_ref: None)
+
+    result = git_cmd.cmd_squash_local(
+        argparse.Namespace(
+            base_ref="origin/main",
+            description=["squash"],
+            type="feat",
+            scope=None,
+            breaking=False,
+            dry_run=False,
+        )
+    )
+
+    assert result == 1
+    assert "Could not determine merge-base" in capsys.readouterr().err
+
+
+def test_cmd_squash_local_reports_commit_subject_resolution_error(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
+    monkeypatch.setattr(
+        git_cmd,
+        "resolve_commit_subject",
+        lambda args, root: (_ for _ in ()).throw(ValueError("bad subject")),
+    )
+
+    result = git_cmd.cmd_squash_local(
+        argparse.Namespace(
+            base_ref="origin/main",
+            description=["squash"],
+            type="feat",
+            scope=None,
+            breaking=False,
+            dry_run=False,
+        )
+    )
+
+    assert result == 1
+    assert "bad subject" in capsys.readouterr().err
+
+
+def test_cmd_squash_local_dry_run_success(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        git_cmd, "resolve_commit_subject", lambda args, root: ("feat/add", "feat: add")
+    )
+    monkeypatch.setattr(
+        git_cmd.git, "commits_ahead", lambda cwd, base_ref: ["a1 feat: one", "b2 fix: two"]
+    )
+    monkeypatch.setattr(git_cmd.git, "merge_base", lambda cwd, base_ref: "abc123")
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+
+    result = git_cmd.cmd_squash_local(
+        argparse.Namespace(
+            base_ref="origin/main",
+            description=["squash"],
+            type="feat",
+            scope=None,
+            breaking=False,
+            dry_run=True,
+        )
+    )
+
+    assert result == 0
+    assert commands == [["git", "reset", "--soft", "abc123"], ["git", "commit", "-m", "feat: add"]]
+    assert "commit graph preserved" in capsys.readouterr().out
+
+
+def test_cmd_undo_safe_runs_soft_reset_in_dry_run(monkeypatch, capsys) -> None:
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+
+    result = git_cmd.cmd_undo_safe(
+        argparse.Namespace(target="HEAD~2", keep_staged=True, dry_run=True)
+    )
+
+    assert result == 0
+    assert commands == [["git", "reset", "--soft", "HEAD~2"]]
+    assert "HEAD unchanged" in capsys.readouterr().out
+
+
+def test_cmd_undo_safe_runs_mixed_reset(monkeypatch) -> None:
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+
+    assert (
+        git_cmd.cmd_undo_safe(argparse.Namespace(target="HEAD~1", keep_staged=False, dry_run=False))
+        == 0
+    )
+    assert commands == [["git", "reset", "--mixed", "HEAD~1"]]
+
+
+def test_cmd_rebootstrap_rejects_missing_git_dir(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "git_dir", lambda cwd: None)
+    args = argparse.Namespace(yes_i_know_this_destroys_history=True)
+
+    assert git_cmd.cmd_rebootstrap(args) == 1
+    assert "does not look like a Git repository" in capsys.readouterr().err
+
+
+def test_cmd_rebootstrap_rejects_remote_guard(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(git_cmd.git, "remote_names", lambda cwd: ["origin"])
+    args = argparse.Namespace(
+        yes_i_know_this_destroys_history=True,
+        allow_remote=False,
+        hard_init=False,
+        empty_first=False,
+        branch=None,
+        message=None,
+        empty_message=git_cmd.DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+        dry_run=True,
+    )
+
+    assert git_cmd.cmd_rebootstrap(args) == 1
+    assert "Refusing to rebootstrap a repository with configured remotes" in capsys.readouterr().err
+
+
+def test_cmd_rebootstrap_empty_first_dry_run(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(git_cmd.git, "remote_names", lambda cwd: [])
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+    args = argparse.Namespace(
+        yes_i_know_this_destroys_history=True,
+        allow_remote=False,
+        hard_init=False,
+        empty_first=True,
+        branch=None,
+        message=None,
+        empty_message="chore: empty bootstrap",
+        dry_run=True,
+    )
+
+    assert git_cmd.cmd_rebootstrap(args) == 0
+    assert commands == [
+        ["git", "init", "-b", "main"],
+        ["git", "commit", "--allow-empty", "-m", "chore: empty bootstrap"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", git_cmd.DEFAULT_REBOOTSTRAP_MESSAGE],
+    ]
+    assert "history preserved via preview only" in capsys.readouterr().out
+
+
+def test_cmd_rebootstrap_empty_first_non_dry_run(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(git_cmd.git, "git_dir", lambda cwd: tmp_path / ".git")
+    monkeypatch.setattr(git_cmd.git, "remote_names", lambda cwd: [])
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    monkeypatch.setattr(git_cmd.shutil, "move", lambda src, dst: None)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+    args = argparse.Namespace(
+        yes_i_know_this_destroys_history=True,
+        allow_remote=False,
+        hard_init=False,
+        empty_first=True,
+        branch=None,
+        message=None,
+        empty_message="chore: empty bootstrap",
+        dry_run=False,
+    )
+
+    assert git_cmd.cmd_rebootstrap(args) == 0
+    assert commands == [
+        ["git", "init", "-b", "main"],
+        ["git", "commit", "--allow-empty", "-m", "chore: empty bootstrap"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", git_cmd.DEFAULT_REBOOTSTRAP_MESSAGE],
+    ]
+
+
+def test_cmd_rebootstrap_reinitializes_snapshot_history(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(git_cmd.git, "git_dir", lambda cwd: tmp_path / ".git")
+    monkeypatch.setattr(git_cmd.git, "remote_names", lambda cwd: [])
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    moved: list[tuple[str, str]] = []
+    commands: list[list[str]] = []
+    monkeypatch.setattr(git_cmd.shutil, "move", lambda src, dst: moved.append((src, dst)))
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+    args = argparse.Namespace(
+        yes_i_know_this_destroys_history=True,
+        allow_remote=False,
+        hard_init=False,
+        empty_first=False,
+        branch=None,
+        message=None,
+        empty_message=git_cmd.DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+        dry_run=False,
+    )
+
+    assert git_cmd.cmd_rebootstrap(args) == 0
+    assert moved
+    assert commands == [
+        ["git", "init", "-b", "main"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", git_cmd.DEFAULT_REBOOTSTRAP_MESSAGE],
+    ]
+    assert "Repository history reinitialized" in capsys.readouterr().out
+
+
+def test_cmd_rebootstrap_reports_runtime_failure_and_backup(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(git_cmd.git, "git_dir", lambda cwd: tmp_path / ".git")
+    monkeypatch.setattr(git_cmd.git, "remote_names", lambda cwd: [])
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
+    monkeypatch.setattr(git_cmd.shutil, "move", lambda src, dst: None)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: (_ for _ in ()).throw(RuntimeError("git init failed")),
+    )
+    args = argparse.Namespace(
+        yes_i_know_this_destroys_history=True,
+        allow_remote=False,
+        hard_init=False,
+        empty_first=False,
+        branch=None,
+        message=None,
+        empty_message=git_cmd.DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+        dry_run=False,
+    )
+
+    assert git_cmd.cmd_rebootstrap(args) == 1
+    assert "Original git data is backed up" in capsys.readouterr().err
+
+
+def test_parse_diff_line_handles_malformed_hunk_header() -> None:
+    kind, text, lineno = git_cmd._parse_diff_line("@@ nonsense +oops @@")
+    assert kind == "unchanged"
+    assert text == "@@ nonsense +oops @@"
+    assert lineno is None
+
+
+def test_cmd_diff_prints_malformed_hunk_headers(monkeypatch, capsys) -> None:
+    diff_output = "diff --git a/foo.py b/foo.py\n+++ b/foo.py\n@@ bad +12 @@\n+added line\n"
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
+    monkeypatch.setattr(git_cmd.git, "capture_checked", lambda cmd, cwd: diff_output)
+
+    assert git_cmd.cmd_diff(argparse.Namespace(staged=False, against=None)) == 0
+    captured = capsys.readouterr().out
+    assert "@@ bad +12 @@" in captured
+    assert "added line" in captured
+
+
+def test_cmd_diff_uses_old_path_when_new_path_is_dev_null(monkeypatch, capsys) -> None:
+    diff_output = (
+        "diff --git a/deleted.txt /dev/null\n"
+        "--- a/deleted.txt\n"
+        "+++ /dev/null\n"
+        "@@ -1 +0,0 @@\n"
+        "-gone\n"
+    )
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
+    monkeypatch.setattr(git_cmd.git, "capture_checked", lambda cmd, cwd: diff_output)
+
+    assert git_cmd.cmd_diff(argparse.Namespace(staged=False, against=None)) == 0
+    assert "deleted.txt" in capsys.readouterr().out

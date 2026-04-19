@@ -9,12 +9,15 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent
+from typing import cast
 
 
 DEFAULT_RELEASE_BRANCH = "release/v{version}"
 DEFAULT_CHANGELOG = "CHANGELOG.md"
+DEFAULT_CHANGELOG_WORKFLOW = "incremental"
 DEFAULT_LOCK_COMMAND = ["uv", "lock", "-U"]
 DEFAULT_GENERIC_LOCK_COMMAND: list[str] = []
+VALID_CHANGELOG_WORKFLOWS = frozenset({"incremental", "squash"})
 
 # Well-known changelog filenames probed in order when autodetecting.
 CHANGELOG_CANDIDATES = (
@@ -212,6 +215,7 @@ class VersionTarget:
             )
 
         if has_pattern:
+            assert self.pattern is not None
             re.compile(self.pattern)
         if self.ci_format is not None:
             if not isinstance(self.ci_format, str):
@@ -268,6 +272,7 @@ class VersionGroup:
     version_targets: list[VersionTarget]
     version_source: Path | None = None
     pin_targets: list[PinTarget] = field(default_factory=list)
+    changelog_workflow: str = DEFAULT_CHANGELOG_WORKFLOW
 
     def primary_target(self) -> VersionTarget:
         """Return the target used as the canonical version source."""
@@ -340,6 +345,11 @@ class RrtConfig:
     def version_targets(self) -> list[VersionTarget]:
         """Backward-compatible access to the default group's version targets."""
         return self.resolve_group().version_targets
+
+    @property
+    def changelog_workflow(self) -> str:
+        """Backward-compatible access to the default group's changelog workflow."""
+        return self.resolve_group().changelog_workflow
 
 
 class MissingRrtConfigError(ValueError):
@@ -899,9 +909,10 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         isinstance(item, str) for item in raw_extra_branch_types
     ):
         raise ValueError("tool.rrt.extra_branch_types must be a list of strings")
+    typed_extra_branch_types = cast(list[str], raw_extra_branch_types)
     seen_extra: set[str] = set()
     extra_branch_types_list: list[str] = []
-    for raw_item in raw_extra_branch_types:
+    for raw_item in typed_extra_branch_types:
         normalized = raw_item.strip().lower()
         if not normalized:
             raise ValueError("tool.rrt.extra_branch_types entries must be non-empty identifiers")
@@ -920,9 +931,10 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
             extra_branch_types_list.append(normalized)
     extra_branch_types = tuple(extra_branch_types_list)
 
-    group_defaults = {
+    group_defaults: dict[str, object] = {
         "release_branch": raw.get("release_branch", DEFAULT_RELEASE_BRANCH),
         "changelog_file": raw.get("changelog_file", DEFAULT_CHANGELOG),
+        "changelog_workflow": raw.get("changelog_workflow", DEFAULT_CHANGELOG_WORKFLOW),
         "lock_command": raw.get("lock_command", _default_lock_command(config_file)),
         "generated_files": raw.get("generated_files", _default_generated_files(config_file)),
     }
@@ -946,7 +958,8 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         for item in raw_groups:
             if not isinstance(item, dict):
                 raise ValueError("Each tool.rrt.version_groups entry must be a table")
-            name = item.get("name")
+            typed_item = cast(dict[str, object], item)
+            name = typed_item.get("name")
             if not isinstance(name, str) or not name:
                 raise ValueError("Each tool.rrt.version_groups entry needs a non-empty name")
             if name in seen_names:
@@ -957,7 +970,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
                     root,
                     config_file=config_file,
                     group_name=name,
-                    raw_group=item,
+                    raw_group=typed_item,
                     defaults=group_defaults,
                 )
             )
@@ -1225,8 +1238,9 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
     for item in raw_pins:
         if not isinstance(item, dict):
             raise ValueError("Each pin_targets entry must be a table")
-        raw_path = item.get("path")
-        raw_pattern = item.get("pattern")
+        typed_item = cast(dict[str, object], item)
+        raw_path = typed_item.get("path")
+        raw_pattern = typed_item.get("pattern")
         if not isinstance(raw_path, str) or not raw_path:
             raise ValueError("Each pin_targets entry must have a non-empty 'path' string")
         if not isinstance(raw_pattern, str) or not raw_pattern:
@@ -1254,13 +1268,32 @@ def _load_version_group(
     for item in raw_targets:
         if not isinstance(item, dict):
             raise ValueError("Each version target must be a table")
+        typed_item = cast(dict[str, object], item)
+        raw_path = typed_item.get("path")
+        if not isinstance(raw_path, str) or not raw_path:
+            raise ValueError("Each version target must have a non-empty 'path' string")
+        raw_kind = typed_item.get("kind")
+        raw_pattern = typed_item.get("pattern")
+        raw_section = typed_item.get("section")
+        raw_field = typed_item.get("field")
+        raw_ci_format = typed_item.get("ci_format")
+        if raw_kind is not None and not isinstance(raw_kind, str):
+            raise ValueError("kind must be a string when provided")
+        if raw_pattern is not None and not isinstance(raw_pattern, str):
+            raise ValueError("pattern must be a string when provided")
+        if raw_section is not None and not isinstance(raw_section, str):
+            raise ValueError("section must be a string when provided")
+        if raw_field is not None and not isinstance(raw_field, str):
+            raise ValueError("field must be a string when provided")
+        if raw_ci_format is not None and not isinstance(raw_ci_format, str):
+            raise ValueError("ci_format must be a string when provided")
         target = VersionTarget(
-            path=root / item["path"],
-            kind=item.get("kind"),
-            pattern=item.get("pattern"),
-            section=item.get("section"),
-            field=item.get("field"),
-            ci_format=item.get("ci_format"),
+            path=root / raw_path,
+            kind=raw_kind,
+            pattern=raw_pattern,
+            section=raw_section,
+            field=raw_field,
+            ci_format=raw_ci_format,
         )
         target.validate()
         targets.append(target)
@@ -1273,6 +1306,13 @@ def _load_version_group(
     if not isinstance(changelog_value, str):
         raise ValueError("changelog_file must be a string")
 
+    changelog_workflow = raw_group.get("changelog_workflow", defaults["changelog_workflow"])
+    if not isinstance(changelog_workflow, str):
+        raise ValueError("changelog_workflow must be a string")
+    if changelog_workflow not in VALID_CHANGELOG_WORKFLOWS:
+        allowed = ", ".join(sorted(VALID_CHANGELOG_WORKFLOWS))
+        raise ValueError(f"changelog_workflow must be one of {allowed}, got {changelog_workflow!r}")
+
     lock_command_raw = raw_group.get("lock_command", defaults["lock_command"])
     auto_gen: list[str] = []
     if lock_command_raw is None:
@@ -1284,7 +1324,7 @@ def _load_version_group(
     ):
         raise ValueError("lock_command must be a list of strings")
     else:
-        lock_command = lock_command_raw
+        lock_command = cast(list[str], lock_command_raw)
 
     generated_files_raw = raw_group.get("generated_files", defaults["generated_files"])
     if generated_files_raw is None:
@@ -1295,7 +1335,7 @@ def _load_version_group(
     ):
         raise ValueError("generated_files must be a list of strings")
     else:
-        generated_files = generated_files_raw
+        generated_files = cast(list[str], generated_files_raw)
 
     raw_version_source = raw_group.get("version_source")
     if raw_version_source is not None and not isinstance(raw_version_source, str):
@@ -1315,4 +1355,5 @@ def _load_version_group(
         version_targets=targets,
         version_source=version_source,
         pin_targets=_load_pin_targets(root, raw_group.get("pin_targets", [])),
+        changelog_workflow=changelog_workflow,
     )

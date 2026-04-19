@@ -35,6 +35,13 @@ from repo_release_tools.versioning import Version
 PREVIEW_LINES = 8
 
 
+def resolve_changelog_mode(config: RrtConfig, requested_mode: str | None) -> str:
+    """Resolve the changelog update mode from CLI input and workflow defaults."""
+    if requested_mode is not None:
+        return requested_mode
+    return "generate" if config.changelog_workflow == "squash" else "auto"
+
+
 def git_log_since_latest_tag(root: Path) -> list[str]:
     """Collect commit subjects since the latest tag."""
     tags_raw = git.capture(["git", "tag", "--sort=-v:refname"], root)
@@ -254,6 +261,9 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     if not args.no_changelog:
         print(f"\n{output.section('Updating changelog')}")
+        effective_changelog_mode = resolve_changelog_mode(
+            config, getattr(args, "changelog_mode", None)
+        )
         update_changelog(
             RrtConfig(
                 root=config.root,
@@ -264,7 +274,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
             str(new),
             include_maintenance=args.include_maintenance,
             dry_run=args.dry_run,
-            changelog_mode=getattr(args, "changelog_mode", "auto"),
+            changelog_mode=effective_changelog_mode,
         )
 
     if group.lock_command and not args.no_update:
@@ -349,11 +359,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument(
         "--changelog-mode",
         choices=["auto", "promote", "generate"],
-        default="auto",
+        default=None,
         metavar="MODE",
         help=(
             "How to update the changelog: "
-            "'auto' (default) promotes [Unreleased] when it has entries, "
+            "when omitted, the default follows changelog_workflow "
+            "(incremental -> 'auto', squash -> 'generate'); "
+            "'auto' promotes [Unreleased] when it has entries, "
             "otherwise generates from the git log; "
             "'promote' requires a non-empty [Unreleased] section and renames it; "
             "'generate' always writes a new section from the git log "

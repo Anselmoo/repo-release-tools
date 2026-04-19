@@ -74,7 +74,7 @@ lefthook install                      # registers git hooks
 DO NOT use `uvx --from repo-release-tools rrt-hooks …` in `lefthook.yml` — `rrt-hooks` is an installed binary, not a uvx shortcut.
 ````
 
-### .pre-commit-config.yaml — minimal (auto-write changelog)
+### .pre-commit-config.yaml — incremental workflow (auto-write changelog)
 
 > Use the following prompt to configure pre-commit with auto-write changelog.
 
@@ -93,7 +93,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v0.1.9
+    rev: v0.1.10
     hooks:
       - id: rrt-branch-name
       - id: rrt-update-unreleased
@@ -106,8 +106,41 @@ Hook reference:
 - `rrt-commit-subject`    commit-msg stage  — validates Conventional Commits subject
 
 Constraints:
-- `rrt-changelog` and `rrt-update-unreleased` are mutually exclusive — use one or the other, never both
+- `rrt-changelog` and `rrt-update-unreleased` are usually alternatives — use one or the other for incremental repos
 - `default_install_hook_types` must include `commit-msg` for `rrt-update-unreleased` and `rrt-commit-subject` to run
+
+If the repo config sets `changelog_workflow = "squash"`, prefer the squash example below instead of auto-writing `[Unreleased]`.
+````
+
+### .pre-commit-config.yaml — squash workflow
+
+> Use the following prompt to configure pre-commit for a squash-merge repo.
+
+````prompt
+<context>
+Repo: https://github.com/Anselmoo/repo-release-tools
+Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
+Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
+Assume pre-commit is already installed.
+</context>
+
+Create `.pre-commit-config.yaml` at the repo root with this content:
+
+```yaml
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v0.1.10
+    hooks:
+      - id: rrt-branch-name
+      - id: rrt-commit-subject
+```
+
+Notes:
+- Use this when the repository squash-merges many commits into one merge commit.
+- Pair it with `changelog_workflow = "squash"` in repo config.
+- In squash workflow, changelog-writing and changelog-check hooks intentionally skip changelog enforcement.
 ````
 
 ### .pre-commit-config.yaml — full (all hooks)
@@ -129,7 +162,7 @@ default_install_hook_types: [pre-commit, commit-msg, pre-push, manual]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v0.1.9
+    rev: v0.1.10
     hooks:
       - id: rrt-branch-name        # pre-commit:       validate <type>/<slug> branch name
       - id: rrt-update-unreleased  # commit-msg:       auto-write [Unreleased] section
@@ -139,7 +172,7 @@ repos:
 ```
 
 Constraints:
-- `rrt-changelog` and `rrt-update-unreleased` are mutually exclusive — enable only one
+- `rrt-changelog` and `rrt-update-unreleased` are usually alternatives — enable only one for incremental repos
 - Do NOT add `default_install_hook_types: [pre-push]` in isolation — include `pre-commit` and `commit-msg` too
 ````
 
@@ -254,7 +287,7 @@ uvx pre-commit run --all-files
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Action: Anselmoo/repo-release-tools@v0.1.9 (composite action, defined in action.yml)
+Action: Anselmoo/repo-release-tools@v0.1.10 (composite action, defined in action.yml)
 Wraps rrt-hooks subcommands; runs on ubuntu-latest; requires fetch-depth: 0 for git log access.
 </context>
 
@@ -268,10 +301,14 @@ jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0        # required — rrt-hooks uses git log; shallow clone breaks it
-      - uses: Anselmoo/repo-release-tools@v0.1.9
+      - uses: Anselmoo/repo-release-tools@v0.1.10
+        with:
+          check-branch-name: "true"
+          check-commit-subject: "true"
+          check-changelog: "true"
 ```
 ````
 
@@ -282,7 +319,7 @@ jobs:
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Action: Anselmoo/repo-release-tools@v0.1.9 (composite action, defined in action.yml)
+Action: Anselmoo/repo-release-tools@v0.1.10 (composite action, defined in action.yml)
 Wraps rrt-hooks subcommands; requires fetch-depth: 0.
 </context>
 
@@ -296,15 +333,15 @@ jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0        # required — rrt-hooks uses git log; shallow clone breaks it
-      - uses: Anselmoo/repo-release-tools@v0.1.9
+      - uses: Anselmoo/repo-release-tools@v0.1.10
         with:
           check-branch-name: "true"
           check-commit-subject: "true"
           check-changelog: "true"
-          changelog-strategy: "per-commit"  # per-commit | unreleased | release-only
+          changelog-strategy: "auto"  # auto | per-commit | unreleased | release-only
           changelog-file: "CHANGELOG.md"
           check-dirty-tree: "false"
 ```
@@ -319,7 +356,7 @@ All available inputs (action.yml):
 - `commit-subject`:      `""`            — override commit subject
 - `check-changelog`:     `"true"`        — validate changelog updates
 - `changelog-file`:      `"CHANGELOG.md"`
-- `changelog-strategy`:  `"per-commit"`  — `per-commit` | `unreleased` | `release-only`
+- `changelog-strategy`:  `"auto"`        — `auto` | `per-commit` | `unreleased` | `release-only`
 - `check-dirty-tree`:    `"false"`       — fail on dirty working tree
 ````
 
@@ -330,7 +367,7 @@ All available inputs (action.yml):
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Action: Anselmoo/repo-release-tools@v0.1.9
+Action: Anselmoo/repo-release-tools@v0.1.10
 changelog-strategy input controls how the action validates CHANGELOG.md.
 </context>
 
@@ -338,21 +375,22 @@ Choose the right changelog strategy based on your workflow:
 
 | Strategy | When to use | Requirement |
 |---|---|---|
+| `auto` | Recommended default | Follows `changelog_workflow` from repo config |
 | `per-commit` | CHANGELOG.md must be in the commit's changed-file list | Commit author must manually update changelog before each commit |
 | `unreleased` | `[Unreleased]` section must be non-empty | Pair with `rrt-update-unreleased` (pre-commit or lefthook) to auto-write entries |
 | `release-only` | Skip changelog check on PRs/pushes; enforce only at release | Changelog is validated only on tagged releases |
 
-**per-commit** (default):
+**auto** (default):
 ```yaml
-- uses: Anselmoo/repo-release-tools@v0.1.9
+- uses: Anselmoo/repo-release-tools@v0.1.10
   with:
     check-changelog: "true"
-    changelog-strategy: "per-commit"
+    changelog-strategy: "auto"
 ```
 
 **unreleased** (pair with auto-write hooks):
 ```yaml
-- uses: Anselmoo/repo-release-tools@v0.1.9
+- uses: Anselmoo/repo-release-tools@v0.1.10
   with:
     check-changelog: "true"
     changelog-strategy: "unreleased"
@@ -361,14 +399,15 @@ Choose the right changelog strategy based on your workflow:
 **Dynamic — unreleased on branches, release-only on tags:**
 (`check-branch-name` auto-skips on tag refs — no extra condition needed)
 ```yaml
-- uses: Anselmoo/repo-release-tools@v0.1.9
+- uses: Anselmoo/repo-release-tools@v0.1.10
   with:
     check-branch-name: "true"
     changelog-strategy: ${{ startsWith(github.ref, 'refs/tags/') && 'release-only' || 'unreleased' }}
 ```
 
 Constraints:
-- `per-commit` fails on squash-merge workflows — prefer `unreleased` for PR-based flows
+- `auto` resolves to `per-commit` for `incremental` repos and `release-only` for `squash` repos
+- `per-commit` is strict and usually a poor fit for squash-merge workflows
 - `fetch-depth: 0` is always required; without it, `git log` returns nothing and checks may silently pass or fail unexpectedly
 ````
 
@@ -379,7 +418,7 @@ Constraints:
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Action: Anselmoo/repo-release-tools@v0.1.9 (composite action, defined in action.yml)
+Action: Anselmoo/repo-release-tools@v0.1.10 (composite action, defined in action.yml)
 Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
 </context>
 
@@ -396,7 +435,7 @@ rrt-hooks check-commit-subject --subject "$(git log -1 --pretty=%s)"
 rrt-hooks check-changelog \
   --subject "$(git log -1 --pretty=%s)" \
   --changelog-file CHANGELOG.md \
-  --strategy per-commit \
+  --strategy auto \
   --branch "$BRANCH_NAME" \
   --ref HEAD
 

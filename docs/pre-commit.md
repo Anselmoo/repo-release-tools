@@ -2,7 +2,22 @@
 
 `repo-release-tools` publishes reusable hooks in `.pre-commit-hooks.yaml`.
 
-## Minimal config
+The first decision is not *which hook do I add?* — it is *which changelog
+workflow does this repo follow?*
+
+## Choose the workflow first
+
+| Workflow | Recommended hooks | Best for |
+|---|---|---|
+| `incremental` *(default)* | `rrt-branch-name`, `rrt-commit-subject`, plus `rrt-update-unreleased` **or** `rrt-changelog` | teams that maintain changelog state while developing |
+| `squash` | `rrt-branch-name`, `rrt-commit-subject`, optional `rrt-dirty-tree` / `rrt-doctor` | repos that squash many commits and do changelog work at release time |
+
+With `changelog_workflow = "squash"`, the changelog-writing and changelog-check
+hooks intentionally skip changelog enforcement. You can leave them configured
+during migration, but the cleaner setup is to remove them and keep only the
+non-changelog policy hooks.
+
+## Incremental workflow: keep `[Unreleased]` current
 
 ```yaml
 default_install_hook_types: [pre-commit, commit-msg]
@@ -11,10 +26,9 @@ repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
     rev: v0.1.10
     hooks:
-      - id: rrt-branch-name        # pre-commit: validate branch name
-      - id: rrt-update-unreleased  # commit-msg: auto-write changelog bullet
-      - id: rrt-changelog          # pre-commit: require changelog for feat/fix
-      - id: rrt-commit-subject     # commit-msg: validate conventional commit
+      - id: rrt-branch-name
+      - id: rrt-update-unreleased
+      - id: rrt-commit-subject
 ```
 
 Install both hook types:
@@ -23,20 +37,53 @@ Install both hook types:
 pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
 
+This setup keeps `CHANGELOG.md` moving with development. `rrt-update-unreleased`
+auto-writes changelog bullets for changelog-relevant commit types, while
+`rrt-commit-subject` enforces Conventional Commits.
+
+If you prefer manual changelog edits instead of auto-writing them, replace
+`rrt-update-unreleased` with `rrt-changelog`.
+
+## Squash workflow: keep local policy, skip per-commit changelog noise
+
+```yaml
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v0.1.10
+    hooks:
+      - id: rrt-branch-name
+      - id: rrt-commit-subject
+```
+
+Use this when pull requests are squash-merged and you do not want ten tiny
+commit-level changelog bullets to become one giant release footnote monster.
+Pair it with:
+
+- `changelog_workflow = "squash"` in repo config
+- GitHub Action `changelog-strategy: "auto"` or `"release-only"`
+- `rrt bump` to generate release-time changelog content
+
 ## Hook overview
 
 | Hook | Stage | Description |
 |---|---|---|
 | `rrt-branch-name` | pre-commit | Validate branch naming convention |
-| `rrt-update-unreleased` | commit-msg | Auto-write bullet under `[Unreleased]` for feat/fix commits |
-| `rrt-changelog` | pre-commit | Require a staged changelog update for feat/fix/breaking work |
-| `rrt-commit-subject` | commit-msg | Validate conventional commit subjects |
+| `rrt-update-unreleased` | commit-msg | Auto-write a bullet under `[Unreleased]` for changelog-relevant commits |
+| `rrt-changelog` | pre-commit | Require a staged changelog update for changelog-relevant work |
+| `rrt-commit-subject` | commit-msg | Validate Conventional Commit subjects |
 | `rrt-dirty-tree` | pre-push / manual | Fail on uncommitted changes |
-| `rrt-doctor` | manual | Run `rrt doctor` health checks on rrt config |
+| `rrt-doctor` | manual | Run `rrt doctor` health checks on `rrt` config |
 
-## Dirty tree check
+`rrt-update-unreleased` and `rrt-changelog` are alternatives for the
+incremental workflow. You usually want one or the other, not both.
 
-`rrt-dirty-tree` is not enabled in the minimal config because a normal
+## Optional guards
+
+### Dirty tree check
+
+`rrt-dirty-tree` is not enabled in the minimal configs because a normal
 `pre-commit` run happens while the working tree is intentionally dirty. It is
 better suited for `pre-push` or manual execution when you want to enforce a
 clean repository before publishing work:
@@ -50,7 +97,7 @@ repos:
         stages: [pre-push]
 ```
 
-## Doctor check
+### Doctor check
 
 `rrt-doctor` runs `rrt doctor` health checks against every version target and
 pin target in `[tool.rrt]`. It is registered at the `manual` stage so it does
@@ -62,7 +109,7 @@ pre-commit run rrt-doctor --hook-stage manual
 rrt doctor
 ```
 
-You can also run the same logic directly:
+You can also run the same dirty-tree logic directly:
 
 ```bash
 rrt-hooks check-dirty-tree
@@ -119,34 +166,13 @@ rrt-hooks changelog post-correct --commit
 
 ## Lefthook setup
 
-[Lefthook](https://github.com/evilmartians/lefthook) is a fast, language-agnostic
-hook runner. Unlike pre-commit it does not require a Python environment, but the
-reference `lefthook.yml` for `repo-release-tools` uses an installed `rrt-hooks`
-binary provided by `uv tool install repo-release-tools`.
+[Lefthook](https://github.com/evilmartians/lefthook) can run the same local
+policy with an installed `rrt-hooks` binary.
 
-`repo-release-tools` ships a reference `lefthook.yml` at the repo root.
+Install `repo-release-tools` so `rrt-hooks` is on `PATH`, then add the commands
+that match your workflow.
 
-### Install
-
-```bash
-# install lefthook
-# macOS
-brew install lefthook
-
-# or via npm / npx
-npm install --save-dev lefthook
-
-# install uv if needed
-# macOS
-brew install uv
-
-# install repo-release-tools so `rrt-hooks` is available to lefthook
-uv tool install repo-release-tools
-
-lefthook install
-```
-
-### Reference config
+### Incremental workflow example
 
 ```yaml
 # lefthook.yml
@@ -168,34 +194,26 @@ pre-push:
       run: rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
 ```
 
-### How the auto-write flow works
+### Squash workflow example
 
-When you commit, lefthook runs two `commit-msg` commands:
+```yaml
+# lefthook.yml
+commit-msg:
+  commands:
+    rrt-commit-subject:
+      run: rrt-hooks commit-msg {1}
 
-1. **`rrt-update-unreleased`** — parses the commit subject, appends a bullet under
-   `## [Unreleased]` in `CHANGELOG.md`, and stages the file automatically.
-   This is the changelog equivalent of `ruff --fix`: `feat`, `fix`, `refactor`,
-   and `perf` commits are written automatically; `chore`, `ci`, `test`, and `build`
-   commits are silently skipped (they map to the Maintenance section which does not
-   require an entry). The `--message-file {1}` argument tells `rrt-hooks` to read
-   the subject from the file lefthook provides rather than `.git/COMMIT_EDITMSG`.
-2. **`rrt-commit-subject`** — validates the subject follows Conventional Commits.
-   If this fails the commit is aborted and the changelog write has no effect.
-
-The `pre-push` guard (`rrt-hooks check-changelog --strategy unreleased`) catches the rare case
-where someone committed with `--no-verify`: it checks that `## [Unreleased]` is
-non-empty before the push is allowed.
-
-**Changelog-meta commit guard**: commits whose description contains the word
-`changelog` (e.g. `fix: update changelog entries`) are automatically skipped by
-`rrt-update-unreleased`. This prevents recursive bullets where a changelog
-correction commit would itself appear in `[Unreleased]`.
+pre-commit:
+  commands:
+    rrt-branch-name:
+      run: rrt-hooks pre-commit
+```
 
 ### Comparison: pre-commit vs. lefthook
 
-| Hook | pre-commit | lefthook |
+| Policy | pre-commit | lefthook |
 |---|---|---|
 | Auto-write changelog | `rrt-update-unreleased` (commit-msg) | `rrt-update-unreleased --message-file {1}` |
 | Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` |
-| Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-branch-name` |
-| Pre-push guard | `rrt-dirty-tree` (pre-push) | `rrt-hooks check-changelog --strategy unreleased` |
+| Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-hooks pre-commit` |
+| Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --strategy unreleased` |

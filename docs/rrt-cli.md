@@ -2,6 +2,9 @@
 
 The installed command is `rrt`.
 
+Use the CLI when you want the local developer workflow: branch helpers, version
+bumps, config inspection, Git shortcuts, and release automation.
+
 ## Install
 
 ```bash
@@ -13,6 +16,22 @@ Or run it without installing:
 ```bash
 uvx repo-release-tools branch new feat "add parser"
 ```
+
+## Quickstart
+
+```bash
+rrt init
+rrt config
+rrt branch new feat "add parser"
+rrt git commit "add parser"
+rrt git doctor
+rrt bump patch
+```
+
+If your repo already has a simple `pyproject.toml`, `package.json`, or
+`Cargo.toml`, `rrt bump` and `rrt ci-version` can often work without explicit
+config. Run `rrt init` when you want `rrt` to write the current recommendation
+into `.rrt.toml` or a native manifest file.
 
 ## Core commands
 
@@ -233,10 +252,41 @@ Go does not have a standard extensible manifest section like `package.json` or
 [tool.rrt]
 release_branch = "release/v{version}"
 changelog_file = "CHANGELOG.md"
+changelog_workflow = "incremental"  # or "squash"
 
 [[tool.rrt.version_targets]]
 path = "pyproject.toml"
 kind = "pep621"
+```
+
+## Changelog workflows
+
+`rrt` supports two changelog workflows so the CLI can match how a repository
+actually merges work.
+
+### `incremental` (default)
+
+Use `incremental` when the repository maintains changelog state during regular
+development.
+
+- works well with `rrt-update-unreleased` or `rrt-changelog`
+- keeps `[Unreleased]` current as changes land
+- makes `rrt bump` default to the normal `auto` changelog behavior
+
+### `squash`
+
+Use `squash` when pull requests are squash-merged and per-commit changelog
+updates would create noisy or misleading release notes.
+
+- local changelog hooks skip changelog enforcement
+- GitHub Action `changelog-strategy: auto` resolves to `release-only`
+- `rrt bump` defaults to `generate` so release notes are built at release time
+
+Set it in repo config:
+
+```toml
+[tool.rrt]
+changelog_workflow = "squash"
 ```
 
 ## Custom branch types
