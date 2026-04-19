@@ -1,3 +1,11 @@
+## [Unreleased]
+
+## [0.1.10] - 2026-04-19
+
+### Added
+- add --force option to bump command for resetting existing release branches (#26)
+- enhance changelog management with unreleased section handling and coverage reporting (#24)
+
 ## [0.1.9] - 2026-04-18
 
 ### Added
