@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from pathlib import Path
@@ -992,8 +994,6 @@ def test_main_update_unreleased_message_file_noop_for_maintenance_commit(
     msg_file = tmp_path / "COMMIT_EDITMSG"
     msg_file.write_text("chore: update deps\n", encoding="utf-8")
 
-    import os
-
     old_cwd = os.getcwd()
     try:
         os.chdir(tmp_path)
@@ -1037,8 +1037,6 @@ def test_main_update_unreleased_message_file_missing(tmp_path: Path) -> None:
     """--message-file with a non-existent path returns failure exit code."""
     missing = tmp_path / "no-such-file.txt"
 
-    import os
-
     old_cwd = os.getcwd()
     try:
         os.chdir(tmp_path)
@@ -1051,8 +1049,6 @@ def test_main_update_unreleased_message_file_missing(tmp_path: Path) -> None:
 
 def test_main_update_unreleased_message_file_unreadable(tmp_path: Path) -> None:
     """--message-file with an unreadable file returns failure exit code."""
-    import os
-
     bad_file = tmp_path / "COMMIT_EDITMSG"
     bad_file.write_bytes(b"\xff\xfe invalid utf-8 \x80")
 
