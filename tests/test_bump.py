@@ -157,6 +157,108 @@ kind = "package_json"
     assert not any("uv.lock" in cmd for cmd in add_calls)
 
 
+def test_cmd_bump_refuses_existing_release_branch_without_force(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: True
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "already exists" in captured.err
+
+
+def test_cmd_bump_force_resets_existing_release_branch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+    )
+
+    calls: list[list[str]] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: True
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+
+    def fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=True,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Resetting it with --force" in captured.out
+    assert ["git", "checkout", "-B", "release/v0.1.1"] in calls
+    assert ["git", "checkout", "-b", "release/v0.1.1"] not in calls
+
+
 def test_cmd_bump_accepts_legacy_double_escaped_pattern(tmp_path: Path, capsys) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """[tool.rrt]

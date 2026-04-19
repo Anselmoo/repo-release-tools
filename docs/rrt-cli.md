@@ -26,9 +26,14 @@ rrt git sync
 rrt git diff
 rrt git diff --staged
 rrt bump patch
+rrt bump patch --force
 rrt bump minor --dry-run
 rrt bump 1.2.3 --no-changelog
 ```
+
+Use `rrt bump ... --force` when you need to recreate an existing release branch
+from the chosen base after last-minute fixes, without deleting the branch by
+hand first.
 
 ## Git workflows
 
