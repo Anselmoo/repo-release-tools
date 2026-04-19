@@ -18,7 +18,12 @@ from repo_release_tools.changelog import (
     parse_conventional_commit,
 )
 from repo_release_tools.config import DEFAULT_CHANGELOG, load_extra_branch_types
-from repo_release_tools.commands.branch import BRANCH_SLUG_RE, CONVENTIONAL_TYPES, SLUG_MAX, normalize_commit_type
+from repo_release_tools.commands.branch import (
+    BRANCH_SLUG_RE,
+    CONVENTIONAL_TYPES,
+    SLUG_MAX,
+    normalize_commit_type,
+)
 from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.versioning import Version
 
