@@ -1713,17 +1713,23 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     version_file_b.parent.mkdir(parents=True)
     changelog = tmp_path / "CHANGELOG.md"
     pin_file = tmp_path / "docs" / "action.md"
+    pin_file_two = tmp_path / "docs" / "guide.md"
     pin_file.parent.mkdir(parents=True)
 
     version_file_a.write_text('[project]\nname = "example"\nversion = "1.0.0"\n', encoding="utf-8")
     version_file_b.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
     changelog.write_text("# Changelog\n", encoding="utf-8")
     pin_file.write_text("uses: Anselmoo/repo-release-tools@v1.0.0\n", encoding="utf-8")
+    pin_file_two.write_text("uses: Anselmoo/repo-release-tools@v1.0.0\n", encoding="utf-8")
 
     target_a = VersionTarget(path=version_file_a, kind="pep621")
     target_b = VersionTarget(path=version_file_b, kind="python_version")
     pin_target = PinTarget(
         path=pin_file,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+    pin_target_two = PinTarget(
+        path=pin_file_two,
         pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
     )
     group = VersionGroup(
@@ -1733,7 +1739,7 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
         lock_command=["uv", "lock", "-U"],
         generated_files=[],
         version_targets=[target_a, target_b],
-        pin_targets=[pin_target],
+        pin_targets=[pin_target, pin_target_two],
     )
     config = RrtConfig(
         root=tmp_path,
@@ -1742,16 +1748,18 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
         default_group_name="default",
     )
 
-    progress_updates: list[float] = []
+    progress_updates: list[tuple[int, float, int]] = []
     spinner_calls: list[tuple[str, str | None, object]] = []
     git_calls: list[tuple[list[str], bool]] = []
+    progress_instances: list[object] = []
 
     class _FakeProgressLine:
         def __init__(self, *, file=None) -> None:
             self.file = file
+            progress_instances.append(self)
 
         def update_bar(self, value: float, *, width: int = 20, lines_since_last: int = 0) -> None:
-            progress_updates.append(value)
+            progress_updates.append((len(progress_instances) - 1, value, lines_since_last))
 
     @contextmanager
     def fake_spinner_lines(label: str, *, detail: str | None = None, file=None):
@@ -1804,6 +1812,7 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     )
 
     assert result == 0
-    assert progress_updates == [0.5, 1.0]
+    assert len(progress_instances) == 2
+    assert progress_updates == [(0, 0.5, 0), (0, 1.0, 1), (1, 0.5, 0), (1, 1.0, 1)]
     assert spinner_calls == [("Running lock command…", "$ uv lock -U", sys.stdout)]
     assert (["uv", "lock", "-U"], True) in git_calls

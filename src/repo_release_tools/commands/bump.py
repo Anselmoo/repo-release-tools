@@ -235,16 +235,17 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 output.warning(f"Branch '{branch_name}' already exists. Resetting it with --force.")
             )
 
-    progress = output.ProgressLine(file=sys.stdout)
+    version_progress = output.ProgressLine(file=sys.stdout)
     print(output.section("Updating version strings"))
     total_targets = len(group.version_targets)
     for i, target in enumerate(group.version_targets, 1):
         replace_version_in_file(target, str(new), dry_run=args.dry_run)
         if total_targets > 1:
-            progress.update_bar(i / total_targets, lines_since_last=0 if i == 1 else 1)
+            version_progress.update_bar(i / total_targets, lines_since_last=0 if i == 1 else 1)
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins and not getattr(args, "no_pin_sync", False):
+        pin_progress = output.ProgressLine(file=sys.stdout)
         print(f"\n{output.section('Updating doc pins')}")
         seen_pin_keys: set[tuple[object, str]] = set()
         unique_pins: list = []
@@ -257,7 +258,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
         for i, pin in enumerate(unique_pins, 1):
             replace_pin_in_file(pin, str(new), dry_run=args.dry_run)
             if total_pins > 1:
-                progress.update_bar(i / total_pins, lines_since_last=0 if i == 1 else 1)
+                pin_progress.update_bar(i / total_pins, lines_since_last=0 if i == 1 else 1)
 
     if not args.no_changelog:
         print(f"\n{output.section('Updating changelog')}")
