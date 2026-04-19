@@ -308,3 +308,269 @@ def test_insert_generated_section_after_empty_unreleased_with_title() -> None:
     assert result.startswith("# Changelog")
     assert result.index("## [Unreleased]") < result.index("## [1.1.0]")
     assert result.index("## [1.1.0]") < result.index("## [1.0.0]")
+
+
+# ---------------------------------------------------------------------------
+# detect_changelog_format
+# ---------------------------------------------------------------------------
+
+from repo_release_tools.changelog import (  # noqa: E402
+    ChangelogFormat,
+    detect_changelog_format,
+)
+
+
+def test_detect_changelog_format_md() -> None:
+    assert detect_changelog_format("CHANGELOG.md") == ChangelogFormat.MARKDOWN
+
+
+def test_detect_changelog_format_no_extension() -> None:
+    assert detect_changelog_format("CHANGELOG") == ChangelogFormat.MARKDOWN
+
+
+def test_detect_changelog_format_rst() -> None:
+    assert detect_changelog_format("CHANGELOG.rst") == ChangelogFormat.RST
+
+
+def test_detect_changelog_format_txt() -> None:
+    assert detect_changelog_format("CHANGELOG.txt") == ChangelogFormat.RST
+
+
+def test_detect_changelog_format_txt_case_insensitive() -> None:
+    assert detect_changelog_format("CHANGELOG.TXT") == ChangelogFormat.RST
+
+
+# ---------------------------------------------------------------------------
+# RST changelog fixtures
+# ---------------------------------------------------------------------------
+
+_RST_EMPTY = """\
+Changelog
+=========
+
+All notable changes to this project will be documented here.
+"""
+
+_RST_UNRELEASED_EMPTY = """\
+Changelog
+=========
+
+Unreleased
+----------
+
+1.0.0 - 2025-01-01
+-------------------
+
+Added
+~~~~~
+
+- Initial release
+"""
+
+_RST_UNRELEASED_WITH_ENTRIES = """\
+Changelog
+=========
+
+Unreleased
+----------
+
+Fixed
+~~~~~
+
+- fix connection timeout
+
+1.0.0 - 2025-01-01
+-------------------
+
+Added
+~~~~~
+
+- Initial release
+"""
+
+_RST_NO_UNRELEASED = """\
+Changelog
+=========
+
+1.0.0 - 2025-01-01
+-------------------
+
+Added
+~~~~~
+
+- Initial release
+"""
+
+# ---------------------------------------------------------------------------
+# has_unreleased_section – RST
+# ---------------------------------------------------------------------------
+
+
+def test_has_unreleased_section_rst_detects_present() -> None:
+    assert has_unreleased_section(_RST_UNRELEASED_EMPTY, ChangelogFormat.RST) is True
+
+
+def test_has_unreleased_section_rst_with_entries() -> None:
+    assert has_unreleased_section(_RST_UNRELEASED_WITH_ENTRIES, ChangelogFormat.RST) is True
+
+
+def test_has_unreleased_section_rst_absent() -> None:
+    assert has_unreleased_section(_RST_NO_UNRELEASED, ChangelogFormat.RST) is False
+
+
+def test_has_unreleased_section_rst_empty_changelog() -> None:
+    assert has_unreleased_section(_RST_EMPTY, ChangelogFormat.RST) is False
+
+
+# ---------------------------------------------------------------------------
+# get_unreleased_entries – RST
+# ---------------------------------------------------------------------------
+
+
+def test_get_unreleased_entries_rst_with_entries() -> None:
+    entries = get_unreleased_entries(_RST_UNRELEASED_WITH_ENTRIES, ChangelogFormat.RST)
+    assert entries == ["- fix connection timeout"]
+
+
+def test_get_unreleased_entries_rst_empty_section() -> None:
+    assert get_unreleased_entries(_RST_UNRELEASED_EMPTY, ChangelogFormat.RST) == []
+
+
+def test_get_unreleased_entries_rst_no_section() -> None:
+    assert get_unreleased_entries(_RST_NO_UNRELEASED, ChangelogFormat.RST) == []
+
+
+# ---------------------------------------------------------------------------
+# append_to_unreleased – RST
+# ---------------------------------------------------------------------------
+
+
+def test_append_to_unreleased_rst_creates_section_when_absent() -> None:
+    result = append_to_unreleased(_RST_EMPTY, "feat: new widget", ChangelogFormat.RST)
+    assert has_unreleased_section(result, ChangelogFormat.RST)
+    assert "new widget" in result
+    assert "Added" in result
+    assert "~" in result  # RST subsection underline
+
+
+def test_append_to_unreleased_rst_adds_to_existing_section() -> None:
+    result = append_to_unreleased(_RST_UNRELEASED_EMPTY, "fix: null pointer", ChangelogFormat.RST)
+    assert has_unreleased_section(result, ChangelogFormat.RST)
+    assert "null pointer" in result
+    assert "Fixed" in result
+
+
+def test_append_to_unreleased_rst_inserts_under_existing_subsection() -> None:
+    result = append_to_unreleased(
+        _RST_UNRELEASED_WITH_ENTRIES, "fix: another bug", ChangelogFormat.RST
+    )
+    entries = get_unreleased_entries(result, ChangelogFormat.RST)
+    descriptions = [e.lstrip("- ") for e in entries]
+    assert "fix connection timeout" in descriptions
+    assert "another bug" in descriptions
+
+
+def test_append_to_unreleased_rst_deduplication() -> None:
+    content = append_to_unreleased(_RST_EMPTY, "feat: shiny thing", ChangelogFormat.RST)
+    result = append_to_unreleased(content, "feat: shiny thing", ChangelogFormat.RST)
+    assert result == content
+    assert result.count("shiny thing") == 1
+
+
+def test_append_to_unreleased_rst_preserves_title() -> None:
+    result = append_to_unreleased(_RST_EMPTY, "feat: new widget", ChangelogFormat.RST)
+    assert result.startswith("Changelog\n=========")
+
+
+def test_append_to_unreleased_rst_no_brackets_in_heading() -> None:
+    """RST unreleased heading must not use Markdown [Unreleased] notation."""
+    result = append_to_unreleased(_RST_EMPTY, "feat: x", ChangelogFormat.RST)
+    assert "## [" not in result
+    assert "###" not in result
+
+
+# ---------------------------------------------------------------------------
+# build_changelog_section – RST
+# ---------------------------------------------------------------------------
+
+from repo_release_tools.changelog import build_changelog_section  # noqa: E402
+
+
+def test_build_changelog_section_rst_heading_format() -> None:
+    result = build_changelog_section(
+        "1.1.0", ["feat: cool thing"], include_maintenance=False, fmt=ChangelogFormat.RST
+    )
+    # No Markdown brackets around version
+    assert "## [" not in result
+    assert "### " not in result
+    # RST underline present (dash for version heading, tilde for sub-section)
+    assert "-" * 3 in result
+    assert "~" * 3 in result
+    assert "1.1.0" in result
+    assert "Added" in result
+    assert "cool thing" in result
+
+
+def test_build_changelog_section_rst_no_notable_changes() -> None:
+    result = build_changelog_section(
+        "1.1.0", [], include_maintenance=False, fmt=ChangelogFormat.RST
+    )
+    assert "1.1.0" in result
+    assert "_No notable changes recorded._" in result
+
+
+# ---------------------------------------------------------------------------
+# promote_unreleased – RST
+# ---------------------------------------------------------------------------
+
+
+def test_promote_unreleased_rst_renames_header() -> None:
+    result = promote_unreleased(_RST_UNRELEASED_WITH_ENTRIES, "1.1.0", ChangelogFormat.RST)
+    assert has_unreleased_section(result, ChangelogFormat.RST)
+    assert "1.1.0" in result
+    assert "fix connection timeout" in result
+    # New Unreleased placeholder above versioned section
+    unreleased_pos = result.index("Unreleased\n")
+    versioned_pos = result.index("1.1.0")
+    assert unreleased_pos < versioned_pos
+
+
+def test_promote_unreleased_rst_no_op_when_absent() -> None:
+    result = promote_unreleased(_RST_NO_UNRELEASED, "1.1.0", ChangelogFormat.RST)
+    assert result == _RST_NO_UNRELEASED
+
+
+def test_promote_unreleased_rst_fresh_placeholder_is_empty() -> None:
+    result = promote_unreleased(_RST_UNRELEASED_WITH_ENTRIES, "1.1.0", ChangelogFormat.RST)
+    assert get_unreleased_entries(result, ChangelogFormat.RST) == []
+
+
+# ---------------------------------------------------------------------------
+# insert_generated_section – RST
+# ---------------------------------------------------------------------------
+
+
+def test_insert_generated_section_rst_after_empty_unreleased() -> None:
+    section = build_changelog_section(
+        "1.1.0", ["feat: new thing"], include_maintenance=False, fmt=ChangelogFormat.RST
+    )
+    result = insert_generated_section(_RST_UNRELEASED_EMPTY, section, ChangelogFormat.RST)
+    assert result.index("Unreleased") < result.index("1.1.0") < result.index("1.0.0")
+
+
+def test_insert_generated_section_rst_adds_placeholder_when_absent() -> None:
+    section = build_changelog_section(
+        "1.1.0", ["feat: new thing"], include_maintenance=False, fmt=ChangelogFormat.RST
+    )
+    result = insert_generated_section(_RST_NO_UNRELEASED, section, ChangelogFormat.RST)
+    assert has_unreleased_section(result, ChangelogFormat.RST)
+    assert result.index("Unreleased") < result.index("1.1.0") < result.index("1.0.0")
+
+
+def test_insert_generated_section_rst_preserves_title() -> None:
+    section = build_changelog_section(
+        "0.2.0", [], include_maintenance=False, fmt=ChangelogFormat.RST
+    )
+    result = insert_generated_section(_RST_EMPTY, section, ChangelogFormat.RST)
+    assert result.startswith("Changelog\n=========")
+    assert has_unreleased_section(result, ChangelogFormat.RST)

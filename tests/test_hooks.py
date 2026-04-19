@@ -913,3 +913,44 @@ def test_main_update_unreleased_accepts_explicit_subject(
 
     assert result == 0
     assert "shiny new thing" in changelog.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# run_update_unreleased – RST / TXT format
+# ---------------------------------------------------------------------------
+
+
+def test_run_update_unreleased_creates_rst_unreleased_section(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With a .rst changelog the Unreleased section must use RST underline notation."""
+    changelog = tmp_path / "CHANGELOG.rst"
+    changelog.write_text("Changelog\n=========\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+
+    result = run_update_unreleased(tmp_path, subject="feat: rst feature", changelog_file="CHANGELOG.rst")
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "## [" not in content
+    assert "### " not in content
+    assert "Unreleased\n" in content
+    assert "~" in content  # RST subsection underline
+    assert "rst feature" in content
+
+
+def test_run_update_unreleased_creates_txt_unreleased_section(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With a .txt changelog the Unreleased section must use RST underline notation."""
+    changelog = tmp_path / "CHANGELOG.txt"
+    changelog.write_text("Changelog\n=========\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+
+    result = run_update_unreleased(tmp_path, subject="fix: txt fix", changelog_file="CHANGELOG.txt")
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "## [" not in content
+    assert "txt fix" in content
+    assert "~" in content  # RST subsection underline

@@ -13,6 +13,7 @@ from repo_release_tools import git, output
 from repo_release_tools.changelog import (
     SECTION_MAP,
     append_to_unreleased,
+    detect_changelog_format,
     get_unreleased_entries,
     parse_conventional_commit,
 )
@@ -551,7 +552,8 @@ def run_update_unreleased(
         )
 
     original = changelog_path.read_text(encoding="utf-8")
-    updated = append_to_unreleased(original, subject)
+    fmt = detect_changelog_format(changelog_file)
+    updated = append_to_unreleased(original, subject, fmt)
     if updated != original:
         changelog_path.write_text(updated, encoding="utf-8")
         git.run(["git", "add", changelog_file], cwd, dry_run=False, label="stage changelog")
@@ -605,7 +607,8 @@ def run_changelog_check(
         changelog_path = cwd / changelog_file
         if changelog_path.exists():
             content = changelog_path.read_text(encoding="utf-8")
-            if get_unreleased_entries(content):
+            fmt = detect_changelog_format(changelog_file)
+            if get_unreleased_entries(content, fmt):
                 return 0
         return emit_failure(
             title,
