@@ -378,7 +378,7 @@ pattern = '(badge/version-v)(\d+\.\d+\.\d+)(-blue)'
 - Files are staged alongside the main version files.
 - If a pattern matches multiple lines, all occurrences are updated.
 - A warning is printed when the pattern produces no match.
-- Already-current pins are skipped silently.
+- Already-current pins are left unchanged and a status line is printed.
 
 ### Skip flag
 
@@ -399,13 +399,13 @@ It produces a tree report — green `✔` for passing checks, red `✖` for fail
 
 ### What it checks
 
-| Check | Pass condition |
-|---|---|
-| Version target files | File exists at the declared path |
-| Version target readability | Version string can be read from the file |
-| Pin target files | File exists at the declared path |
-| Pin target patterns | Pattern compiles and matches at least once |
-| Changelog file | File exists at `changelog_file` |
+| Check | Pass condition | Failure condition |
+|---|---|---|
+| Version target files | File exists at the declared path | File not found → exits 1 |
+| Version target readability | Version string can be read from the file | Unreadable → warning only, exits 0 |
+| Pin target files | File exists at the declared path | File not found → exits 1 |
+| Pin target patterns | Pattern compiles and matches in the file | No match → warning only, exits 0 |
+| Changelog file | File exists at `changelog_file` | File not found → exits 1 |
 
 ### Exit behavior
 

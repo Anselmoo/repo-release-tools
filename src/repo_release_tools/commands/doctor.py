@@ -139,6 +139,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
             cl_label = f"{cl.relative_to(root)}  {g.git.clean} exists"
         else:
             cl_label = f"{cl.relative_to(root)}  {g.bullet.warning} not found"
+            group_ok = False
 
         group_children.append((cl_label, False, None))
 

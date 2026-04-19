@@ -26,6 +26,7 @@ CONVENTIONAL_TYPES = (
 )
 
 SLUG_MAX = 60
+BRANCH_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 @dataclass(frozen=True)
@@ -181,6 +182,23 @@ def cmd_rename(args: argparse.Namespace) -> int:
             new_slug = f"{scope_slug}-{current_slug}"
         else:
             new_slug = current_slug
+
+        # Validate the resulting slug against the same rules used by branch creation
+        if len(new_slug) > SLUG_MAX:
+            print(
+                f"Computed slug {new_slug!r} is too long ({len(new_slug)} > {SLUG_MAX}). "
+                "Provide a new description to rebuild the slug.",
+                file=sys.stderr,
+            )
+            return 1
+        if not BRANCH_SLUG_RE.fullmatch(new_slug):
+            print(
+                f"Computed slug {new_slug!r} is not valid kebab-case. "
+                "Provide a new description to rebuild the slug.",
+                file=sys.stderr,
+            )
+            return 1
+
         new_name = f"{new_type}/{new_slug}"
         scope_part = f"({scope})" if scope else ""
         commit_title = f"{new_type}{scope_part}: <preserved description>"

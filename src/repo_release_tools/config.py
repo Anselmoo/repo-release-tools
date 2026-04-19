@@ -250,7 +250,7 @@ class PinTarget:
             compiled = re.compile(self.pattern)
         except re.error as exc:
             raise ValueError(f"pin_targets pattern is not a valid regex: {exc}") from exc
-        if compiled.groups < 3:
+        if compiled.groups != 3:
             raise ValueError(
                 "pin_targets pattern must have exactly 3 capture groups (prefix, version, suffix)"
             )

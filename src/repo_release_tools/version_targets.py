@@ -191,11 +191,15 @@ def replace_package_json_version(text: str, new_version: str) -> str:
     return updated
 
 
-def replace_pattern_version(text: str, pattern: str, new_version: str) -> str:
-    """Replace a regex-based version, tolerating legacy TOML double escaping."""
+def replace_pattern_version(text: str, pattern: str, new_version: str, *, count: int = 1) -> str:
+    """Replace a regex-based version, tolerating legacy TOML double escaping.
+
+    *count* defaults to 1 (replace only the first occurrence).  Pass ``count=0``
+    to replace all occurrences (used for pin-target substitutions).
+    """
     for compiled in compile_pattern_variants(pattern):
-        updated, count = compiled.subn(rf"\g<1>{new_version}\g<3>", text, count=1)
-        if count:
+        updated, n = compiled.subn(rf"\g<1>{new_version}\g<3>", text, count=count)
+        if n:
             return updated
     raise RuntimeError("Configured pattern did not match the target file")
 
@@ -263,7 +267,7 @@ def replace_pin_in_file(
         print(output.status(output.GLYPHS.bullet.dot, f"{path}  already at {new_version}"))
         return
 
-    updated = replace_pattern_version(text, target.pattern, new_version)
+    updated = replace_pattern_version(text, target.pattern, new_version, count=0)
 
     if dry_run:
         print(output.dry_run(f'Would update {path}: pin = "{new_version}"'))

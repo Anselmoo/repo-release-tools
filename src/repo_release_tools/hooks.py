@@ -18,7 +18,7 @@ from repo_release_tools.changelog import (
     parse_conventional_commit,
 )
 from repo_release_tools.config import DEFAULT_CHANGELOG, load_extra_branch_types
-from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, SLUG_MAX, normalize_commit_type
+from repo_release_tools.commands.branch import BRANCH_SLUG_RE, CONVENTIONAL_TYPES, SLUG_MAX, normalize_commit_type
 from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.versioning import Version
 
@@ -27,7 +27,6 @@ ALLOWED_BRANCH_NAMES = ("main", "master", "develop")
 MAGIC_BRANCH_TYPES = ("claude", "codex", "copilot")
 BOT_BRANCH_TYPES = ("dependabot", "renovate")
 ALLOWED_BRANCH_TYPES = (*CONVENTIONAL_TYPES, *MAGIC_BRANCH_TYPES, *BOT_BRANCH_TYPES)
-BRANCH_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def validate_branch_name(
@@ -157,19 +156,29 @@ def commit_subject_requires_changelog(subject: str) -> bool:
     return commit_type_requires_changelog(parsed.type, breaking=parsed.breaking)
 
 
+_CHANGELOG_META_RE = re.compile(
+    r"\b(?:update|bump|revise|amend|correct|trim)\s+changelog\b"
+    r"|\bchangelog\s+(?:entries?|updates?|corrections?|formatting?)\b",
+    re.IGNORECASE,
+)
+
+
 def is_changelog_meta_commit(subject: str) -> bool:
     """Return True when the commit description is itself about updating the changelog.
 
     Prevents ``rrt-update-unreleased`` from adding a recursive bullet such as
     ``- update changelog entries`` when someone commits a changelog correction
-    with a subject like ``fix: update changelog to reflect CI changes``.  Any
-    conventional commit whose *description* contains the word ``changelog``
-    (case-insensitive) is treated as a maintenance activity and silently skipped.
+    with a subject like ``fix: update changelog to reflect CI changes``.
+
+    Only commits whose *description* matches a narrow set of maintenance phrases
+    (e.g. "update changelog", "changelog entries") are treated as meta-commits,
+    so that genuine product changes whose names contain "changelog" (e.g.
+    ``feat: add changelog parser``) are not silently suppressed.
     """
     parsed = _parse_subject_for_changelog(subject)
     if parsed is None:
         return False
-    return "changelog" in parsed.description.lower()
+    return bool(_CHANGELOG_META_RE.search(parsed.description))
 
 
 def _normalize_repo_path(path: str, *, cwd: Path) -> str:

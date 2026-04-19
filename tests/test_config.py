@@ -789,6 +789,15 @@ def test_pin_target_validate_rejects_pattern_with_fewer_than_3_groups(tmp_path: 
         pin.validate()
 
 
+def test_pin_target_validate_rejects_pattern_with_more_than_3_groups(tmp_path: Path) -> None:
+    """validate() raises if the pattern has > 3 capture groups."""
+    from repo_release_tools.config import PinTarget
+
+    pin = PinTarget(path=tmp_path / "file.md", pattern=r"(a)(b)(\d+\.\d+\.\d+)(suffix)")
+    with pytest.raises(ValueError, match="3 capture groups"):
+        pin.validate()
+
+
 def test_pin_target_validate_rejects_invalid_regex(tmp_path: Path) -> None:
     """validate() raises on invalid regex."""
     from repo_release_tools.config import PinTarget

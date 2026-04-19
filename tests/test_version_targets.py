@@ -302,3 +302,29 @@ def test_replace_pin_in_file_no_match_warns(tmp_path: Path, capsys: pytest.Captu
 
     captured = capsys.readouterr()
     assert "did not match" in captured.out.lower() or "skipping" in captured.out.lower()
+
+
+def test_replace_pin_in_file_replaces_all_occurrences(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """replace_pin_in_file updates every occurrence, not just the first."""
+    from repo_release_tools.config import PinTarget
+    from repo_release_tools.version_targets import replace_pin_in_file
+
+    f = tmp_path / "action.md"
+    content = (
+        "- uses: Anselmoo/repo-release-tools@v0.1.7\n"
+        "# also: Anselmoo/repo-release-tools@v0.1.7\n"
+        "- uses: Anselmoo/repo-release-tools@v0.1.7\n"
+    )
+    f.write_text(content, encoding="utf-8")
+    pin = PinTarget(
+        path=f,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+
+    replace_pin_in_file(pin, "2.0.0", dry_run=False)
+
+    updated = f.read_text(encoding="utf-8")
+    assert updated.count("v2.0.0") == 3
+    assert "v0.1.7" not in updated

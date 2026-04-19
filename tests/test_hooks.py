@@ -1092,6 +1092,16 @@ def test_is_changelog_meta_commit_false_for_unparseable_subject() -> None:
     assert is_changelog_meta_commit("not a conventional commit at all") is False
 
 
+def test_is_changelog_meta_commit_false_for_changelog_product_feature() -> None:
+    """A commit adding a product feature named 'changelog' must NOT be skipped."""
+    assert is_changelog_meta_commit("feat: add changelog parser") is False
+
+
+def test_is_changelog_meta_commit_false_for_changelog_bug_fix() -> None:
+    """A bug fix for a product component named 'changelog' must NOT be skipped."""
+    assert is_changelog_meta_commit("fix: changelog parsing regression") is False
+
+
 # ---------------------------------------------------------------------------
 # run_update_unreleased – changelog-meta-commit skip guard
 # ---------------------------------------------------------------------------

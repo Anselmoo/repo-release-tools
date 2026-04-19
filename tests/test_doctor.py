@@ -173,6 +173,23 @@ def test_doctor_changelog_exists(tmp_path: Path, monkeypatch, capsys) -> None:
     assert "exists" in out
 
 
+def test_doctor_changelog_missing_returns_1(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Returns 1 when the changelog file does not exist."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    # Do NOT create CHANGELOG.md
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "CHANGELOG.md" in out
+    assert "not found" in out
+    assert "One or more health checks failed" in out
+
+
 def test_doctor_autodetected_warns(tmp_path: Path, monkeypatch, capsys) -> None:
     """Autodetected config prints a warning to stderr."""
     monkeypatch.chdir(tmp_path)
@@ -213,6 +230,7 @@ def test_doctor_unreadable_version_returns_0(tmp_path: Path, monkeypatch, capsys
     target_path.parent.mkdir(parents=True, exist_ok=True)
     # Write a file without the expected __version__ line
     target_path.write_text("# nothing here\n", encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
 
     rc = doctor.cmd_doctor(_ARGS)
@@ -269,6 +287,7 @@ def test_doctor_pin_no_match_warns_not_errors(tmp_path: Path, monkeypatch, capsy
     pin = PinTarget(path=pin_file, pattern=_VALID_PIN_PATTERN)
     conf = _make_config(tmp_path, pin_targets=[pin])
     _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
 
     rc = doctor.cmd_doctor(_ARGS)
@@ -287,6 +306,7 @@ def test_doctor_pin_match_shows_healthy(tmp_path: Path, monkeypatch, capsys) -> 
     pin = PinTarget(path=pin_file, pattern=_VALID_PIN_PATTERN)
     conf = _make_config(tmp_path, pin_targets=[pin])
     _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
 
     rc = doctor.cmd_doctor(_ARGS)
