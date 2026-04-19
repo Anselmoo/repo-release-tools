@@ -891,7 +891,9 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 subject = read_commit_subject(msg_path)
             except (OSError, UnicodeDecodeError) as exc:
-                return emit_failure("update-unreleased failed.", [f"Could not read message file: {exc}"])
+                return emit_failure(
+                    "update-unreleased failed.", [f"Could not read message file: {exc}"]
+                )
         elif parsed.subject is not None:
             subject = parsed.subject
         else:
