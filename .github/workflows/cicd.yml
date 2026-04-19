@@ -81,7 +81,7 @@ jobs:
         run: uv sync --all-groups
 
       - name: Run tests
-        run: uv run pytest -q -m "not runtime" --cov=src/repo_release_tools --cov-report=xml
+        run: uv run pytest -q -m "not runtime"
         env:
           PYTHON: ${{ matrix.python-version }}
 
