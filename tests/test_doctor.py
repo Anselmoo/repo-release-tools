@@ -80,6 +80,36 @@ def test_doctor_no_rrt_section(tmp_path: Path, monkeypatch, capsys) -> None:
     assert capsys.readouterr().err
 
 
+def test_doctor_generic_value_error_returns_1(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Unexpected ValueError is surfaced to stderr."""
+    monkeypatch.chdir(tmp_path)
+
+    def _boom(_: Path) -> RrtConfig:
+        raise ValueError("bad config")
+
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", _boom)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    assert "bad config" in capsys.readouterr().err
+
+
+def test_doctor_runtime_error_returns_1(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Runtime errors while loading config are surfaced to stderr."""
+    monkeypatch.chdir(tmp_path)
+
+    def _boom(_: Path) -> RrtConfig:
+        raise RuntimeError("broken runtime")
+
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", _boom)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    assert "broken runtime" in capsys.readouterr().err
+
+
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------

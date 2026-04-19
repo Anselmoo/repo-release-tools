@@ -1137,3 +1137,9 @@ def test_run_update_unreleased_does_not_skip_unrelated_feat(
 
     assert result == 0
     assert "add pagination" in changelog.read_text(encoding="utf-8")
+
+
+def test_main_doctor_dispatches_to_cmd_doctor(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hooks, "cmd_doctor", lambda parsed: 7)
+
+    assert hooks.main(["doctor"]) == 7

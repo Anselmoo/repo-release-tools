@@ -796,3 +796,101 @@ def test_pin_target_validate_rejects_invalid_regex(tmp_path: Path) -> None:
     pin = PinTarget(path=tmp_path / "file.md", pattern=r"(unclosed[")
     with pytest.raises(ValueError, match="not a valid regex"):
         pin.validate()
+
+
+def test_load_config_rejects_non_list_pin_targets(tmp_path: Path) -> None:
+    from repo_release_tools.config import load_config_from_path
+
+    cfg_file = tmp_path / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+pin_targets = {}
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="pin_targets must be an array of tables"):
+        load_config_from_path(tmp_path, cfg_file)
+
+
+def test_load_config_rejects_non_table_pin_target_entry(tmp_path: Path) -> None:
+    from repo_release_tools.config import load_config_from_path
+
+    cfg_file = tmp_path / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+pin_targets = ["docs.md"]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Each pin_targets entry must be a table"):
+        load_config_from_path(tmp_path, cfg_file)
+
+
+def test_load_config_rejects_pin_target_without_path(tmp_path: Path) -> None:
+    from repo_release_tools.config import load_config_from_path
+
+    cfg_file = tmp_path / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = ""
+pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="non-empty 'path' string"):
+        load_config_from_path(tmp_path, cfg_file)
+
+
+def test_load_config_rejects_pin_target_without_pattern(tmp_path: Path) -> None:
+    from repo_release_tools.config import load_config_from_path
+
+    cfg_file = tmp_path / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = "docs.md"
+pattern = ""
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="non-empty 'pattern' string"):
+        load_config_from_path(tmp_path, cfg_file)

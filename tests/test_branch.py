@@ -34,6 +34,55 @@ def test_cmd_new_dry_run_uses_summary_panel(capsys) -> None:
     assert "[dry-run] complete" in captured.out
 
 
+def test_cmd_new_existing_branch_returns_error(monkeypatch, capsys) -> None:
+    args = argparse.Namespace(
+        type="feat",
+        description=["add", "parser"],
+        scope=None,
+        dry_run=False,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch", lambda root: "main"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: True
+    )
+
+    result = cmd_new(args)
+
+    assert result == 1
+    assert "already exists" in capsys.readouterr().err
+
+
+def test_cmd_new_reports_uncommitted_changes(monkeypatch, capsys) -> None:
+    args = argparse.Namespace(
+        type="feat",
+        description=["add", "parser"],
+        scope=None,
+        dry_run=False,
+    )
+    ran: list[list[str]] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch", lambda root: "main"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: False
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.working_tree_clean", lambda root: False
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.run",
+        lambda cmd, root, *, dry_run, label: ran.append(cmd),
+    )
+
+    result = cmd_new(args)
+
+    assert result == 0
+    assert ran == [["git", "checkout", "-b", "feat/add-parser"]]
+    assert "Uncommitted changes moved to the new branch" in capsys.readouterr().out
+
+
 def test_branch_validation_accepts_magic_ai_types() -> None:
     assert validate_branch_name("codex/add-parser") is None
 
@@ -115,6 +164,60 @@ def test_cmd_rescue_dry_run_with_since(capsys) -> None:
     assert result == 0
     captured = capsys.readouterr()
     assert "abc123" in captured.out
+
+
+def test_cmd_rescue_no_commits_returns_error(monkeypatch, capsys) -> None:
+    """Non-dry-run rescue fails when there are no commits ahead to rescue."""
+    from repo_release_tools.commands.branch import cmd_rescue
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch", lambda root: "feat/existing-work"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.commits_ahead", lambda root, ref: []
+    )
+
+    args = argparse.Namespace(
+        type="fix",
+        description=["extract", "helper"],
+        scope=None,
+        dry_run=False,
+        since=None,
+    )
+
+    result = cmd_rescue(args)
+
+    assert result == 1
+    assert "Nothing to rescue" in capsys.readouterr().err
+
+
+def test_cmd_rescue_existing_target_branch_returns_error(monkeypatch, capsys) -> None:
+    """Rescue fails when the destination branch already exists."""
+    from repo_release_tools.commands.branch import cmd_rescue
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch", lambda root: "main"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.commits_ahead",
+        lambda root, ref: ["abc123 fix: keep this change"],
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: True
+    )
+
+    args = argparse.Namespace(
+        type="fix",
+        description=["extract", "helper"],
+        scope=None,
+        dry_run=False,
+        since=None,
+    )
+
+    result = cmd_rescue(args)
+
+    assert result == 1
+    assert "already exists" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
