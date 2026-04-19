@@ -1,26 +1,40 @@
 # repo-release-tools docs
 
-`repo-release-tools` provides one release workflow across local CLI usage, CI,
-pre-commit, and Copilot skill entrypoints.
+`repo-release-tools` has two main entry points:
 
-## Start here
+- **GitHub Action** for CI policy checks
+- **Python CLI + hooks** for local release automation
 
-- [RRT CLI](rrt-cli.md) — branch helpers, version bumps, and config-driven targets
-- [GitHub Action](github-action.md) — CI enforcement for branch, changelog, and commit policy
-- [pre-commit](pre-commit.md) — local hooks for branch, changelog, and commit checks
-- [Skill](skill.md) — Copilot CLI skill usage via `uvx`
-- [Conventional branches](semantic-branches.md) — branch naming model for trunk-based publishing
-- [Git magic](git-magic.md) — opinionated commit workflows and reusable Git safety checks
+This docs set is organized around those entry points first, then around the
+workflow details behind them.
 
-## What This Docs Set Covers
+## Start by platform
 
-The docs are intentionally split so the landing page stays short:
+- [GitHub Action](github-action.md) — CI checks for branch names, commit
+	subjects, changelog policy, and optional doctor/dirty-tree gates
+- [RRT CLI](rrt-cli.md) — installable or `uvx`-driven local commands for
+	branches, bumps, config inspection, and Git helpers
+- [pre-commit / lefthook](pre-commit.md) — local hook setup for incremental or
+	squash-based changelog workflows
 
-- the CLI and config model live in `rrt-cli.md`
-- branch policy and release naming live in `semantic-branches.md`
-- workflow design and Git safety checks live in `git-magic.md`
-- CI and local enforcement live in `github-action.md` and `pre-commit.md`
-- zero-install guidance lives in `skill.md`
+## Start by workflow
 
-That keeps the homepage readable while still giving each workflow a complete
-leaf page.
+- [Conventional branches](semantic-branches.md) — naming model and allowed
+	branch types
+- [Git magic](git-magic.md) — opinionated Git helpers and workflow shortcuts
+- [Skill](skill.md) — Copilot CLI usage via `uvx`
+
+## Choose your changelog workflow
+
+`repo-release-tools` supports two changelog styles:
+
+- `incremental` *(default)* — maintain changelog state during development
+- `squash` — skip per-commit changelog enforcement and generate or correct
+	changelog entries when changes are squashed together
+
+If you are unsure where to start:
+
+1. Read [`rrt-cli.md`](rrt-cli.md) to configure `changelog_workflow`
+2. Read [`pre-commit.md`](pre-commit.md) for the matching local hook setup
+3. Read [`github-action.md`](github-action.md) to see how
+	 `changelog-strategy: auto` follows that workflow in CI

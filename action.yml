@@ -36,7 +36,7 @@ inputs:
     description: |
       Changelog enforcement strategy:
         auto         – (default) derive from changelog_workflow in repo config.
-        per-commit   – (default) the changelog file must appear in the commit's changed-file list.
+        per-commit   – the changelog file must appear in the commit's changed-file list.
         unreleased   – a non-empty [Unreleased] section must exist in the changelog.
         release-only – the check is skipped (changelog is updated only at release time).
     default: "auto"
