@@ -147,6 +147,7 @@ def update_changelog(
 def cmd_bump(args: argparse.Namespace) -> int:
     """Bump project version using [tool.rrt]."""
     root = Path.cwd()
+    force = getattr(args, "force", False)
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
@@ -187,7 +188,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
             return 1
 
     branch_name = group.release_branch.format(version=new)
-    base = args.base_branch or ("<current>" if args.dry_run else git.current_branch(root))
+    current_branch = "<current>" if args.dry_run else git.current_branch(root)
+    base = args.base_branch or current_branch
 
     title = "[DRY RUN] Version bump" if args.dry_run else "Version bump"
     print()
@@ -203,6 +205,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
     )
     print()
 
+    branch_exists = False
     if not args.dry_run:
         if not git.working_tree_clean(root):
             print(
@@ -210,14 +213,19 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
-        if git.branch_exists(root, branch_name):
+        branch_exists = git.branch_exists(root, branch_name)
+        if branch_exists and not force:
             print(
                 f"Branch '{branch_name}' already exists. Delete it first or choose a different version.",
                 file=sys.stderr,
             )
             return 1
-        if git.current_branch(root) != base:
+        if current_branch != base:
             git.run(["git", "checkout", base], root, dry_run=False, label="git checkout base")
+        if branch_exists:
+            print(
+                output.warning(f"Branch '{branch_name}' already exists. Resetting it with --force.")
+            )
 
     print(output.section("Updating version strings"))
     for target in group.version_targets:
@@ -244,8 +252,12 @@ def cmd_bump(args: argparse.Namespace) -> int:
             git.run(group.lock_command, root, dry_run=args.dry_run, label="lock command")
 
     print(f"\n{output.section('Git')}")
+    create_flag = "-B" if force else "-b"
     git.run(
-        ["git", "checkout", "-b", branch_name], root, dry_run=args.dry_run, label="git checkout -b"
+        ["git", "checkout", create_flag, branch_name],
+        root,
+        dry_run=args.dry_run,
+        label=f"git checkout {create_flag}",
     )
 
     files_to_stage = [str(target.path.relative_to(root)) for target in group.version_targets]
@@ -283,6 +295,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Bump kind: major | minor | patch, or an explicit semver like 1.2.3",
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing changes.")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Reset the release branch if it already exists instead of failing.",
+    )
     parser.add_argument("--no-commit", action="store_true", help="Skip the git commit step.")
     parser.add_argument("--no-changelog", action="store_true", help="Skip updating the changelog.")
     parser.add_argument(
