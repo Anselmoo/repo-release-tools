@@ -24,14 +24,14 @@ drifts from your release policy.
 
 ```yaml
 - uses: actions/checkout@v6
-	with:
-		fetch-depth: 0
+  with:
+    fetch-depth: 0
 
 - uses: Anselmoo/repo-release-tools@v0.1.10
-	with:
-		check-branch-name: "true"
-		check-commit-subject: "true"
-		check-changelog: "true"
+  with:
+    check-branch-name: "true"
+    check-commit-subject: "true"
+    check-changelog: "true"
 ```
 
 See the full action guide:
