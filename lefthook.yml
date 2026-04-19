@@ -1,0 +1,27 @@
+# lefthook.yml — git hooks powered by repo-release-tools
+# Setup: uv tool install repo-release-tools && lefthook install
+# Docs: https://github.com/Anselmoo/repo-release-tools/blob/main/docs/pre-commit.md
+
+commit-msg:
+  commands:
+    rrt-update-unreleased:
+      # Auto-appends a conventional commit bullet to the [Unreleased] section
+      # of CHANGELOG.md and stages it — changelog equivalent of `ruff --fix`.
+      # feat/fix/refactor/perf commits are written; chore/ci/test are silent no-ops.
+      run: rrt-hooks update-unreleased --message-file {1}
+    rrt-commit-subject:
+      # {1} is the commit-msg file path (positional arg).
+      run: rrt-hooks commit-msg {1}
+
+pre-commit:
+  commands:
+    rrt-branch-name:
+      # Validates the active branch name against the project's branch policy.
+      run: rrt-hooks pre-commit
+
+pre-push:
+  commands:
+    rrt-changelog:
+      # Ensures [Unreleased] is non-empty before pushing — guards against commits
+      # that bypassed the commit-msg hooks (e.g. committed with --no-verify).
+      run: rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased

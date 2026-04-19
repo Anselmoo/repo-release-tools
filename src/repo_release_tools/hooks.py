@@ -810,6 +810,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     update_unreleased_parser.add_argument(
+        "--message-file",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to the commit message file. "
+            "When provided, the subject is read from this file instead of "
+            ".git/COMMIT_EDITMSG. Takes priority over --subject."
+        ),
+    )
+    update_unreleased_parser.add_argument(
         "--changelog-file",
         default=DEFAULT_CHANGELOG,
         help="Changelog path to update.",
@@ -870,8 +880,12 @@ def main(argv: list[str] | None = None) -> int:
     if parsed.command == "check-dirty-tree":
         return run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.")
     if parsed.command == "update-unreleased":
-        subject = parsed.subject
-        if subject is None:
+        if parsed.message_file is not None:
+            # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
+            subject = read_commit_subject(Path(parsed.message_file))
+        elif parsed.subject is not None:
+            subject = parsed.subject
+        else:
             # Fall back to reading the commit message file that git sets during commit hooks.
             commit_editmsg = Path.cwd() / ".git" / "COMMIT_EDITMSG"
             if commit_editmsg.exists():
