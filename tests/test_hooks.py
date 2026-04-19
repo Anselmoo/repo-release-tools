@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from pathlib import Path
@@ -956,3 +958,105 @@ def test_run_update_unreleased_creates_txt_unreleased_section(
     assert "## [" not in content
     assert "txt fix" in content
     assert "~" in content  # RST subsection underline
+
+
+# ---------------------------------------------------------------------------
+# run_update_unreleased – --message-file argument (lefthook integration)
+# ---------------------------------------------------------------------------
+
+
+def test_main_update_unreleased_reads_subject_from_message_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """--message-file takes priority and its content is used as the commit subject."""
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+    monkeypatch.chdir(tmp_path)
+
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("feat: add widget from file\n", encoding="utf-8")
+
+    result = hooks.main(["update-unreleased", "--message-file", str(msg_file)])
+
+    assert result == 0
+    assert "add widget from file" in changelog.read_text(encoding="utf-8")
+
+
+def test_main_update_unreleased_message_file_noop_for_maintenance_commit(
+    tmp_path: Path,
+) -> None:
+    """--message-file with a chore commit leaves CHANGELOG.md unchanged."""
+    changelog = tmp_path / "CHANGELOG.md"
+    original = "# Changelog\n"
+    changelog.write_text(original, encoding="utf-8")
+
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("chore: update deps\n", encoding="utf-8")
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result = hooks.main(["update-unreleased", "--message-file", str(msg_file)])
+    finally:
+        os.chdir(old_cwd)
+
+    assert result == 0
+    assert changelog.read_text(encoding="utf-8") == original
+
+
+def test_main_update_unreleased_message_file_takes_priority_over_subject(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When both --message-file and --subject are given, --message-file wins."""
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+    monkeypatch.chdir(tmp_path)
+
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("feat: from file wins\n", encoding="utf-8")
+
+    result = hooks.main(
+        [
+            "update-unreleased",
+            "--message-file",
+            str(msg_file),
+            "--subject",
+            "feat: from subject ignored",
+        ]
+    )
+
+    assert result == 0
+    content = changelog.read_text(encoding="utf-8")
+    assert "from file wins" in content
+    assert "from subject ignored" not in content
+
+
+def test_main_update_unreleased_message_file_missing(tmp_path: Path) -> None:
+    """--message-file with a non-existent path returns failure exit code."""
+    missing = tmp_path / "no-such-file.txt"
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result = hooks.main(["update-unreleased", "--message-file", str(missing)])
+    finally:
+        os.chdir(old_cwd)
+
+    assert result == 1
+
+
+def test_main_update_unreleased_message_file_unreadable(tmp_path: Path) -> None:
+    """--message-file with an unreadable file returns failure exit code."""
+    bad_file = tmp_path / "COMMIT_EDITMSG"
+    bad_file.write_bytes(b"\xff\xfe invalid utf-8 \x80")
+
+    old_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        result = hooks.main(["update-unreleased", "--message-file", str(bad_file)])
+    finally:
+        os.chdir(old_cwd)
+
+    assert result == 1

@@ -97,3 +97,83 @@ rrt-hooks changelog post-correct --commit
 | `--squash-commit SHA` | Explicit commit SHA to inspect (defaults to `HEAD`) |
 | `--output PATH` | Changelog file to rewrite (default: `CHANGELOG.md`) |
 | `--commit` | Create a follow-up commit with the corrected changelog |
+
+---
+
+## Lefthook setup
+
+[Lefthook](https://github.com/evilmartians/lefthook) is a fast, language-agnostic
+hook runner. Unlike pre-commit it does not require a Python environment, but the
+reference `lefthook.yml` for `repo-release-tools` uses an installed `rrt-hooks`
+binary provided by `uv tool install repo-release-tools`.
+
+`repo-release-tools` ships a reference `lefthook.yml` at the repo root.
+
+### Install
+
+```bash
+# install lefthook
+# macOS
+brew install lefthook
+
+# or via npm / npx
+npm install --save-dev lefthook
+
+# install uv if needed
+# macOS
+brew install uv
+
+# install repo-release-tools so `rrt-hooks` is available to lefthook
+uv tool install repo-release-tools
+
+lefthook install
+```
+
+### Reference config
+
+```yaml
+# lefthook.yml
+commit-msg:
+  commands:
+    rrt-update-unreleased:
+      run: rrt-hooks update-unreleased --message-file {1}
+    rrt-commit-subject:
+      run: rrt-hooks commit-msg {1}
+
+pre-commit:
+  commands:
+    rrt-branch-name:
+      run: rrt-hooks pre-commit
+
+pre-push:
+  commands:
+    rrt-changelog:
+      run: rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
+```
+
+### How the auto-write flow works
+
+When you commit, lefthook runs two `commit-msg` commands:
+
+1. **`rrt-update-unreleased`** — parses the commit subject, appends a bullet under
+   `## [Unreleased]` in `CHANGELOG.md`, and stages the file automatically.
+   This is the changelog equivalent of `ruff --fix`: `feat`, `fix`, `refactor`,
+   and `perf` commits are written automatically; `chore`, `ci`, `test`, and `build`
+   commits are silently skipped (they map to the Maintenance section which does not
+   require an entry). The `--message-file {1}` argument tells `rrt-hooks` to read
+   the subject from the file lefthook provides rather than `.git/COMMIT_EDITMSG`.
+2. **`rrt-commit-subject`** — validates the subject follows Conventional Commits.
+   If this fails the commit is aborted and the changelog write has no effect.
+
+The `pre-push` guard (`rrt-hooks check-changelog --strategy unreleased`) catches the rare case
+where someone committed with `--no-verify`: it checks that `## [Unreleased]` is
+non-empty before the push is allowed.
+
+### Comparison: pre-commit vs. lefthook
+
+| Hook | pre-commit | lefthook |
+|---|---|---|
+| Auto-write changelog | `rrt-update-unreleased` (commit-msg) | `rrt-update-unreleased --message-file {1}` |
+| Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` |
+| Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-branch-name` |
+| Pre-push guard | `rrt-dirty-tree` (pre-push) | `rrt-hooks check-changelog --strategy unreleased` |
