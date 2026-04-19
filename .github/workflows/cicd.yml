@@ -82,13 +82,19 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -q -m "not runtime" --cov=src/repo_release_tools --cov-report=xml
+        env:
+          PYTHON: ${{ matrix.python-version }}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
           flags: python-${{ matrix.python-version }}
-          fail_ci_if_error: false
+          env_vars: PYTHON
+          name: repo-release-tools-${{ matrix.python-version }}
+          fail_ci_if_error: true
+          verbose: false
 
   docker-image-check:
     name: Docker image smoke check
