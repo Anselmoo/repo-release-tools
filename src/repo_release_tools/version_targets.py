@@ -9,7 +9,7 @@ import tomllib
 from pathlib import Path
 
 from repo_release_tools import output
-from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.versioning import Version
 
 
@@ -236,3 +236,38 @@ def _detect_json_indent(text: str) -> int | str | None:
             return "\t"
         return len(indent)
     return None
+
+
+def replace_pin_in_file(
+    target: PinTarget,
+    new_version: str,
+    *,
+    dry_run: bool,
+) -> None:
+    """Update a single doc/CI pin reference to ``new_version``.
+
+    Unlike :func:`replace_version_in_file`, this function is lenient:
+    - A non-matching pattern prints a warning and returns without error.
+    - A version already equal to ``new_version`` prints a note and returns.
+    """
+    path = target.path
+    text = path.read_text(encoding="utf-8")
+
+    match = search_pattern(text, target.pattern)
+    if match is None:
+        print(output.warning(f"Pin pattern did not match in {path} — skipping"))
+        return
+
+    current = match.group(2)
+    if current == new_version:
+        print(output.status(output.GLYPHS.bullet.dot, f"{path}  already at {new_version}"))
+        return
+
+    updated = replace_pattern_version(text, target.pattern, new_version)
+
+    if dry_run:
+        print(output.dry_run(f'Would update {path}: pin = "{new_version}"'))
+        return
+
+    path.write_text(updated, encoding="utf-8")
+    print(output.ok(f'{path}  {output.GLYPHS.arrow.right}  pin = "{new_version}"'))

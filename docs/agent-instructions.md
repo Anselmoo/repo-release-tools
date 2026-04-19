@@ -406,3 +406,40 @@ rrt-hooks check-dirty-tree
 
 Use these commands to reproduce a CI failure locally before pushing. All subcommands accept `--dry-run` for safe inspection.
 ````
+
+## pin_targets — auto-sync version pins in docs and CI
+
+`pin_targets` keeps action refs and pre-commit `rev:` tags in sync with your project version automatically during `rrt bump`.
+
+### When to add pin_targets
+
+Add entries whenever your docs or CI reference the tool's own version as a pin that drifts (e.g. `uses: org/repo@v1.2.3` or `rev: v1.2.3`).
+
+### Config placement
+
+```toml
+# pyproject.toml — global (applies to all version groups)
+[[tool.rrt.pin_targets]]
+path = "docs/github-action.md"
+pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = "docs/pre-commit.md"
+pattern = '(rev: v)(\d+\.\d+\.\d+)()'
+```
+
+Pattern convention: exactly 3 capture groups — `(prefix)(semver)(suffix)`.
+The suffix can be empty: use `()` as the third group.
+
+### Bump behavior
+
+1. `rrt bump <kind>` updates version targets as usual.
+2. Then for each pin entry (global + group-level, deduplicated), runs `replace_pin_in_file`.
+3. Pin files are staged alongside version files before the git commit.
+4. `--no-pin-sync` skips this step entirely for a one-off run.
+
+### Validation
+
+```bash
+rrt bump minor --dry-run   # preview — shows "Would update" for each pin file
+```

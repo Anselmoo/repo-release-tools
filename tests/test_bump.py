@@ -1025,3 +1025,160 @@ def test_update_changelog_generates_txt_section(
     content = changelog.read_text(encoding="utf-8")
     assert "## [" not in content
     assert "txt fix" in content
+
+
+# ---------------------------------------------------------------------------
+# pin_targets — integration with cmd_bump
+# ---------------------------------------------------------------------------
+
+_BUMP_CONFIG_WITH_PINS = """\
+[tool.rrt]
+release_branch = "release/v{{version}}"
+changelog_file = "CHANGELOG.md"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = "docs/action.md"
+pattern = '(Anselmoo/repo-release-tools@v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+"""
+
+
+def _setup_pin_bump(tmp_path: Path) -> Path:
+    """Create a minimal project with a pin_targets doc file."""
+    (tmp_path / "pyproject.toml").write_text(_BUMP_CONFIG_WITH_PINS, encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    doc = docs / "action.md"
+    doc.write_text("- uses: Anselmoo/repo-release-tools@v0.1.0\n", encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Added\n- new feature\n",
+        encoding="utf-8",
+    )
+    return doc
+
+
+def test_cmd_bump_updates_pin_targets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """cmd_bump should update pin_targets files to the new version."""
+    doc = _setup_pin_bump(tmp_path)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git_log_since_latest_tag", lambda root: []
+    )
+
+    args = Namespace(
+        bump="minor",
+        dry_run=False,
+        no_commit=True,
+        no_changelog=True,
+        no_update=True,
+        no_pin_sync=False,
+        include_maintenance=False,
+        base_branch=None,
+        group=None,
+    )
+    result = cmd_bump(args)
+
+    assert result == 0
+    assert "v0.2.0" in doc.read_text(encoding="utf-8")
+
+
+def test_cmd_bump_dry_run_does_not_write_pin_targets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """In dry-run mode, pin_targets files must not be modified."""
+    doc = _setup_pin_bump(tmp_path)
+    original_doc = doc.read_text(encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git_log_since_latest_tag", lambda root: []
+    )
+
+    args = Namespace(
+        bump="minor",
+        dry_run=True,
+        no_commit=True,
+        no_changelog=True,
+        no_update=True,
+        no_pin_sync=False,
+        include_maintenance=False,
+        base_branch=None,
+        group=None,
+    )
+    result = cmd_bump(args)
+
+    assert result == 0
+    # File must be untouched in dry-run
+    assert doc.read_text(encoding="utf-8") == original_doc
+    assert "Would update" in capsys.readouterr().out
+
+
+def test_cmd_bump_no_pin_sync_skips_pin_targets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """--no-pin-sync must skip all pin_targets updates."""
+    doc = _setup_pin_bump(tmp_path)
+    original_doc = doc.read_text(encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git_log_since_latest_tag", lambda root: []
+    )
+
+    args = Namespace(
+        bump="minor",
+        dry_run=False,
+        no_commit=True,
+        no_changelog=True,
+        no_update=True,
+        no_pin_sync=True,
+        include_maintenance=False,
+        base_branch=None,
+        group=None,
+    )
+    result = cmd_bump(args)
+
+    assert result == 0
+    # Doc file must be untouched when --no-pin-sync is set
+    assert doc.read_text(encoding="utf-8") == original_doc

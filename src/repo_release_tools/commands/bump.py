@@ -27,6 +27,7 @@ from repo_release_tools.config import (
 from repo_release_tools.version_targets import (
     check_autodetected_version_consistency,
     read_group_current_version,
+    replace_pin_in_file,
     replace_version_in_file,
 )
 from repo_release_tools.versioning import Version
@@ -227,9 +228,29 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 output.warning(f"Branch '{branch_name}' already exists. Resetting it with --force.")
             )
 
+    g = output.GLYPHS
     print(output.section("Updating version strings"))
-    for target in group.version_targets:
+    total_targets = len(group.version_targets)
+    for i, target in enumerate(group.version_targets, 1):
         replace_version_in_file(target, str(new), dry_run=args.dry_run)
+        if total_targets > 1:
+            print(f"  {g.progress.render_bar(i / total_targets)}")
+
+    all_pins = group.pin_targets + config.global_pin_targets
+    if all_pins and not getattr(args, "no_pin_sync", False):
+        print(f"\n{output.section('Updating doc pins')}")
+        seen_pin_keys: set[tuple[object, str]] = set()
+        unique_pins: list = []
+        for pin in all_pins:
+            key = (pin.path, pin.pattern)
+            if key not in seen_pin_keys:
+                seen_pin_keys.add(key)
+                unique_pins.append(pin)
+        total_pins = len(unique_pins)
+        for i, pin in enumerate(unique_pins, 1):
+            replace_pin_in_file(pin, str(new), dry_run=args.dry_run)
+            if total_pins > 1:
+                print(f"  {g.progress.render_bar(i / total_pins)}")
 
     if not args.no_changelog:
         print(f"\n{output.section('Updating changelog')}")
@@ -266,6 +287,14 @@ def cmd_bump(args: argparse.Namespace) -> int:
             files_to_stage.append(str(path.relative_to(root)))
     if group.changelog_file.exists() and not args.no_changelog:
         files_to_stage.append(str(group.changelog_file.relative_to(root)))
+    if not getattr(args, "no_pin_sync", False):
+        seen_pin_stage: set[tuple[object, str]] = set()
+        for pin in all_pins:
+            key = (pin.path, pin.pattern)
+            if key in seen_pin_stage:
+                continue
+            seen_pin_stage.add(key)
+            files_to_stage.append(str(pin.path.relative_to(root)))
     git.run(
         ["git", "add", *dict.fromkeys(files_to_stage)], root, dry_run=args.dry_run, label="git add"
     )
@@ -302,6 +331,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     parser.add_argument("--no-commit", action="store_true", help="Skip the git commit step.")
     parser.add_argument("--no-changelog", action="store_true", help="Skip updating the changelog.")
+    parser.add_argument(
+        "--no-pin-sync",
+        action="store_true",
+        help="Skip updating doc/CI pin references (pin_targets).",
+    )
     parser.add_argument(
         "--no-update",
         action="store_true",

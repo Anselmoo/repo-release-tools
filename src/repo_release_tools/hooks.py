@@ -19,6 +19,7 @@ from repo_release_tools.changelog import (
 )
 from repo_release_tools.config import DEFAULT_CHANGELOG, load_extra_branch_types
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, SLUG_MAX, normalize_commit_type
+from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.versioning import Version
 
 
@@ -154,6 +155,21 @@ def commit_subject_requires_changelog(subject: str) -> bool:
     if parsed is None:
         return False
     return commit_type_requires_changelog(parsed.type, breaking=parsed.breaking)
+
+
+def is_changelog_meta_commit(subject: str) -> bool:
+    """Return True when the commit description is itself about updating the changelog.
+
+    Prevents ``rrt-update-unreleased`` from adding a recursive bullet such as
+    ``- update changelog entries`` when someone commits a changelog correction
+    with a subject like ``fix: update changelog to reflect CI changes``.  Any
+    conventional commit whose *description* contains the word ``changelog``
+    (case-insensitive) is treated as a maintenance activity and silently skipped.
+    """
+    parsed = _parse_subject_for_changelog(subject)
+    if parsed is None:
+        return False
+    return "changelog" in parsed.description.lower()
 
 
 def _normalize_repo_path(path: str, *, cwd: Path) -> str:
@@ -543,6 +559,8 @@ def run_update_unreleased(
     """
     if not commit_subject_requires_changelog(subject):
         return 0
+    if is_changelog_meta_commit(subject):
+        return 0
 
     changelog_path = cwd / changelog_file
     if not changelog_path.exists():
@@ -830,6 +848,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Validate that the current working tree is clean.",
     )
 
+    subparsers.add_parser(
+        "doctor",
+        help="Health-check the rrt configuration for the current repository.",
+    )
+
     changelog_parser = subparsers.add_parser(
         "changelog",
         help="Changelog management commands.",
@@ -879,6 +902,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_commit_subject_check(parsed.subject, title="Commit subject validation failed.")
     if parsed.command == "check-dirty-tree":
         return run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.")
+    if parsed.command == "doctor":
+        return cmd_doctor(parsed)
     if parsed.command == "update-unreleased":
         if parsed.message_file is not None:
             # Explicit file path — used by lefthook which passes {1} (the commit-msg file).

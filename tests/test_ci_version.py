@@ -734,3 +734,162 @@ ci_format = "pep440"
     assert result == 0
     assert 'version = "0.2.0"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
     assert '"version": "1.6.0.dev1201"' in (tmp_path / "package.json").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# cmd_ci_version_apply – error paths
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_ci_version_apply_no_ci_format_targets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """apply should fail when no version targets have ci_format configured."""
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "1.0.0"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    result = cmd_ci_version_apply(
+        argparse.Namespace(version="1.0.0.dev100", dry_run=False, group=None)
+    )
+
+    assert result == 1
+
+
+def test_cmd_ci_version_apply_semver_pre_non_dev_version_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """apply should fail when semver_pre conversion cannot handle the version."""
+    (tmp_path / "Cargo.toml").write_text('[package]\nname = "eg"\nversion = "0.1.0"\n')
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "Cargo.toml"
+kind = "pep621"
+ci_format = "semver_pre"
+
+[project]
+name = "example"
+version = "1.0.0"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    # ".dev" in version but to_semver() leaves it unchanged → should fail
+    result = cmd_ci_version_apply(
+        argparse.Namespace(version="1.0.0.devABC", dry_run=False, group=None)
+    )
+
+    assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# cmd_ci_version_compute – error paths
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_ci_version_compute_no_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """compute should return 1 when no config is available."""
+    monkeypatch.chdir(tmp_path)
+
+    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="999", run_attempt="1"))
+
+    assert result == 1
+
+
+def test_cmd_ci_version_compute_with_base(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """compute --base should print the computed version."""
+    monkeypatch.chdir(tmp_path)
+
+    args = argparse.Namespace(
+        base="2.0.0",
+        ref="refs/tags/v2.0.0",
+        ref_name="v2.0.0",
+        run_id="0",
+        run_attempt="1",
+        dry_run=False,
+        group=None,
+    )
+    result = cmd_ci_version_compute(args)
+
+    assert result == 0
+    assert "2.0.0" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# cmd_ci_version_sync
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_ci_version_sync_with_base_tag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """sync should compute the version and call apply."""
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+ci_format = "pep440"
+
+[project]
+name = "example"
+version = "0.9.0"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    args = argparse.Namespace(
+        base="1.0.0",
+        ref="refs/tags/v1.0.0",
+        ref_name="v1.0.0",
+        run_id="0",
+        run_attempt="1",
+        dry_run=True,
+        group=None,
+    )
+    result = cmd_ci_version_sync(args)
+
+    assert result == 0
+    out = capsys.readouterr().out
+    assert "1.0.0" in out
+
+
+def test_cmd_ci_version_sync_invalid_run_attempt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """sync should return 1 when run_attempt is not an integer on main."""
+    monkeypatch.chdir(tmp_path)
+
+    args = argparse.Namespace(
+        base="1.0.0",
+        ref="refs/heads/main",
+        ref_name="main",
+        run_id="12345",
+        run_attempt="not-a-number",
+        dry_run=False,
+        group=None,
+    )
+    result = cmd_ci_version_sync(args)
+
+    assert result == 1

@@ -13,6 +13,7 @@ from repo_release_tools.hooks import run_changelog_check
 from repo_release_tools.hooks import run_pre_commit_changelog
 from repo_release_tools.hooks import run_update_unreleased
 from repo_release_tools.hooks import validate_branch_name
+from repo_release_tools.hooks import is_changelog_meta_commit
 from repo_release_tools.hooks import validate_commit_subject
 from repo_release_tools.hooks import _entries_cancel_out
 from repo_release_tools.hooks import dedup_changelog_entries
@@ -1060,3 +1061,79 @@ def test_main_update_unreleased_message_file_unreadable(tmp_path: Path) -> None:
         os.chdir(old_cwd)
 
     assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# is_changelog_meta_commit
+# ---------------------------------------------------------------------------
+
+
+def test_is_changelog_meta_commit_true_for_fix_update_changelog() -> None:
+    assert is_changelog_meta_commit("fix: update changelog entries") is True
+
+
+def test_is_changelog_meta_commit_true_for_feat_with_changelog_word() -> None:
+    assert is_changelog_meta_commit("feat: update changelog to reflect new api") is True
+
+
+def test_is_changelog_meta_commit_true_case_insensitive() -> None:
+    assert is_changelog_meta_commit("fix: correct CHANGELOG formatting") is True
+
+
+def test_is_changelog_meta_commit_false_for_normal_feat() -> None:
+    assert is_changelog_meta_commit("feat: add dark mode") is False
+
+
+def test_is_changelog_meta_commit_false_for_normal_fix() -> None:
+    assert is_changelog_meta_commit("fix: resolve login timeout") is False
+
+
+def test_is_changelog_meta_commit_false_for_unparseable_subject() -> None:
+    assert is_changelog_meta_commit("not a conventional commit at all") is False
+
+
+# ---------------------------------------------------------------------------
+# run_update_unreleased – changelog-meta-commit skip guard
+# ---------------------------------------------------------------------------
+
+
+def test_run_update_unreleased_skips_changelog_meta_commit(
+    tmp_path: Path,
+) -> None:
+    """A commit whose description mentions 'changelog' must not add a bullet."""
+    changelog = tmp_path / "CHANGELOG.md"
+    original = "# Changelog\n"
+    changelog.write_text(original, encoding="utf-8")
+
+    result = run_update_unreleased(tmp_path, subject="fix: update changelog entries")
+
+    assert result == 0
+    assert changelog.read_text(encoding="utf-8") == original
+
+
+def test_run_update_unreleased_skips_changelog_meta_commit_case_insensitive(
+    tmp_path: Path,
+) -> None:
+    """The guard is case-insensitive on 'changelog'."""
+    changelog = tmp_path / "CHANGELOG.md"
+    original = "# Changelog\n"
+    changelog.write_text(original, encoding="utf-8")
+
+    result = run_update_unreleased(tmp_path, subject="feat: correct CHANGELOG formatting")
+
+    assert result == 0
+    assert changelog.read_text(encoding="utf-8") == original
+
+
+def test_run_update_unreleased_does_not_skip_unrelated_feat(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A normal feat commit (no 'changelog' in description) still writes a bullet."""
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "run", lambda *a, **kw: None)
+
+    result = run_update_unreleased(tmp_path, subject="feat: add pagination")
+
+    assert result == 0
+    assert "add pagination" in changelog.read_text(encoding="utf-8")

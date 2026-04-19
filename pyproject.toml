@@ -42,6 +42,28 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = ["pytest>=8.0", "pytest-cov>=7.1.0", "ruff>=0.14.0", "ty>=0.0.26"]
 
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_targets]]
+path = "src/repo_release_tools/__init__.py"
+kind = "python_version"
+
+[[tool.rrt.pin_targets]]
+path = "docs/github-action.md"
+pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = "docs/pre-commit.md"
+pattern = '(rev: v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = "docs/agent-instructions.md"
+pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
