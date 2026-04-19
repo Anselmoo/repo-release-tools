@@ -105,6 +105,12 @@ def test_spinner_lines_noop_on_non_tty(capsys) -> None:
     assert non_tty.getvalue() == ""
 
 
+def test_panel_empty_rows_returns_title_only() -> None:
+    """panel() with no rows must return just the title string."""
+    result = output.panel("Just a title", [])
+    assert result == "Just a title"
+
+
 def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
     """spinner_lines must skip threading when IS_LEGACY_TERMINAL is True."""
     import io

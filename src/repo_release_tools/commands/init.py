@@ -68,11 +68,12 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
         print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
         return 1
 
+    g = output.GLYPHS
     print()
     print(
         output.panel(
             "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [("File", DEFAULT_INIT_CONFIG)],
+            [(f"{g.git.commit} File", DEFAULT_INIT_CONFIG)],
         )
     )
     print()
@@ -139,11 +140,12 @@ def _init_manifest(
         print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
         return 1
 
+    g = output.GLYPHS
     print()
     print(
         output.panel(
             "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [("File", manifest), ("Section", section_label)],
+            [(f"{g.git.commit} File", manifest), ("Section", section_label)],
         )
     )
     print()
@@ -200,11 +202,12 @@ def _init_package_json(args: argparse.Namespace) -> int:
 
     preview = _json.dumps({"rrt": rrt_dict}, indent=2)
 
+    g = output.GLYPHS
     print()
     print(
         output.panel(
             "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [("File", "package.json"), ("Key", '"rrt"')],
+            [(f"{g.git.commit} File", "package.json"), ("Key", '"rrt"')],
         )
     )
     print()

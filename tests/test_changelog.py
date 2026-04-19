@@ -574,3 +574,79 @@ def test_insert_generated_section_rst_preserves_title() -> None:
     result = insert_generated_section(_RST_EMPTY, section, ChangelogFormat.RST)
     assert result.startswith("Changelog\n=========")
     assert has_unreleased_section(result, ChangelogFormat.RST)
+
+
+# ---------------------------------------------------------------------------
+# append_to_unreleased – blank-line correctness (regression)
+# ---------------------------------------------------------------------------
+
+_VERSIONED_AFTER_TITLE = """\
+# Changelog
+
+## [1.0.0] - 2025-01-01
+
+### Added
+- initial release
+"""
+
+_UNRELEASED_WITH_FIXED_AND_VERSION = """\
+# Changelog
+
+## [Unreleased]
+
+### Fixed
+- fix connection timeout
+
+## [1.0.0] - 2025-01-01
+
+### Added
+- initial release
+"""
+
+_UNRELEASED_EMPTY_WITH_VERSION = """\
+# Changelog
+
+## [Unreleased]
+
+## [1.0.0] - 2025-01-01
+
+### Added
+- initial release
+"""
+
+
+def test_append_new_section_preserves_blank_line_before_versioned_section() -> None:
+    """Adding a new subsection must keep exactly one blank line before ## [version]."""
+    result = append_to_unreleased(_UNRELEASED_WITH_FIXED_AND_VERSION, "feat: add dark mode")
+    # The blank line separator between the new bullet and the version header must exist.
+    assert "- add dark mode\n\n## [1.0.0]" in result
+
+
+def test_append_to_empty_unreleased_preserves_blank_line_before_versioned_section() -> None:
+    """Filling an empty [Unreleased] must keep exactly one blank line before ## [version]."""
+    result = append_to_unreleased(_UNRELEASED_EMPTY_WITH_VERSION, "feat: new feature")
+    assert "- new feature\n\n## [1.0.0]" in result
+
+
+def test_fresh_unreleased_section_no_double_blank_line_before_versioned_section() -> None:
+    """Creating [Unreleased] from scratch must not produce two blank lines before ## [version]."""
+    result = append_to_unreleased(_VERSIONED_AFTER_TITLE, "fix: correct null pointer")
+    # Exactly one blank line between bullet and next version header.
+    assert "- correct null pointer\n\n## [1.0.0]" in result
+    assert "- correct null pointer\n\n\n## [1.0.0]" not in result
+
+
+def test_append_multiple_sections_no_extra_blank_lines() -> None:
+    """Three successive commits must not accumulate extra blank lines."""
+    content = _VERSIONED_AFTER_TITLE
+    content = append_to_unreleased(content, "feat: add widget")
+    content = append_to_unreleased(content, "fix: fix typo")
+    content = append_to_unreleased(content, "feat: add pagination")
+
+    # No run of three or more consecutive newlines anywhere.
+    assert "\n\n\n" not in content
+    # Version header still present and preceded by exactly one blank line.
+    assert "## [1.0.0]" in content
+    # Both subsections present.
+    assert "### Added" in content
+    assert "### Fixed" in content

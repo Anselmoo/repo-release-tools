@@ -6,7 +6,7 @@ import json
 import re
 import tomllib
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent
 
@@ -226,6 +226,37 @@ class VersionTarget:
 
 
 @dataclass(frozen=True)
+class PinTarget:
+    """A single doc/CI pin target updated by 'rrt bump'.
+
+    Unlike ``VersionTarget``, ``PinTarget`` is write-only and does not
+    participate in version consistency checks.  Use it to keep version pins
+    in documentation and CI configs (e.g. ``@v1.2.3`` or ``rev: v1.2.3``)
+    in sync with every release.
+
+    The ``pattern`` must follow the 3-group convention used by
+    ``VersionTarget`` custom patterns:
+    - Group 1: constant prefix (e.g. ``(Anselmoo/repo-release-tools@v)``)
+    - Group 2: bare semver being replaced (e.g. ``(\\d+\\.\\d+\\.\\d+)``)
+    - Group 3: constant suffix (e.g. ``()``)
+    """
+
+    path: Path
+    pattern: str
+
+    def validate(self) -> None:
+        """Validate the pin target."""
+        try:
+            compiled = re.compile(self.pattern)
+        except re.error as exc:
+            raise ValueError(f"pin_targets pattern is not a valid regex: {exc}") from exc
+        if compiled.groups != 3:
+            raise ValueError(
+                "pin_targets pattern must have exactly 3 capture groups (prefix, version, suffix)"
+            )
+
+
+@dataclass(frozen=True)
 class VersionGroup:
     """A coordinated release unit inside a repository."""
 
@@ -236,6 +267,7 @@ class VersionGroup:
     generated_files: list[Path]
     version_targets: list[VersionTarget]
     version_source: Path | None = None
+    pin_targets: list[PinTarget] = field(default_factory=list)
 
     def primary_target(self) -> VersionTarget:
         """Return the target used as the canonical version source."""
@@ -261,6 +293,7 @@ class RrtConfig:
     default_group_name: str | None = None
     autodetected: bool = False
     extra_branch_types: tuple[str, ...] = ()
+    global_pin_targets: list[PinTarget] = field(default_factory=list)
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""
@@ -942,6 +975,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         version_groups=version_groups,
         default_group_name=default_group_name,
         extra_branch_types=extra_branch_types,
+        global_pin_targets=_load_pin_targets(root, raw.get("pin_targets", [])),
     )
 
 
@@ -1183,6 +1217,26 @@ def _load_cargo_toml_config(config_file: Path) -> dict[str, object]:
     )
 
 
+def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
+    """Parse a list of pin target tables into ``PinTarget`` objects."""
+    if not isinstance(raw_pins, list):
+        raise ValueError("pin_targets must be an array of tables")
+    pins: list[PinTarget] = []
+    for item in raw_pins:
+        if not isinstance(item, dict):
+            raise ValueError("Each pin_targets entry must be a table")
+        raw_path = item.get("path")
+        raw_pattern = item.get("pattern")
+        if not isinstance(raw_path, str) or not raw_path:
+            raise ValueError("Each pin_targets entry must have a non-empty 'path' string")
+        if not isinstance(raw_pattern, str) or not raw_pattern:
+            raise ValueError("Each pin_targets entry must have a non-empty 'pattern' string")
+        pin = PinTarget(path=root / raw_path, pattern=raw_pattern)
+        pin.validate()
+        pins.append(pin)
+    return pins
+
+
 def _load_version_group(
     root: Path,
     *,
@@ -1260,4 +1314,5 @@ def _load_version_group(
         generated_files=[root / path for path in generated_files],
         version_targets=targets,
         version_source=version_source,
+        pin_targets=_load_pin_targets(root, raw_group.get("pin_targets", [])),
     )

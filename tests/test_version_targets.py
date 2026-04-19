@@ -7,7 +7,6 @@ import pytest
 from repo_release_tools.config import VersionTarget
 from repo_release_tools.version_targets import read_version_string, replace_version_in_file
 
-
 # ---------------------------------------------------------------------------
 # python_version – read
 # ---------------------------------------------------------------------------
@@ -223,3 +222,109 @@ def test_validate_unknown_kind_raises() -> None:
     target = VersionTarget(path=Path("file.py"), kind="ruby_version")
     with pytest.raises(ValueError, match="kind must be one of"):
         target.validate()
+
+
+# ---------------------------------------------------------------------------
+# replace_pin_in_file
+# ---------------------------------------------------------------------------
+
+
+def test_replace_pin_in_file_updates_version(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    from repo_release_tools.config import PinTarget
+    from repo_release_tools.version_targets import replace_pin_in_file
+
+    f = tmp_path / "action.md"
+    f.write_text("- uses: Anselmoo/repo-release-tools@v0.1.7\n", encoding="utf-8")
+    pin = PinTarget(
+        path=f,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+
+    replace_pin_in_file(pin, "1.0.0", dry_run=False)
+
+    assert "v1.0.0" in f.read_text(encoding="utf-8")
+    assert "v0.1.7" not in f.read_text(encoding="utf-8")
+
+
+def test_replace_pin_in_file_dry_run_does_not_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    from repo_release_tools.config import PinTarget
+    from repo_release_tools.version_targets import replace_pin_in_file
+
+    f = tmp_path / "action.md"
+    original = "- uses: Anselmoo/repo-release-tools@v0.1.7\n"
+    f.write_text(original, encoding="utf-8")
+    pin = PinTarget(
+        path=f,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+
+    replace_pin_in_file(pin, "1.0.0", dry_run=True)
+
+    # File must be unchanged in dry-run mode
+    assert f.read_text(encoding="utf-8") == original
+    out = capsys.readouterr().out
+    assert "Would update" in out
+
+
+def test_replace_pin_in_file_already_current_skips(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    from repo_release_tools.config import PinTarget
+    from repo_release_tools.version_targets import replace_pin_in_file
+
+    f = tmp_path / "action.md"
+    f.write_text("- uses: Anselmoo/repo-release-tools@v1.0.0\n", encoding="utf-8")
+    pin = PinTarget(
+        path=f,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+
+    replace_pin_in_file(pin, "1.0.0", dry_run=False)
+
+    out = capsys.readouterr().out
+    assert "already" in out.lower() or "up to date" in out.lower() or "pin" in out.lower()
+
+
+def test_replace_pin_in_file_no_match_warns(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    from repo_release_tools.config import PinTarget
+    from repo_release_tools.version_targets import replace_pin_in_file
+
+    f = tmp_path / "notes.md"
+    f.write_text("# Just some notes\n", encoding="utf-8")
+    pin = PinTarget(
+        path=f,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+
+    replace_pin_in_file(pin, "1.0.0", dry_run=False)
+
+    captured = capsys.readouterr()
+    assert "did not match" in captured.out.lower() or "skipping" in captured.out.lower()
+
+
+def test_replace_pin_in_file_replaces_all_occurrences(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """replace_pin_in_file updates every occurrence, not just the first."""
+    from repo_release_tools.config import PinTarget
+    from repo_release_tools.version_targets import replace_pin_in_file
+
+    f = tmp_path / "action.md"
+    content = (
+        "- uses: Anselmoo/repo-release-tools@v0.1.7\n"
+        "# also: Anselmoo/repo-release-tools@v0.1.7\n"
+        "- uses: Anselmoo/repo-release-tools@v0.1.7\n"
+    )
+    f.write_text(content, encoding="utf-8")
+    pin = PinTarget(
+        path=f,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+
+    replace_pin_in_file(pin, "2.0.0", dry_run=False)
+
+    updated = f.read_text(encoding="utf-8")
+    assert updated.count("v2.0.0") == 3
+    assert "v0.1.7" not in updated

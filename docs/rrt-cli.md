@@ -21,6 +21,9 @@ rrt init
 rrt config
 rrt branch new feat "add parser"
 rrt branch rescue fix "recover release work"
+rrt branch rename --type feat
+rrt branch rename --scope cli
+rrt branch rename fix "add helper" --scope utils
 rrt git commit "add parser"
 rrt git sync
 rrt git diff
@@ -34,6 +37,45 @@ rrt bump 1.2.3 --no-changelog
 Use `rrt bump ... --force` when you need to recreate an existing release branch
 from the chosen base after last-minute fixes, without deleting the branch by
 hand first.
+
+## Branch rename
+
+Rename the **current** branch, updating any combination of type, scope, and
+description without leaving the repo in a broken state.
+
+```bash
+# Change only the type — slug is kept as-is
+rrt branch rename --type feat
+
+# Prepend a scope to the existing slug
+rrt branch rename --scope cli
+
+# Change type + scope (slug kept)
+rrt branch rename --type feat --scope cli
+
+# Full rebuild: type inferred from current branch, new description
+rrt branch rename fix add helper --scope utils
+
+# Remove scope and restate description
+rrt branch rename --no-scope feat "add parser"
+
+# Preview without touching git
+rrt branch rename --type docs --dry-run
+```
+
+### How it works
+
+| What you provide | Behaviour |
+|---|---|
+| `--type` only | Replaces the `type/` prefix; slug unchanged |
+| `--scope` only | Prepends `{scope}-` to the existing slug |
+| description words | Rebuilds from scratch using `BranchName(type, description, scope)` |
+| `--no-scope` + words | Rebuilds without any scope prefix |
+
+`rrt branch rename` calls `git branch -m <old> <new>` — only a local rename,
+no remote tracking branches are moved. Push the new name with
+`git push origin :<old> <new>` or `git push --set-upstream origin <new>` as
+needed.
 
 ## Git workflows
 
@@ -304,3 +346,84 @@ rrt bump patch --group web
 rrt ci-version compute --group python
 rrt ci-version apply 1.4.0.dev1201 --group web
 ```
+
+## Pin targets — auto-sync doc/CI version pins
+
+`pin_targets` lets you declare files that contain version pins (e.g. GitHub Action refs, pre-commit `rev:` tags) and have `rrt bump` update them automatically alongside the main version bump.
+
+### Config
+
+Add entries to `pyproject.toml` (or `.rrt.toml`) using a 3-group capture pattern:
+`(prefix)(bare_semver)(suffix)` — groups 1 and 3 are kept verbatim; group 2 is replaced.
+
+```toml
+# Global — applies to all version groups
+[[tool.rrt.pin_targets]]
+path = "docs/github-action.md"
+pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = "docs/pre-commit.md"
+pattern = '(rev: v)(\d+\.\d+\.\d+)()'
+
+# Per-group — only applied when bumping that group
+[[tool.rrt.version_groups.pin_targets]]
+path = "README.md"
+pattern = '(badge/version-v)(\d+\.\d+\.\d+)(-blue)'
+```
+
+### Behavior
+
+- Runs after version string updates, before changelog and git commit.
+- Files are staged alongside the main version files.
+- If a pattern matches multiple lines, all occurrences are updated.
+- A warning is printed when the pattern produces no match.
+- Already-current pins are left unchanged and a status line is printed.
+
+### Skip flag
+
+```bash
+rrt bump minor --no-pin-sync   # skip pin_targets for this run
+```
+
+## Health checks — rrt doctor
+
+`rrt doctor` verifies that the current `[tool.rrt]` configuration is internally
+consistent and all referenced files are reachable:
+
+```bash
+rrt doctor
+```
+
+It produces a tree report — green `✔` for passing checks, red `✖` for failures.
+
+### What it checks
+
+| Check | Pass condition | Failure condition |
+|---|---|---|
+| Version target files | File exists at the declared path | File not found → exits 1 |
+| Version target readability | Version string can be read from the file | Unreadable → warning only, exits 0 |
+| Pin target files | File exists at the declared path | File not found → exits 1 |
+| Pin target patterns | Pattern compiles and matches in the file | No match → warning only, exits 0 |
+| Changelog file | File exists at `changelog_file` | File not found → exits 1 |
+
+### Exit behavior
+
+- Exits `0` when all checks pass.
+- Exits `1` when any check fails. Failing checks print a message under `✖`.
+
+### Usage in CI
+
+```yaml
+- uses: Anselmoo/repo-release-tools@v0.1.10
+  with:
+    check-doctor: "true"
+```
+
+Or run directly in a workflow step:
+
+```bash
+uvx --from repo-release-tools rrt doctor
+```
+
+Run `rrt doctor` before `rrt bump` to confirm targets are set up correctly.

@@ -46,3 +46,13 @@
   always_run: true
   stages: [manual, pre-push]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-doctor
+  name: repo-release-tools doctor
+  description: Health-check the rrt configuration (version targets, pin targets, changelog)
+  entry: rrt-hooks doctor
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"

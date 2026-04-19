@@ -26,6 +26,7 @@ CONVENTIONAL_TYPES = (
 )
 
 SLUG_MAX = 60
+BRANCH_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 @dataclass(frozen=True)
@@ -112,6 +113,129 @@ def cmd_new(args: argparse.Namespace) -> int:
         print(f"{output.action('Uncommitted changes moved to the new branch.')}\n")
 
     print(output.ok(f"Done. Suggested commit title: {commit_title}"))
+    print()
+    if args.dry_run:
+        print(output.dry_run_complete("no changes made"))
+    return 0
+
+
+def _parse_current_branch(branch: str) -> tuple[str, str]:
+    """Split ``type/slug`` → ``(type, slug)``.
+
+    Raises :exc:`ValueError` when the branch name does not follow the
+    ``type/slug`` convention expected by *rrt*.
+    """
+    if "/" not in branch:
+        raise ValueError(
+            f"Current branch {branch!r} does not follow the '<type>/<slug>' convention. "
+            "Cannot determine which part to rename."
+        )
+    commit_type, _, slug = branch.partition("/")
+    return commit_type, slug
+
+
+def cmd_rename(args: argparse.Namespace) -> int:
+    """Rename the current branch, changing any combination of type / scope / description."""
+    root = Path.cwd()
+    no_scope: bool = getattr(args, "no_scope", False)
+    new_type_arg: str | None = getattr(args, "type", None)
+    scope: str | None = getattr(args, "scope", None)
+    description_words: list[str] = list(getattr(args, "description", None) or [])
+
+    # Validate: at least one change must be requested
+    if not new_type_arg and not scope and not no_scope and not description_words:
+        print(
+            "Nothing to rename. Specify --type, --scope, --no-scope, or new description words.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # --no-scope without description means we can't strip the embedded scope from the slug
+    if no_scope and not description_words:
+        print(
+            "--no-scope requires description words so the slug can be rebuilt without a scope.",
+            file=sys.stderr,
+        )
+        return 1
+
+    current_branch = git.current_branch(root)
+
+    try:
+        current_type, current_slug = _parse_current_branch(current_branch)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+
+    new_type = new_type_arg or current_type
+
+    if description_words:
+        # Full rebuild: type + scope + new description
+        description = join_description(description_words)
+        effective_scope = None if no_scope else scope
+        branch = BranchName(type=new_type, description=description, scope=effective_scope)
+        new_name = branch.slug()
+        commit_title = branch.commit_title()
+    else:
+        # Slug-preserving rename: only type and/or scope prefix changes
+        if scope:
+            scope_slug = re.sub(r"[^a-z0-9]+", "-", scope.lower()).strip("-")
+            new_slug = f"{scope_slug}-{current_slug}"
+        else:
+            new_slug = current_slug
+
+        # Validate the resulting slug against the same rules used by branch creation
+        if len(new_slug) > SLUG_MAX:
+            print(
+                f"Computed slug {new_slug!r} is too long ({len(new_slug)} > {SLUG_MAX}). "
+                "Provide a new description to rebuild the slug.",
+                file=sys.stderr,
+            )
+            return 1
+        if not BRANCH_SLUG_RE.fullmatch(new_slug):
+            print(
+                f"Computed slug {new_slug!r} is not valid kebab-case. "
+                "Provide a new description to rebuild the slug.",
+                file=sys.stderr,
+            )
+            return 1
+
+        new_name = f"{new_type}/{new_slug}"
+        scope_part = f"({scope})" if scope else ""
+        commit_title = f"{new_type}{scope_part}: <preserved description>"
+
+    if new_name == current_branch:
+        print("Branch name is unchanged. Nothing to do.", file=sys.stderr)
+        return 1
+
+    g = output.GLYPHS
+    title = "[DRY RUN] Rename branch" if args.dry_run else "Rename branch"
+    print()
+    print(
+        output.panel(
+            title,
+            [
+                (f"{g.git.branch} From", current_branch),
+                (f"{g.diff.renamed} To", new_name),
+                (f"{g.arrow.right} Commit title", commit_title),
+            ],
+        )
+    )
+    print()
+
+    if not args.dry_run:
+        if git.branch_exists(root, new_name):
+            print(
+                f"Branch '{new_name}' already exists. Delete it first or choose a different name.",
+                file=sys.stderr,
+            )
+            return 1
+        git.run(
+            ["git", "branch", "-m", current_branch, new_name],
+            root,
+            dry_run=False,
+            label="git branch -m",
+        )
+        print(output.ok(f"Done. Renamed '{current_branch}' {g.diff.renamed} '{new_name}'."))
     print()
     if args.dry_run:
         print(output.dry_run_complete("no changes made"))
@@ -232,3 +356,37 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Rescue commits since this SHA instead of origin/<branch>.",
     )
     rescue_parser.set_defaults(handler=cmd_rescue)
+
+    rename_parser = branch_sub.add_parser(
+        "rename",
+        help="Rename the current branch: change type, scope, description, or any combination.",
+    )
+    rename_parser.add_argument(
+        "--type",
+        dest="type",
+        type=normalize_commit_type,
+        metavar="TYPE",
+        default=None,
+        help="New conventional commit type (e.g. feat, fix, build).",
+    )
+    rename_parser.add_argument(
+        "--scope",
+        metavar="SCOPE",
+        default=None,
+        help="New scope to prefix the slug with.",
+    )
+    rename_parser.add_argument(
+        "--no-scope",
+        action="store_true",
+        default=False,
+        help="Remove the scope from the new branch name (requires description words).",
+    )
+    rename_parser.add_argument(
+        "description",
+        nargs="*",
+        help="New branch description words (replaces the current description).",
+    )
+    rename_parser.add_argument(
+        "--dry-run", action="store_true", help="Preview the rename without touching git."
+    )
+    rename_parser.set_defaults(handler=cmd_rename)

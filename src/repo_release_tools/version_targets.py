@@ -9,7 +9,7 @@ import tomllib
 from pathlib import Path
 
 from repo_release_tools import output
-from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.versioning import Version
 
 
@@ -191,11 +191,15 @@ def replace_package_json_version(text: str, new_version: str) -> str:
     return updated
 
 
-def replace_pattern_version(text: str, pattern: str, new_version: str) -> str:
-    """Replace a regex-based version, tolerating legacy TOML double escaping."""
+def replace_pattern_version(text: str, pattern: str, new_version: str, *, count: int = 1) -> str:
+    """Replace a regex-based version, tolerating legacy TOML double escaping.
+
+    *count* defaults to 1 (replace only the first occurrence).  Pass ``count=0``
+    for unlimited replacements, i.e. all occurrences (used for pin-target substitutions).
+    """
     for compiled in compile_pattern_variants(pattern):
-        updated, count = compiled.subn(rf"\g<1>{new_version}\g<3>", text, count=1)
-        if count:
+        updated, n = compiled.subn(rf"\g<1>{new_version}\g<3>", text, count=count)
+        if n:
             return updated
     raise RuntimeError("Configured pattern did not match the target file")
 
@@ -236,3 +240,38 @@ def _detect_json_indent(text: str) -> int | str | None:
             return "\t"
         return len(indent)
     return None
+
+
+def replace_pin_in_file(
+    target: PinTarget,
+    new_version: str,
+    *,
+    dry_run: bool,
+) -> None:
+    """Update a single doc/CI pin reference to ``new_version``.
+
+    Unlike :func:`replace_version_in_file`, this function is lenient:
+    - A non-matching pattern prints a warning and returns without error.
+    - A version already equal to ``new_version`` prints a note and returns.
+    """
+    path = target.path
+    text = path.read_text(encoding="utf-8")
+
+    match = search_pattern(text, target.pattern)
+    if match is None:
+        print(output.warning(f"Pin pattern did not match in {path} — skipping"))
+        return
+
+    current = match.group(2)
+    if current == new_version:
+        print(output.status(output.GLYPHS.bullet.dot, f"{path}  already at {new_version}"))
+        return
+
+    updated = replace_pattern_version(text, target.pattern, new_version, count=0)
+
+    if dry_run:
+        print(output.dry_run(f'Would update {path}: pin = "{new_version}"'))
+        return
+
+    path.write_text(updated, encoding="utf-8")
+    print(output.ok(f'{path}  {output.GLYPHS.arrow.right}  pin = "{new_version}"'))

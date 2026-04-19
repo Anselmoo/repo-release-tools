@@ -291,16 +291,39 @@ def append_to_unreleased(
             new_body = section_body[:sub_pos] + f"\n{bullet}" + section_body[sub_pos:]
         else:
             stripped = section_body.rstrip("\n")
-            new_body = stripped + f"\n\n### {section}\n{bullet}\n"
+            # How many trailing newlines were in the original section body.
+            trailing_n = len(section_body) - len(stripped)
+            # When a version section follows we need at least two newlines
+            # (blank line) as separator.  Without this, stripping the
+            # trailing newlines and adding back only one would abut the
+            # new bullet against the ## [version] header.
+            if section_end_m is not None:
+                trailing_n = max(trailing_n, 2)
+            trailing = "\n" * trailing_n
+            if stripped:
+                # Existing content: append after it with a blank-line gap.
+                # stripped already starts with \n (the blank line after the
+                # [Unreleased] header consumed by \s*$ in the regex).
+                new_body = stripped + f"\n\n### {section}\n{bullet}" + trailing
+            else:
+                # Empty section: one leading \n forms the blank line together
+                # with the \n already at end of content[:insert_pos].
+                new_body = f"\n### {section}\n{bullet}" + trailing
 
         return content[:insert_pos] + new_body + content[section_body_end:]
     else:
-        new_section = f"## [Unreleased]\n\n### {section}\n{bullet}\n\n"
+        new_section = f"## [Unreleased]\n\n### {section}\n{bullet}\n"
         title_m = _CHANGELOG_TITLE_RE.match(content)
         if title_m:
             insert_pos = title_m.end()
-            return content[:insert_pos] + "\n" + new_section + content[insert_pos:]
-        return new_section + content
+            remainder = content[insert_pos:]
+            # Avoid a double blank line: if the existing content already starts
+            # with \n (blank line before first version header), don't add one.
+            separator = "" if remainder.startswith("\n") else "\n"
+            return content[:insert_pos] + "\n" + new_section + separator + remainder
+        # No title line: add a separator before any existing content.
+        separator = "\n" if content and not content.startswith("\n") else ""
+        return new_section + separator + content
 
 
 def _append_to_unreleased_rst(content: str, section: str, bullet: str) -> str:

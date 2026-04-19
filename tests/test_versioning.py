@@ -16,3 +16,17 @@ def test_bump_minor() -> None:
 
 def test_bump_major() -> None:
     assert str(Version.parse("1.2.3").bump("major")) == "2.0.0"
+
+
+def test_parse_invalid_semver_raises() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="Invalid semver"):
+        Version.parse("not-a-version")
+
+
+def test_bump_unknown_kind_raises() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="Unknown bump kind"):
+        Version.parse("1.2.3").bump("hotfix")

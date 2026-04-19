@@ -9,11 +9,12 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v0.1.7
+    rev: v0.1.10
     hooks:
-      - id: rrt-branch-name
-      - id: rrt-changelog
-      - id: rrt-commit-subject
+      - id: rrt-branch-name        # pre-commit: validate branch name
+      - id: rrt-update-unreleased  # commit-msg: auto-write changelog bullet
+      - id: rrt-changelog          # pre-commit: require changelog for feat/fix
+      - id: rrt-commit-subject     # commit-msg: validate conventional commit
 ```
 
 Install both hook types:
@@ -24,10 +25,14 @@ pre-commit install --hook-type pre-commit --hook-type commit-msg
 
 ## Hook overview
 
-- `rrt-branch-name` — validates branch names
-- `rrt-changelog` — requires staged changelog updates for feature/fix/breaking work
-- `rrt-commit-subject` — validates conventional commit subjects
-- `rrt-dirty-tree` — optional manual or pre-push check that fails on uncommitted changes
+| Hook | Stage | Description |
+|---|---|---|
+| `rrt-branch-name` | pre-commit | Validate branch naming convention |
+| `rrt-update-unreleased` | commit-msg | Auto-write bullet under `[Unreleased]` for feat/fix commits |
+| `rrt-changelog` | pre-commit | Require a staged changelog update for feat/fix/breaking work |
+| `rrt-commit-subject` | commit-msg | Validate conventional commit subjects |
+| `rrt-dirty-tree` | pre-push / manual | Fail on uncommitted changes |
+| `rrt-doctor` | manual | Run `rrt doctor` health checks on rrt config |
 
 ## Dirty tree check
 
@@ -39,10 +44,22 @@ clean repository before publishing work:
 ```yaml
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v0.1.7
+    rev: v0.1.10
     hooks:
       - id: rrt-dirty-tree
         stages: [pre-push]
+```
+
+## Doctor check
+
+`rrt-doctor` runs `rrt doctor` health checks against every version target and
+pin target in `[tool.rrt]`. It is registered at the `manual` stage so it does
+not run on every commit — invoke it on demand before releases:
+
+```bash
+pre-commit run rrt-doctor --hook-stage manual
+# or directly:
+rrt doctor
 ```
 
 You can also run the same logic directly:
@@ -168,6 +185,11 @@ When you commit, lefthook runs two `commit-msg` commands:
 The `pre-push` guard (`rrt-hooks check-changelog --strategy unreleased`) catches the rare case
 where someone committed with `--no-verify`: it checks that `## [Unreleased]` is
 non-empty before the push is allowed.
+
+**Changelog-meta commit guard**: commits whose description contains the word
+`changelog` (e.g. `fix: update changelog entries`) are automatically skipped by
+`rrt-update-unreleased`. This prevents recursive bullets where a changelog
+correction commit would itself appear in `[Unreleased]`.
 
 ### Comparison: pre-commit vs. lefthook
 

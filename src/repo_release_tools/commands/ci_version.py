@@ -232,8 +232,10 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
 
     version: str = args.version
 
+    g = output.GLYPHS
     print(output.section("Applying CI versions"))
-    for target in ci_targets:
+    total = len(ci_targets)
+    for i, target in enumerate(ci_targets, 1):
         if target.ci_format == "semver_pre":
             version_str = to_semver(version)
             # If the version contains a PEP 440 dev marker but to_semver() made
@@ -253,6 +255,8 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
         except (FileNotFoundError, RuntimeError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
+        if total > 1:
+            print(f"  {g.progress.render_bar(i / total)}")
 
     print()
     if args.dry_run:
@@ -278,7 +282,8 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    print(f"Applying published version: {version}")
+    g = output.GLYPHS
+    print(output.action(f"{g.diff.modified} Applying published version: {version}"))
 
     apply_args = argparse.Namespace(
         version=version, dry_run=args.dry_run, group=getattr(args, "group", None)
