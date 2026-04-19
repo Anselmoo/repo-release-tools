@@ -894,10 +894,11 @@ def test_run_update_unreleased_no_write_when_content_unchanged(
     staged: list[list[str]] = []
     monkeypatch.setattr(hooks.git, "run", lambda cmd, cwd, **kw: staged.append(cmd))
 
-    # Same description but different wording → still adds a new bullet
-    run_update_unreleased(tmp_path, subject="feat: different feature")
-    # We only care that the original content was not overwritten to nothing
-    assert "new widget" in changelog.read_text(encoding="utf-8")
+    result = run_update_unreleased(tmp_path, subject="feat: new widget")
+
+    assert result == 0
+    assert changelog.read_text(encoding="utf-8") == existing
+    assert staged == []
 
 
 def test_main_update_unreleased_accepts_explicit_subject(

@@ -663,3 +663,96 @@ kind = "go_version"
 
     assert result == 0
     assert 'const Version = "1.0.0"' in ver_file.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# update_changelog – empty [Unreleased] and health-mode tests
+# ---------------------------------------------------------------------------
+
+
+def test_update_changelog_inserts_after_empty_unreleased(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When [Unreleased] exists but is empty, the generated section goes after it."""
+    from repo_release_tools.commands.bump import update_changelog
+    from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+
+    changelog = tmp_path / "CHANGELOG.md"
+    # Simulates state left by promote_unreleased: empty [Unreleased] at the top.
+    changelog.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2025-01-01\n\n### Added\n- init\n",
+        encoding="utf-8",
+    )
+
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=changelog,
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git_log_since_latest_tag",
+        lambda root: ["feat: brand new feature"],
+    )
+
+    update_changelog(config, "1.1.0", include_maintenance=False, dry_run=False)
+
+    content = changelog.read_text(encoding="utf-8")
+    # [Unreleased] must still be at the top (after the title).
+    assert content.index("## [Unreleased]") < content.index("## [1.1.0]")
+    # New version must appear before the old version.
+    assert content.index("## [1.1.0]") < content.index("## [1.0.0]")
+
+
+def test_update_changelog_adds_unreleased_placeholder_when_absent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """When no [Unreleased] section exists the bump adds a health-mode placeholder."""
+    from repo_release_tools.commands.bump import update_changelog
+    from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+    from repo_release_tools.changelog import has_unreleased_section
+
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        "# Changelog\n\n## [1.0.0] - 2025-01-01\n\n### Added\n- init\n",
+        encoding="utf-8",
+    )
+
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=changelog,
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git_log_since_latest_tag",
+        lambda root: ["feat: something new"],
+    )
+
+    update_changelog(config, "1.1.0", include_maintenance=False, dry_run=False)
+
+    content = changelog.read_text(encoding="utf-8")
+    # A fresh [Unreleased] placeholder must now be present (health mode).
+    assert has_unreleased_section(content)
+    # New version must appear before the old version.
+    assert content.index("## [1.1.0]") < content.index("## [1.0.0]")

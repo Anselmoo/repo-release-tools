@@ -11,6 +11,7 @@ from repo_release_tools import git, output
 from repo_release_tools.changelog import (
     build_changelog_section,
     get_unreleased_entries,
+    insert_generated_section,
     promote_unreleased,
 )
 from repo_release_tools.config import (
@@ -52,6 +53,12 @@ def update_changelog(
     When the changelog already contains a non-empty ``[Unreleased]`` section
     its header is promoted to ``[version] - YYYY-MM-DD`` instead of
     generating a new section from the git log.
+
+    When the changelog contains an empty ``[Unreleased]`` placeholder (e.g.
+    after a previous release), the generated section is inserted *after* that
+    placeholder so it stays at the top.  When no ``[Unreleased]`` section is
+    present at all, a fresh empty placeholder is prepended as a health-mode
+    guarantee.
     """
     path = config.changelog_file
     if not path.exists():
@@ -79,16 +86,19 @@ def update_changelog(
         git_log_since_latest_tag(config.root),
         include_maintenance=include_maintenance,
     )
+    # insert_generated_section handles both an empty [Unreleased] placeholder
+    # (inserts after it) and a missing [Unreleased] section (health-mode prepend).
+    section_text = insert_generated_section(existing, section)
 
     if dry_run:
         print(output.dry_run(f"Would prepend to {path}:"))
-        for line in section.splitlines()[:PREVIEW_LINES]:
+        for line in section_text.splitlines()[:PREVIEW_LINES]:
             print(output.status(">", line, indent=4))
-        if len(section.splitlines()) > PREVIEW_LINES:
+        if len(section_text.splitlines()) > PREVIEW_LINES:
             print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
         return
 
-    path.write_text(section + "\n" + existing, encoding="utf-8")
+    path.write_text(section_text, encoding="utf-8")
     print(output.ok(f"{path} updated"))
 
 

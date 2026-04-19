@@ -5,8 +5,10 @@ from pathlib import Path
 import pytest
 
 from repo_release_tools.config import (
+    DEFAULT_CHANGELOG,
     VersionTarget,
     autodetect_config,
+    find_changelog_file,
     find_config_file,
     format_autodetected_config_notice,
     load_config,
@@ -667,3 +669,45 @@ kind = "package_json"
     )
 
     assert load_extra_branch_types(tmp_path) == ("snyk", "greenkeeper")
+
+
+# ---------------------------------------------------------------------------
+# find_changelog_file
+# ---------------------------------------------------------------------------
+
+
+def test_find_changelog_file_returns_default_when_no_file(tmp_path: Path) -> None:
+    assert find_changelog_file(tmp_path) == DEFAULT_CHANGELOG
+
+
+def test_find_changelog_file_returns_changelog_md(tmp_path: Path) -> None:
+    (tmp_path / "CHANGELOG.md").write_text("", encoding="utf-8")
+    assert find_changelog_file(tmp_path) == "CHANGELOG.md"
+
+
+def test_find_changelog_file_returns_rst_when_md_absent(tmp_path: Path) -> None:
+    (tmp_path / "CHANGELOG.rst").write_text("", encoding="utf-8")
+    assert find_changelog_file(tmp_path) == "CHANGELOG.rst"
+
+
+def test_find_changelog_file_prefers_md_over_rst(tmp_path: Path) -> None:
+    (tmp_path / "CHANGELOG.md").write_text("", encoding="utf-8")
+    (tmp_path / "CHANGELOG.rst").write_text("", encoding="utf-8")
+    assert find_changelog_file(tmp_path) == "CHANGELOG.md"
+
+
+def test_find_changelog_file_returns_plain_changelog(tmp_path: Path) -> None:
+    (tmp_path / "CHANGELOG").write_text("", encoding="utf-8")
+    assert find_changelog_file(tmp_path) == "CHANGELOG"
+
+
+def test_autodetect_config_picks_up_rst_changelog(tmp_path: Path) -> None:
+    """Zero-config autodetect should use CHANGELOG.rst when no CHANGELOG.md exists."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.rst").write_text("", encoding="utf-8")
+
+    config = autodetect_config(tmp_path)
+    assert config is not None
+    assert config.changelog_file.name == "CHANGELOG.rst"

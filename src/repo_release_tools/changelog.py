@@ -146,9 +146,10 @@ def append_to_unreleased(content: str, commit_subject: str) -> str:
     If no ``[Unreleased]`` section exists, one is created at the top of the
     file (after a ``# Changelog`` title line when present).
 
-    Returns the updated content.  If the commit subject does not map to a
-    changelog-worthy entry (e.g. a ``chore:`` commit) the content is returned
-    unchanged.
+    Returns the updated content.  If the commit subject is not a conventional
+    commit subject, or its parsed type is not mapped in ``SECTION_MAP``, the
+    content is returned unchanged.  If the exact bullet is already present in
+    the ``[Unreleased]`` section the content is also returned unchanged.
     """
     parsed = parse_conventional_commit(commit_subject)
     if parsed is None:
@@ -171,6 +172,10 @@ def append_to_unreleased(content: str, commit_subject: str) -> str:
         section_body_end = section_end_m.start() if section_end_m else len(content)
         section_body = content[insert_pos:section_body_end]
 
+        # Skip if this exact bullet is already present in the section.
+        if bullet in section_body.splitlines():
+            return content
+
         sub_header = f"### {section}"
         if sub_header in section_body:
             # Insert bullet right after the matching sub-header line.
@@ -190,6 +195,34 @@ def append_to_unreleased(content: str, commit_subject: str) -> str:
             insert_pos = title_m.end()
             return content[:insert_pos] + "\n" + new_section + content[insert_pos:]
         return new_section + content
+
+
+def insert_generated_section(content: str, section: str) -> str:
+    """Insert a generated version *section* into *content*.
+
+    When an (empty) ``[Unreleased]`` section already exists, the generated
+    section is placed *after* that placeholder so the placeholder remains at
+    the top (Keep-a-Changelog convention).  When no ``[Unreleased]`` section
+    is present, a fresh empty placeholder is prepended as a *health-mode*
+    guarantee and the generated section follows it.
+
+    A ``# Changelog`` (or similar) title line, when present, is always kept
+    at the very top.
+    """
+    if has_unreleased_section(content):
+        m = _UNRELEASED_HEADER_RE.search(content)
+        assert m is not None  # guaranteed by has_unreleased_section
+        insert_pos = m.end()
+        next_section_m = _SECTION_HEADER_RE.search(content, insert_pos)
+        next_section_pos = next_section_m.start() if next_section_m else len(content)
+        return content[:insert_pos] + "\n" + section + "\n" + content[next_section_pos:]
+    else:
+        new_content = UNRELEASED_PLACEHOLDER + "\n" + section + "\n"
+        title_m = _CHANGELOG_TITLE_RE.match(content)
+        if title_m:
+            insert_pos = title_m.end()
+            return content[:insert_pos] + "\n" + new_content + content[insert_pos:]
+        return new_content + content
 
 
 def promote_unreleased(content: str, version: str) -> str:

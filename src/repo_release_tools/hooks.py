@@ -535,8 +535,10 @@ def run_update_unreleased(
     """Append a parsed bullet to the [Unreleased] section for changelog-relevant commits.
 
     Creates the ``[Unreleased]`` section at the top of the changelog when it
-    does not yet exist.  Always stages the changelog file and returns 0; this
-    hook is additive and non-blocking.
+    does not yet exist.  If the changelog content changes, writes the updated
+    file and stages it. Returns 0 for non-changelog commits and successful
+    updates, but returns ``emit_failure(...)`` if the changelog file is
+    missing.
     """
     if not commit_subject_requires_changelog(subject):
         return 0

@@ -25,7 +25,7 @@
   language: python
   pass_filenames: false
   always_run: true
-  stages: [pre-commit]
+  stages: [commit-msg]
   minimum_pre_commit_version: "3.2.0"
 
 - id: rrt-commit-subject

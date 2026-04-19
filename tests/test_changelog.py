@@ -6,6 +6,7 @@ from repo_release_tools.changelog import (
     append_to_unreleased,
     get_unreleased_entries,
     has_unreleased_section,
+    insert_generated_section,
     promote_unreleased,
 )
 
@@ -242,3 +243,68 @@ def test_append_then_promote_round_trip() -> None:
     assert "## [0.2.0]" in content
     # Fresh [Unreleased] placeholder must be empty after promotion
     assert get_unreleased_entries(content) == []
+
+
+# ---------------------------------------------------------------------------
+# append_to_unreleased – deduplication
+# ---------------------------------------------------------------------------
+
+
+def test_append_to_unreleased_no_duplicate_bullet() -> None:
+    """Appending the same bullet a second time must leave the content unchanged."""
+    content = append_to_unreleased(EMPTY_CHANGELOG, "feat: new shiny thing")
+    result = append_to_unreleased(content, "feat: new shiny thing")
+    assert result == content
+    assert result.count("new shiny thing") == 1
+
+
+def test_append_to_unreleased_allows_different_bullets_same_section() -> None:
+    """Two distinct bullets under the same sub-header are both inserted."""
+    content = append_to_unreleased(EMPTY_CHANGELOG, "feat: first feature")
+    result = append_to_unreleased(content, "feat: second feature")
+    assert "first feature" in result
+    assert "second feature" in result
+
+
+# ---------------------------------------------------------------------------
+# insert_generated_section
+# ---------------------------------------------------------------------------
+
+
+def test_insert_generated_section_after_empty_unreleased() -> None:
+    """Generated section must be inserted after an existing empty [Unreleased] header."""
+    section = "## [1.1.0] - 2025-06-01\n\n### Added\n- new thing\n"
+    result = insert_generated_section(UNRELEASED_EMPTY, section)
+    unreleased_pos = result.index("## [Unreleased]")
+    new_version_pos = result.index("## [1.1.0]")
+    old_version_pos = result.index("## [1.0.0]")
+    assert unreleased_pos < new_version_pos < old_version_pos
+
+
+def test_insert_generated_section_adds_unreleased_placeholder_when_absent() -> None:
+    """When no [Unreleased] section exists a fresh placeholder must be prepended."""
+    section = "## [1.1.0] - 2025-06-01\n\n### Added\n- new thing\n"
+    result = insert_generated_section(NO_UNRELEASED, section)
+    assert has_unreleased_section(result)
+    unreleased_pos = result.index("## [Unreleased]")
+    new_version_pos = result.index("## [1.1.0]")
+    old_version_pos = result.index("## [1.0.0]")
+    assert unreleased_pos < new_version_pos < old_version_pos
+
+
+def test_insert_generated_section_preserves_title_line() -> None:
+    """The # Changelog title must remain at the top after insertion."""
+    section = "## [0.2.0] - 2025-06-01\n\n### Added\n- something\n"
+    result = insert_generated_section(EMPTY_CHANGELOG, section)
+    assert result.startswith("# Changelog")
+    assert has_unreleased_section(result)
+
+
+def test_insert_generated_section_after_empty_unreleased_with_title() -> None:
+    """Title line stays first when inserting after an empty [Unreleased]."""
+    content = "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2025-01-01\n\n### Added\n- init\n"
+    section = "## [1.1.0] - 2025-06-01\n\n### Fixed\n- a bug\n"
+    result = insert_generated_section(content, section)
+    assert result.startswith("# Changelog")
+    assert result.index("## [Unreleased]") < result.index("## [1.1.0]")
+    assert result.index("## [1.1.0]") < result.index("## [1.0.0]")
