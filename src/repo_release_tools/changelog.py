@@ -101,3 +101,113 @@ def build_changelog_section(
     if not rendered_any:
         lines.extend(["_No notable changes recorded._", ""])
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# [Unreleased] section helpers
+# ---------------------------------------------------------------------------
+
+# Matches the top-level "## [Unreleased]" header (case-insensitive).
+_UNRELEASED_HEADER_RE = re.compile(r"^## \[Unreleased\]\s*$", re.IGNORECASE | re.MULTILINE)
+# Matches any "## [version]" or "## [Unreleased]" header used as a section boundary.
+_SECTION_HEADER_RE = re.compile(r"^## \[", re.MULTILINE)
+# Matches a leading "# Changelog" or "# CHANGELOG" title line.
+_CHANGELOG_TITLE_RE = re.compile(r"^# .+\n", re.MULTILINE)
+
+UNRELEASED_PLACEHOLDER = "## [Unreleased]\n"
+
+
+def has_unreleased_section(content: str) -> bool:
+    """Return True if *content* contains an ``## [Unreleased]`` header."""
+    return bool(_UNRELEASED_HEADER_RE.search(content))
+
+
+def get_unreleased_entries(content: str) -> list[str]:
+    """Return bullet lines that exist under the ``## [Unreleased]`` section.
+
+    Returns an empty list when no ``[Unreleased]`` section is present or when
+    the section contains no bullet items.
+    """
+    m = _UNRELEASED_HEADER_RE.search(content)
+    if not m:
+        return []
+
+    section_start = m.end()
+    # Find the start of the next ``## [...]`` header (next versioned section).
+    next_section = _SECTION_HEADER_RE.search(content, section_start)
+    section_body = content[section_start : next_section.start() if next_section else len(content)]
+
+    return [line for line in section_body.splitlines() if line.strip().startswith("- ")]
+
+
+def append_to_unreleased(content: str, commit_subject: str) -> str:
+    """Insert a parsed bullet from *commit_subject* into the ``[Unreleased]`` section.
+
+    If no ``[Unreleased]`` section exists, one is created at the top of the
+    file (after a ``# Changelog`` title line when present).
+
+    Returns the updated content.  If the commit subject does not map to a
+    changelog-worthy entry (e.g. a ``chore:`` commit) the content is returned
+    unchanged.
+    """
+    parsed = parse_conventional_commit(commit_subject)
+    if parsed is None:
+        return content
+
+    section = "Breaking Changes" if parsed.breaking else SECTION_MAP.get(parsed.type)
+    if section is None:
+        return content
+
+    scope_part = f"**{parsed.scope}**: " if parsed.scope else ""
+    bullet = f"- {scope_part}{parsed.description}"
+
+    if has_unreleased_section(content):
+        m = _UNRELEASED_HEADER_RE.search(content)
+        assert m is not None  # guaranteed by has_unreleased_section
+        insert_pos = m.end()
+        # Skip past any existing sub-headers / bullets to find the right place.
+        # We insert under the matching sub-header if present, or append it.
+        section_end_m = _SECTION_HEADER_RE.search(content, insert_pos)
+        section_body_end = section_end_m.start() if section_end_m else len(content)
+        section_body = content[insert_pos:section_body_end]
+
+        sub_header = f"### {section}"
+        if sub_header in section_body:
+            # Insert bullet right after the matching sub-header line.
+            sub_pos = section_body.index(sub_header) + len(sub_header)
+            new_body = section_body[:sub_pos] + f"\n{bullet}" + section_body[sub_pos:]
+        else:
+            # Append a new sub-header + bullet at the end of the unreleased body.
+            stripped = section_body.rstrip("\n")
+            new_body = stripped + f"\n\n### {section}\n{bullet}\n"
+
+        return content[:insert_pos] + new_body + content[section_body_end:]
+    else:
+        # Create a new [Unreleased] section at the top of the file.
+        new_section = f"## [Unreleased]\n\n### {section}\n{bullet}\n\n"
+        title_m = _CHANGELOG_TITLE_RE.match(content)
+        if title_m:
+            insert_pos = title_m.end()
+            return content[:insert_pos] + "\n" + new_section + content[insert_pos:]
+        return new_section + content
+
+
+def promote_unreleased(content: str, version: str) -> str:
+    """Rename the ``## [Unreleased]`` header to ``## [version] - YYYY-MM-DD``.
+
+    After promotion an empty ``## [Unreleased]`` placeholder is inserted above
+    the newly versioned section so contributors always have a place to add
+    entries.
+
+    Returns the updated content.  If no ``[Unreleased]`` section exists the
+    content is returned unchanged.
+    """
+    if not has_unreleased_section(content):
+        return content
+
+    today = dt.datetime.now(dt.UTC).date().isoformat()
+    versioned_header = f"## [{version}] - {today}"
+    updated = _UNRELEASED_HEADER_RE.sub(versioned_header, content, count=1)
+    # Re-insert an empty placeholder above the new versioned section.
+    updated = updated.replace(versioned_header, f"{UNRELEASED_PLACEHOLDER}\n{versioned_header}", 1)
+    return updated

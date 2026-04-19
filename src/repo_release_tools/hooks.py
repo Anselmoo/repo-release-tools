@@ -10,7 +10,12 @@ from collections import Counter
 from pathlib import Path
 
 from repo_release_tools import git, output
-from repo_release_tools.changelog import SECTION_MAP, parse_conventional_commit
+from repo_release_tools.changelog import (
+    SECTION_MAP,
+    append_to_unreleased,
+    get_unreleased_entries,
+    parse_conventional_commit,
+)
 from repo_release_tools.config import DEFAULT_CHANGELOG, load_extra_branch_types
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, SLUG_MAX, normalize_commit_type
 from repo_release_tools.versioning import Version
@@ -521,6 +526,40 @@ def run_commit_msg(message_path: Path) -> int:
     )
 
 
+def run_update_unreleased(
+    cwd: Path,
+    *,
+    subject: str,
+    changelog_file: str = DEFAULT_CHANGELOG,
+) -> int:
+    """Append a parsed bullet to the [Unreleased] section for changelog-relevant commits.
+
+    Creates the ``[Unreleased]`` section at the top of the changelog when it
+    does not yet exist.  Always stages the changelog file and returns 0; this
+    hook is additive and non-blocking.
+    """
+    if not commit_subject_requires_changelog(subject):
+        return 0
+
+    changelog_path = cwd / changelog_file
+    if not changelog_path.exists():
+        return emit_failure(
+            "Changelog update failed.",
+            [f"Changelog file {changelog_file!r} not found in {cwd}."],
+        )
+
+    original = changelog_path.read_text(encoding="utf-8")
+    updated = append_to_unreleased(original, subject)
+    if updated != original:
+        changelog_path.write_text(updated, encoding="utf-8")
+        git.run(["git", "add", changelog_file], cwd, dry_run=False, label="stage changelog")
+        print(
+            output.ok(f"[Unreleased] section updated in {changelog_file}."),
+            file=sys.stderr,
+        )
+    return 0
+
+
 def run_changelog_check(
     subject: str,
     *,
@@ -529,18 +568,59 @@ def run_changelog_check(
     changed_files: list[str] | None = None,
     ref: str = "HEAD",
     title: str,
+    strategy: str = "per-commit",
+    branch: str = "",
 ) -> int:
-    """Validate that changelog-relevant commits update the changelog file."""
+    """Validate that changelog-relevant commits update the changelog file.
+
+    *strategy* controls what constitutes a valid changelog update:
+
+    ``per-commit`` (default)
+        The changelog file must appear in the commit's changed file list.
+    ``unreleased``
+        The changelog file must contain a non-empty ``[Unreleased]`` section.
+    ``release-only``
+        The check is skipped entirely (changelog updated only at release time).
+
+    When *branch* matches a known bot prefix (``renovate/*``,
+    ``dependabot/*``) the check is also skipped.
+    """
     if not commit_subject_requires_changelog(subject):
         return 0
 
+    # Skip for automated bot branches regardless of strategy.
+    if branch:
+        branch_prefix = branch.split("/", 1)[0]
+        if branch_prefix in BOT_BRANCH_TYPES:
+            return 0
+
+    if strategy == "release-only":
+        return 0
+
+    normalized_path = _normalize_repo_path(changelog_file, cwd=cwd)
+
+    if strategy == "unreleased":
+        changelog_path = cwd / changelog_file
+        if changelog_path.exists():
+            content = changelog_path.read_text(encoding="utf-8")
+            if get_unreleased_entries(content):
+                return 0
+        return emit_failure(
+            title,
+            [
+                f"Commit subject {subject!r} requires a changelog update.",
+                f"Expected {normalized_path} to contain a non-empty [Unreleased] section.",
+                "Run 'rrt-hooks update-unreleased' or add entries under '## [Unreleased]' manually.",
+            ],
+        )
+
+    # strategy == "per-commit" (default)
     effective_changed_files = (
         changed_files if changed_files is not None else changed_files_for_ref(cwd, ref)
     )
     if changelog_is_updated(effective_changed_files, changelog_file=changelog_file, cwd=cwd):
         return 0
 
-    normalized_path = _normalize_repo_path(changelog_file, cwd=cwd)
     return emit_failure(
         title,
         [
@@ -695,6 +775,40 @@ def main(argv: list[str] | None = None) -> int:
         default="HEAD",
         help="Git ref whose changed files should be inspected when --changed-file is omitted.",
     )
+    changelog_check_parser.add_argument(
+        "--strategy",
+        default="per-commit",
+        choices=["per-commit", "unreleased", "release-only"],
+        help=(
+            "Changelog enforcement strategy: "
+            "'per-commit' (default) requires the changelog in the changed-file list; "
+            "'unreleased' requires a non-empty [Unreleased] section; "
+            "'release-only' skips the check entirely."
+        ),
+    )
+    changelog_check_parser.add_argument(
+        "--branch",
+        default="",
+        help="Current branch name; bot branches (renovate/*, dependabot/*) skip the check.",
+    )
+
+    update_unreleased_parser = subparsers.add_parser(
+        "update-unreleased",
+        help="Append a parsed bullet to the [Unreleased] changelog section.",
+    )
+    update_unreleased_parser.add_argument(
+        "--subject",
+        default=None,
+        help=(
+            "Commit subject to parse. "
+            "Defaults to reading the first non-empty line of COMMIT_EDITMSG."
+        ),
+    )
+    update_unreleased_parser.add_argument(
+        "--changelog-file",
+        default=DEFAULT_CHANGELOG,
+        help="Changelog path to update.",
+    )
 
     subparsers.add_parser(
         "check-dirty-tree",
@@ -750,6 +864,20 @@ def main(argv: list[str] | None = None) -> int:
         return run_commit_subject_check(parsed.subject, title="Commit subject validation failed.")
     if parsed.command == "check-dirty-tree":
         return run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.")
+    if parsed.command == "update-unreleased":
+        subject = parsed.subject
+        if subject is None:
+            # Fall back to reading the commit message file that git sets during commit hooks.
+            commit_editmsg = Path.cwd() / ".git" / "COMMIT_EDITMSG"
+            if commit_editmsg.exists():
+                subject = read_commit_subject(commit_editmsg)
+            else:
+                subject = ""
+        return run_update_unreleased(
+            Path.cwd(),
+            subject=subject,
+            changelog_file=parsed.changelog_file,
+        )
     if parsed.command == "changelog" and parsed.changelog_command == "post-correct":
         ref = parsed.squash_commit or "HEAD"
         return run_post_correct(
@@ -765,6 +893,8 @@ def main(argv: list[str] | None = None) -> int:
         changed_files=parsed.changed_files,
         ref=parsed.ref,
         title="Changelog validation failed.",
+        strategy=parsed.strategy,
+        branch=parsed.branch,
     )
 
 

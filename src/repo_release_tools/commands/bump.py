@@ -8,7 +8,11 @@ import sys
 from pathlib import Path
 
 from repo_release_tools import git, output
-from repo_release_tools.changelog import build_changelog_section
+from repo_release_tools.changelog import (
+    build_changelog_section,
+    get_unreleased_entries,
+    promote_unreleased,
+)
 from repo_release_tools.config import (
     RrtConfig,
     format_autodetected_config_notice,
@@ -43,10 +47,31 @@ def update_changelog(
     include_maintenance: bool,
     dry_run: bool,
 ) -> None:
-    """Prepend a generated changelog section."""
+    """Prepend a generated changelog section.
+
+    When the changelog already contains a non-empty ``[Unreleased]`` section
+    its header is promoted to ``[version] - YYYY-MM-DD`` instead of
+    generating a new section from the git log.
+    """
     path = config.changelog_file
     if not path.exists():
         print(output.warning(f"{path} not found {output.GLYPHS.typography.mdash} skipping"))
+        return
+
+    existing = path.read_text(encoding="utf-8")
+
+    if get_unreleased_entries(existing):
+        # Promote the [Unreleased] section to the new version.
+        section_text = promote_unreleased(existing, version)
+        if dry_run:
+            print(output.dry_run(f"Would promote [Unreleased] to [{version}] in {path}:"))
+            for line in section_text.splitlines()[:PREVIEW_LINES]:
+                print(output.status(">", line, indent=4))
+            if len(section_text.splitlines()) > PREVIEW_LINES:
+                print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
+            return
+        path.write_text(section_text, encoding="utf-8")
+        print(output.ok(f"{path} updated (promoted [Unreleased] to [{version}])"))
         return
 
     section = build_changelog_section(
@@ -63,7 +88,6 @@ def update_changelog(
             print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
         return
 
-    existing = path.read_text(encoding="utf-8")
     path.write_text(section + "\n" + existing, encoding="utf-8")
     print(output.ok(f"{path} updated"))
 

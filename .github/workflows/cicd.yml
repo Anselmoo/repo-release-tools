@@ -81,7 +81,14 @@ jobs:
         run: uv sync --all-groups
 
       - name: Run tests
-        run: uv run pytest -q -m "not runtime"
+        run: uv run pytest -q -m "not runtime" --cov=src/repo_release_tools --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          flags: python-${{ matrix.python-version }}
+          fail_ci_if_error: false
 
   docker-image-check:
     name: Docker image smoke check
