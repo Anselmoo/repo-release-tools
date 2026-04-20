@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 
 from pathlib import Path
@@ -239,9 +240,11 @@ def cmd_bump(args: argparse.Namespace) -> int:
     print(output.section("Updating version strings"))
     total_targets = len(group.version_targets)
     for i, target in enumerate(group.version_targets, 1):
+        if total_targets > 1 and i > 1:
+            version_progress.clear()
         replace_version_in_file(target, str(new), dry_run=args.dry_run)
         if total_targets > 1:
-            version_progress.update_bar(i / total_targets, lines_since_last=0 if i == 1 else 1)
+            version_progress.update_bar(i / total_targets)
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins and not getattr(args, "no_pin_sync", False):
@@ -256,9 +259,11 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 unique_pins.append(pin)
         total_pins = len(unique_pins)
         for i, pin in enumerate(unique_pins, 1):
+            if total_pins > 1 and i > 1:
+                pin_progress.clear()
             replace_pin_in_file(pin, str(new), dry_run=args.dry_run)
             if total_pins > 1:
-                pin_progress.update_bar(i / total_pins, lines_since_last=0 if i == 1 else 1)
+                pin_progress.update_bar(i / total_pins)
 
     if not args.no_changelog:
         print(f"\n{output.section('Updating changelog')}")
@@ -280,11 +285,16 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     if group.lock_command and not args.no_update:
         print(f"\n{output.section('Refreshing lockfiles')}")
-        with output.spinner_lines(
-            "Running lock command…",
-            detail=output.status("$", " ".join(group.lock_command), indent=0).strip(),
-            file=sys.stdout,
-        ):
+        spinner = (
+            contextlib.nullcontext()
+            if args.dry_run
+            else output.spinner_lines(
+                "Running lock command…",
+                detail=output.status("$", " ".join(group.lock_command), indent=0).strip(),
+                file=sys.stdout,
+            )
+        )
+        with spinner:
             git.run(
                 group.lock_command,
                 root,

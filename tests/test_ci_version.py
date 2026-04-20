@@ -900,14 +900,18 @@ def test_cmd_apply_uses_shared_progress_line(
     mixed_project: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    updates: list[tuple[float, int, object]] = []
+    updates: list[tuple[float, object]] = []
+    clears: list[int] = []
 
     class _FakeProgressLine:
         def __init__(self, *, file=None) -> None:
             self.file = file
 
-        def update_bar(self, value: float, *, width: int = 20, lines_since_last: int = 0) -> None:
-            updates.append((value, lines_since_last, self.file))
+        def update_bar(self, value: float, *, width: int = 20) -> None:
+            updates.append((value, self.file))
+
+        def clear(self) -> None:
+            clears.append(1)
 
     monkeypatch.chdir(mixed_project)
     monkeypatch.setattr(
@@ -919,4 +923,80 @@ def test_cmd_apply_uses_shared_progress_line(
     )
 
     assert result == 0
-    assert updates == [(0.5, 0, sys.stdout), (1.0, 1, sys.stdout)]
+    assert updates == [(0.5, sys.stdout), (1.0, sys.stdout)]
+    assert len(clears) == 1  # clear() called once before the second iteration
+
+
+def test_cmd_apply_clears_progress_on_semver_error(
+    mixed_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """progress.clear() must be called before returning 1 on semver conversion failure."""
+    clears: list[int] = []
+
+    class _FakeProgressLine:
+        def __init__(self, *, file=None) -> None:
+            self.file = file
+
+        def update_bar(self, value: float, *, width: int = 20) -> None:
+            pass
+
+        def clear(self) -> None:
+            clears.append(1)
+
+    monkeypatch.chdir(mixed_project)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
+    )
+
+    # An un-convertible '.dev' version triggers the semver_pre early-return path.
+    result = cmd_ci_version_apply(
+        argparse.Namespace(version="0.2.0.devABC", dry_run=False, group=None)
+    )
+
+    assert result == 1
+    assert len(clears) == 1  # clear() called exactly once before the early return
+
+
+def test_cmd_apply_clears_progress_on_file_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """progress.clear() must be called before returning 1 on a file write error."""
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "missing_file.toml"
+kind = "pep621"
+ci_format = "pep440"
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    clears: list[int] = []
+
+    class _FakeProgressLine:
+        def __init__(self, *, file=None) -> None:
+            self.file = file
+
+        def update_bar(self, value: float, *, width: int = 20) -> None:
+            pass
+
+        def clear(self) -> None:
+            clears.append(1)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
+    )
+
+    result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0", dry_run=False, group=None))
+
+    assert result == 1
+    assert len(clears) == 1  # clear() called exactly once before the early return
