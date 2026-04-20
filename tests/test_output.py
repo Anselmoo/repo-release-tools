@@ -233,6 +233,8 @@ def test_progress_line_shorter_message_clears_trailing_chars() -> None:
     rendered = tty.getvalue()
     # Both writes must carry the clear-to-EOL escape so leftovers are erased.
     assert rendered.count("\x1b[K") == 2
+    # The 30 trailing 'A' characters must not appear after the second write.
+    assert rendered.endswith(f"\r{'B' * 10}\x1b[K")
 
 
 def test_progress_line_clear_then_rewrite() -> None:

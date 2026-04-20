@@ -955,7 +955,7 @@ def test_cmd_apply_clears_progress_on_semver_error(
     )
 
     assert result == 1
-    assert len(clears) >= 1  # clear() must be called before the early return
+    assert len(clears) == 1  # clear() called exactly once before the early return
 
 
 def test_cmd_apply_clears_progress_on_file_error(
@@ -1001,4 +1001,4 @@ version = "0.1.0"
     )
 
     assert result == 1
-    assert len(clears) >= 1  # clear() must be called before the early return
+    assert len(clears) == 1  # clear() called exactly once before the early return
