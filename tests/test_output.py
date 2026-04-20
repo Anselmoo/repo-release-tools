@@ -219,22 +219,25 @@ def test_progress_line_writes_initial_bar_on_tty() -> None:
 
     progress.update_bar(0.5)
 
-    assert tty.getvalue() == f"  {output.GLYPHS.progress.render_bar(0.5)}\n"
+    assert tty.getvalue() == f"\r  {output.GLYPHS.progress.render_bar(0.5)}"
 
 
-def test_progress_line_rewrites_bar_below_latest_status_line() -> None:
+def test_progress_line_clear_then_rewrite() -> None:
     tty = _TtyBuffer()
     progress = output.ProgressLine(file=tty)
 
     progress.update_bar(0.5)
+    progress.clear()
     tty.write("  ✔ updated file\n")
-    progress.update_bar(1.0, lines_since_last=1)
+    progress.update_bar(1.0)
 
     rendered = tty.getvalue()
-    assert f"  {output.GLYPHS.progress.render_bar(0.5)}\n" in rendered
-    assert "\x1b[2A" in rendered
-    assert "\x1b[M" in rendered
-    assert f"\r  {output.GLYPHS.progress.render_bar(1.0)}\n" in rendered
+    assert f"\r  {output.GLYPHS.progress.render_bar(0.5)}" in rendered
+    assert "\r\x1b[2K" in rendered
+    assert f"\r  {output.GLYPHS.progress.render_bar(1.0)}" in rendered
+    # old cursor-reposition sequences must not appear
+    assert "\x1b[2A" not in rendered
+    assert "\x1b[M" not in rendered
 
 
 def test_spinner_lines_writes_error_status_on_tty_exception(

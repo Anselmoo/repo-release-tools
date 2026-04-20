@@ -157,41 +157,41 @@ def dry_run_complete(message: str) -> str:
 
 
 class ProgressLine:
-    """Render a sticky progress line that stays below newly printed status lines."""
+    """Render a sticky progress line that overwrites in place.
+
+    Usage pattern
+    -------------
+    * Call ``update_bar()`` after printing a status line to render the bar.
+    * Before printing the *next* status line, call ``clear()`` to erase the bar.
+    * The caller does **not** need to track how many lines were printed.
+    """
 
     def __init__(self, *, file: IO[str] | None = None) -> None:
         self.out = file if file is not None else sys.stdout
         self.enabled = _interactive_output_enabled(self.out)
         self._visible = False
 
-    def update(self, message: str, *, lines_since_last: int = 0) -> None:
-        """Render *message* on a dedicated progress line.
-
-        ``lines_since_last`` is the number of normal output lines printed since the
-        previous progress render. Those lines are kept in place while the progress
-        line is moved to the bottom and rewritten.
-        """
+    def update(self, message: str) -> None:
+        """Overwrite the current line with *message* (no trailing newline)."""
         if not self.enabled:
             return
+        print(f"\r{message}", end="", flush=True, file=self.out)
+        self._visible = True
 
-        if not self._visible:
-            print(message, file=self.out)
-            self._visible = True
+    def clear(self) -> None:
+        """Erase the progress line, leaving the cursor at the start of that line.
+
+        Call this before printing a normal status line so the bar is removed
+        and the status line is written in its place.
+        """
+        if not self.enabled or not self._visible:
             return
+        print("\r\x1b[2K", end="", flush=True, file=self.out)
+        self._visible = False
 
-        lines_up = lines_since_last + 1
-        parts = [f"\x1b[{lines_up}A", "\r\x1b[2K\x1b[M"]
-        if lines_since_last:
-            parts.append(f"\x1b[{lines_since_last}B")
-        parts.append(f"\r{message}\n")
-        print("".join(parts), end="", flush=True, file=self.out)
-
-    def update_bar(self, value: float, *, width: int = 20, lines_since_last: int = 0) -> None:
+    def update_bar(self, value: float, *, width: int = 20) -> None:
         """Render a progress bar update on the sticky progress line."""
-        self.update(
-            f"  {GLYPHS.progress.render_bar(value, width)}",
-            lines_since_last=lines_since_last,
-        )
+        self.update(f"  {GLYPHS.progress.render_bar(value, width)}")
 
 
 @contextmanager

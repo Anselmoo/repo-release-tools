@@ -900,14 +900,18 @@ def test_cmd_apply_uses_shared_progress_line(
     mixed_project: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    updates: list[tuple[float, int, object]] = []
+    updates: list[tuple[float, object]] = []
+    clears: list[int] = []
 
     class _FakeProgressLine:
         def __init__(self, *, file=None) -> None:
             self.file = file
 
-        def update_bar(self, value: float, *, width: int = 20, lines_since_last: int = 0) -> None:
-            updates.append((value, lines_since_last, self.file))
+        def update_bar(self, value: float, *, width: int = 20) -> None:
+            updates.append((value, self.file))
+
+        def clear(self) -> None:
+            clears.append(1)
 
     monkeypatch.chdir(mixed_project)
     monkeypatch.setattr(
@@ -919,4 +923,5 @@ def test_cmd_apply_uses_shared_progress_line(
     )
 
     assert result == 0
-    assert updates == [(0.5, 0, sys.stdout), (1.0, 1, sys.stdout)]
+    assert updates == [(0.5, sys.stdout), (1.0, sys.stdout)]
+    assert len(clears) == 1  # clear() called once before the second iteration

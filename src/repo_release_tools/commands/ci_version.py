@@ -250,13 +250,15 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
                 return 1
         else:
             version_str = version
+        if total > 1 and i > 1:
+            progress.clear()
         try:
             replace_version_in_file(target, version_str, dry_run=args.dry_run)
         except (FileNotFoundError, RuntimeError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
         if total > 1:
-            progress.update_bar(i / total, lines_since_last=0 if i == 1 else 1)
+            progress.update_bar(i / total)
 
     print()
     if args.dry_run:
