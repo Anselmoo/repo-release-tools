@@ -996,9 +996,7 @@ version = "0.1.0"
         "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
     )
 
-    result = cmd_ci_version_apply(
-        argparse.Namespace(version="0.2.0", dry_run=False, group=None)
-    )
+    result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0", dry_run=False, group=None))
 
     assert result == 1
     assert len(clears) == 1  # clear() called exactly once before the early return
