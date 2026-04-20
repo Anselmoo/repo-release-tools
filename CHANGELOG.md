@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [1.0.0] - 2026-04-20
+
+### Added
+- enhance progress line handling with clear and overwrite functionalityru (#32)
+- implement shared progress line and spinner updates for version bump and CI commands (#31)
+- Add comprehensive tests for branch management and versioning features (#29)
+
+### Fixed
+- changelog squash (#30)
+
 ## [0.1.10] - 2026-04-19
 
 ### Added
