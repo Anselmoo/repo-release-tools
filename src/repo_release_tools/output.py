@@ -172,10 +172,14 @@ class ProgressLine:
         self._visible = False
 
     def update(self, message: str) -> None:
-        """Overwrite the current line with *message* (no trailing newline)."""
+        """Overwrite the current line with *message* (no trailing newline).
+
+        Emits a clear-to-EOL sequence (``\\x1b[K``) after the message so that
+        any leftover characters from a previously longer render are erased.
+        """
         if not self.enabled:
             return
-        print(f"\r{message}", end="", flush=True, file=self.out)
+        print(f"\r{message}\x1b[K", end="", flush=True, file=self.out)
         self._visible = True
 
     def clear(self) -> None:

@@ -219,7 +219,20 @@ def test_progress_line_writes_initial_bar_on_tty() -> None:
 
     progress.update_bar(0.5)
 
-    assert tty.getvalue() == f"\r  {output.GLYPHS.progress.render_bar(0.5)}"
+    assert tty.getvalue() == f"\r  {output.GLYPHS.progress.render_bar(0.5)}\x1b[K"
+
+
+def test_progress_line_shorter_message_clears_trailing_chars() -> None:
+    """A shorter update must not leave leftover chars from a longer prior render."""
+    tty = _TtyBuffer()
+    progress = output.ProgressLine(file=tty)
+
+    progress.update("A" * 40)
+    progress.update("B" * 10)
+
+    rendered = tty.getvalue()
+    # Both writes must carry the clear-to-EOL escape so leftovers are erased.
+    assert rendered.count("\x1b[K") == 2
 
 
 def test_progress_line_clear_then_rewrite() -> None:

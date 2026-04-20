@@ -242,6 +242,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             # no change, the suffix pattern was not a plain `.devN`. Fail fast
             # rather than writing an invalid Cargo SemVer string.
             if version_str == version and ".dev" in version:
+                progress.clear()
                 print(
                     f"Cannot convert {version!r} to a Cargo-compatible SemVer prerelease. "
                     "Only versions ending in '.dev<digits>' are supported (e.g. 0.2.0.dev42).",
@@ -255,6 +256,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
         try:
             replace_version_in_file(target, version_str, dry_run=args.dry_run)
         except (FileNotFoundError, RuntimeError) as exc:
+            progress.clear()
             print(str(exc), file=sys.stderr)
             return 1
         if total > 1:
