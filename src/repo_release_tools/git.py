@@ -9,13 +9,21 @@ from pathlib import Path
 from repo_release_tools import output
 
 
-def run(cmd: list[str], cwd: Path, *, dry_run: bool, label: str) -> str:
+def run(
+    cmd: list[str],
+    cwd: Path,
+    *,
+    dry_run: bool,
+    label: str,
+    suppress_announce: bool = False,
+) -> str:
     """Run a command in a repository."""
     pretty = " ".join(cmd)
     if dry_run:
         print(output.dry_run(f"Would run: {pretty}"))
         return ""
-    print(output.status("$", pretty))
+    if not suppress_announce:
+        print(output.status("$", pretty))
     result = subprocess.run(
         cmd,
         cwd=cwd,

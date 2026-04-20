@@ -232,7 +232,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
 
     version: str = args.version
 
-    g = output.GLYPHS
+    progress = output.ProgressLine(file=sys.stdout)
     print(output.section("Applying CI versions"))
     total = len(ci_targets)
     for i, target in enumerate(ci_targets, 1):
@@ -256,7 +256,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             print(str(exc), file=sys.stderr)
             return 1
         if total > 1:
-            print(f"  {g.progress.render_bar(i / total)}")
+            progress.update_bar(i / total, lines_since_last=0 if i == 1 else 1)
 
     print()
     if args.dry_run:

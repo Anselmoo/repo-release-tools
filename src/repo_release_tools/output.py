@@ -27,6 +27,25 @@ SECTION_WIDTH = 52
 _AnyBoxGlyphs = BoxGlyphs | RoundedBoxGlyphs | BoldBoxGlyphs
 
 
+def _interactive_output_enabled(out: IO[str]) -> bool:
+    """Return whether *out* supports live terminal redraws."""
+    return not IS_LEGACY_TERMINAL and out.isatty()
+
+
+def _write_live_line(
+    message: str,
+    *,
+    out: IO[str],
+    last_width: list[int],
+    newline: bool = False,
+) -> None:
+    """Rewrite the current terminal line, clearing any leftover glyphs."""
+    message_width = display_width(message)
+    padding = " " * max(0, last_width[0] - message_width)
+    print(f"\r{message}{padding}", end="\n" if newline else "", flush=True, file=out)
+    last_width[0] = 0 if newline else message_width
+
+
 def _resolve_box(style: BoxStyle) -> _AnyBoxGlyphs:
     """Return the glyph set matching the requested panel style."""
     if style == "rounded":
@@ -137,8 +156,51 @@ def dry_run_complete(message: str) -> str:
     return dry_run(f"complete {GLYPHS.typography.mdash} {message}", indent=0)
 
 
+class ProgressLine:
+    """Render a sticky progress line that stays below newly printed status lines."""
+
+    def __init__(self, *, file: IO[str] | None = None) -> None:
+        self.out = file if file is not None else sys.stdout
+        self.enabled = _interactive_output_enabled(self.out)
+        self._visible = False
+
+    def update(self, message: str, *, lines_since_last: int = 0) -> None:
+        """Render *message* on a dedicated progress line.
+
+        ``lines_since_last`` is the number of normal output lines printed since the
+        previous progress render. Those lines are kept in place while the progress
+        line is moved to the bottom and rewritten.
+        """
+        if not self.enabled:
+            return
+
+        if not self._visible:
+            print(message, file=self.out)
+            self._visible = True
+            return
+
+        lines_up = lines_since_last + 1
+        parts = [f"\x1b[{lines_up}A", "\r\x1b[2K\x1b[M"]
+        if lines_since_last:
+            parts.append(f"\x1b[{lines_since_last}B")
+        parts.append(f"\r{message}\n")
+        print("".join(parts), end="", flush=True, file=self.out)
+
+    def update_bar(self, value: float, *, width: int = 20, lines_since_last: int = 0) -> None:
+        """Render a progress bar update on the sticky progress line."""
+        self.update(
+            f"  {GLYPHS.progress.render_bar(value, width)}",
+            lines_since_last=lines_since_last,
+        )
+
+
 @contextmanager
-def spinner_lines(label: str, *, file: IO[str] | None = None) -> Generator[None, None, None]:
+def spinner_lines(
+    label: str,
+    *,
+    detail: str | None = None,
+    file: IO[str] | None = None,
+) -> Generator[None, None, None]:
     """Context manager that animates a spinner on *file* (default: sys.stderr).
 
     The spinner runs in a background thread and is cleared on exit.
@@ -146,18 +208,21 @@ def spinner_lines(label: str, *, file: IO[str] | None = None) -> Generator[None,
     (Windows cmd), the context manager is a no-op so nothing is printed.
     """
     out = file if file is not None else sys.stderr
-    if IS_LEGACY_TERMINAL or not out.isatty():
+    if not _interactive_output_enabled(out):
         yield
         return
 
     frames = GLYPHS.progress.spinner()
     stop_event = threading.Event()
     success: list[bool] = [True]
+    last_width = [0]
+
+    suffix = f"  {detail}" if detail else ""
 
     def _animate() -> None:
         while not stop_event.is_set():
             frame = next(frames)
-            print(f"\r  {frame}  {label}", end="", flush=True, file=out)
+            _write_live_line(f"  {frame}  {label}{suffix}", out=out, last_width=last_width)
             stop_event.wait(timeout=0.08)
 
     thread = threading.Thread(target=_animate, daemon=True)
@@ -171,4 +236,9 @@ def spinner_lines(label: str, *, file: IO[str] | None = None) -> Generator[None,
         stop_event.set()
         thread.join(timeout=0.5)
         check = GLYPHS.bullet.ok if success[0] else GLYPHS.bullet.error
-        print(f"\r  {check}  {label}  ", file=out)
+        _write_live_line(
+            f"  {check}  {label}{suffix}",
+            out=out,
+            last_width=last_width,
+            newline=True,
+        )

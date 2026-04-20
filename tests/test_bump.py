@@ -1,4 +1,6 @@
 import os
+import sys
+from contextlib import contextmanager
 from argparse import Namespace
 from pathlib import Path
 
@@ -1701,3 +1703,116 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
     add_calls = [cmd for cmd in git_calls if cmd[:2] == ["git", "add"]]
     assert add_calls
     assert add_calls[-1].count("docs/action.md") == 1
+
+
+def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    version_file_a = tmp_path / "pyproject.toml"
+    version_file_b = tmp_path / "src" / "example" / "__init__.py"
+    version_file_b.parent.mkdir(parents=True)
+    changelog = tmp_path / "CHANGELOG.md"
+    pin_file = tmp_path / "docs" / "action.md"
+    pin_file_two = tmp_path / "docs" / "guide.md"
+    pin_file.parent.mkdir(parents=True)
+
+    version_file_a.write_text('[project]\nname = "example"\nversion = "1.0.0"\n', encoding="utf-8")
+    version_file_b.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+    pin_file.write_text("uses: Anselmoo/repo-release-tools@v1.0.0\n", encoding="utf-8")
+    pin_file_two.write_text("uses: Anselmoo/repo-release-tools@v1.0.0\n", encoding="utf-8")
+
+    target_a = VersionTarget(path=version_file_a, kind="pep621")
+    target_b = VersionTarget(path=version_file_b, kind="python_version")
+    pin_target = PinTarget(
+        path=pin_file,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+    pin_target_two = PinTarget(
+        path=pin_file_two,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=changelog,
+        lock_command=["uv", "lock", "-U"],
+        generated_files=[],
+        version_targets=[target_a, target_b],
+        pin_targets=[pin_target, pin_target_two],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    progress_updates: list[tuple[int, float, int]] = []
+    spinner_calls: list[tuple[str, str | None, object]] = []
+    git_calls: list[tuple[list[str], bool]] = []
+    progress_instances: list[object] = []
+
+    class _FakeProgressLine:
+        def __init__(self, *, file=None) -> None:
+            self.file = file
+            progress_instances.append(self)
+
+        def update_bar(self, value: float, *, width: int = 20, lines_since_last: int = 0) -> None:
+            progress_updates.append((len(progress_instances) - 1, value, lines_since_last))
+
+    @contextmanager
+    def fake_spinner_lines(label: str, *, detail: str | None = None, file=None):
+        spinner_calls.append((label, detail, file))
+        yield
+
+    def fake_git_run(
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
+    ) -> str:
+        git_calls.append((cmd, suppress_announce))
+        return ""
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.read_group_current_version",
+        lambda grp: Version.parse("1.0.0"),
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr("repo_release_tools.commands.bump.output.ProgressLine", _FakeProgressLine)
+    monkeypatch.setattr("repo_release_tools.commands.bump.output.spinner_lines", fake_spinner_lines)
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_git_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=False,
+            no_pin_sync=False,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert len(progress_instances) == 2
+    assert progress_updates == [(0, 0.5, 0), (0, 1.0, 1), (1, 0.5, 0), (1, 1.0, 1)]
+    assert spinner_calls == [("Running lock command…", "$ uv lock -U", sys.stdout)]
+    assert (["uv", "lock", "-U"], True) in git_calls

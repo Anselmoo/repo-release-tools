@@ -235,16 +235,17 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 output.warning(f"Branch '{branch_name}' already exists. Resetting it with --force.")
             )
 
-    g = output.GLYPHS
+    version_progress = output.ProgressLine(file=sys.stdout)
     print(output.section("Updating version strings"))
     total_targets = len(group.version_targets)
     for i, target in enumerate(group.version_targets, 1):
         replace_version_in_file(target, str(new), dry_run=args.dry_run)
         if total_targets > 1:
-            print(f"  {g.progress.render_bar(i / total_targets)}")
+            version_progress.update_bar(i / total_targets, lines_since_last=0 if i == 1 else 1)
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins and not getattr(args, "no_pin_sync", False):
+        pin_progress = output.ProgressLine(file=sys.stdout)
         print(f"\n{output.section('Updating doc pins')}")
         seen_pin_keys: set[tuple[object, str]] = set()
         unique_pins: list = []
@@ -257,7 +258,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
         for i, pin in enumerate(unique_pins, 1):
             replace_pin_in_file(pin, str(new), dry_run=args.dry_run)
             if total_pins > 1:
-                print(f"  {g.progress.render_bar(i / total_pins)}")
+                pin_progress.update_bar(i / total_pins, lines_since_last=0 if i == 1 else 1)
 
     if not args.no_changelog:
         print(f"\n{output.section('Updating changelog')}")
@@ -279,8 +280,18 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     if group.lock_command and not args.no_update:
         print(f"\n{output.section('Refreshing lockfiles')}")
-        with output.spinner_lines("Running lock command…"):
-            git.run(group.lock_command, root, dry_run=args.dry_run, label="lock command")
+        with output.spinner_lines(
+            "Running lock command…",
+            detail=output.status("$", " ".join(group.lock_command), indent=0).strip(),
+            file=sys.stdout,
+        ):
+            git.run(
+                group.lock_command,
+                root,
+                dry_run=args.dry_run,
+                label="lock command",
+                suppress_announce=True,
+            )
 
     print(f"\n{output.section('Git')}")
     create_flag = "-B" if force else "-b"

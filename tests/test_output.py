@@ -136,6 +136,15 @@ def test_spinner_lines_noop_yields_normally(capsys) -> None:
     assert ran == [True]
 
 
+def test_progress_line_noop_on_non_tty() -> None:
+    non_tty = io.StringIO()
+    progress = output.ProgressLine(file=non_tty)
+
+    progress.update_bar(0.5)
+
+    assert non_tty.getvalue() == ""
+
+
 def test_spinner_lines_propagates_exception() -> None:
     """Exceptions raised inside the context propagate out."""
     with pytest.raises(ValueError, match="boom"):
@@ -188,6 +197,44 @@ def test_spinner_lines_writes_success_status_on_tty(monkeypatch: pytest.MonkeyPa
     rendered = tty.getvalue()
     assert "Working" in rendered
     assert f"{output.GLYPHS.bullet.ok}  Working" in rendered
+
+
+def test_spinner_lines_writes_detail_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    tty = _TtyBuffer()
+
+    monkeypatch.setattr(output.threading, "Event", _FakeEvent)
+    monkeypatch.setattr(output.threading, "Thread", _FakeThread)
+
+    with output.spinner_lines("Working", detail="$ uv lock -U", file=tty):
+        pass
+
+    rendered = tty.getvalue()
+    assert "$ uv lock -U" in rendered
+    assert f"{output.GLYPHS.bullet.ok}  Working  $ uv lock -U" in rendered
+
+
+def test_progress_line_writes_initial_bar_on_tty() -> None:
+    tty = _TtyBuffer()
+    progress = output.ProgressLine(file=tty)
+
+    progress.update_bar(0.5)
+
+    assert tty.getvalue() == f"  {output.GLYPHS.progress.render_bar(0.5)}\n"
+
+
+def test_progress_line_rewrites_bar_below_latest_status_line() -> None:
+    tty = _TtyBuffer()
+    progress = output.ProgressLine(file=tty)
+
+    progress.update_bar(0.5)
+    tty.write("  ✔ updated file\n")
+    progress.update_bar(1.0, lines_since_last=1)
+
+    rendered = tty.getvalue()
+    assert f"  {output.GLYPHS.progress.render_bar(0.5)}\n" in rendered
+    assert "\x1b[2A" in rendered
+    assert "\x1b[M" in rendered
+    assert f"\r  {output.GLYPHS.progress.render_bar(1.0)}\n" in rendered
 
 
 def test_spinner_lines_writes_error_status_on_tty_exception(
