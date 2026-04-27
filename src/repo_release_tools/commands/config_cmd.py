@@ -7,6 +7,15 @@ import sys
 from pathlib import Path
 
 from repo_release_tools import config as cfg, output
+from repo_release_tools.ui.glyphs import display_width, pad_right
+
+
+def _render_group_detail_rows(
+    details: list[tuple[str, str]],
+) -> list[tuple[str, bool, list | None]]:
+    """Render aligned key/value lines for a version-group tree node."""
+    key_width = max(display_width(key) for key, _ in details)
+    return [(f"{pad_right(key, key_width)}  {value}", False, None) for key, value in details]
 
 
 def cmd_config(args: argparse.Namespace) -> int:
@@ -23,6 +32,18 @@ def cmd_config(args: argparse.Namespace) -> int:
         print(exc, file=sys.stderr)
         return 1
 
+    # --raw: syntax-highlighted view of the raw config file
+    if getattr(args, "raw", False):
+        config_path = conf.config_file
+        try:
+            raw_text = config_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            print(output.error(str(exc)), file=sys.stderr)
+            return 1
+        lang = "toml" if config_path.suffix in {".toml"} else "text"
+        print(output.highlight_terminal(raw_text, lang))
+        return 0
+
     # Header panel: config origin + number of groups
     source = "(auto-detected)" if conf.autodetected else str(conf.config_file.relative_to(root))
     group_count = len(conf.version_groups)
@@ -34,20 +55,27 @@ def cmd_config(args: argparse.Namespace) -> int:
                 ("config file", source),
                 ("version groups", f"{group_count} {plural}"),
             ],
+            expand=True,
+            title_mode="row",
         )
     )
     print()
 
+    print("Version groups")
+    print(output.rule())
+
     # Tree: one branch per version group
     tree_entries: list[tuple[str, bool, list | None]] = []
     for group in conf.version_groups:
-        children: list[tuple[str, bool, list | None]] = [
-            (f"release_branch  {group.release_branch}", False, None),
-            (f"changelog       {group.changelog_file.relative_to(root)}", False, None),
+        detail_rows = [
+            ("release_branch", group.release_branch),
+            ("changelog", str(group.changelog_file.relative_to(root))),
         ]
 
         if group.lock_command:
-            children.append((f"lock_command    {' '.join(group.lock_command)}", False, None))
+            detail_rows.append(("lock_command", " ".join(group.lock_command)))
+
+        children = _render_group_detail_rows(detail_rows)
 
         # Version targets
         target_children: list[tuple[str, bool, list | None]] = [
@@ -74,5 +102,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser = subparsers.add_parser(
         "config",
         help="Show the resolved rrt configuration for this repository.",
+    )
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        default=False,
+        help="Show the raw config file with syntax highlighting instead of the tree view.",
     )
     parser.set_defaults(handler=cmd_config)

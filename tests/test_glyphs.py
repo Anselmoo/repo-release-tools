@@ -1,9 +1,9 @@
 import sys
 
-from repo_release_tools.glyphs import GLYPHS
-from repo_release_tools.glyphs import Glyph
-from repo_release_tools.glyphs import _detect_legacy_terminal
-from repo_release_tools.glyphs import display_width
+from repo_release_tools.ui.glyphs import GLYPHS
+from repo_release_tools.ui.glyphs import Glyph
+from repo_release_tools.ui.glyphs import _detect_legacy_terminal
+from repo_release_tools.ui.glyphs import display_width
 
 
 def test_glyph_multiplies_like_a_string() -> None:
@@ -112,7 +112,7 @@ def test_display_width_ambiguous_narrow_by_default(monkeypatch) -> None:
     # Bullet '•' has east_asian_width 'A' – counted as 1 in a non-CJK locale.
     monkeypatch.setenv("RRT_WIDE_AMBIGUOUS", "0")
     from importlib import reload
-    import repo_release_tools.glyphs as g
+    import repo_release_tools.ui.glyphs as g
 
     reload(g)
     assert g.display_width("•") == 1
@@ -123,7 +123,7 @@ def test_display_width_ambiguous_narrow_by_default(monkeypatch) -> None:
 def test_display_width_ambiguous_wide_when_override(monkeypatch) -> None:
     monkeypatch.setenv("RRT_WIDE_AMBIGUOUS", "1")
     from importlib import reload
-    import repo_release_tools.glyphs as g
+    import repo_release_tools.ui.glyphs as g
 
     reload(g)
     assert g.display_width("•") == 2

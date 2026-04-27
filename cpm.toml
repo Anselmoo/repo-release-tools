@@ -1,0 +1,14 @@
+[plugins]
+
+[skills]
+cli-mastery = { url = "https://github.com/github/awesome-copilot/tree/main/skills/cli-mastery", rev = "63d08d51f792d53feec8c1c06897cee870e83c18" }
+
+[agents]
+
+[mcps]
+
+[hooks]
+
+[workflows]
+
+[instructions]

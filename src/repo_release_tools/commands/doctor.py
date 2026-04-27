@@ -18,6 +18,8 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
+from repo_release_tools.ui import bold
+from repo_release_tools.ui.layout import render_table
 from repo_release_tools.version_targets import read_version_string
 
 
@@ -84,15 +86,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
     source = "(auto-detected)" if config.autodetected else str(config.config_file.relative_to(root))
     group_count = len(config.version_groups)
     plural = "group" if group_count == 1 else "groups"
-    print(
-        output.panel(
-            "rrt doctor",
-            [
-                ("config file", source),
-                ("version groups", f"{group_count} {plural}"),
-            ],
-        )
-    )
+    print(bold("rrt doctor"))
+    print(render_table([("config file", source), ("version groups", f"{group_count} {plural}")]))
     print()
 
     all_ok = True
@@ -150,6 +145,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
         if not group_ok:
             all_ok = False
 
+    print(output.rule("Health checks"))
     print(g.tree.render(tree_entries))
     print()
 

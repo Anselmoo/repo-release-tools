@@ -223,3 +223,83 @@ def test_register_adds_config_subparser() -> None:
     parsed = root_parser.parse_args(["config"])
     assert parsed.command == "config"
     assert callable(parsed.handler)
+
+
+def test_register_adds_raw_flag() -> None:
+    import argparse as ap
+
+    root_parser = ap.ArgumentParser()
+    subs = root_parser.add_subparsers(dest="command")
+    config_cmd.register(subs)
+    parsed = root_parser.parse_args(["config", "--raw"])
+    assert parsed.raw is True
+
+
+def test_cmd_config_raw_prints_toml(tmp_path: Path, monkeypatch, capsys) -> None:
+    from repo_release_tools.commands import config_cmd
+    from repo_release_tools import output
+
+    toml_content = '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+    config_path = tmp_path / "pyproject.toml"
+    config_path.write_text(toml_content)
+
+    conf = _make_config(tmp_path)
+    # Override config_file to point at our temp file
+    from dataclasses import replace
+
+    conf = replace(conf, config_file=config_path)
+
+    import repo_release_tools.config as cfg_mod
+
+    monkeypatch.setattr(cfg_mod, "load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr(output, "highlight_terminal", lambda code, lang, **kw: code)
+    monkeypatch.chdir(tmp_path)
+
+    args = argparse.Namespace(raw=True)
+    rc = config_cmd.cmd_config(args)
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "tool.rrt" in captured.out
+
+
+def test_cmd_config_raw_unreadable_file(tmp_path: Path, monkeypatch, capsys) -> None:
+    conf = _make_config(tmp_path)
+    # Don't create the file so OSError is raised
+    import repo_release_tools.config as cfg_mod
+
+    monkeypatch.setattr(cfg_mod, "load_or_autodetect_config", lambda _: conf)
+    monkeypatch.chdir(tmp_path)
+
+    args = argparse.Namespace(raw=True)
+    rc = config_cmd.cmd_config(args)
+    assert rc == 1
+
+
+def test_cmd_config_panel_uses_rule_separator(tmp_path: Path, monkeypatch, capsys) -> None:
+    conf = _make_config(tmp_path)
+    import repo_release_tools.config as cfg_mod
+
+    monkeypatch.setattr(cfg_mod, "load_or_autodetect_config", lambda _: conf)
+    monkeypatch.chdir(tmp_path)
+
+    args = argparse.Namespace(raw=False)
+    rc = config_cmd.cmd_config(args)
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "Version groups" in captured.out
+
+
+def test_cmd_config_aligns_tree_details(tmp_path: Path, monkeypatch, capsys) -> None:
+    conf = _make_config(tmp_path)
+    import repo_release_tools.config as cfg_mod
+
+    monkeypatch.setattr(cfg_mod, "load_or_autodetect_config", lambda _: conf)
+    monkeypatch.chdir(tmp_path)
+
+    rc = config_cmd.cmd_config(argparse.Namespace(raw=False))
+    captured = capsys.readouterr()
+
+    assert rc == 0
+    assert "release_branch  release/v{version}" in captured.out
+    assert "changelog       CHANGELOG.md" in captured.out
+    assert "lock_command    uv lock" in captured.out

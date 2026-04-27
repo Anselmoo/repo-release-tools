@@ -1,0 +1,23 @@
+version = 1
+generated = "2026-04-27T19:56:30.666152Z"
+
+[[skill]]
+name = "cli-mastery"
+rev = "63d08d51f792d53feec8c1c06897cee870e83c18"
+resolved = "2026-04-27T19:56:30.667759Z"
+hash = "sha256:42cb2d1aebdce23e3d681f12fabca871b60e7508c6275a00b5d04e672cdf8d0a"
+scope = "local"
+groups = ["default"]
+git_owner = "github"
+git_repo = "awesome-copilot"
+git_ref = "63d08d51f792d53feec8c1c06897cee870e83c18"
+git_path = "skills/cli-mastery"
+git_mode = "tree"
+url = "https://github.com/github/awesome-copilot/tree/main/skills/cli-mastery"
+files = [{ path = "cli-mastery/SKILL.md", sha256 = "d3e4194d69f973aa5bf8993c8e68b09fea9f0f2c0427e740a18fd4175d956879" }, { path = "cli-mastery/references/final-exam.md", sha256 = "2cca06f143f744d6a8eaad75534a43752de43565754f2ad86603f2fc05345f19" }, { path = "cli-mastery/references/module-1-slash-commands.md", sha256 = "c7c6bfd73de365b972db947ca04a247d0a33c243f3a123185a7aba1424a63aa2" }, { path = "cli-mastery/references/module-2-keyboard-shortcuts.md", sha256 = "db5b06e80b390b2dca74ec53f1748b81b06ee347be753d4bff4895fa3052b374" }, { path = "cli-mastery/references/module-3-modes.md", sha256 = "b2d0843ef39942f2213a126bb2fd81cec50e5fc002133b430b398a03f5a2ca4c" }, { path = "cli-mastery/references/module-4-agents.md", sha256 = "7a0c25edc4e3186003afab6c9d9a10bd26afb915a396f5e661127053da7cd428" }, { path = "cli-mastery/references/module-5-skills.md", sha256 = "7027f8cb6263ed86d8a486265356f029d9dc7e359be0e3e53d2e68b44794dd2a" }, { path = "cli-mastery/references/module-6-mcp.md", sha256 = "a82a53a4751cf5c6ac0b6eef5862e6c974e7790a27451cd02d358c3aded02bdc" }, { path = "cli-mastery/references/module-7-advanced.md", sha256 = "478e4ac66885d9ed7fde31218ae8d4d5e2d44aec76b244b628d822a8e0a44032" }, { path = "cli-mastery/references/module-8-configuration.md", sha256 = "d256475f4fb601441636d649618b0efa11e4f4611594726b8a5cb19d2e3d7c96" }, { path = "cli-mastery/references/scenarios.md", sha256 = "fc2bea675c2cdb7d484cb7e9f02701816f8ac05bfb3a56eb76e7a9f4e0b9e79d" },
+]
+
+[skill.license]
+spdx = "MIT"
+url = "https://github.com/github/awesome-copilot/blob/63d08d51f792d53feec8c1c06897cee870e83c18/LICENSE"
+verified = true

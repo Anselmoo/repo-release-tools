@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "timeout": 900,
+        "command": "python3 .github/hooks/check_push_coverage.py"
+      }]
+    }]
+  }
+}

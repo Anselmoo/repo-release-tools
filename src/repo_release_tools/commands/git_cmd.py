@@ -73,9 +73,7 @@ def infer_commit_type(branch_name: str) -> str | None:
     type_part, _ = branch_name.split("/", 1)
     if type_part in MAGIC_BRANCH_TYPES or type_part in BOT_BRANCH_TYPES:
         return None
-    if type_part in CONVENTIONAL_TYPES:
-        return type_part
-    return None
+    return type_part if type_part in CONVENTIONAL_TYPES else None
 
 
 def resolve_commit_subject(args: argparse.Namespace, root: Path) -> tuple[str, str]:
@@ -185,9 +183,7 @@ def describe_sync_relation(*, ahead: int, behind: int, base_ref: str | None) -> 
         return "up to date"
     if ahead > 0 and behind == 0:
         return "ahead locally"
-    if ahead == 0 and behind > 0:
-        return "behind base"
-    return "diverged"
+    return "behind base" if ahead == 0 and behind > 0 else "diverged"
 
 
 def sync_problem(branch_name: str, *, base_ref: str | None, ahead: int, behind: int) -> str | None:
@@ -295,14 +291,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     subject_problem = (
         validate_commit_subject(latest_subject) if latest_subject else "No commits found."
     )
-    dirty_problem = None if not status_lines else "Working tree has uncommitted changes."
+    dirty_problem = "Working tree has uncommitted changes." if status_lines else None
     operation_problem = (
         None
         if operation is None
         else f"{operation.capitalize()} is in progress. Resolve or abort it first."
     )
     conflict_problem = (
-        None if not conflicts else f"Found {len(conflicts)} conflicted path(s). Resolve them first."
+        f"Found {len(conflicts)} conflicted path(s). Resolve them first." if conflicts else None
     )
     relation_problem = sync_problem(branch_name, base_ref=upstream, ahead=ahead, behind=behind)
 
@@ -405,8 +401,7 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
     if not git.is_git_repository(root):
         print(f"{root} is not inside a Git work tree.", file=sys.stderr)
         return 1
-    clean = git.working_tree_clean(root)
-    if clean:
+    if git.working_tree_clean(root):
         branch_name = git.current_branch(root) or "<detached>"
         upstream = git.upstream_branch(root)
         print(output.ok("Working tree is clean."))
@@ -500,9 +495,9 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
         print(output.ok(f"{branch_name} is ahead of {base_ref} by {ahead} commit(s)."))
     else:
         failures += 1
-        print(
-            output.warning(sync_problem(branch_name, base_ref=base_ref, ahead=ahead, behind=behind))
-        )
+        problem = sync_problem(branch_name, base_ref=base_ref, ahead=ahead, behind=behind)
+        if problem is not None:
+            print(output.warning(problem))
 
     if conflicts:
         print()
@@ -526,11 +521,12 @@ def run_commit(args: argparse.Namespace, *, stage_all: bool) -> int:
     try:
         branch_name, subject = resolve_commit_subject(args, root)
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        print(exc, file=sys.stderr)
         return 1
 
     title = "[DRY RUN] Commit" if args.dry_run else "Commit"
     print()
+    print(output.banner(title, style="bold"))
     print(
         output.panel(
             title,
@@ -539,6 +535,7 @@ def run_commit(args: argparse.Namespace, *, stage_all: bool) -> int:
                 ("Mode", "stage all" if stage_all else "commit only"),
                 ("Subject", subject),
             ],
+            style="mixed",
         )
     )
     print()
@@ -724,7 +721,7 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
     try:
         branch_name, subject = resolve_commit_subject(args, root)
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        print(exc, file=sys.stderr)
         return 1
 
     commits = git.commits_ahead(root, base_ref)
@@ -905,7 +902,7 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
             output.warning(f"Rebootstrap failed. Original git data is backed up at {backup_path}."),
             file=sys.stderr,
         )
-        print(str(exc), file=sys.stderr)
+        print(exc, file=sys.stderr)
         return 1
 
     print()
@@ -1059,10 +1056,29 @@ def add_commit_arguments(parser: argparse.ArgumentParser) -> None:
     add_dry_run_flag(parser)
 
 
+GIT_EPILOG = (
+    "  $ rrt git status\n"
+    "  $ rrt git diff --against HEAD~1\n"
+    '  $ rrt git commit fix "make output clearer"\n'
+    "  $ rrt git sync\n"
+    "  $ rrt git undo-safe"
+)
+
+
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the git command group."""
-    parser = subparsers.add_parser("git", help="Git workflow helpers.")
-    git_sub = parser.add_subparsers(dest="git_command", required=True)
+    parser = subparsers.add_parser(
+        "git",
+        help="Git workflow helpers.",
+        description="Git workflow helpers for repository status, commit, sync, and history operations.",
+        epilog=GIT_EPILOG,
+    )
+    git_sub = parser.add_subparsers(
+        dest="git_command",
+        metavar="<git_command>",
+        parser_class=type(parser),
+        required=True,
+    )
 
     status_parser = git_sub.add_parser(
         "status",
