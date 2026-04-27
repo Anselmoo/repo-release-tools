@@ -50,3 +50,16 @@ Supported targets:
 
 The installer refuses to overwrite an existing installed skill unless you pass
 `--force`. Use `--dry-run` to preview the copy targets first.
+
+## Skill eval fixtures
+
+Keep the canonical skill eval prompts in:
+
+- `/evals/evals.json`
+
+That file is part of the repo and should be tracked so future skill iterations
+can reuse the same prompts and expectations.
+
+Do **not** treat ad-hoc execution transcripts such as a root-level
+`transcript.md` as repository documentation. Those are local review artifacts
+from a specific eval run and should stay out of git.
