@@ -1,0 +1,1 @@
+Development commands: `uv sync --all-groups`, `uv run pytest -q -m "not runtime"`, `uv run pytest -q -m runtime tests/test_runtime_hybrid.py`, and `uvx pre-commit run --all-files`. Entry points: `rrt`, `rrt-hooks`, and `python -m repo_release_tools`.

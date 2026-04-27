@@ -5,7 +5,16 @@ from __future__ import annotations
 import argparse
 import sys
 
-from repo_release_tools.commands import branch, bump, ci_version, config_cmd, doctor, git_cmd, init
+from repo_release_tools.commands import (
+    branch,
+    bump,
+    ci_version,
+    config_cmd,
+    doctor,
+    git_cmd,
+    init,
+    skill,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.register(subparsers)
     git_cmd.register(subparsers)
     init.register(subparsers)
+    skill.register(subparsers)
     return parser
 
 

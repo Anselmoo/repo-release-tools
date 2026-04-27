@@ -1,0 +1,1 @@
+repo-release-tools is a Python 3.12+ project providing config-driven release tooling across multiple ecosystems. It exposes the `rrt` CLI, `rrt-hooks` hook runner, and a reusable GitHub Action. Core areas are config loading, changelog management, version target updates, and command implementations under src/repo_release_tools/commands/.

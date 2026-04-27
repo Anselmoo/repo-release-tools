@@ -1,0 +1,10 @@
+{
+  "eval_id": 0,
+  "eval_name": "branch-naming-feat-scope",
+  "prompt": "I already have rrt installed. I need to start work on adding parser caching for the CLI. Suggest the correct branch name, show the exact rrt command to create it, and explain how to rename it later if I realize the scope should be config instead of cli.",
+  "assertions": [
+    "The answer recommends a conventional branch name that uses the `feat/` prefix and a kebab-case slug for parser caching work.",
+    "The answer shows an explicit `rrt branch new feat ...` command for creating the branch.",
+    "The answer explains a valid `rrt branch rename ...` follow-up for changing the scope from `cli` to `config`."
+  ]
+}

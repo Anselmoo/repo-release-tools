@@ -1,19 +1,52 @@
-# Skill
+# Skills
 
-This repository includes a Copilot CLI skill at:
+This repository includes two bundled agent skills:
 
-`/.github/skills/repo-release-tools-uvx/SKILL.md`
+- `/.github/skills/repo-release-tools-uvx/SKILL.md`
+- `/.github/skills/repo-release-tools/SKILL.md`
 
-## Purpose
+## Which one to use
 
-The skill gives zero-install guidance for:
+### `repo-release-tools-uvx`
 
-- `rrt` CLI usage
-- release automation via `uvx`
-- pre-commit setup
-- GitHub Action usage
+Use the existing `uvx` skill when you want zero-install guidance such as:
 
-## Recommended usage
+- `uvx repo-release-tools branch new ...`
+- `uvx repo-release-tools bump ...`
+- ephemeral CI or one-off release automation
 
-Use the skill when you want guided release operations without manually
-installing the tool first.
+### `repo-release-tools`
+
+Use the installed-CLI skill when `rrt` is already available on the machine and
+you want guidance for:
+
+- branch naming with `rrt branch ...`
+- release bumps with `rrt bump ...`
+- hook setup with `rrt-hooks ...`
+- `rrt doctor` / `rrt config`
+- GitHub Action and changelog workflow configuration
+
+## Installing the bundled CLI skill
+
+The `repo-release-tools` package includes a bundled installer command:
+
+```bash
+rrt skill install --target copilot-local
+rrt skill install --target claude-local --target codex-local
+rrt skill install --target copilot-global --dry-run
+rrt skill install --target codex-global --force
+```
+
+Supported targets:
+
+| Target | Directory |
+|---|---|
+| `copilot-local` | `.copilot/skills` |
+| `claude-local` | `.claude/skills` |
+| `codex-local` | `.codex/skills` |
+| `copilot-global` | `~/.copilot/skills` |
+| `claude-global` | `~/.claude/skills` |
+| `codex-global` | `~/.codex/skills` |
+
+The installer refuses to overwrite an existing installed skill unless you pass
+`--force`. Use `--dry-run` to preview the copy targets first.

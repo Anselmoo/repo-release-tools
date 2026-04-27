@@ -1,0 +1,50 @@
+{
+  "expectations": [
+    {
+      "text": "The answer explains that `incremental` keeps changelog maintenance active during development, while `squash` skips per-commit changelog enforcement until release time.",
+      "passed": false,
+      "evidence": "Answer does not clearly explain the incremental vs squash behavior difference."
+    },
+    {
+      "text": "The answer states how GitHub Action `changelog-strategy: auto` maps from workflow choice, including `per-commit` for incremental and `release-only` for squash.",
+      "passed": true,
+      "evidence": "Answer states the `auto` mapping, including `per-commit` and `release-only`."
+    },
+    {
+      "text": "The answer includes a minimal config example that sets `changelog_workflow` and at least one `version_targets` entry.",
+      "passed": true,
+      "evidence": "Answer includes config text with `changelog_workflow` and a `version_targets` entry."
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 1,
+    "total": 3,
+    "pass_rate": 0.67
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 5,
+    "errors_encountered": 0,
+    "output_chars": 2076,
+    "transcript_chars": 1373
+  },
+  "timing": {
+    "total_tokens": 0,
+    "duration_ms": 171000,
+    "total_duration_seconds": 171.0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [
+      "# Caveats\n\n- In `incremental`, GitHub Action `changelog-strategy: \"auto\"` resolves to `per-commit`, not `unreleased`.\n- In this repository today, omitting `changelog_workflow` still behaves like `incremental`, because that is the default.\n- For local incremental workflows, `rrt-update-unreleased` and `rrt-changelog` are alternatives; you usually want one or the other, not both."
+    ],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "No suggestions, evals look solid"
+  }
+}

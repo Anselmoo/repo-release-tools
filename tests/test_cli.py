@@ -25,6 +25,7 @@ def test_module_help_smoke() -> None:
     assert "bump" in result.stdout
     assert "git" in result.stdout
     assert "init" in result.stdout
+    assert "skill" in result.stdout
 
 
 def test_build_parser_registers_doctor_command() -> None:
@@ -34,6 +35,16 @@ def test_build_parser_registers_doctor_command() -> None:
 
     assert args.command == "doctor"
     assert args.handler.__name__ == "cmd_doctor"
+
+
+def test_build_parser_registers_skill_install_command() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["skill", "install", "--target", "copilot-local"])
+
+    assert args.command == "skill"
+    assert args.skill_command == "install"
+    assert args.handler.__name__ == "cmd_install"
 
 
 def test_main_dispatches_to_selected_handler(monkeypatch: pytest.MonkeyPatch) -> None:
