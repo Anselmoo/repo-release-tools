@@ -103,7 +103,9 @@ def cmd_install(args: argparse.Namespace) -> int:
         destination_dir = skills_dir / INSTALLED_CLI_SKILL.name
         destination_file = destination_dir / "SKILL.md"
         try:
-            if destination_dir.exists():
+            if destination_dir.is_symlink() or destination_dir.is_file():
+                destination_dir.unlink()
+            elif destination_dir.exists():
                 shutil.rmtree(destination_dir)
             destination_dir.mkdir(parents=True, exist_ok=True)
             destination_file.write_text(

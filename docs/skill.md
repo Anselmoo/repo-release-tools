@@ -60,6 +60,9 @@ Keep the canonical skill eval prompts in:
 That file is part of the repo and should be tracked so future skill iterations
 can reuse the same prompts and expectations.
 
-Do **not** treat ad-hoc execution transcripts such as a root-level
-`transcript.md` as repository documentation. Those are local review artifacts
-from a specific eval run and should stay out of git.
+Structured workspace artifacts under `.github/skills/repo-release-tools-workspace/`
+(such as `benchmark.json`, `benchmark.md`, `review.html`, and per-eval `eval-N/` answer
+files) are part of the repo and may be committed as evidence of an evaluation run.
+
+Do **not** commit ad-hoc execution transcripts (`transcript.md`).  Those files are
+already listed in `.gitignore` and should stay out of git.

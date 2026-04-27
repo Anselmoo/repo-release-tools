@@ -87,6 +87,40 @@ def test_cmd_install_force_overwrites_existing_skill(monkeypatch, tmp_path: Path
     )
 
 
+def test_cmd_install_force_replaces_symlink(monkeypatch, tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, home)
+    skills_dir = tmp_path / ".copilot" / "skills"
+    skills_dir.mkdir(parents=True)
+    real_dir = tmp_path / "other-skill"
+    real_dir.mkdir()
+    (skills_dir / "repo-release-tools").symlink_to(real_dir)
+
+    result = cmd_install(Namespace(targets=["copilot-local"], dry_run=False, force=True))
+
+    assert result == 0
+    installed = skills_dir / "repo-release-tools" / "SKILL.md"
+    assert installed.is_file()
+    assert installed.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
+
+
+def test_cmd_install_force_replaces_file(monkeypatch, tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, home)
+    skills_dir = tmp_path / ".copilot" / "skills"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "repo-release-tools").write_text("not a directory\n", encoding="utf-8")
+
+    result = cmd_install(Namespace(targets=["copilot-local"], dry_run=False, force=True))
+
+    assert result == 0
+    installed = skills_dir / "repo-release-tools" / "SKILL.md"
+    assert installed.is_file()
+    assert installed.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
+
+
 def test_cmd_install_global_target_uses_home_directory(monkeypatch, tmp_path: Path) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
