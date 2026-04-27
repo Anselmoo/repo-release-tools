@@ -1,0 +1,3 @@
+- `rrt branch rename --scope config` by itself prepends `config-` to the existing slug; it does not replace an existing embedded scope like `cli-`.
+- To switch from `feat/cli-parser-caching` to `feat/config-parser-caching`, include description words so `rrt` rebuilds the slug: `rrt branch rename "parser caching" --scope config`.
+- Optional safety preview: add `--dry-run` before running the mutating command.

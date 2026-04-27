@@ -1,0 +1,1 @@
+Use Conventional Commits and semantic branch names. Changelog format follows Keep a Changelog with an auto-managed `[Unreleased]` section. Ruff uses line-length 100, project metadata declares `Typing :: Typed`, and changelog workflow defaults to `incremental` unless `changelog_workflow` is explicitly set to `squash`.

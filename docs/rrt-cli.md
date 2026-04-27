@@ -22,6 +22,7 @@ uvx repo-release-tools branch new feat "add parser"
 ```bash
 rrt init
 rrt config
+rrt skill install --target copilot-local
 rrt branch new feat "add parser"
 rrt git commit "add parser"
 rrt git doctor
@@ -38,6 +39,7 @@ into `.rrt.toml` or a native manifest file.
 ```bash
 rrt init
 rrt config
+rrt skill install --target copilot-local
 rrt branch new feat "add parser"
 rrt branch rescue fix "recover release work"
 rrt branch rename --type feat
@@ -245,6 +247,32 @@ to keep release-tool settings in `pyproject.toml`.
 
 Go does not have a standard extensible manifest section like `package.json` or
 `Cargo.toml`, so Go repos should use `.rrt.toml` or `.config/rrt.toml`.
+
+## Skill install
+
+Use `rrt skill install` to copy the bundled installed-CLI skill into an agent
+skill directory:
+
+```bash
+rrt skill install --target copilot-local
+rrt skill install --target claude-local --target codex-local
+rrt skill install --target copilot-global --dry-run
+rrt skill install --target codex-global --force
+```
+
+### Targets
+
+| Target | Directory |
+|---|---|
+| `copilot-local` | `.copilot/skills` |
+| `claude-local` | `.claude/skills` |
+| `codex-local` | `.codex/skills` |
+| `copilot-global` | `~/.copilot/skills` |
+| `claude-global` | `~/.claude/skills` |
+| `codex-global` | `~/.codex/skills` |
+
+The command installs the bundled `repo-release-tools` skill. It refuses to
+overwrite an existing installation unless `--force` is provided.
 
 ## Minimal config
 

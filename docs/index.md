@@ -22,7 +22,7 @@ workflow details behind them.
 - [Conventional branches](semantic-branches.md) — naming model and allowed
 	branch types
 - [Git magic](git-magic.md) — opinionated Git helpers and workflow shortcuts
-- [Skill](skill.md) — Copilot CLI usage via `uvx`
+- [Skills](skill.md) — bundled `uvx` and installed-CLI agent skills
 
 ## Choose your changelog workflow
 

@@ -1,0 +1,274 @@
+{
+  "metadata": {
+    "skill_name": "repo-release-tools",
+    "skill_path": ".github/skills/repo-release-tools/SKILL.md",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-04-27T06:16:13Z",
+    "evals_run": [
+      0,
+      1,
+      2
+    ],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": 0,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 85.0,
+        "tokens": 739,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer recommends a conventional branch name that uses the `feat/` prefix and a kebab-case slug for parser caching work.",
+          "passed": true,
+          "evidence": "Found suggested branch name 'feat/cli-add-parser-caching'."
+        },
+        {
+          "text": "The answer shows an explicit `rrt branch new feat ...` command for creating the branch.",
+          "passed": true,
+          "evidence": "Answer includes an explicit `rrt branch new feat ...` command."
+        },
+        {
+          "text": "The answer explains a valid `rrt branch rename ...` follow-up for changing the scope from `cli` to `config`.",
+          "passed": true,
+          "evidence": "Answer explains a `rrt branch rename ...` follow-up that changes scope to config."
+        }
+      ],
+      "notes": [
+        "# Caveat\n\nUse a full rebuild when changing the scope from `cli` to `config`:\n\n```bash\nrrt branch rename --scope config \"add parser caching\"\n```\n\nDo **not** use `rrt branch rename --scope config` by itself for this case. Scope-only rename preserves the existing slug and prepends the new scope, which would produce `feat/config-cli-add-parser-caching` instead of the desired `feat/config-add-parser-caching`."
+      ]
+    },
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 109.0,
+        "tokens": 3606,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer explains that `incremental` keeps changelog maintenance active during development, while `squash` skips per-commit changelog enforcement until release time.",
+          "passed": true,
+          "evidence": "Answer contrasts incremental maintenance with squash/release-time changelog behavior."
+        },
+        {
+          "text": "The answer states how GitHub Action `changelog-strategy: auto` maps from workflow choice, including `per-commit` for incremental and `release-only` for squash.",
+          "passed": true,
+          "evidence": "Answer states the `auto` mapping, including `per-commit` and `release-only`."
+        },
+        {
+          "text": "The answer includes a minimal config example that sets `changelog_workflow` and at least one `version_targets` entry.",
+          "passed": true,
+          "evidence": "Answer includes config text with `changelog_workflow` and a `version_targets` entry."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 85.0,
+        "tokens": 1863,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer gives a valid pre-commit example for the installed CLI workflow and does not recommend enabling `rrt-update-unreleased` and `rrt-changelog` together as simultaneous changelog hooks.",
+          "passed": true,
+          "evidence": "Answer gives installed-CLI pre-commit guidance without enabling both changelog hooks together."
+        },
+        {
+          "text": "The answer gives a valid lefthook example that uses `rrt-hooks pre-commit`, `rrt-hooks update-unreleased --message-file {1}`, and `rrt-hooks commit-msg {1}`.",
+          "passed": true,
+          "evidence": "Answer includes the expected lefthook commands for branch, changelog update, and commit subject checks."
+        },
+        {
+          "text": "The answer explains that `rrt-hooks` must be on PATH for lefthook and ties that to the installed package workflow.",
+          "passed": true,
+          "evidence": "Answer explains the PATH requirement for `rrt-hooks`."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 109.0,
+        "tokens": 542,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer recommends a conventional branch name that uses the `feat/` prefix and a kebab-case slug for parser caching work.",
+          "passed": true,
+          "evidence": "Found suggested branch name 'feat/cli-parser-caching'."
+        },
+        {
+          "text": "The answer shows an explicit `rrt branch new feat ...` command for creating the branch.",
+          "passed": true,
+          "evidence": "Answer includes an explicit `rrt branch new feat ...` command."
+        },
+        {
+          "text": "The answer explains a valid `rrt branch rename ...` follow-up for changing the scope from `cli` to `config`.",
+          "passed": true,
+          "evidence": "Answer explains a `rrt branch rename ...` follow-up that changes scope to config."
+        }
+      ],
+      "notes": [
+        "- `rrt branch rename --scope config` by itself prepends `config-` to the existing slug; it does not replace an existing embedded scope like `cli-`.\n- To switch from `feat/cli-parser-caching` to `feat/config-parser-caching`, include description words so `rrt` rebuilds the slug: `rrt branch rename \"parser caching\" --scope config`.\n- Optional safety preview: add `--dry-run` before running the mutating command."
+      ]
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.67,
+        "passed": 2,
+        "failed": 1,
+        "total": 3,
+        "time_seconds": 171.0,
+        "tokens": 2076,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer explains that `incremental` keeps changelog maintenance active during development, while `squash` skips per-commit changelog enforcement until release time.",
+          "passed": false,
+          "evidence": "Answer does not clearly explain the incremental vs squash behavior difference."
+        },
+        {
+          "text": "The answer states how GitHub Action `changelog-strategy: auto` maps from workflow choice, including `per-commit` for incremental and `release-only` for squash.",
+          "passed": true,
+          "evidence": "Answer states the `auto` mapping, including `per-commit` and `release-only`."
+        },
+        {
+          "text": "The answer includes a minimal config example that sets `changelog_workflow` and at least one `version_targets` entry.",
+          "passed": true,
+          "evidence": "Answer includes config text with `changelog_workflow` and a `version_targets` entry."
+        }
+      ],
+      "notes": [
+        "# Caveats\n\n- In `incremental`, GitHub Action `changelog-strategy: \"auto\"` resolves to `per-commit`, not `unreleased`.\n- In this repository today, omitting `changelog_workflow` still behaves like `incremental`, because that is the default.\n- For local incremental workflows, `rrt-update-unreleased` and `rrt-changelog` are alternatives; you usually want one or the other, not both."
+      ]
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 99.0,
+        "tokens": 2101,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The answer gives a valid pre-commit example for the installed CLI workflow and does not recommend enabling `rrt-update-unreleased` and `rrt-changelog` together as simultaneous changelog hooks.",
+          "passed": true,
+          "evidence": "Answer gives installed-CLI pre-commit guidance without enabling both changelog hooks together."
+        },
+        {
+          "text": "The answer gives a valid lefthook example that uses `rrt-hooks pre-commit`, `rrt-hooks update-unreleased --message-file {1}`, and `rrt-hooks commit-msg {1}`.",
+          "passed": true,
+          "evidence": "Answer includes the expected lefthook commands for branch, changelog update, and commit subject checks."
+        },
+        {
+          "text": "The answer explains that `rrt-hooks` must be on PATH for lefthook and ties that to the installed package workflow.",
+          "passed": true,
+          "evidence": "Answer explains the PATH requirement for `rrt-hooks`."
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 93.0,
+        "stddev": 13.8564,
+        "min": 85.0,
+        "max": 109.0
+      },
+      "tokens": {
+        "mean": 2069.3333,
+        "stddev": 1444.5942,
+        "min": 739,
+        "max": 3606
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.89,
+        "stddev": 0.1905,
+        "min": 0.67,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 126.3333,
+        "stddev": 39.0043,
+        "min": 99.0,
+        "max": 171.0
+      },
+      "tokens": {
+        "mean": 1573.0,
+        "stddev": 892.9597,
+        "min": 542,
+        "max": 2101
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.11",
+      "time_seconds": "-33.3",
+      "tokens": "+496"
+    }
+  },
+  "notes": [
+    "Eval 1 (changelog workflow choice) is the only discriminating eval in iteration 1: the skill run passed all assertions, while the baseline missed the incremental-vs-squash behavior explanation.",
+    "Evals 0 and 2 passed in both configurations, so they currently validate correctness but do not strongly distinguish the skill from baseline behavior.",
+    "With-skill runs were faster on average in this sample (93.0s vs 126.3s) despite producing longer answers and higher output-token counts.",
+    "This benchmark uses one run per configuration, so pass-rate and timing variance are not yet meaningful stability signals."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "expectations": [
+    {
+      "text": "The answer recommends a conventional branch name that uses the `feat/` prefix and a kebab-case slug for parser caching work.",
+      "passed": true,
+      "evidence": "Found suggested branch name 'feat/cli-add-parser-caching'."
+    },
+    {
+      "text": "The answer shows an explicit `rrt branch new feat ...` command for creating the branch.",
+      "passed": true,
+      "evidence": "Answer includes an explicit `rrt branch new feat ...` command."
+    },
+    {
+      "text": "The answer explains a valid `rrt branch rename ...` follow-up for changing the scope from `cli` to `config`.",
+      "passed": true,
+      "evidence": "Answer explains a `rrt branch rename ...` follow-up that changes scope to config."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 5,
+    "errors_encountered": 0,
+    "output_chars": 739,
+    "transcript_chars": 1115
+  },
+  "timing": {
+    "total_tokens": 0,
+    "duration_ms": 85000,
+    "total_duration_seconds": 85.0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [
+      "# Caveat\n\nUse a full rebuild when changing the scope from `cli` to `config`:\n\n```bash\nrrt branch rename --scope config \"add parser caching\"\n```\n\nDo **not** use `rrt branch rename --scope config` by itself for this case. Scope-only rename preserves the existing slug and prepends the new scope, which would produce `feat/config-cli-add-parser-caching` instead of the desired `feat/config-add-parser-caching`."
+    ],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "No suggestions, evals look solid"
+  }
+}

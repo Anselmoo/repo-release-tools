@@ -57,6 +57,15 @@ Or run the CLI without installing it permanently:
 uvx repo-release-tools branch new feat "add parser"
 ```
 
+If `rrt` is already installed and you want the bundled agent skill for Copilot,
+Claude, or Codex, install it with:
+
+```bash
+rrt skill install --target copilot-local
+rrt skill install --target claude-local --target codex-local
+rrt skill install --target codex-global --dry-run
+```
+
 For basic versioning, `bump` and `ci-version` can run without `[tool.rrt]` by
 auto-detecting root-level `pyproject.toml`, `package.json`, and `Cargo.toml`.
 If multiple version files are found, they are updated together. Explicit config
@@ -95,6 +104,7 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 - `rrt` CLI for branches, bumps, config inspection, and Git helpers
 - `rrt-hooks` for `pre-commit`, `lefthook`, and CI validation
 - a reusable GitHub Action in `action.yml`
+- bundled agent skills for `uvx` and installed-CLI workflows
 - docs for branch policy, hook setup, and release workflows
 
 ## Start with the doc that matches your task
@@ -105,7 +115,7 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 - Hook setup: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/pre-commit.md>
 - Conventional branches: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/semantic-branches.md>
 - Git workflow helpers: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/git-magic.md>
-- Copilot skill: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/skill.md>
+- Agent skills: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/skill.md>
 
 ## License
 

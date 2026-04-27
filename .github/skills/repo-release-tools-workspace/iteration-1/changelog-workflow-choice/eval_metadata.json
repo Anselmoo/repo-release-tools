@@ -1,0 +1,10 @@
+{
+  "eval_id": 1,
+  "eval_name": "changelog-workflow-choice",
+  "prompt": "Help me choose between incremental and squash changelog workflows for repo-release-tools. I want to understand which hooks stay active in each mode, how GitHub Action changelog-strategy auto behaves, and what minimal config I should add.",
+  "assertions": [
+    "The answer explains that `incremental` keeps changelog maintenance active during development, while `squash` skips per-commit changelog enforcement until release time.",
+    "The answer states how GitHub Action `changelog-strategy: auto` maps from workflow choice, including `per-commit` for incremental and `release-only` for squash.",
+    "The answer includes a minimal config example that sets `changelog_workflow` and at least one `version_targets` entry."
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "expectations": [
+    {
+      "text": "The answer gives a valid pre-commit example for the installed CLI workflow and does not recommend enabling `rrt-update-unreleased` and `rrt-changelog` together as simultaneous changelog hooks.",
+      "passed": true,
+      "evidence": "Answer gives installed-CLI pre-commit guidance without enabling both changelog hooks together."
+    },
+    {
+      "text": "The answer gives a valid lefthook example that uses `rrt-hooks pre-commit`, `rrt-hooks update-unreleased --message-file {1}`, and `rrt-hooks commit-msg {1}`.",
+      "passed": true,
+      "evidence": "Answer includes the expected lefthook commands for branch, changelog update, and commit subject checks."
+    },
+    {
+      "text": "The answer explains that `rrt-hooks` must be on PATH for lefthook and ties that to the installed package workflow.",
+      "passed": true,
+      "evidence": "Answer explains the PATH requirement for `rrt-hooks`."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "total_steps": 5,
+    "errors_encountered": 0,
+    "output_chars": 1863,
+    "transcript_chars": 1104
+  },
+  "timing": {
+    "total_tokens": 0,
+    "duration_ms": 85000,
+    "total_duration_seconds": 85.0
+  },
+  "claims": [],
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "No suggestions, evals look solid"
+  }
+}

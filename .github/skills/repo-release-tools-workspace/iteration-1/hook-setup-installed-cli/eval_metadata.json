@@ -1,0 +1,10 @@
+{
+  "eval_id": 2,
+  "eval_name": "hook-setup-installed-cli",
+  "prompt": "rrt is installed locally. Show me how to set up repo-release-tools hooks for both pre-commit and lefthook so branch names, commit subjects, and changelog updates are enforced. Mention when rrt-hooks needs to be on PATH.",
+  "assertions": [
+    "The answer gives a valid pre-commit example for the installed CLI workflow and does not recommend enabling `rrt-update-unreleased` and `rrt-changelog` together as simultaneous changelog hooks.",
+    "The answer gives a valid lefthook example that uses `rrt-hooks pre-commit`, `rrt-hooks update-unreleased --message-file {1}`, and `rrt-hooks commit-msg {1}`.",
+    "The answer explains that `rrt-hooks` must be on PATH for lefthook and ties that to the installed package workflow."
+  ]
+}
