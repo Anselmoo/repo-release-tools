@@ -144,3 +144,55 @@ def test_rule_explicit_width() -> None:
 def test_rule_title_only_when_too_wide() -> None:
     result = layout.rule("very long title that exceeds width", width=5)
     assert "very long title that exceeds width" in result
+
+
+def test_terminal_width_returns_default_on_error(monkeypatch) -> None:
+    monkeypatch.setattr(
+        layout.shutil, "get_terminal_size", lambda fallback: (_ for _ in ()).throw(OSError())
+    )
+    assert layout.terminal_width(default=12) == 12
+
+
+def test_truncate_uses_ellipsis_when_width_too_small() -> None:
+    assert layout.truncate("hello", width=1) == "…"
+
+
+def test_truncate_returns_empty_when_width_zero() -> None:
+    assert layout.truncate("hello", width=0) == ""
+
+
+def test_truncate_returns_text_when_it_fits() -> None:
+    assert layout.truncate("hi", width=5) == "hi"
+
+
+def test_align_returns_truncated_text_when_too_wide() -> None:
+    assert layout.align("hello", width=3) == layout.truncate("hello", 3)
+
+
+def test_align_right_pads_left() -> None:
+    assert layout.align("hi", width=5, mode="right") == "   hi"
+
+
+def test_align_left_uses_pad_right() -> None:
+    assert layout.align("hi", width=5, mode="left") == "hi   "
+
+
+def test_render_table_returns_empty_for_no_rows() -> None:
+    assert layout.render_table([]) == ""
+
+
+def test_render_table_renders_known_rows() -> None:
+    rendered = layout.render_table([("A", "1"), ("BB", "22")])
+
+    assert "A" in rendered
+    assert "BB" in rendered
+    assert "22" in rendered
+
+
+def test_sparkline_returns_empty_when_no_values() -> None:
+    assert layout.sparkline([]) == ""
+
+
+def test_sparkline_returns_flat_line_for_constant_values() -> None:
+    rendered = layout.sparkline([3.0, 3.0, 3.0])
+    assert rendered == "▁▁▁"

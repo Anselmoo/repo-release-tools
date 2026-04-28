@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import os
 import re
 import runpy
@@ -535,6 +536,319 @@ def test_compute_col_width_default_when_no_options() -> None:
     from repo_release_tools.cli import _compute_col_width
 
     assert _compute_col_width([]) == 24
+
+
+def test_strip_ansi_and_display_len() -> None:
+    assert cli._strip_ansi("\x1b[31mred\x1b[0m") == "red"
+    assert cli._display_len("\x1b[31mred\x1b[0m") == 3
+
+
+def test_metavar_text_handles_tuple_and_suppressed() -> None:
+    class FakeAction:
+        def __init__(self, dest, metavar):
+            self.dest = dest
+            self.metavar = metavar
+
+    assert cli._metavar_text(FakeAction("foo", ("BAR", "BAZ"))) == "BAR BAZ"
+    assert cli._metavar_text(FakeAction(argparse.SUPPRESS, None)) == ""
+    assert cli._metavar_text(FakeAction("==SUPPRESS==", None)) == ""
+
+
+def test_compute_col_width_handles_choice_dict() -> None:
+    class FakeAction:
+        def __init__(self, choices):
+            self._choices_actions = None
+            self.choices = choices
+            self.option_strings = []
+            self.metavar = None
+
+    action = FakeAction({"short": None, "longer": None})
+    assert cli._compute_col_width(cast(list[argparse.Action], [action]), width=100) == 10
+
+
+def test_build_grouped_epilog_skips_unknown_command() -> None:
+    parser = cli.build_parser()
+    subparsers = next(
+        action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+    )
+    grouped = cli._build_grouped_epilog(subparsers, {"Fake": ["does-not-exist"]})
+
+    assert "Fake" not in grouped
+    assert "Examples" in grouped
+
+
+def test_formatter_compute_col_width_uses_width() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=100)
+
+    class FakeAction:
+        def __init__(self):
+            self.option_strings = ["-h"]
+            self.metavar = None
+            self.choices = None
+
+    assert formatter._compute_col_width([FakeAction()]) == 6
+
+
+def test_decolor_returns_plain_text() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    assert formatter._decolor("\x1b[31mred\x1b[0m") == "red"
+
+
+def test_start_section_is_noop_for_empty_heading() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    assert formatter.start_section("") is None
+
+
+def test_format_epilog_returns_empty_for_none() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    assert formatter.format_epilog(None) == ""
+
+
+def test_format_action_skips_suppressed_help() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    class FakeAction:
+        help = argparse.SUPPRESS
+
+    assert formatter._format_action(FakeAction()) == ""
+
+
+def test_render_row_wraps_when_column_underflow() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=6)
+    formatter._col_width = 6
+
+    assert formatter._render_row("long", "long", "help") == "  long\n      help\n"
+
+
+def test_format_subparser_action_uses_choices_dict() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    class FakeParser:
+        description = "Fake parser"
+
+    class FakeAction:
+        _choices_actions = []
+        choices = {"foo": FakeParser()}
+
+    result = formatter._format_subparser_action(FakeAction())
+
+    assert "foo" in result
+    assert "Fake parser" in result
+
+
+def test_format_choice_action_renders_choices_and_help() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    class FakeAction:
+        option_strings = []
+        choices = ["one", "two"]
+        metavar = "CHOICE"
+        help = "select one"
+        dest = "choice"
+
+    rendered = formatter._format_choice_action(FakeAction())
+
+    assert "CHOICE" in rendered
+    assert "one" in rendered
+    assert "select one" in rendered
+
+
+def test_error_prints_colored_suggestion_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "supports_color", lambda stream=None: True)
+    monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
+    parser = cli.RrtArgumentParser(prog="rrt")
+
+    with pytest.raises(SystemExit):
+        parser.error("invalid choice: 'feaut' (choose from 'feat', 'fix')")
+
+    err = capsys.readouterr().err
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", err)
+    assert "Did you mean: feat?" in plain
+    assert "Run rrt --help for usage and examples." in plain
+    assert "✖  error:" in plain
+
+
+def test_build_parser_falls_back_when_package_version_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli.importlib.metadata,
+        "version",
+        lambda package: (_ for _ in ()).throw(importlib.metadata.PackageNotFoundError()),
+    )
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--version"])
+
+    assert parser.description is not None
+
+
+def test_clean_error_message_replaces_raw_tokens() -> None:
+    parser = cli.RrtArgumentParser(prog="rrt")
+
+    cleaned = parser._clean_error_message("unknown git_command")
+
+    assert "<git_command>" in cleaned
+
+
+def test_available_choices_includes_subparsers_and_options() -> None:
+    parser = cli.RrtArgumentParser(prog="rrt")
+    subparsers = parser.add_subparsers(dest="cmd")
+    subparsers.add_parser("branch")
+    parser.add_argument("--test", choices=["a", "b"])
+
+    assert "branch" in parser._available_choices()
+    assert "--test" in parser._available_choices()
+
+
+def test_suggestion_for_unrecognized_arguments_uses_available_choices() -> None:
+    parser = cli.RrtArgumentParser(prog="rrt")
+    subparsers = parser.add_subparsers(dest="cmd")
+    subparsers.add_parser("branch")
+
+    suggestion = parser._suggestion_for("unrecognized arguments: 'brnch'")
+
+    assert suggestion is not None
+    assert "branch" in suggestion
+
+
+def test_format_choice_action_renders_without_help() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    class FakeAction:
+        option_strings = []
+        choices = ["one", "two"]
+        metavar = "CHOICE"
+        help = None
+        dest = "choice"
+
+    rendered = formatter._format_choice_action(FakeAction())
+
+    assert "CHOICE" in rendered
+    assert "one" in rendered
+    assert "two" in rendered
+
+
+def test_format_action_uses_choice_action_branch() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    class FakeAction:
+        option_strings = []
+        choices = ["one", "two"]
+        metavar = "CHOICE"
+        help = "select one"
+        dest = "choice"
+
+    rendered = formatter._format_action(FakeAction())
+
+    assert "CHOICE" in rendered
+    assert "one" in rendered
+    assert "select one" in rendered
+
+
+def test_build_grouped_epilog_includes_known_commands() -> None:
+    parser = cli.build_parser()
+    subparsers = next(
+        action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+    )
+    grouped = cli._build_grouped_epilog(subparsers, {"Repository Health": ["doctor"]})
+
+    assert "Repository Health" in grouped
+    assert "doctor" in grouped
+
+
+def test_metavar_text_returns_tag_for_dest_without_metavar() -> None:
+    class FakeAction:
+        def __init__(self):
+            self.dest = "name"
+            self.metavar = None
+
+    assert cli._metavar_text(FakeAction()) == "<name>"
+
+
+def test_compute_col_width_with_metavar_and_options() -> None:
+    class FakeAction:
+        def __init__(self):
+            self.option_strings = ["--include-maintenance"]
+            self.metavar = "MODE"
+            self.choices = None
+
+    assert cli._compute_col_width(cast(list[argparse.Action], [FakeAction()]), width=100) == 30
+
+
+def test_render_row_returns_simple_line_when_no_help() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    assert formatter._render_row("foo", "foo", "") == "  foo\n"
+
+
+def test_format_subparser_action_renders_rows_from_choice_action() -> None:
+    formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
+
+    class FakeChoiceAction:
+        _choices_actions = [type("Sub", (), {"dest": "foo", "help": "Foo help"})()]
+        choices = None
+
+    rendered = formatter._format_subparser_action(FakeChoiceAction())
+
+    assert "foo" in rendered
+    assert "Foo help" in rendered
+
+
+def test_error_help_hint_includes_help_target() -> None:
+    parser = cli.RrtArgumentParser(prog="rrt")
+
+    assert "Run 'rrt --help' for usage and examples." in parser._error_help_hint(
+        "invalid choice: 'feat' (choose from 'feat')"
+    )
+
+
+def test_build_parser_version_action_includes_default_version() -> None:
+    parser = cli.build_parser()
+
+    version_action = next(action for action in parser._actions if action.dest == "version")
+    version_string = getattr(version_action, "version", "")
+    assert "rrt" in version_string
+    assert not version_string.endswith("0.0.0")
+
+
+def test_error_prints_suggestion_for_unrecognized_arguments() -> None:
+    parser = cli.RrtArgumentParser(prog="rrt")
+
+    assert parser._suggestion_for("unrecognized arguments: 'gitx'") is None
+
+
+def test_compute_col_width_with_choices_actions() -> None:
+    class SubAction:
+        def __init__(self, dest):
+            self.dest = dest
+
+    class FakeAction:
+        _choices_actions = [SubAction("sync"), SubAction("status")]
+        choices = None
+        option_strings = []
+        metavar = None
+
+    assert cli._compute_col_width(cast(list[argparse.Action], [FakeAction()]), width=100) == 10
+
+
+def test_style_command_name_returns_danger_style(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
+    styled = cli._style_command_name("rebootstrap")
+    assert "\x1b[" in styled
+
+
+def test_style_command_name_returns_write_style(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
+    styled = cli._style_command_name("bump")
+    assert "\x1b[" in styled
 
 
 def test_bump_help_column_alignment_with_color(

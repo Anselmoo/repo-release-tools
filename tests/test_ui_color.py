@@ -66,6 +66,29 @@ def test_detect_color_level_returns_256_for_rtt_color_256(monkeypatch) -> None:
     assert color.detect_color_level() == "256"
 
 
+def test_detect_color_level_returns_256_for_term_256color(monkeypatch) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("RRT_COLOR", raising=False)
+    monkeypatch.delenv("COLORTERM", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    assert color.detect_color_level() == "256"
+
+
+def test_detect_color_level_returns_none_for_rtt_color_false(monkeypatch) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("RRT_COLOR", "false")
+    assert color.detect_color_level() == "none"
+
+
+def test_detect_color_level_defaults_to_standard_without_overrides(monkeypatch) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("RRT_COLOR", raising=False)
+    monkeypatch.delenv("COLORTERM", raising=False)
+    monkeypatch.setenv("TERM", "xterm")
+    monkeypatch.setattr(color.sys, "platform", "darwin")
+    assert color.detect_color_level() == "standard"
+
+
 def test_detect_color_level_returns_truecolor_for_colorterm(monkeypatch) -> None:
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("RRT_COLOR", raising=False)
@@ -131,6 +154,30 @@ def test_hex_to_rgb_raises_on_invalid() -> None:
         _hex_to_rgb("#gg0000")
 
 
+def test_hex_to_rgb_rejects_invalid_length() -> None:
+    from repo_release_tools.ui.color import _hex_to_rgb
+
+    with pytest.raises(ValueError):
+        _hex_to_rgb("#12345")
+
+
+def test_rgb_to_ansi_returns_truecolor_sequence(monkeypatch) -> None:
+    monkeypatch.setattr(color, "detect_color_level", lambda: "truecolor")
+    assert color._rgb_to_ansi(255, 0, 0) == "38;2;255;0;0"
+    assert color._rgb_to_ansi(255, 0, 0, bg=True) == "48;2;255;0;0"
+
+
+def test_rgb_to_ansi_returns_256_sequence(monkeypatch) -> None:
+    monkeypatch.setattr(color, "detect_color_level", lambda: "256")
+    result = color._rgb_to_ansi(255, 100, 0)
+    assert result.startswith("38;5;")
+
+
+def test_rgb_to_ansi_returns_standard_sequence(monkeypatch) -> None:
+    monkeypatch.setattr(color, "detect_color_level", lambda: "standard")
+    assert color._rgb_to_ansi(255, 0, 0) == "31"
+
+
 def test_apply_style_named_color_success(monkeypatch) -> None:
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("RRT_COLOR", "1")
@@ -167,6 +214,32 @@ def test_apply_style_with_style_instance(monkeypatch) -> None:
     from repo_release_tools.ui.color import Style
 
     result = color.apply_style("styled", color=Style(fg=32, bold=True))
+    assert "\x1b[" in result
+
+
+def test_apply_style_supports_italic_and_background(monkeypatch) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("RRT_COLOR", "truecolor")
+
+    result = color.apply_style(
+        "styled",
+        bold=True,
+        italic=True,
+        underline=True,
+        fg="#ff0000",
+        bg=(0, 255, 0),
+    )
+
+    assert "\x1b[" in result
+    assert "styled" in result
+
+
+def test_apply_style_uses_style_background_when_no_override(monkeypatch) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("RRT_COLOR", "1")
+    from repo_release_tools.ui.color import Style
+
+    result = color.apply_style("styled", color=Style(fg=32, bg=44))
     assert "\x1b[" in result
 
 
