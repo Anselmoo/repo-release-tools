@@ -23,6 +23,12 @@ TARGET_PATHS = {
 }
 
 
+SKILL_EXAMPLES = (
+    "  $ rrt skill install --target copilot-local\n"
+    "  $ rrt skill install --target claude-local --target codex-local"
+)
+
+
 def _dedupe_targets(targets: Iterable[str]) -> list[str]:
     """Return targets in first-seen order without duplicates."""
     seen: set[str] = set()
@@ -130,8 +136,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser = subparsers.add_parser(
         "skill",
         help="Install the bundled repo-release-tools agent skill.",
+        description="Install the bundled repo-release-tools agent skill.",
+        epilog=SKILL_EXAMPLES,
     )
-    skill_sub = parser.add_subparsers(dest="skill_command", required=True)
+    skill_sub = parser.add_subparsers(
+        dest="skill_command",
+        metavar="<skill_command>",
+        parser_class=type(parser),
+        required=True,
+    )
 
     install_parser = skill_sub.add_parser(
         "install",

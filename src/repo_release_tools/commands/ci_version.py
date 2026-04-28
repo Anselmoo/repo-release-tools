@@ -295,6 +295,11 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
     return cmd_ci_version_apply(apply_args)
 
 
+CI_VERSION_EXAMPLES = (
+    "  $ rrt ci-version compute\n  $ rrt ci-version apply 1.2.3.dev4\n  $ rrt ci-version sync"
+)
+
+
 # ---------------------------------------------------------------------------
 # CLI registration
 # ---------------------------------------------------------------------------
@@ -349,8 +354,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser = subparsers.add_parser(
         "ci-version",
         help="Compute and apply CI pre-release versions (PEP 440 / SemVer).",
+        description="Compute and apply CI pre-release versions (PEP 440 / SemVer).",
+        epilog=CI_VERSION_EXAMPLES,
     )
-    sub = parser.add_subparsers(dest="ci_version_cmd", required=True)
+    sub = parser.add_subparsers(
+        dest="ci_version_cmd",
+        metavar="<ci_version_cmd>",
+        parser_class=type(parser),
+        required=True,
+    )
 
     # compute ----------------------------------------------------------------
     compute_parser = sub.add_parser(

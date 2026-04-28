@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from argparse import Namespace
 from pathlib import Path
+from typing import cast
 
 from repo_release_tools.commands import init as init_cmd
 from repo_release_tools.commands.init import cmd_init
@@ -309,7 +310,7 @@ def test_recommend_init_section_for_node_detected(tmp_path: Path) -> None:
 
     assert isinstance(result, dict)
     assert "version_targets" in result
-    targets = result["version_targets"]
+    targets = cast(list[dict[str, str]], result["version_targets"])
     assert any(t.get("path") == "package.json" for t in targets)
 
 
@@ -317,7 +318,8 @@ def test_recommend_init_section_for_node_fallback(tmp_path: Path) -> None:
     result = recommend_init_section_for_node(tmp_path)
 
     assert isinstance(result, dict)
-    assert result["version_targets"][0]["kind"] == "package_json"
+    targets = cast(list[dict[str, str]], result["version_targets"])
+    assert targets[0]["kind"] == "package_json"
 
 
 # ---------------------------------------------------------------------------
@@ -455,11 +457,11 @@ def test_cmd_init_go_fallback_no_go_mod(monkeypatch, tmp_path: Path) -> None:
 
 def test_cmd_init_reports_config_discovery_error(monkeypatch, tmp_path: Path, capsys) -> None:
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        init_cmd,
-        "find_explicit_config_file",
-        lambda root: (_ for _ in ()).throw(ValueError("broken config discovery")),
-    )
+
+    def _raise_config_discovery(root: Path) -> Path | None:
+        raise ValueError("broken config discovery")
+
+    monkeypatch.setattr(init_cmd, "find_explicit_config_file", _raise_config_discovery)
 
     assert cmd_init(Namespace(dry_run=False, force=False)) == 1
     assert "Could not read existing configuration" in capsys.readouterr().err
@@ -475,7 +477,9 @@ def test_cmd_init_refuses_when_other_explicit_config_exists(
     )
 
     assert cmd_init(Namespace(dry_run=False, force=False)) == 1
-    assert "Refusing to add .rrt.toml" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "[ERROR] configuration already exists in pyproject.toml" in err
+    assert "Hint: Use --force to overwrite .rrt.toml." in err
 
 
 def test_cmd_init_refuses_existing_rrt_toml_without_force(
@@ -492,11 +496,11 @@ def test_cmd_init_refuses_existing_rrt_toml_without_force(
 def test_cmd_init_reports_generation_error(monkeypatch, tmp_path: Path, capsys) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(init_cmd, "find_explicit_config_file", lambda root: None)
-    monkeypatch.setattr(
-        init_cmd,
-        "recommend_init_config",
-        lambda root: (_ for _ in ()).throw(RuntimeError("cannot recommend")),
-    )
+
+    def _raise_recommend_config(root: Path) -> str:
+        raise RuntimeError("cannot recommend")
+
+    monkeypatch.setattr(init_cmd, "recommend_init_config", _raise_recommend_config)
 
     assert cmd_init(Namespace(dry_run=False, force=False)) == 1
     assert "Could not generate init config" in capsys.readouterr().err
@@ -508,11 +512,11 @@ def test_cmd_init_pyproject_reports_generation_error(monkeypatch, tmp_path: Path
         '[project]\nname = "mypkg"\nversion = "1.0.0"\n',
         encoding="utf-8",
     )
-    monkeypatch.setattr(
-        init_cmd,
-        "recommend_init_section_for_pyproject",
-        lambda root: (_ for _ in ()).throw(RuntimeError("pyproject detection failed")),
-    )
+
+    def _raise_pyproject_section(root: Path) -> str:
+        raise RuntimeError("pyproject detection failed")
+
+    monkeypatch.setattr(init_cmd, "recommend_init_section_for_pyproject", _raise_pyproject_section)
 
     assert cmd_init(Namespace(dry_run=False, force=False, target="pyproject")) == 1
     assert "Could not generate init config" in capsys.readouterr().err
@@ -553,11 +557,11 @@ def test_cmd_init_node_reports_generation_error(monkeypatch, tmp_path: Path, cap
     (tmp_path / "package.json").write_text(
         '{"name": "myapp", "version": "1.0.0"}', encoding="utf-8"
     )
-    monkeypatch.setattr(
-        init_cmd,
-        "recommend_init_section_for_node",
-        lambda root: (_ for _ in ()).throw(RuntimeError("node detection failed")),
-    )
+
+    def _raise_node_section(root: Path) -> dict[str, object]:
+        raise RuntimeError("node detection failed")
+
+    monkeypatch.setattr(init_cmd, "recommend_init_section_for_node", _raise_node_section)
 
     assert cmd_init(Namespace(dry_run=False, force=False, target="node")) == 1
     assert "Could not generate init config" in capsys.readouterr().err

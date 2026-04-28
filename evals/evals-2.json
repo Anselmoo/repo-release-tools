@@ -1,0 +1,40 @@
+{
+  "skill_name": "rrt-ux-design",
+  "evals": [
+    {
+      "id": 3,
+      "prompt": "I'm adding a new `audit` subcommand to rrt that prints a summary table and a per-file status line. Which ui/ module functions should I use for the table, the status lines, and the section header? Show me the import and a minimal code sketch.",
+      "expected_output": "A concise answer that maps the three output needs (table, status lines, section header) to the correct ui/ functions (panel or box, error/success/info, rule or section_line), gives a single import statement, and includes a minimal code sketch.",
+      "files": [],
+      "expectations": [
+        "The answer recommends functions from `repo_release_tools.ui` (not raw ANSI escapes or third-party libraries) for all three output needs.",
+        "The answer uses `rule()` or `section_line()` for the section header and explains why it fits the design principles.",
+        "The answer includes a valid Python import from `repo_release_tools.ui` and a code sketch that wires the three functions together.",
+        "The answer mentions NO_COLOR or non-TTY fallback behaviour at least once."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I changed the `doctor` command to print colored output but now NO_COLOR=1 still shows ANSI codes. How do I debug this and fix it so the output respects NO_COLOR and non-TTY environments?",
+      "expected_output": "A debugging walkthrough that identifies likely causes (raw print with ANSI, bypassing supports_color/apply), shows how to verify with NO_COLOR=1 and a pipe, and gives a corrected code pattern using the ui/ module.",
+      "files": [],
+      "expectations": [
+        "The answer identifies that writing raw ANSI escape sequences bypasses `supports_color()` and is the likely root cause.",
+        "The answer shows how to test the fix with `NO_COLOR=1 rrt doctor` and by piping output to a file.",
+        "The answer demonstrates a corrected pattern using `apply()`, `apply_style()`, or a semantic messaging function from `repo_release_tools.ui`.",
+        "The answer does not recommend importing or using Rich, Colorama, or any third-party styling library."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I want to add a progress bar to the `bump` command when it updates multiple version files. Show me the exact function to use, what value to pass for the fraction, and how to clear the line after all files are done.",
+      "expected_output": "A practical guide that identifies `progress_bar()` from `ui/layout.py`, explains the 0.0–1.0 fraction parameter, and shows the `\\r` + final newline pattern for live redraw.",
+      "files": [],
+      "expectations": [
+        "The answer uses `progress_bar(value, width=..., label=...)` from `repo_release_tools.ui` and does not suggest an alternative.",
+        "The answer explains that `value` is a float 0.0–1.0 (fraction complete) and shows how to compute it inside a loop.",
+        "The answer shows a `sys.stdout.write(f'\\r{bar}')` + `sys.stdout.flush()` pattern and ends with `sys.stdout.write('\\n')` to clear the line."
+      ]
+    }
+  ]
+}

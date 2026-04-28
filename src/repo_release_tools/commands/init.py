@@ -19,6 +19,7 @@ from repo_release_tools.config import (
     recommend_init_section_for_node,
     recommend_init_section_for_pyproject,
 )
+from repo_release_tools.ui.messaging import error as render_error
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -35,6 +36,15 @@ def cmd_init(args: argparse.Namespace) -> int:
     return _init_rrt_toml(args)
 
 
+def _print_dry_run_preview(message: str, preview: str) -> None:
+    """Render a standard dry-run preview block."""
+    print(output.dry_run(message))
+    print()
+    print(preview)
+    print()
+    print(output.dry_run_complete("no files were modified"))
+
+
 def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     """Write a recommended local .rrt.toml file."""
     root = Path.cwd()
@@ -49,15 +59,22 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     if explicit_config is not None and explicit_config != target and not args.force:
         relative = explicit_config.relative_to(root)
         print(
-            f"Explicit rrt configuration already exists in {relative}. "
-            f"Refusing to add {DEFAULT_INIT_CONFIG}; use --force to overwrite it anyway.",
+            render_error(
+                f"configuration already exists in {relative}",
+                hint=f"Use --force to overwrite {DEFAULT_INIT_CONFIG}.",
+                stream=sys.stderr,
+            ),
             file=sys.stderr,
         )
         return 1
 
     if target.exists() and not args.force:
         print(
-            f"{DEFAULT_INIT_CONFIG} already exists. Use --force to overwrite it.",
+            render_error(
+                f"{DEFAULT_INIT_CONFIG} already exists",
+                hint="Use --force to overwrite it.",
+                stream=sys.stderr,
+            ),
             file=sys.stderr,
         )
         return 1
@@ -79,11 +96,7 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     print()
 
     if args.dry_run:
-        print(output.dry_run(f"Would write {DEFAULT_INIT_CONFIG}:"))
-        print()
-        print(config_text)
-        print()
-        print(output.dry_run_complete("no files were modified"))
+        _print_dry_run_preview(f"Would write {DEFAULT_INIT_CONFIG}:", config_text)
         return 0
 
     target.write_text(config_text + "\n", encoding="utf-8")
@@ -151,11 +164,7 @@ def _init_manifest(
     print()
 
     if args.dry_run:
-        print(output.dry_run(f"Would append to {manifest}:"))
-        print()
-        print(section_text)
-        print()
-        print(output.dry_run_complete("no files were modified"))
+        _print_dry_run_preview(f"Would append to {manifest}:", section_text)
         return 0
 
     separator = "\n" if existing_text.endswith("\n") else "\n\n"
@@ -213,11 +222,7 @@ def _init_package_json(args: argparse.Namespace) -> int:
     print()
 
     if args.dry_run:
-        print(output.dry_run('Would add "rrt" key to package.json:'))
-        print()
-        print(preview)
-        print()
-        print(output.dry_run_complete("no files were modified"))
+        _print_dry_run_preview('Would add "rrt" key to package.json:', preview)
         return 0
 
     data["rrt"] = rrt_dict

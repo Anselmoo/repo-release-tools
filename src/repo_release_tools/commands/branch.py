@@ -28,6 +28,13 @@ CONVENTIONAL_TYPES = (
 SLUG_MAX = 60
 BRANCH_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
+BRANCH_EPILOG = (
+    '  $ rrt branch new feat "add parser"\n'
+    '  $ rrt branch new fix "repair config loader" --scope api\n'
+    '  $ rrt branch rename --type fix --scope api "fix config loader"\n'
+    '  $ rrt branch rescue feat "rescue work in progress"'
+)
+
 
 @dataclass(frozen=True)
 class BranchName:
@@ -87,10 +94,12 @@ def cmd_new(args: argparse.Namespace) -> int:
     base = "<current>" if args.dry_run else git.current_branch(root)
     title = "[DRY RUN] New branch" if args.dry_run else "New branch"
     print()
+    print(output.banner(title, style="bold"))
     print(
         output.panel(
             title,
             [("Base", base), ("Branch", branch_name), ("Title", commit_title)],
+            style="mixed",
         )
     )
     print()
@@ -210,6 +219,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
     g = output.GLYPHS
     title = "[DRY RUN] Rename branch" if args.dry_run else "Rename branch"
     print()
+    print(output.banner(title, style="bold"))
     print(
         output.panel(
             title,
@@ -218,6 +228,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
                 (f"{g.diff.renamed} To", new_name),
                 (f"{g.arrow.right} Commit title", commit_title),
             ],
+            style="mixed",
         )
     )
     print()
@@ -261,6 +272,7 @@ def cmd_rescue(args: argparse.Namespace) -> int:
 
     title = "[DRY RUN] Rescue commits" if args.dry_run else "Rescue commits"
     print()
+    print(output.banner(title, style="bold"))
     print(
         output.panel(
             title,
@@ -270,6 +282,7 @@ def cmd_rescue(args: argparse.Namespace) -> int:
                 ("Reset to", reset_target),
                 ("Title", commit_title),
             ],
+            style="mixed",
         )
     )
     print()
@@ -338,15 +351,33 @@ def cmd_rescue(args: argparse.Namespace) -> int:
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register branch subcommands."""
-    branch_parser = subparsers.add_parser("branch", help="Branch management helpers.")
-    branch_sub = branch_parser.add_subparsers(dest="branch_command", required=True)
+    branch_parser = subparsers.add_parser(
+        "branch",
+        help="Branch management helpers.",
+        description="Branch management helpers for conventional branch naming.",
+        epilog=BRANCH_EPILOG,
+    )
+    branch_sub = branch_parser.add_subparsers(
+        dest="branch_command",
+        metavar="<branch_command>",
+        parser_class=type(branch_parser),
+        required=True,
+    )
 
-    new_parser = branch_sub.add_parser("new", help="Create a new conventionally named branch.")
+    new_parser = branch_sub.add_parser(
+        "new",
+        help="Create a new conventionally named branch.",
+        description="Create a new conventionally named branch from a commit type, optional scope, and description.",
+        epilog=BRANCH_EPILOG,
+    )
     add_common_branch_arguments(new_parser)
     new_parser.set_defaults(handler=cmd_new)
 
     rescue_parser = branch_sub.add_parser(
-        "rescue", help="Move commits to a new branch and reset the current branch."
+        "rescue",
+        help="Move commits to a new branch and reset the current branch.",
+        description="Rescue commits onto a new branch and reset the current branch to a safe point.",
+        epilog=BRANCH_EPILOG,
     )
     add_common_branch_arguments(rescue_parser)
     rescue_parser.add_argument(
@@ -360,6 +391,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     rename_parser = branch_sub.add_parser(
         "rename",
         help="Rename the current branch: change type, scope, description, or any combination.",
+        description="Rename the current branch using conventional branch naming rules.",
+        epilog=BRANCH_EPILOG,
     )
     rename_parser.add_argument(
         "--type",

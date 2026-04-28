@@ -346,63 +346,77 @@ def cmd_bump(args: argparse.Namespace) -> int:
     return 0
 
 
+_BUMP_EXAMPLES = (
+    "  $ rrt bump patch\n"
+    "  $ rrt bump minor --dry-run\n"
+    "  $ rrt bump 2.1.0 --no-changelog --no-commit\n"
+    "  $ rrt bump major --base-branch develop"
+)
+
+
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the bump command."""
-    parser = subparsers.add_parser("bump", help="Bump project version using [tool.rrt] config.")
+    parser = subparsers.add_parser(
+        "bump",
+        help="Bump project version using [tool.rrt] config.",
+        description="Bump project version using [tool.rrt] config.",
+        epilog=_BUMP_EXAMPLES,
+    )
     parser.add_argument(
         "bump",
-        metavar="BUMP",
-        help="Bump kind: major | minor | patch, or an explicit semver like 1.2.3",
+        metavar="<bump>",
+        help="major | minor | patch | <semver>  \u2014 bump kind or explicit version",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Preview without writing changes.")
-    parser.add_argument(
+
+    release_grp = parser.add_argument_group("Release control")
+    release_grp.add_argument(
+        "--dry-run", action="store_true", help="Preview changes without writing to disk."
+    )
+    release_grp.add_argument(
         "--force",
         action="store_true",
-        help="Reset the release branch if it already exists instead of failing.",
+        help="Reset the release branch if it already exists.",
     )
-    parser.add_argument("--no-commit", action="store_true", help="Skip the git commit step.")
-    parser.add_argument("--no-changelog", action="store_true", help="Skip updating the changelog.")
-    parser.add_argument(
+    release_grp.add_argument("--no-commit", action="store_true", help="Skip the git commit step.")
+
+    content_grp = parser.add_argument_group("Content")
+    content_grp.add_argument(
+        "--no-changelog", action="store_true", help="Do not update the changelog file."
+    )
+    content_grp.add_argument(
         "--no-pin-sync",
         action="store_true",
-        help="Skip updating doc/CI pin references (pin_targets).",
+        help="Skip dependency pin synchronisation.",
     )
-    parser.add_argument(
+    content_grp.add_argument(
         "--no-update",
         action="store_true",
-        help="Skip the lockfile update step (do not run the lock command).",
+        help="Skip the lockfile update step.",
     )
-    parser.add_argument(
+    content_grp.add_argument(
         "--include-maintenance",
         action="store_true",
-        help="Include chore/ci/build/test entries in the changelog.",
+        help="Include maintenance commits in changelog.",
     )
-    parser.add_argument(
+    content_grp.add_argument(
         "--changelog-mode",
         choices=["auto", "promote", "generate"],
         default=None,
         metavar="MODE",
-        help=(
-            "How to update the changelog: "
-            "when omitted, the default follows changelog_workflow "
-            "(incremental -> 'auto', squash -> 'generate'); "
-            "'auto' promotes [Unreleased] when it has entries, "
-            "otherwise generates from the git log; "
-            "'promote' requires a non-empty [Unreleased] section and renames it; "
-            "'generate' always writes a new section from the git log "
-            "(heading/hash notation)."
-        ),
+        help="How to write changelog entries (auto | promote | generate).",
     )
-    parser.add_argument(
+
+    git_grp = parser.add_argument_group("Git")
+    git_grp.add_argument(
         "--base-branch",
         default=None,
         metavar="BRANCH",
-        help="Branch to create the release branch from (default: current branch).",
+        help="Branch to base the release on.",
     )
-    parser.add_argument(
+    git_grp.add_argument(
         "--group",
         default=None,
         metavar="GROUP",
-        help="Version group to bump when multiple release groups are configured.",
+        help="Version group to bump when multiple groups are configured.",
     )
     parser.set_defaults(handler=cmd_bump)

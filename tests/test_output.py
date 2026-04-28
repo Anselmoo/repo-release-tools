@@ -3,7 +3,7 @@ import io
 import pytest
 
 from repo_release_tools import output
-from repo_release_tools.glyphs import GLYPHS
+from repo_release_tools.ui.glyphs import GLYPHS
 
 
 def test_panel_renders_boxed_summary() -> None:
@@ -88,6 +88,28 @@ def test_panel_style_mixed_bold_outer_thin_inner() -> None:
         assert "┼" in lines[2]  # thin cross in interior separator
 
 
+def test_banner_renders_a_boxed_title() -> None:
+    rendered = output.banner("New action")
+
+    assert rendered.splitlines()[0].startswith("┏") or rendered.splitlines()[0].startswith("+")
+    assert rendered.splitlines()[-1].startswith("┗") or rendered.splitlines()[-1].startswith("+")
+    assert "New action" in rendered
+
+
+def test_info_renders_arrow_glyph() -> None:
+    rendered = output.info("Process started")
+
+    assert "Process started" in rendered
+    assert rendered.strip().startswith(str(output.GLYPHS.arrow.right))
+
+
+def test_hint_renders_ellipsis_glyph() -> None:
+    rendered = output.hint("Use --dry-run to preview changes")
+
+    assert "Use --dry-run to preview changes" in rendered
+    assert rendered.strip().startswith(str(output.GLYPHS.typography.ellipsis))
+
+
 def test_dry_run_complete_uses_shared_typography() -> None:
     rendered = output.dry_run_complete("no changes made")
 
@@ -111,6 +133,30 @@ def test_panel_empty_rows_returns_title_only() -> None:
     """panel() with no rows must return just the title string."""
     result = output.panel("Just a title", [])
     assert result == "Just a title"
+
+
+def test_section_renders_a_heading_line() -> None:
+    rendered = output.section("Build")
+
+    assert "Build" in rendered
+    assert rendered.startswith("──") or rendered.startswith("--")
+
+
+def test_panel_expands_value_width_to_fit_title() -> None:
+    rendered = output.panel("Long title header", [("A", "b")])
+
+    assert "Long title header" in rendered
+    assert len(rendered.splitlines()[0]) >= len(" Long title header ")
+
+
+def test_panel_title_row_separates_title_from_border() -> None:
+    rendered = output.panel("Environment", [("Platform", "darwin")], title_mode="row")
+
+    lines = rendered.splitlines()
+    assert lines[0].startswith("┌") or lines[0].startswith("+")
+    assert "Environment" in lines[1]
+    assert lines[1].startswith("│") or lines[1].startswith("|")
+    assert lines[2].startswith("├") or lines[2].startswith("+")
 
 
 def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
@@ -213,6 +259,31 @@ def test_spinner_lines_writes_detail_on_tty(monkeypatch: pytest.MonkeyPatch) -> 
     assert f"{output.GLYPHS.bullet.ok}  Working  $ uv lock -U" in rendered
 
 
+def test_syntax_forwards_stream_to_highlight_terminal(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_highlight(
+        code: str,
+        language: str,
+        *,
+        line_numbers: bool = False,
+        background: str = "dark",
+        stream=None,
+    ):
+        captured["code"] = code
+        captured["language"] = language
+        captured["stream"] = stream
+        return "rendered"
+
+    monkeypatch.setattr(output, "highlight_terminal", fake_highlight)
+
+    stream = io.StringIO()
+    rendered = output.syntax("print('x')", "python", stream=stream)
+
+    assert rendered == "rendered"
+    assert captured["stream"] is stream
+
+
 def test_progress_line_writes_initial_bar_on_tty() -> None:
     tty = _TtyBuffer()
     progress = output.ProgressLine(file=tty)
@@ -270,3 +341,96 @@ def test_spinner_lines_writes_error_status_on_tty_exception(
     rendered = tty.getvalue()
     assert "Exploding" in rendered
     assert f"{output.GLYPHS.bullet.error}  Exploding" in rendered
+
+
+# ── New Phase 2/3a tests ────────────────────────────────────────────────────
+
+
+def test_panel_wraps_long_value(monkeypatch) -> None:
+    """panel() must wrap values that exceed value_width when terminal is narrow."""
+    import repo_release_tools.output as _out_mod
+
+    monkeypatch.setattr(_out_mod, "terminal_width", lambda default=100: 40)
+    rendered = output.panel(
+        "Wrap test",
+        [("Key", "short"), ("Long", "x " * 20)],
+    )
+    lines = rendered.splitlines()
+    # The long value row should produce more than one body line.
+    assert len(lines) > 5
+
+
+def test_hyperlink_returns_osc8_when_color_supported(monkeypatch) -> None:
+    monkeypatch.setattr(output.ui_color, "supports_color", lambda stream=None: True)
+    result = output.hyperlink("click here", "https://example.com")
+    assert "\x1b]8;;" in result
+    assert "click here" in result
+    assert "https://example.com" in result
+
+
+def test_hyperlink_falls_back_to_plain_text_when_no_color(monkeypatch) -> None:
+    monkeypatch.setattr(output.ui_color, "supports_color", lambda stream=None: False)
+    result = output.hyperlink("click here", "https://example.com")
+    assert result == "click here (https://example.com)"
+
+
+def test_spinner_lines_cancelled_writes_warning_glyph(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tty = _TtyBuffer()
+    monkeypatch.setattr(output.threading, "Event", _FakeEvent)
+    monkeypatch.setattr(output.threading, "Thread", _FakeThread)
+
+    with pytest.raises(KeyboardInterrupt):
+        with output.spinner_lines("Task", file=tty):
+            raise KeyboardInterrupt
+
+    rendered = tty.getvalue()
+    assert "Cancelled" in rendered
+    assert str(output.GLYPHS.bullet.warning) in rendered
+
+
+def test_pretty_print_returns_string(monkeypatch) -> None:
+    monkeypatch.setattr(output, "highlight_terminal", lambda code, lang, **kw: code)
+    result = output.pretty_print({"a": 1})
+    assert "a" in result
+
+
+def test_json_highlight_returns_valid_json(monkeypatch) -> None:
+    monkeypatch.setattr(output, "highlight_terminal", lambda code, lang, **kw: code)
+    result = output.json_highlight({"key": "value"})
+    import json
+
+    parsed = json.loads(result)
+    assert parsed == {"key": "value"}
+
+
+# ── Phase 3a P3 + panel expand tests ────────────────────────────────────────
+
+
+def test_diff_highlight_returns_non_empty_for_diff_text(monkeypatch) -> None:
+    monkeypatch.setattr(output, "highlight_terminal", lambda code, lang, **kw: code)
+    diff = "--- a/file.py\n+++ b/file.py\n@@ -1 +1 @@\n-old\n+new\n"
+    result = output.diff_highlight(diff)
+    assert "old" in result
+    assert "new" in result
+
+
+def test_diff_highlight_empty_returns_empty() -> None:
+    assert output.diff_highlight("   ") == "   "
+
+
+def test_panel_expand_fills_terminal_width(monkeypatch) -> None:
+    monkeypatch.setattr(output, "terminal_width", lambda default=100: 60)
+    result = output.panel("T", [("k", "v")], expand=True)
+    # The top border line should be close to 60 - 4 = 56 chars wide
+    top_line = result.splitlines()[0]
+    assert len(top_line) >= 54
+
+
+def test_panel_no_expand_stays_narrow(monkeypatch) -> None:
+    monkeypatch.setattr(output, "terminal_width", lambda default=100: 60)
+    result = output.panel("T", [("k", "short")])
+    top_line = result.splitlines()[0]
+    # Without expand, the box should be narrower than terminal width
+    assert len(top_line) < 55
