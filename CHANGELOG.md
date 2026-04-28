@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-28
+
+### Added
+- Enhance CLI help and add mastery skill (#35)
+- Add repo-release-tools CLI skill installation and evaluation features (#34)
+
 ## [1.0.0] - 2026-04-20
 
 ### Added

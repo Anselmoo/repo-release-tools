@@ -93,7 +93,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.0.0
+    rev: v1.1.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-update-unreleased
@@ -131,7 +131,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.0.0
+    rev: v1.1.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-commit-subject
@@ -162,7 +162,7 @@ default_install_hook_types: [pre-commit, commit-msg, pre-push, manual]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.0.0
+    rev: v1.1.0
     hooks:
       - id: rrt-branch-name        # pre-commit:       validate <type>/<slug> branch name
       - id: rrt-update-unreleased  # commit-msg:       auto-write [Unreleased] section
@@ -287,7 +287,7 @@ uvx pre-commit run --all-files
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Action: Anselmoo/repo-release-tools@v1.0.0 (composite action, defined in action.yml)
+Action: Anselmoo/repo-release-tools@v1.1.0 (composite action, defined in action.yml)
 Wraps rrt-hooks subcommands; runs on ubuntu-latest; requires fetch-depth: 0 for git log access.
 </context>
 
@@ -304,7 +304,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0        # required — rrt-hooks uses git log; shallow clone breaks it
-      - uses: Anselmoo/repo-release-tools@v1.0.0
+      - uses: Anselmoo/repo-release-tools@v1.1.0
         with:
           check-branch-name: "true"
           check-commit-subject: "true"
@@ -319,7 +319,7 @@ jobs:
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Action: Anselmoo/repo-release-tools@v1.0.0 (composite action, defined in action.yml)
+Action: Anselmoo/repo-release-tools@v1.1.0 (composite action, defined in action.yml)
 Wraps rrt-hooks subcommands; requires fetch-depth: 0.
 </context>
 
@@ -336,7 +336,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0        # required — rrt-hooks uses git log; shallow clone breaks it
-      - uses: Anselmoo/repo-release-tools@v1.0.0
+      - uses: Anselmoo/repo-release-tools@v1.1.0
         with:
           check-branch-name: "true"
           check-commit-subject: "true"
@@ -367,7 +367,7 @@ All available inputs (action.yml):
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Action: Anselmoo/repo-release-tools@v1.0.0
+Action: Anselmoo/repo-release-tools@v1.1.0
 changelog-strategy input controls how the action validates CHANGELOG.md.
 </context>
 
@@ -382,7 +382,7 @@ Choose the right changelog strategy based on your workflow:
 
 **auto** (default):
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.0.0
+- uses: Anselmoo/repo-release-tools@v1.1.0
   with:
     check-changelog: "true"
     changelog-strategy: "auto"
@@ -390,7 +390,7 @@ Choose the right changelog strategy based on your workflow:
 
 **unreleased** (pair with auto-write hooks):
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.0.0
+- uses: Anselmoo/repo-release-tools@v1.1.0
   with:
     check-changelog: "true"
     changelog-strategy: "unreleased"
@@ -399,7 +399,7 @@ Choose the right changelog strategy based on your workflow:
 **Dynamic — unreleased on branches, release-only on tags:**
 (`check-branch-name` auto-skips on tag refs — no extra condition needed)
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.0.0
+- uses: Anselmoo/repo-release-tools@v1.1.0
   with:
     check-branch-name: "true"
     changelog-strategy: ${{ startsWith(github.ref, 'refs/tags/') && 'release-only' || 'unreleased' }}
@@ -418,7 +418,7 @@ Constraints:
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Action: Anselmoo/repo-release-tools@v1.0.0 (composite action, defined in action.yml)
+Action: Anselmoo/repo-release-tools@v1.1.0 (composite action, defined in action.yml)
 Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
 </context>
 
@@ -452,7 +452,7 @@ Use these commands to reproduce a CI failure locally before pushing. All subcomm
 
 ### When to add pin_targets
 
-Add entries whenever your docs or CI reference the tool's own version as a pin that drifts (e.g. `uses: org/repo@v1.2.3` or `rev: v1.0.0`).
+Add entries whenever your docs or CI reference the tool's own version as a pin that drifts (e.g. `uses: org/repo@v1.2.3` or `rev: v1.1.0`).
 
 ### Config placement
 
