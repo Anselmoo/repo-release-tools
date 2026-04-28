@@ -1,0 +1,38 @@
+{
+  "skill_name": "repo-release-tools",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I already have rrt installed. I need to start work on adding parser caching for the CLI. Suggest the correct branch name, show the exact rrt command to create it, and explain how to rename it later if I realize the scope should be config instead of cli.",
+      "expected_output": "A concise installed-CLI answer that proposes a conventional branch name, uses `rrt branch new ...`, and explains a valid `rrt branch rename ...` follow-up for changing the scope.",
+      "files": [],
+      "expectations": [
+        "The answer recommends a conventional branch name that uses the `feat/` prefix and a kebab-case slug for parser caching work.",
+        "The answer shows an explicit `rrt branch new feat ...` command for creating the branch.",
+        "The answer explains a valid `rrt branch rename ...` follow-up for changing the scope from `cli` to `config`."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Help me choose between incremental and squash changelog workflows for repo-release-tools. I want to understand which hooks stay active in each mode, how GitHub Action changelog-strategy auto behaves, and what minimal config I should add.",
+      "expected_output": "A clear comparison of incremental vs squash workflows, including hook behavior, `changelog-strategy: auto` behavior, and a minimal valid config example.",
+      "files": [],
+      "expectations": [
+        "The answer explains that `incremental` keeps changelog maintenance active during development, while `squash` skips per-commit changelog enforcement until release time.",
+        "The answer states how GitHub Action `changelog-strategy: auto` maps from workflow choice, including `per-commit` for incremental and `release-only` for squash.",
+        "The answer includes a minimal config example that sets `changelog_workflow` and at least one `version_targets` entry."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "rrt is installed locally. Show me how to set up repo-release-tools hooks for both pre-commit and lefthook so branch names, commit subjects, and changelog updates are enforced. Mention when rrt-hooks needs to be on PATH.",
+      "expected_output": "A practical setup guide for installed-CLI hook usage that gives valid pre-commit and lefthook examples, keeps changelog-hook guidance consistent, and explains the PATH requirement for `rrt-hooks`.",
+      "files": [],
+      "expectations": [
+        "The answer gives a valid pre-commit example for the installed CLI workflow and does not recommend enabling `rrt-update-unreleased` and `rrt-changelog` together as simultaneous changelog hooks.",
+        "The answer gives a valid lefthook example that uses `rrt-hooks pre-commit`, `rrt-hooks update-unreleased --message-file {1}`, and `rrt-hooks commit-msg {1}`.",
+        "The answer explains that `rrt-hooks` must be on PATH for lefthook and ties that to the installed package workflow."
+      ]
+    }
+  ]
+}
