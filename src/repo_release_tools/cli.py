@@ -35,7 +35,7 @@ from repo_release_tools.ui import (
 )
 
 
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_ANSI_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
 def _strip_ansi(text: str) -> str:
