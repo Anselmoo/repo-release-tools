@@ -9,7 +9,7 @@ import importlib.metadata
 import os
 import re
 import sys
-from typing import NoReturn, cast
+from typing import Callable, NoReturn, cast
 
 from repo_release_tools.commands import (
     branch,
@@ -189,6 +189,11 @@ class RrtHelpFormatter(argparse.RawDescriptionHelpFormatter):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._col_width = 24
+        # Python 3.14 added _set_color() to HelpFormatter which sets self._decolor as
+        # an instance attribute (_identity for non-TTY, _colorize.decolor for TTY),
+        # shadowing this class's _decolor method.  Re-pin it so ANSI codes are always
+        # stripped with our own implementation regardless of Python version or TTY state.
+        self._decolor: Callable[[str], str] = _strip_ansi
 
     def _compute_col_width(self, actions: list[argparse.Action]) -> int:
         return _compute_col_width(actions, self._width)

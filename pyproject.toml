@@ -94,3 +94,12 @@ exclude_lines = [
     "@overload",
     "raise NotImplementedError",
 ]
+
+[tool.tox]
+env_list = ["py312", "py313", "py314"]
+skip_missing_interpreters = true
+
+[tool.tox.env_run_base]
+runner = "uv-venv-runner"
+dependency_groups = ["dev"]
+commands = [["pytest", "-q", "-m", "not runtime", "{posargs}"]]
