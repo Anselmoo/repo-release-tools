@@ -9,7 +9,10 @@ import tomllib
 
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui.color import warning
+from repo_release_tools.ui.glyphs import GLYPHS
+from repo_release_tools.ui.syntax import highlight_terminal
 from repo_release_tools.config import (
     DEFAULT_INIT_CONFIG,
     find_explicit_config_file,
@@ -38,11 +41,16 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 def _print_dry_run_preview(message: str, preview: str) -> None:
     """Render a standard dry-run preview block."""
-    print(output.dry_run(message))
+    from repo_release_tools.ui.glyphs import GLYPHS as _G
+    from repo_release_tools.ui.color import subtle
+
+    print(subtle(f"{_G.bullet.skip} [dry-run] {message}"))
     print()
     print(preview)
     print()
-    print(output.dry_run_complete("no files were modified"))
+    print(
+        subtle(f"{_G.bullet.skip} [dry-run] complete {_G.typography.mdash} no files were modified")
+    )
 
 
 def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
@@ -53,7 +61,10 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     try:
         explicit_config = find_explicit_config_file(root)
     except (ValueError, RuntimeError) as exc:
-        print(output.warning(f"Could not read existing configuration: {exc}"), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warning(f'Could not read existing configuration: {exc}')}",
+            file=sys.stderr,
+        )
         return 1
 
     if explicit_config is not None and explicit_config != target and not args.force:
@@ -82,31 +93,30 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     try:
         config_text = recommend_init_config_for_go(root) if go else recommend_init_config(root)
     except (ValueError, RuntimeError) as exc:
-        print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warning(f'Could not generate init config: {exc}')}",
+            file=sys.stderr,
+        )
         return 1
 
-    title = "[DRY RUN] Init config" if args.dry_run else "Init config"
+    p = DryRunPrinter(args.dry_run)
     print()
-    print(output.ok(title))
-    print(output.info(f"File: {DEFAULT_INIT_CONFIG}"))
-    print()
+    p.header("Init config", File=DEFAULT_INIT_CONFIG)
 
     if args.dry_run:
-        print(output.dry_run(f"Would write {DEFAULT_INIT_CONFIG}:"))
+        p.would_write(DEFAULT_INIT_CONFIG)
         print()
-        print(output.syntax(config_text, "toml"))
+        print(highlight_terminal(config_text, "toml"))
         print()
-        print(output.dry_run_complete("no files were modified"))
+        p.footer("no files were modified")
         return 0
 
     target.write_text(config_text + "\n", encoding="utf-8")
-    print(output.ok(f"Wrote {DEFAULT_INIT_CONFIG}"))
+    p.ok(f"Wrote {DEFAULT_INIT_CONFIG}")
     if explicit_config is not None and explicit_config != target:
         relative = explicit_config.relative_to(root)
         print(
-            output.warning(
-                f"{relative} still takes precedence over {DEFAULT_INIT_CONFIG} during config discovery."
-            )
+            f"{GLYPHS.bullet.warning} {warning(f'{relative} still takes precedence over {DEFAULT_INIT_CONFIG} during config discovery.')}"
         )
     return 0
 
@@ -134,7 +144,7 @@ def _init_manifest(
     try:
         already_present = _has_rrt_section(manifest, existing_text)
     except ValueError as exc:
-        print(output.warning(str(exc)), file=sys.stderr)
+        print(f"{GLYPHS.bullet.warning} {warning(str(exc))}", file=sys.stderr)
         return 1
     if already_present:
         print(
@@ -150,27 +160,27 @@ def _init_manifest(
         else:
             section_text = recommend_init_section_for_cargo(root)
     except (ValueError, RuntimeError) as exc:
-        print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warning(f'Could not generate init config: {exc}')}",
+            file=sys.stderr,
+        )
         return 1
 
-    title = "[DRY RUN] Init config" if args.dry_run else "Init config"
+    p = DryRunPrinter(args.dry_run)
     print()
-    print(output.ok(title))
-    print(output.info(f"File: {manifest}"))
-    print(output.info(f"Section: {section_label}"))
-    print()
+    p.header("Init config", File=manifest, Section=section_label)
 
     if args.dry_run:
-        print(output.dry_run(f"Would append to {manifest}:"))
+        p.would_write(manifest, f"append {section_label}")
         print()
-        print(output.syntax(section_text, "toml"))
+        print(highlight_terminal(section_text, "toml"))
         print()
-        print(output.dry_run_complete("no files were modified"))
+        p.footer("no files were modified")
         return 0
 
     separator = "\n" if existing_text.endswith("\n") else "\n\n"
     manifest_path.write_text(existing_text + separator + section_text + "\n", encoding="utf-8")
-    print(output.ok(f"Appended {section_label} to {manifest}"))
+    p.ok(f"Appended {section_label} to {manifest}")
     return 0
 
 
@@ -190,11 +200,17 @@ def _init_package_json(args: argparse.Namespace) -> int:
     try:
         data: dict = _json.loads(manifest_path.read_text(encoding="utf-8"))
     except _json.JSONDecodeError as exc:
-        print(output.warning(f"Could not parse package.json: {exc}"), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warning(f'Could not parse package.json: {exc}')}",
+            file=sys.stderr,
+        )
         return 1
 
     if not isinstance(data, dict):
-        print(output.warning("package.json must contain a top-level object."), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warning('package.json must contain a top-level object.')}",
+            file=sys.stderr,
+        )
         return 1
 
     if "rrt" in data and not args.force:
@@ -207,29 +223,29 @@ def _init_package_json(args: argparse.Namespace) -> int:
     try:
         rrt_dict = recommend_init_section_for_node(root)
     except (ValueError, RuntimeError) as exc:
-        print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warning(f'Could not generate init config: {exc}')}",
+            file=sys.stderr,
+        )
         return 1
 
     preview = _json.dumps({"rrt": rrt_dict}, indent=2)
 
-    title = "[DRY RUN] Init config" if args.dry_run else "Init config"
+    p = DryRunPrinter(args.dry_run)
     print()
-    print(output.ok(title))
-    print(output.info("File: package.json"))
-    print(output.info('Key: "rrt"'))
-    print()
+    p.header("Init config", File="package.json", Key='"rrt"')
 
     if args.dry_run:
-        print(output.dry_run('Would add "rrt" key to package.json:'))
+        p.would_write("package.json", 'add "rrt" key')
         print()
-        print(output.syntax(preview, "json"))
+        print(highlight_terminal(preview, "json"))
         print()
-        print(output.dry_run_complete("no files were modified"))
+        p.footer("no files were modified")
         return 0
 
     data["rrt"] = rrt_dict
     manifest_path.write_text(_json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print(output.ok('Added "rrt" to package.json'))
+    p.ok('Added "rrt" to package.json')
     return 0
 
 

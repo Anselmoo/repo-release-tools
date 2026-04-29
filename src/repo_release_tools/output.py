@@ -1,4 +1,12 @@
-"""Terminal output helpers with a small shared glyph registry."""
+"""Terminal output helpers with a small shared glyph registry.
+
+.. deprecated::
+    This module is a legacy compatibility shim. Use ``repo_release_tools.ui``
+    submodules directly instead (``ui.color``, ``ui.glyphs``, ``ui.layout``,
+    ``ui.syntax``, ``ui.progress``).
+    This module is retained for backwards compatibility with ``git.py``,
+    ``hooks.py``, and ``version_targets.py`` until those are migrated.
+"""
 
 from __future__ import annotations
 

@@ -31,12 +31,16 @@ from repo_release_tools.ui.layout import (
 )
 from repo_release_tools.ui.syntax import highlight_terminal
 from repo_release_tools.ui.prompt import ask, confirm
+from repo_release_tools.ui.messaging import DryRunPrinter
+from repo_release_tools.ui.progress import ProgressLine, spinner_lines
 
 __all__ = [
     "Style",
     "THEMES",
     "Emphasis",
+    "DryRunPrinter",
     "OutputContext",
+    "ProgressLine",
     "align",
     "apply",
     "apply_style",
@@ -56,6 +60,7 @@ __all__ = [
     "set_theme",
     "progress_bar",
     "sparkline",
+    "spinner_lines",
     "subtle",
     "success",
     "supports_color",

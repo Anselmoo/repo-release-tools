@@ -879,7 +879,7 @@ def test_cmd_sync_warns_when_pull_fails_after_auto_stash(monkeypatch, capsys) ->
     monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [" M src/file.py"])
     monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (1, 0))
-    monkeypatch.setattr(git_cmd.output, "spinner_lines", lambda *a, **k: contextlib.nullcontext())
+    monkeypatch.setattr(git_cmd, "spinner_lines", lambda *a, **k: contextlib.nullcontext())
 
     def fake_run(cmd, cwd, *, dry_run, label):
         if cmd[:2] == ["git", "pull"]:

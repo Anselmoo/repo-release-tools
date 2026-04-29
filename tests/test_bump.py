@@ -1798,8 +1798,8 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
         "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
-    monkeypatch.setattr("repo_release_tools.commands.bump.output.ProgressLine", _FakeProgressLine)
-    monkeypatch.setattr("repo_release_tools.commands.bump.output.spinner_lines", fake_spinner_lines)
+    monkeypatch.setattr("repo_release_tools.commands.bump.ProgressLine", _FakeProgressLine)
+    monkeypatch.setattr("repo_release_tools.commands.bump.spinner_lines", fake_spinner_lines)
     monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_git_run)
 
     result = cmd_bump(

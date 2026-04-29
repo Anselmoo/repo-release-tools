@@ -8,7 +8,11 @@ import sys
 
 from pathlib import Path
 
-from repo_release_tools import git, output
+from repo_release_tools import git
+from repo_release_tools.ui.color import warning as warn_color, success, subtle
+from repo_release_tools.ui.glyphs import GLYPHS
+from repo_release_tools.ui.layout import rule, terminal_width
+from repo_release_tools.ui.progress import ProgressLine, spinner_lines
 from repo_release_tools.changelog import (
     build_changelog_section,
     detect_changelog_format,
@@ -85,7 +89,9 @@ def update_changelog(
     """
     path = config.changelog_file
     if not path.exists():
-        print(output.warning(f"{path} not found {output.GLYPHS.typography.mdash} skipping"))
+        print(
+            f"{GLYPHS.bullet.warning} {warn_color(f'{path} not found {GLYPHS.typography.mdash} skipping')}"
+        )
         return
 
     existing = path.read_text(encoding="utf-8")
@@ -99,17 +105,11 @@ def update_changelog(
         if not has_entries:
             if has_unreleased_section(existing, fmt):
                 print(
-                    output.warning(
-                        f"[Unreleased] section in {path} is empty"
-                        f" {output.GLYPHS.typography.mdash} nothing to promote."
-                    )
+                    f"{GLYPHS.bullet.warning} {warn_color(f'[Unreleased] section in {path} is empty {GLYPHS.typography.mdash} nothing to promote.')}"
                 )
             else:
                 print(
-                    output.warning(
-                        f"No [Unreleased] section found in {path}"
-                        f" {output.GLYPHS.typography.mdash} nothing to promote."
-                    )
+                    f"{GLYPHS.bullet.warning} {warn_color(f'No [Unreleased] section found in {path} {GLYPHS.typography.mdash} nothing to promote.')}"
                 )
             return
         do_promote = True
@@ -120,14 +120,20 @@ def update_changelog(
     if do_promote:
         section_text = promote_unreleased(existing, version, fmt)
         if dry_run:
-            print(output.dry_run(f"Would promote [Unreleased] to [{version}] in {path}:"))
+            print(
+                subtle(
+                    f"{GLYPHS.bullet.skip} [dry-run] Would promote [Unreleased] to [{version}] in {path}:"
+                )
+            )
             for line in section_text.splitlines()[:PREVIEW_LINES]:
-                print(output.status(">", line, indent=4))
+                print(f"    > {line}")
             if len(section_text.splitlines()) > PREVIEW_LINES:
-                print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
+                print(f"    > {GLYPHS.typography.ellipsis}")
             return
         path.write_text(section_text, encoding="utf-8")
-        print(output.ok(f"{path} updated (promoted [Unreleased] to [{version}])"))
+        print(
+            f"{GLYPHS.bullet.ok} {success(f'{path} updated (promoted [Unreleased] to [{version}])')}"
+        )
         return
 
     # ---- Generate section from git log (heading / hash notation) -----------
@@ -142,15 +148,15 @@ def update_changelog(
     section_text = insert_generated_section(existing, section, fmt)
 
     if dry_run:
-        print(output.dry_run(f"Would prepend to {path}:"))
+        print(subtle(f"{GLYPHS.bullet.skip} [dry-run] Would prepend to {path}:"))
         for line in section_text.splitlines()[:PREVIEW_LINES]:
-            print(output.status(">", line, indent=4))
+            print(f"    > {line}")
         if len(section_text.splitlines()) > PREVIEW_LINES:
-            print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
+            print(f"    > {GLYPHS.typography.ellipsis}")
         return
 
     path.write_text(section_text, encoding="utf-8")
-    print(output.ok(f"{path} updated"))
+    print(f"{GLYPHS.bullet.ok} {success(f'{path} updated')}")
 
 
 def cmd_bump(args: argparse.Namespace) -> int:
@@ -160,12 +166,18 @@ def cmd_bump(args: argparse.Namespace) -> int:
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
-        print(output.warning("No supported rrt config file found."), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warn_color('No supported rrt config file found.')}",
+            file=sys.stderr,
+        )
         print(format_missing_tool_rrt_guidance(root, []), file=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            print(output.warning("No [tool.rrt] configuration found."), file=sys.stderr)
+            print(
+                f"{GLYPHS.bullet.warning} {warn_color('No [tool.rrt] configuration found.')}",
+                file=sys.stderr,
+            )
             print(format_missing_tool_rrt_guidance(root, iter_config_files(root)), file=sys.stderr)
             return 1
         print(str(exc), file=sys.stderr)
@@ -175,7 +187,10 @@ def cmd_bump(args: argparse.Namespace) -> int:
         return 1
 
     if config.autodetected:
-        print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warn_color(format_autodetected_config_notice(config))}",
+            file=sys.stderr,
+        )
         if mismatch := check_autodetected_version_consistency(config):
             print(mismatch, file=sys.stderr)
             return 1
@@ -200,13 +215,16 @@ def cmd_bump(args: argparse.Namespace) -> int:
     current_branch = "<current>" if args.dry_run else git.current_branch(root)
     base = args.base_branch or current_branch
 
-    title = "[DRY RUN] Version bump" if args.dry_run else "Version bump"
+    from repo_release_tools.ui import DryRunPrinter
+
+    p = DryRunPrinter(args.dry_run)
     print()
-    print(output.ok(title))
-    print(output.info(f"Current: {current} {output.GLYPHS.arrow.right} {new}"))
-    print(output.info(f"Branch: {branch_name}"))
-    print(output.info(f"Base: {base}"))
-    print()
+    p.header(
+        "Version bump",
+        Current=f"{current} {GLYPHS.arrow.right} {new}",
+        Branch=branch_name,
+        Base=base,
+    )
 
     branch_exists = False
     if not args.dry_run:
@@ -226,12 +244,11 @@ def cmd_bump(args: argparse.Namespace) -> int:
         if current_branch != base:
             git.run(["git", "checkout", base], root, dry_run=False, label="git checkout base")
         if branch_exists:
-            print(
-                output.warning(f"Branch '{branch_name}' already exists. Resetting it with --force.")
-            )
+            msg = f"Branch '{branch_name}' already exists. Resetting it with --force."
+            print(f"{GLYPHS.bullet.warning} {warn_color(msg)}")
 
-    version_progress = output.ProgressLine(file=sys.stdout)
-    print(output.section("Updating version strings"))
+    version_progress = ProgressLine(file=sys.stdout)
+    print(rule("Updating version strings", width=terminal_width()))
     total_targets = len(group.version_targets)
     for i, target in enumerate(group.version_targets, 1):
         if total_targets > 1 and i > 1:
@@ -244,8 +261,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins and not getattr(args, "no_pin_sync", False):
-        pin_progress = output.ProgressLine(file=sys.stdout)
-        print(f"\n{output.section('Updating doc pins')}")
+        pin_progress = ProgressLine(file=sys.stdout)
+        print(f"\n{rule('Updating doc pins', width=terminal_width())}")
         seen_pin_keys: set[tuple[object, str]] = set()
         unique_pins: list = []
         for pin in all_pins:
@@ -264,7 +281,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
             pin_progress.clear()
 
     if not args.no_changelog:
-        print(f"\n{output.section('Updating changelog')}")
+        print(f"\n{rule('Updating changelog', width=terminal_width())}")
         effective_changelog_mode = resolve_changelog_mode(
             config, getattr(args, "changelog_mode", None)
         )
@@ -282,13 +299,13 @@ def cmd_bump(args: argparse.Namespace) -> int:
         )
 
     if group.lock_command and not args.no_update:
-        print(f"\n{output.section('Refreshing lockfiles')}")
+        print(f"\n{rule('Refreshing lockfiles', width=terminal_width())}")
         spinner = (
             contextlib.nullcontext()
             if args.dry_run
-            else output.spinner_lines(
+            else spinner_lines(
                 "Running lock command…",
-                detail=output.status("$", " ".join(group.lock_command), indent=0).strip(),
+                detail=f"$ {' '.join(group.lock_command)}",
                 file=sys.stdout,
             )
         )
@@ -301,7 +318,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 suppress_announce=True,
             )
 
-    print(f"\n{output.section('Git')}")
+    print(f"\n{rule('Git', width=terminal_width())}")
     create_flag = "-B" if force else "-b"
     git.run(
         ["git", "checkout", create_flag, branch_name],
@@ -333,14 +350,18 @@ def cmd_bump(args: argparse.Namespace) -> int:
         commit_msg = f"chore: bump version to v{new}"
         git.run(["git", "commit", "-m", commit_msg], root, dry_run=args.dry_run, label="git commit")
         print()
-        print(output.ok(f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"))
+        done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
+        print(f"{GLYPHS.bullet.ok} {success(done_msg)}")
     else:
         print()
-        print(output.ok(f"Done. Branch '{branch_name}' created and files staged."))
-
-    if args.dry_run:
-        print(output.status(output.GLYPHS.bullet.dot, f"Base branch: {base}"))
-        print(output.dry_run_complete("no files were modified"))
+        done_msg = f"Done. Branch '{branch_name}' created and files staged."
+        print(f"{GLYPHS.bullet.ok} {success(done_msg)}")
+        print(f"  {GLYPHS.bullet.dot} Base branch: {base}")
+        print(
+            subtle(
+                f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no files were modified"
+            )
+        )
     return 0
 
 

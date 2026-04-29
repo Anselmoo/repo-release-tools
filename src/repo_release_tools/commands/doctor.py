@@ -7,7 +7,9 @@ import re
 import sys
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui.color import success, info, warning, error as color_error
+from repo_release_tools.ui.glyphs import GLYPHS
+from repo_release_tools.ui.layout import rule, terminal_width
 from repo_release_tools.config import (
     PinTarget,
     VersionTarget,
@@ -59,7 +61,7 @@ def _check_pin_target(pin: PinTarget, root: Path, g) -> tuple[str, bool, str]:
 def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
     """Check the health of the rrt configuration."""
     root = Path.cwd()
-    g = output.GLYPHS
+    g = GLYPHS
 
     try:
         config = load_or_autodetect_config(root)
@@ -69,7 +71,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            print(output.warning("No [tool.rrt] configuration found."), file=sys.stderr)
+            print(
+                f"{g.bullet.warning} {warning('No [tool.rrt] configuration found.')}",
+                file=sys.stderr,
+            )
             print(format_missing_tool_rrt_guidance(root, iter_config_files(root)), file=sys.stderr)
             return 1
         print(str(exc), file=sys.stderr)
@@ -79,19 +84,23 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
         return 1
 
     if config.autodetected:
-        print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
+        print(
+            f"{g.bullet.warning} {warning(format_autodetected_config_notice(config))}",
+            file=sys.stderr,
+        )
 
     source = "(auto-detected)" if config.autodetected else str(config.config_file.relative_to(root))
     group_count = len(config.version_groups)
     plural = "group" if group_count == 1 else "groups"
-    print(output.ok("rrt doctor"))
-    print(output.info(f"Config file: {source}"))
-    print(output.info(f"Version groups: {group_count} {plural}"))
+    print(f"{g.bullet.ok} {success('rrt doctor')}")
+    print(f"{g.arrow.right} {info(f'Config file: {source}')}")
+    print(f"{g.arrow.right} {info(f'Version groups: {group_count} {plural}')}")
     print()
 
     all_ok = True
+    W = terminal_width()
 
-    print(output.section("Health checks"))
+    print(rule("Health checks", width=W))
 
     for group in config.version_groups:
         group_ok = True
@@ -106,7 +115,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
                 if severity == "warning"
                 else g.bullet.error
             )
-            statuses.append(output.status(symbol, message, indent=2))
+            statuses.append(f"  {symbol} {message}")
             if not ok:
                 group_ok = False
 
@@ -129,7 +138,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
                     if severity == "warning"
                     else g.bullet.error
                 )
-                statuses.append(output.status(symbol, message, indent=2))
+                statuses.append(f"  {symbol} {message}")
+                if not ok:
+                    group_ok = False
                 if not ok:
                     group_ok = False
 
@@ -141,9 +152,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
             message = f"{cl.relative_to(root)} not found"
             symbol = g.bullet.error
             group_ok = False
-        statuses.append(output.status(symbol, message, indent=2))
+        statuses.append(f"  {symbol} {message}")
 
-        header = output.ok(f"[{group.name}]") if group_ok else output.error(f"[{group.name}]")
+        if group_ok:
+            header = f"{g.bullet.ok} {success(f'[{group.name}]')}"
+        else:
+            header = f"{g.bullet.error} {color_error(f'[{group.name}]')}"
         print(header)
         for line in statuses:
             print(line)
@@ -153,10 +167,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
             all_ok = False
 
     if all_ok:
-        print(output.ok("All health checks passed."))
+        print(f"{g.bullet.ok} {success('All health checks passed.')}")
         return 0
     else:
-        print(output.error("One or more health checks failed."))
+        print(f"{g.bullet.error} {color_error('One or more health checks failed.')}")
         return 1
 
 

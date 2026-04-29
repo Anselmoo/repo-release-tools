@@ -7,7 +7,8 @@ import json
 import os
 import sys
 
-from repo_release_tools import output
+from repo_release_tools.ui.color import success, info
+from repo_release_tools.ui.glyphs import GLYPHS
 
 ENV_EPILOG = "  $ rrt env\n  $ rrt env --json"
 
@@ -28,9 +29,9 @@ def cmd_env(args: argparse.Namespace) -> int:
         print(json.dumps(dict(values), indent=2))
         return 0
 
-    print(output.ok("Environment"))
+    print(f"{GLYPHS.bullet.ok} {success('Environment')}")
     for name, value in values:
-        print(output.info(f"{name}: {value}"))
+        print(f"{GLYPHS.arrow.right} {info(f'{name}: {value}')}")
     return 0
 
 

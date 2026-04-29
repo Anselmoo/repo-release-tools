@@ -30,7 +30,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui.color import warning as warn_color, success, info, subtle
+from repo_release_tools.ui.glyphs import GLYPHS
+from repo_release_tools.ui.layout import rule, terminal_width
+from repo_release_tools.ui.progress import ProgressLine
 from repo_release_tools.config import (
     VALID_CI_FORMATS,
     format_autodetected_config_notice,
@@ -142,19 +145,28 @@ def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
     try:
         config = load_or_autodetect_config(root)
         if config.autodetected:
-            print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
+            print(
+                f"{GLYPHS.bullet.warning} {warn_color(format_autodetected_config_notice(config))}",
+                file=sys.stderr,
+            )
             if mismatch := check_autodetected_version_consistency(config):
                 print(mismatch, file=sys.stderr)
                 return None
         group = config.resolve_group(getattr(args, "group", None))
         return str(read_group_current_version(group))
     except FileNotFoundError:
-        print(output.warning("No supported rrt config file found."), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warn_color('No supported rrt config file found.')}",
+            file=sys.stderr,
+        )
         print(format_missing_tool_rrt_guidance(root, []), file=sys.stderr)
         return None
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            print(output.warning("No [tool.rrt] configuration found."), file=sys.stderr)
+            print(
+                f"{GLYPHS.bullet.warning} {warn_color('No [tool.rrt] configuration found.')}",
+                file=sys.stderr,
+            )
             print(format_missing_tool_rrt_guidance(root, iter_config_files(root)), file=sys.stderr)
             return None
         print(str(exc), file=sys.stderr)
@@ -204,15 +216,24 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     try:
         config = load_or_autodetect_config(root)
         if config.autodetected:
-            print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
+            print(
+                f"{GLYPHS.bullet.warning} {warn_color(format_autodetected_config_notice(config))}",
+                file=sys.stderr,
+            )
         group = config.resolve_group(getattr(args, "group", None))
     except FileNotFoundError:
-        print(output.warning("No supported rrt config file found."), file=sys.stderr)
+        print(
+            f"{GLYPHS.bullet.warning} {warn_color('No supported rrt config file found.')}",
+            file=sys.stderr,
+        )
         print(format_missing_tool_rrt_guidance(root, []), file=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            print(output.warning("No [tool.rrt] configuration found."), file=sys.stderr)
+            print(
+                f"{GLYPHS.bullet.warning} {warn_color('No [tool.rrt] configuration found.')}",
+                file=sys.stderr,
+            )
             print(format_missing_tool_rrt_guidance(root, iter_config_files(root)), file=sys.stderr)
             return 1
         print(str(exc), file=sys.stderr)
@@ -232,8 +253,8 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
 
     version: str = args.version
 
-    progress = output.ProgressLine(file=sys.stdout)
-    print(output.section("Applying CI versions"))
+    progress = ProgressLine(file=sys.stdout)
+    print(rule("Applying CI versions", width=terminal_width()))
     total = len(ci_targets)
     for i, target in enumerate(ci_targets, 1):
         if target.ci_format == "semver_pre":
@@ -265,9 +286,13 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     progress.clear()
     print()
     if args.dry_run:
-        print(output.dry_run_complete("no files were modified"))
+        print(
+            subtle(
+                f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no files were modified"
+            )
+        )
     else:
-        print(output.ok("Done."))
+        print(f"{GLYPHS.bullet.ok} {success('Done.')}")
     return 0
 
 
@@ -287,8 +312,9 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    g = output.GLYPHS
-    print(output.action(f"{g.diff.modified} Applying published version: {version}"))
+    print(
+        f"{GLYPHS.arrow.right} {info(f'{GLYPHS.diff.modified} Applying published version: {version}')}"
+    )
 
     apply_args = argparse.Namespace(
         version=version, dry_run=args.dry_run, group=getattr(args, "group", None)

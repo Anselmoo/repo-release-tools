@@ -9,7 +9,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools import git, output
+from repo_release_tools import git
+from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui.color import success, info, subtle  # noqa: F401 (used inline)
+from repo_release_tools.ui.glyphs import GLYPHS
 
 
 CONVENTIONAL_TYPES = (
@@ -111,13 +114,9 @@ def cmd_new(args: argparse.Namespace) -> int:
     commit_title = branch.commit_title()
 
     base = "<current>" if args.dry_run else git.current_branch(root)
-    title = "[DRY RUN] New branch" if args.dry_run else "New branch"
+    p = DryRunPrinter(args.dry_run)
     print()
-    print(output.ok(title))
-    print(output.info(f"Base: {base}"))
-    print(output.info(f"Branch: {branch_name}"))
-    print(output.info(f"Title: {commit_title}"))
-    print()
+    p.header("New branch", Base=base, Branch=branch_name, Title=commit_title)
 
     if not args.dry_run and git.branch_exists(root, branch_name):
         print(
@@ -130,7 +129,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     dirty = bool(status_lines)
     staged_count, unstaged_count = _count_status_changes(status_lines)
 
-    print(output.section("Creating branch"))
+    p.section("Creating branch")
     git.run(
         ["git", "checkout", "-b", branch_name], root, dry_run=args.dry_run, label="git checkout -b"
     )
@@ -141,27 +140,25 @@ def cmd_new(args: argparse.Namespace) -> int:
             if args.dry_run
             else "Uncommitted changes moved to the new branch."
         )
-        print(f"{output.action(action_text)}\n")
+        print(f"{GLYPHS.arrow.right} {info(action_text)}")
+        print()
         summary = f"Files changed: {len(status_lines)} | Staged: {staged_count} | Unstaged: {unstaged_count}"
-        print(output.info(summary))
-        print(output.section("Changed files"))
+        print(f"{GLYPHS.arrow.right} {info(summary)}")
+        p.section("Changed files")
         for path, status in _status_rows(status_lines):
-            print(output.status(status, path, indent=2))
+            print(f"  {status} {path}")
         print()
     else:
         clean_message = (
             "No uncommitted changes would be moved." if args.dry_run else "Working tree clean."
         )
         if args.dry_run:
-            print(output.dry_run(clean_message))
+            print(subtle(f"{GLYPHS.bullet.skip} [dry-run] {clean_message}"))
         else:
-            print(output.ok(clean_message))
+            print(f"{GLYPHS.bullet.ok} {success(clean_message)}")
         print()
 
-    print(output.ok(f"Done. Suggested commit title: {commit_title}"))
-    print()
-    if args.dry_run:
-        print(output.dry_run_complete("no changes made"))
+    p.footer(f"Done. Suggested commit title: {commit_title}")
     return 0
 
 
@@ -253,14 +250,16 @@ def cmd_rename(args: argparse.Namespace) -> int:
         print("Branch name is unchanged. Nothing to do.", file=sys.stderr)
         return 1
 
-    g = output.GLYPHS
-    title = "[DRY RUN] Rename branch" if args.dry_run else "Rename branch"
+    p = DryRunPrinter(args.dry_run)
     print()
-    print(output.ok(title))
-    print(output.info(f"{g.git.branch} From: {current_branch}"))
-    print(output.info(f"{g.diff.renamed} To: {new_name}"))
-    print(output.info(f"{g.arrow.right} Commit title: {commit_title}"))
-    print()
+    p.header(
+        "Rename branch",
+        **{
+            f"{GLYPHS.git.branch} From": current_branch,
+            f"{GLYPHS.diff.renamed} To": new_name,
+            f"{GLYPHS.arrow.right} Commit title": commit_title,
+        },
+    )
 
     if not args.dry_run:
         if git.branch_exists(root, new_name):
@@ -275,10 +274,14 @@ def cmd_rename(args: argparse.Namespace) -> int:
             dry_run=False,
             label="git branch -m",
         )
-        print(output.ok(f"Done. Renamed '{current_branch}' {g.diff.renamed} '{new_name}'."))
-    print()
-    if args.dry_run:
-        print(output.dry_run_complete("no changes made"))
+        p.footer(f"Done. Renamed '{current_branch}' {GLYPHS.diff.renamed} '{new_name}'.")
+    else:
+        print()
+        print(
+            subtle(
+                f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no changes made"
+            )
+        )
     return 0
 
 
@@ -299,14 +302,14 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         log_lines = [] if args.dry_run else git.commits_ahead(root, remote_ref)
         reset_target = remote_ref
 
-    title = "[DRY RUN] Rescue commits" if args.dry_run else "Rescue commits"
+    p = DryRunPrinter(args.dry_run)
     print()
-    print(output.ok(title))
-    print(output.info(f"From: {origin_branch}"))
-    print(output.info(f"Branch: {branch_name}"))
-    print(output.info(f"Reset to: {reset_target}"))
-    print(output.info(f"Title: {commit_title}"))
-    print()
+    p.header(
+        "Rescue commits",
+        From=origin_branch,
+        Branch=branch_name,
+        **{"Reset to": reset_target, "Title": commit_title},
+    )
 
     if not log_lines and not args.dry_run:
         ref_label = args.since or f"origin/{origin_branch}"
@@ -316,13 +319,13 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         )
         return 1
 
-    print(output.section("Commits to rescue"))
+    p.section("Commits to rescue")
     if log_lines:
         for line in log_lines:
-            print(output.status(output.GLYPHS.bullet.dot, line))
+            print(f"  {GLYPHS.bullet.dot} {line}")
     else:
         ahead = args.since or f"origin/{origin_branch}"
-        print(output.dry_run(f"Would detect commits ahead of {ahead}"))
+        print(subtle(f"{GLYPHS.bullet.skip} [dry-run] Would detect commits ahead of {ahead}"))
 
     if not args.dry_run and git.branch_exists(root, branch_name):
         print(
@@ -331,7 +334,8 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         )
         return 1
 
-    print(f"\n{output.section('Creating rescue branch')}")
+    print()
+    p.section("Creating rescue branch")
     git.run(
         ["git", "checkout", "-b", branch_name],
         root,
@@ -339,7 +343,8 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         label="git checkout -b rescue",
     )
 
-    print(f"\n{output.section('Resetting origin branch')}")
+    print()
+    p.section("Resetting origin branch")
     git.run(
         ["git", "checkout", origin_branch], root, dry_run=args.dry_run, label="git checkout origin"
     )
@@ -350,23 +355,19 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         label="git reset --hard",
     )
 
-    print(f"\n{output.section('Switching back to rescue branch')}")
+    print()
+    p.section("Switching back to rescue branch")
     git.run(
         ["git", "checkout", branch_name], root, dry_run=args.dry_run, label="git checkout rescue"
     )
 
     rescued_count = "Selected" if args.dry_run else str(len(log_lines))
     print()
-    print(
-        output.ok(
-            f"Done. {rescued_count} commit(s) rescued into '{branch_name}'. "
-            f"'{origin_branch}' reset to '{reset_target}'. "
-            f"Suggested commit title: {commit_title}"
-        )
+    p.footer(
+        f"Done. {rescued_count} commit(s) rescued into '{branch_name}'. "
+        f"'{origin_branch}' reset to '{reset_target}'. "
+        f"Suggested commit title: {commit_title}"
     )
-    print()
-    if args.dry_run:
-        print(output.dry_run_complete("no changes made"))
     return 0
 
 

@@ -9,7 +9,9 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui.color import warning
+from repo_release_tools.ui.glyphs import GLYPHS
 from repo_release_tools.skill_assets import INSTALLED_CLI_SKILL
 
 
@@ -64,12 +66,13 @@ def cmd_install(args: argparse.Namespace) -> int:
     home = Path.home()
     install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
 
+    p = DryRunPrinter(args.dry_run)
     print()
-    title = "[DRY RUN] Skill install" if args.dry_run else "Skill install"
-    print(output.ok(title))
-    print(output.info(f"Skill: {INSTALLED_CLI_SKILL.name}"))
-    print(output.info(f"Targets: {len(install_plan)}"))
-    print()
+    p.header(
+        "Skill install",
+        Skill=INSTALLED_CLI_SKILL.name,
+        Targets=str(len(install_plan)),
+    )
 
     conflicts: list[tuple[str, Path]] = []
     for target_name, skills_dir in install_plan:
@@ -91,13 +94,9 @@ def cmd_install(args: argparse.Namespace) -> int:
         for target_name, skills_dir in install_plan:
             destination = skills_dir / INSTALLED_CLI_SKILL.name / "SKILL.md"
             location = _display_path(destination, cwd=cwd, home=home)
-            print(
-                output.dry_run(
-                    f"Would install {INSTALLED_CLI_SKILL.name} to {target_name}: {location}"
-                )
-            )
+            p.would_install(INSTALLED_CLI_SKILL.name, target_name, location)
         print()
-        print(output.dry_run_complete("no files were modified"))
+        p.footer("no files were modified")
         return 0
 
     for target_name, skills_dir in install_plan:
@@ -115,14 +114,12 @@ def cmd_install(args: argparse.Namespace) -> int:
         except OSError as exc:
             location = _display_path(destination_file, cwd=cwd, home=home)
             print(
-                output.warning(
-                    f"Could not install {INSTALLED_CLI_SKILL.name} to {target_name} ({location}): {exc}"
-                ),
+                f"{GLYPHS.bullet.warning} {warning(f'Could not install {INSTALLED_CLI_SKILL.name} to {target_name} ({location}): {exc}')}",
                 file=sys.stderr,
             )
             return 1
         location = _display_path(destination_file, cwd=cwd, home=home)
-        print(output.ok(f"Installed {INSTALLED_CLI_SKILL.name} to {target_name}: {location}"))
+        p.ok(f"Installed {INSTALLED_CLI_SKILL.name} to {target_name}: {location}")
     return 0
 
 

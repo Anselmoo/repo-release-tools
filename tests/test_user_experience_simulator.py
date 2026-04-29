@@ -74,6 +74,7 @@ from repo_release_tools.ui import (
     truncate,
     underline,
     warning,
+    DryRunPrinter,
 )
 from repo_release_tools.ui import color, font, syntax
 from repo_release_tools.ui.context import OutputContext
@@ -480,3 +481,121 @@ class TestMessaging:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         for fn in (error, warning, info, success, subtle):
             assert fn("msg") == "msg"
+
+
+# ── TestDryRunPrinter ─────────────────────────────────────────────────────────
+
+
+class TestDryRunPrinter:
+    """Verify DryRunPrinter produces consistent, 0-indent output in both modes."""
+
+    def test_header_live_contains_title(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.header("My command")
+        out = capsys.readouterr().out
+        assert "My command" in out
+        assert "[DRY RUN]" not in out
+
+    def test_header_dry_run_labels_title(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.header("My command")
+        out = capsys.readouterr().out
+        assert "[DRY RUN]" in out
+        assert "My command" in out
+
+    def test_header_metadata_key_value(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.header("Cmd", Version="1.2.3", Branch="main")
+        out = capsys.readouterr().out
+        assert "Version" in out
+        assert "1.2.3" in out
+        assert "Branch" in out
+        assert "main" in out
+
+    def test_header_not_indented(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.header("Zero indent check")
+        out = capsys.readouterr().out
+        first_line = out.splitlines()[0]
+        # strip ANSI codes to check there is no leading space
+        import re
+
+        stripped = re.sub(r"\x1b\[[0-9;]*m", "", first_line)
+        assert not stripped.startswith(" ")
+
+    def test_section_outputs_rule(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.section("My section")
+        out = capsys.readouterr().out
+        assert "My section" in out
+        assert "─" in out or "-" in out  # rule character
+
+    def test_would_run_only_in_dry_run(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.would_run("git commit")
+        out = capsys.readouterr().out
+        assert "git commit" in out
+        assert "[dry-run]" in out
+
+    def test_would_write_shows_path(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.would_write("CHANGELOG.md", "add entry")
+        out = capsys.readouterr().out
+        assert "CHANGELOG.md" in out
+        assert "add entry" in out
+
+    def test_would_install_shows_name_target_location(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.would_install("skill.md", "copilot-local", "/some/path")
+        out = capsys.readouterr().out
+        assert "skill.md" in out
+        assert "copilot-local" in out
+        assert "/some/path" in out
+
+    def test_action_contains_message(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.action("Cloning repo")
+        out = capsys.readouterr().out
+        assert "Cloning repo" in out
+
+    def test_meta_shows_key_value(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.meta("Ref", "refs/heads/main")
+        out = capsys.readouterr().out
+        assert "Ref" in out
+        assert "refs/heads/main" in out
+
+    def test_ok_contains_message(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.ok("All done")
+        out = capsys.readouterr().out
+        assert "All done" in out
+
+    def test_warn_contains_message(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.warn("Proceeding anyway")
+        out = capsys.readouterr().out
+        assert "Proceeding anyway" in out
+
+    def test_footer_live_shows_message_no_dry_run_suffix(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.footer("Completed")
+        out = capsys.readouterr().out
+        assert "Completed" in out
+        assert "[dry-run]" not in out
+
+    def test_footer_dry_run_shows_complete_line(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.footer("no files were modified")
+        out = capsys.readouterr().out
+        assert "no files were modified" in out
+        assert "[dry-run]" in out
+        assert "complete" in out
+
+    def test_no_color_fallback(self, monkeypatch, capsys) -> None:
+        monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
+        p = DryRunPrinter(dry_run=False)
+        p.ok("plain output")
+        out = capsys.readouterr().out
+        assert "\x1b[" not in out
+        assert "plain output" in out
