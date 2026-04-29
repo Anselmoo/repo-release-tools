@@ -27,8 +27,6 @@ from repo_release_tools.ui.layout import rule, section_line, terminal_width  # n
 from repo_release_tools.ui.syntax import highlight_terminal
 
 
-SECTION_WIDTH = 52
-
 # OutputContext lives in ui.context to avoid a circular-import cycle
 # (output → ui.glyphs → ui.__init__ → output).  Re-export it here so
 # callers can do: from repo_release_tools.output import OutputContext
@@ -71,7 +69,7 @@ def _resolve_box(style: BoxStyle) -> _AnyBoxGlyphs:
 
 def section(title: str) -> str:
     """Render a section heading."""
-    return section_line(title, body_width=SECTION_WIDTH, glyph=str(GLYPHS.box.h), left=2)
+    return ui_color.heading(section_line(title, glyph=str(GLYPHS.box.h), left=2))
 
 
 def panel(
@@ -153,14 +151,19 @@ def panel(
 
     # Top border uses outer corners + outer horizontal; rows use inner vertical for column divider.
     if title_mode == "row":
-        title_width = row_width - 4
-        lines = [
-            f"{outer.tl}{_repeat_to_width(outer.h, row_width - 2)}{outer.tr}",
-            f"{outer.v} {pad_right(title, title_width)} {outer.v}",
-            title_sep,
-        ]
-    else:
+        if title:
+            title_width = row_width - 4
+            lines = [
+                f"{outer.tl}{_repeat_to_width(outer.h, row_width - 2)}{outer.tr}",
+                f"{outer.v} {pad_right(title, title_width)} {outer.v}",
+                title_sep,
+            ]
+        else:
+            lines = [f"{outer.tl}{_repeat_to_width(outer.h, row_width - 2)}{outer.tr}", title_sep]
+    elif title:
         lines = [f"{outer.tl}{border_title}{_repeat_to_width(outer.h, top_fill)}{outer.tr}"]
+    else:
+        lines = [f"{outer.tl}{_repeat_to_width(outer.h, row_width - 2)}{outer.tr}"]
     for index, (label, value) in enumerate(rows):
         # Wrap long values to value_width cells so the panel stays within terminal bounds.
         wrapped = textwrap.wrap(value, width=value_width) or [""]
@@ -182,7 +185,7 @@ def banner(title: str, *, style: BoxStyle = "bold") -> str:
     text = f" {title} "
     width = display_width(text)
     top = f"{glyphs.tl}{_repeat_to_width(glyphs.h, width)}{glyphs.tr}"
-    middle = f"{glyphs.v}{text}{glyphs.v}"
+    middle = f"{glyphs.v}{ui_color.heading(text)}{glyphs.v}"
     bottom = f"{glyphs.bl}{_repeat_to_width(glyphs.h, width)}{glyphs.br}"
     return "\n".join([top, middle, bottom])
 

@@ -130,6 +130,7 @@ _ROOT_EXAMPLES = (
     "  $ rrt bump patch --dry-run\n"
     "  $ rrt git status\n"
     "  $ rrt doctor\n"
+    "  $ rrt skill install --target copilot-local\n"
     "  $ rrt @args.txt"
 )
 

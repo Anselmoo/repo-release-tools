@@ -202,16 +202,10 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     title = "[DRY RUN] Version bump" if args.dry_run else "Version bump"
     print()
-    print(
-        output.panel(
-            title,
-            [
-                ("Current", f"{current} {output.GLYPHS.arrow.right} {new}"),
-                ("Branch", branch_name),
-                ("Base", base),
-            ],
-        )
-    )
+    print(output.ok(title))
+    print(output.info(f"Current: {current} {output.GLYPHS.arrow.right} {new}"))
+    print(output.info(f"Branch: {branch_name}"))
+    print(output.info(f"Base: {base}"))
     print()
 
     branch_exists = False
@@ -245,6 +239,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
         replace_version_in_file(target, str(new), dry_run=args.dry_run)
         if total_targets > 1:
             version_progress.update_bar(i / total_targets)
+    if total_targets > 1:
+        version_progress.clear()
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins and not getattr(args, "no_pin_sync", False):
@@ -264,6 +260,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
             replace_pin_in_file(pin, str(new), dry_run=args.dry_run)
             if total_pins > 1:
                 pin_progress.update_bar(i / total_pins)
+        if total_pins > 1:
+            pin_progress.clear()
 
     if not args.no_changelog:
         print(f"\n{output.section('Updating changelog')}")

@@ -262,6 +262,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
         if total > 1:
             progress.update_bar(i / total)
 
+    progress.clear()
     print()
     if args.dry_run:
         print(output.dry_run_complete("no files were modified"))

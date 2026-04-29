@@ -85,18 +85,18 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
         print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
         return 1
 
-    g = output.GLYPHS
+    title = "[DRY RUN] Init config" if args.dry_run else "Init config"
     print()
-    print(
-        output.panel(
-            "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [(f"{g.git.commit} File", DEFAULT_INIT_CONFIG)],
-        )
-    )
+    print(output.ok(title))
+    print(output.info(f"File: {DEFAULT_INIT_CONFIG}"))
     print()
 
     if args.dry_run:
-        _print_dry_run_preview(f"Would write {DEFAULT_INIT_CONFIG}:", config_text)
+        print(output.dry_run(f"Would write {DEFAULT_INIT_CONFIG}:"))
+        print()
+        print(output.syntax(config_text, "toml"))
+        print()
+        print(output.dry_run_complete("no files were modified"))
         return 0
 
     target.write_text(config_text + "\n", encoding="utf-8")
@@ -153,18 +153,19 @@ def _init_manifest(
         print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
         return 1
 
-    g = output.GLYPHS
+    title = "[DRY RUN] Init config" if args.dry_run else "Init config"
     print()
-    print(
-        output.panel(
-            "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [(f"{g.git.commit} File", manifest), ("Section", section_label)],
-        )
-    )
+    print(output.ok(title))
+    print(output.info(f"File: {manifest}"))
+    print(output.info(f"Section: {section_label}"))
     print()
 
     if args.dry_run:
-        _print_dry_run_preview(f"Would append to {manifest}:", section_text)
+        print(output.dry_run(f"Would append to {manifest}:"))
+        print()
+        print(output.syntax(section_text, "toml"))
+        print()
+        print(output.dry_run_complete("no files were modified"))
         return 0
 
     separator = "\n" if existing_text.endswith("\n") else "\n\n"
@@ -211,18 +212,19 @@ def _init_package_json(args: argparse.Namespace) -> int:
 
     preview = _json.dumps({"rrt": rrt_dict}, indent=2)
 
-    g = output.GLYPHS
+    title = "[DRY RUN] Init config" if args.dry_run else "Init config"
     print()
-    print(
-        output.panel(
-            "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [(f"{g.git.commit} File", "package.json"), ("Key", '"rrt"')],
-        )
-    )
+    print(output.ok(title))
+    print(output.info("File: package.json"))
+    print(output.info('Key: "rrt"'))
     print()
 
     if args.dry_run:
-        _print_dry_run_preview('Would add "rrt" key to package.json:', preview)
+        print(output.dry_run('Would add "rrt" key to package.json:'))
+        print()
+        print(output.syntax(preview, "json"))
+        print()
+        print(output.dry_run_complete("no files were modified"))
         return 0
 
     data["rrt"] = rrt_dict

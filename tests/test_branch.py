@@ -28,10 +28,42 @@ def test_cmd_new_dry_run_uses_summary_panel(capsys) -> None:
     assert cmd_new(args) == 0
 
     captured = capsys.readouterr()
-    assert "New branch" in captured.out
+    assert captured.out.count("New branch") == 1
     assert "Branch" in captured.out
     assert "feat/add-parser" in captured.out
     assert "[dry-run] complete" in captured.out
+
+
+def test_cmd_new_dry_run_shows_uncommitted_changes(monkeypatch, capsys) -> None:
+    args = argparse.Namespace(
+        type="feat",
+        description=["add", "parser"],
+        scope=None,
+        dry_run=True,
+    )
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch", lambda root: "main"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: False
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.status_porcelain",
+        lambda root: [" M file.py", "?? new.txt"],
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.run",
+        lambda cmd, root, *, dry_run, label: None,
+    )
+
+    assert cmd_new(args) == 0
+    captured = capsys.readouterr().out
+    assert "Would move uncommitted changes to the new branch" in captured
+    assert "file.py" in captured
+    assert "new.txt" in captured
+    assert "Staged" in captured
+    assert "Unstaged" in captured
 
 
 def test_cmd_new_existing_branch_returns_error(monkeypatch, capsys) -> None:
@@ -69,7 +101,8 @@ def test_cmd_new_reports_uncommitted_changes(monkeypatch, capsys) -> None:
         "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: False
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.branch.git.working_tree_clean", lambda root: False
+        "repo_release_tools.commands.branch.git.status_porcelain",
+        lambda root: [" M file.py", "?? new.txt"],
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.branch.git.run",
@@ -80,7 +113,12 @@ def test_cmd_new_reports_uncommitted_changes(monkeypatch, capsys) -> None:
 
     assert result == 0
     assert ran == [["git", "checkout", "-b", "feat/add-parser"]]
-    assert "Uncommitted changes moved to the new branch" in capsys.readouterr().out
+    captured = capsys.readouterr().out
+    assert "Uncommitted changes moved to the new branch" in captured
+    assert "file.py" in captured
+    assert "new.txt" in captured
+    assert "Staged" in captured
+    assert "Unstaged" in captured
 
 
 def test_branch_validation_accepts_magic_ai_types() -> None:

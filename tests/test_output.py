@@ -159,6 +159,24 @@ def test_panel_title_row_separates_title_from_border() -> None:
     assert lines[2].startswith("├") or lines[2].startswith("+")
 
 
+def test_panel_empty_title_renders_plain_border() -> None:
+    rendered = output.panel("", [("A", "b")])
+
+    lines = rendered.splitlines()
+    assert lines[0].startswith("┌") or lines[0].startswith("+")
+    assert "A" in rendered
+    assert "┌ " not in lines[0] or "┌  " not in lines[0]  # title should not render blank spaces
+
+
+def test_panel_empty_title_row_renders_plain_border() -> None:
+    rendered = output.panel("", [("A", "b")], title_mode="row")
+
+    lines = rendered.splitlines()
+    assert lines[0].startswith("┌") or lines[0].startswith("+")
+    assert lines[1].startswith("├") or lines[1].startswith("+")
+    assert "A" in rendered
+
+
 def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
     """spinner_lines must skip threading when IS_LEGACY_TERMINAL is True."""
     import io

@@ -28,7 +28,9 @@ def cmd_env(args: argparse.Namespace) -> int:
         print(json.dumps(dict(values), indent=2))
         return 0
 
-    print(output.panel("Environment", values, style="single", expand=True, title_mode="row"))
+    print(output.ok("Environment"))
+    for name, value in values:
+        print(output.info(f"{name}: {value}"))
     return 0
 
 

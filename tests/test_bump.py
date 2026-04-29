@@ -1820,7 +1820,9 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     assert result == 0
     assert len(progress_instances) == 2
     assert progress_updates == [(0, 0.5), (0, 1.0), (1, 0.5), (1, 1.0)]
-    assert progress_clears == [0, 1]  # clear() called once per progress instance before 2nd item
+    assert (
+        progress_clears == [0, 0, 1, 1]
+    )  # clear() called before second item and again after the final update for each progress instance
     assert spinner_calls == [("Running lock command…", "$ uv lock -U", sys.stdout)]
     assert (["uv", "lock", "-U"], True) in git_calls
 
@@ -1939,6 +1941,6 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
     assert "\n" not in expected_bars[-1], "100% bar render itself contains \\n"
 
     # -- 4. Exactly three clear sequences (one before each of iterations 2/3/4)
-    assert raw.count("\r\x1b[2K") == 3, (
-        f"Expected 3 clear sequences, found {raw.count(chr(13) + chr(27) + '[2K')}"
+    assert raw.count("\r\x1b[2K") == 4, (
+        f"Expected 4 clear sequences, found {raw.count(chr(13) + chr(27) + '[2K')}"
     )

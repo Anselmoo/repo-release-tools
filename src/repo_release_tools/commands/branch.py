@@ -83,6 +83,25 @@ def add_common_branch_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dry-run", action="store_true", help="Preview without touching git.")
 
 
+def _count_status_changes(status_lines: list[str]) -> tuple[int, int]:
+    staged = 0
+    unstaged = 0
+    for line in status_lines:
+        if len(line) >= 2:
+            staged += 1 if line[0] != " " else 0
+            unstaged += 1 if line[1] != " " else 0
+    return staged, unstaged
+
+
+def _status_rows(status_lines: list[str]) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for line in status_lines:
+        if len(line) < 3:
+            continue
+        rows.append((line[3:], line[:2]))
+    return rows
+
+
 def cmd_new(args: argparse.Namespace) -> int:
     """Create a new branch."""
     root = Path.cwd()
@@ -94,14 +113,10 @@ def cmd_new(args: argparse.Namespace) -> int:
     base = "<current>" if args.dry_run else git.current_branch(root)
     title = "[DRY RUN] New branch" if args.dry_run else "New branch"
     print()
-    print(output.banner(title, style="bold"))
-    print(
-        output.panel(
-            title,
-            [("Base", base), ("Branch", branch_name), ("Title", commit_title)],
-            style="mixed",
-        )
-    )
+    print(output.ok(title))
+    print(output.info(f"Base: {base}"))
+    print(output.info(f"Branch: {branch_name}"))
+    print(output.info(f"Title: {commit_title}"))
     print()
 
     if not args.dry_run and git.branch_exists(root, branch_name):
@@ -111,15 +126,37 @@ def cmd_new(args: argparse.Namespace) -> int:
         )
         return 1
 
-    has_changes = not args.dry_run and not git.working_tree_clean(root)
+    status_lines = git.status_porcelain(root)
+    dirty = bool(status_lines)
+    staged_count, unstaged_count = _count_status_changes(status_lines)
 
     print(output.section("Creating branch"))
     git.run(
         ["git", "checkout", "-b", branch_name], root, dry_run=args.dry_run, label="git checkout -b"
     )
 
-    if has_changes:
-        print(f"{output.action('Uncommitted changes moved to the new branch.')}\n")
+    if dirty:
+        action_text = (
+            "Would move uncommitted changes to the new branch."
+            if args.dry_run
+            else "Uncommitted changes moved to the new branch."
+        )
+        print(f"{output.action(action_text)}\n")
+        summary = f"Files changed: {len(status_lines)} | Staged: {staged_count} | Unstaged: {unstaged_count}"
+        print(output.info(summary))
+        print(output.section("Changed files"))
+        for path, status in _status_rows(status_lines):
+            print(output.status(status, path, indent=2))
+        print()
+    else:
+        clean_message = (
+            "No uncommitted changes would be moved." if args.dry_run else "Working tree clean."
+        )
+        if args.dry_run:
+            print(output.dry_run(clean_message))
+        else:
+            print(output.ok(clean_message))
+        print()
 
     print(output.ok(f"Done. Suggested commit title: {commit_title}"))
     print()
@@ -219,18 +256,10 @@ def cmd_rename(args: argparse.Namespace) -> int:
     g = output.GLYPHS
     title = "[DRY RUN] Rename branch" if args.dry_run else "Rename branch"
     print()
-    print(output.banner(title, style="bold"))
-    print(
-        output.panel(
-            title,
-            [
-                (f"{g.git.branch} From", current_branch),
-                (f"{g.diff.renamed} To", new_name),
-                (f"{g.arrow.right} Commit title", commit_title),
-            ],
-            style="mixed",
-        )
-    )
+    print(output.ok(title))
+    print(output.info(f"{g.git.branch} From: {current_branch}"))
+    print(output.info(f"{g.diff.renamed} To: {new_name}"))
+    print(output.info(f"{g.arrow.right} Commit title: {commit_title}"))
     print()
 
     if not args.dry_run:
@@ -272,19 +301,11 @@ def cmd_rescue(args: argparse.Namespace) -> int:
 
     title = "[DRY RUN] Rescue commits" if args.dry_run else "Rescue commits"
     print()
-    print(output.banner(title, style="bold"))
-    print(
-        output.panel(
-            title,
-            [
-                ("From", origin_branch),
-                ("Branch", branch_name),
-                ("Reset to", reset_target),
-                ("Title", commit_title),
-            ],
-            style="mixed",
-        )
-    )
+    print(output.ok(title))
+    print(output.info(f"From: {origin_branch}"))
+    print(output.info(f"Branch: {branch_name}"))
+    print(output.info(f"Reset to: {reset_target}"))
+    print(output.info(f"Title: {commit_title}"))
     print()
 
     if not log_lines and not args.dry_run:

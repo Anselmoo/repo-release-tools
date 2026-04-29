@@ -65,15 +65,10 @@ def cmd_install(args: argparse.Namespace) -> int:
     install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
 
     print()
-    print(
-        output.panel(
-            "[DRY RUN] Skill install" if args.dry_run else "Skill install",
-            [
-                ("Skill", INSTALLED_CLI_SKILL.name),
-                ("Targets", str(len(install_plan))),
-            ],
-        )
-    )
+    title = "[DRY RUN] Skill install" if args.dry_run else "Skill install"
+    print(output.ok(title))
+    print(output.info(f"Skill: {INSTALLED_CLI_SKILL.name}"))
+    print(output.info(f"Targets: {len(install_plan)}"))
     print()
 
     conflicts: list[tuple[str, Path]] = []

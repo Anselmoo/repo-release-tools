@@ -934,6 +934,16 @@ def test_skill_help_has_examples_and_no_enum_blob(capsys: pytest.CaptureFixture[
     assert "  $ rrt skill install --target copilot-local" in out
 
 
+def test_root_help_includes_skill_example(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--help"])
+
+    out = capsys.readouterr().out
+    assert "  $ rrt skill install --target copilot-local" in out
+
+
 # ── Section heading + rule coloring tests ──────────────────────────────────
 
 

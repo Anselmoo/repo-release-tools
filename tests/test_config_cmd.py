@@ -66,7 +66,7 @@ def test_cmd_config_renders_panel_header(tmp_path: Path, monkeypatch, capsys) ->
     captured = capsys.readouterr().out
     assert rc == 0
     assert "rrt config" in captured
-    assert "version groups" in captured
+    assert "Version groups" in captured
 
 
 def test_cmd_config_shows_autodetected_label(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -300,6 +300,6 @@ def test_cmd_config_aligns_tree_details(tmp_path: Path, monkeypatch, capsys) -> 
     captured = capsys.readouterr()
 
     assert rc == 0
-    assert "release_branch  release/v{version}" in captured.out
-    assert "changelog       CHANGELOG.md" in captured.out
-    assert "lock_command    uv lock" in captured.out
+    assert "release_branch: release/v{version}" in captured.out
+    assert "changelog: CHANGELOG.md" in captured.out
+    assert "lock_command: uv lock" in captured.out

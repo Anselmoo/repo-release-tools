@@ -924,7 +924,9 @@ def test_cmd_apply_uses_shared_progress_line(
 
     assert result == 0
     assert updates == [(0.5, sys.stdout), (1.0, sys.stdout)]
-    assert len(clears) == 1  # clear() called once before the second iteration
+    assert (
+        len(clears) == 2
+    )  # clear() called before the second iteration and once more after the final update
 
 
 def test_cmd_apply_clears_progress_on_semver_error(

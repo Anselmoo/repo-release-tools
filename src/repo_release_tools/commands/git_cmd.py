@@ -106,6 +106,15 @@ def require_explicit_confirmation(args: argparse.Namespace) -> bool:
     return bool(args.yes_i_know_this_destroys_history)
 
 
+def _print_summary(title: str, entries: list[tuple[str, str]]) -> None:
+    """Print a compact colored command summary without boxed tables."""
+    print()
+    print(output.ok(title))
+    for label, value in entries:
+        print(output.info(f"{label}: {value}"))
+    print()
+
+
 def classify_status_line(line: str) -> tuple[str, str]:
     """Classify a porcelain status line into a compact diff category."""
     status_code = line[:2]
@@ -214,18 +223,14 @@ def cmd_status(args: argparse.Namespace) -> int:
         return 1
     summary = summarize_status(branch_name, status_lines, upstream=upstream)
 
-    print()
-    print(
-        output.panel(
-            "Git status",
-            [
-                ("Branch", branch_name),
-                ("Upstream", upstream or "<none>"),
-                ("Status", summary),
-            ],
-        )
+    _print_summary(
+        "Git status",
+        [
+            ("Branch", branch_name),
+            ("Upstream", upstream or "<none>"),
+            ("Status", summary),
+        ],
     )
-    print()
 
     if not status_lines:
         print(output.ok("Working tree is clean."))
@@ -250,9 +255,10 @@ def cmd_log(args: argparse.Namespace) -> int:
     )
     lines = [line for line in raw.splitlines() if line.strip()]
 
-    print()
-    print(output.panel("Git log", [("Count", str(len(lines))), ("Limit", str(args.limit))]))
-    print()
+    _print_summary(
+        "Git log",
+        [("Count", str(len(lines))), ("Limit", str(args.limit))],
+    )
 
     if not lines:
         print(output.warning("No commits found."))
@@ -316,20 +322,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             )
 
     summary = summarize_status(branch_name, status_lines, upstream=upstream)
-    print()
-    print(
-        output.panel(
-            "Git doctor",
-            [
-                ("Branch", branch_name),
-                ("Upstream", upstream or "<none>"),
-                ("Sync", describe_sync_relation(ahead=ahead, behind=behind, base_ref=upstream)),
-                ("Status", summary),
-                ("Commit", latest_subject or "<none>"),
-            ],
-        )
+    _print_summary(
+        "Git doctor",
+        [
+            ("Branch", branch_name),
+            ("Upstream", upstream or "<none>"),
+            ("Sync", describe_sync_relation(ahead=ahead, behind=behind, base_ref=upstream)),
+            ("Status", summary),
+            ("Commit", latest_subject or "<none>"),
+        ],
     )
-    print()
 
     print(output.section("Checks"))
     failures = 0
@@ -454,20 +456,16 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
     ahead, behind = (0, 0) if base_ref is None else git.ahead_behind(root, base_ref)
     relation = describe_sync_relation(ahead=ahead, behind=behind, base_ref=base_ref)
 
-    print()
-    print(
-        output.panel(
-            "Sync status",
-            [
-                ("Branch", branch_name),
-                ("Base", base_ref or "<none>"),
-                ("Relation", relation),
-                ("Operation", operation or "idle"),
-                ("Status", summarize_status(branch_name, status_lines, upstream=base_ref)),
-            ],
-        )
+    _print_summary(
+        "Sync status",
+        [
+            ("Branch", branch_name),
+            ("Base", base_ref or "<none>"),
+            ("Relation", relation),
+            ("Operation", operation or "idle"),
+            ("Status", summarize_status(branch_name, status_lines, upstream=base_ref)),
+        ],
     )
-    print()
 
     print(output.section("Analysis"))
     failures = 0
@@ -525,20 +523,14 @@ def run_commit(args: argparse.Namespace, *, stage_all: bool) -> int:
         return 1
 
     title = "[DRY RUN] Commit" if args.dry_run else "Commit"
-    print()
-    print(output.banner(title, style="bold"))
-    print(
-        output.panel(
-            title,
-            [
-                ("Branch", branch_name),
-                ("Mode", "stage all" if stage_all else "commit only"),
-                ("Subject", subject),
-            ],
-            style="mixed",
-        )
+    _print_summary(
+        title,
+        [
+            ("Branch", branch_name),
+            ("Mode", "stage all" if stage_all else "commit only"),
+            ("Subject", subject),
+        ],
     )
-    print()
 
     print(output.section("Git"))
     if stage_all:
@@ -601,20 +593,16 @@ def cmd_sync(args: argparse.Namespace) -> int:
         return 1
     strategy = "merge" if args.merge else "rebase"
     title = "[DRY RUN] Sync" if args.dry_run else "Sync"
-    print()
-    print(
-        output.panel(
-            title,
-            [
-                ("Branch", branch_name),
-                ("Upstream", upstream),
-                ("Strategy", strategy),
-                ("Working tree", "dirty" if dirty else "clean"),
-                ("Status", summarize_status(branch_name, status_lines, upstream=upstream)),
-            ],
-        )
+    _print_summary(
+        title,
+        [
+            ("Branch", branch_name),
+            ("Upstream", upstream),
+            ("Strategy", strategy),
+            ("Working tree", "dirty" if dirty else "clean"),
+            ("Status", summarize_status(branch_name, status_lines, upstream=upstream)),
+        ],
     )
-    print()
 
     print(output.section("Syncing"))
     with output.spinner_lines("Fetching…"):
@@ -661,18 +649,14 @@ def cmd_move(args: argparse.Namespace) -> int:
     dirty = not git.working_tree_clean(root)
     target_label = f"new branch {args.target}" if args.create else args.target
     title = "[DRY RUN] Move" if args.dry_run else "Move"
-    print()
-    print(
-        output.panel(
-            title,
-            [
-                ("From", current),
-                ("To", target_label),
-                ("Working tree", "dirty" if dirty else "clean"),
-            ],
-        )
+    _print_summary(
+        title,
+        [
+            ("From", current),
+            ("To", target_label),
+            ("Working tree", "dirty" if dirty else "clean"),
+        ],
     )
-    print()
 
     print(output.section("Switching"))
     if dirty:
@@ -735,19 +719,15 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
         return 1
 
     title = "[DRY RUN] Squash local" if args.dry_run else "Squash local"
-    print()
-    print(
-        output.panel(
-            title,
-            [
-                ("Branch", branch_name),
-                ("Base", base_ref),
-                ("Commits", str(len(commits))),
-                ("Subject", subject),
-            ],
-        )
+    _print_summary(
+        title,
+        [
+            ("Branch", branch_name),
+            ("Base", base_ref),
+            ("Commits", str(len(commits))),
+            ("Subject", subject),
+        ],
     )
-    print()
 
     print(output.section("Commits to squash"))
     for line in commits:
@@ -773,17 +753,13 @@ def cmd_undo_safe(args: argparse.Namespace) -> int:
     """Undo the last commit while keeping work in the index or working tree."""
     mode = "--soft" if args.keep_staged else "--mixed"
     title = "[DRY RUN] Undo safe" if args.dry_run else "Undo safe"
-    print()
-    print(
-        output.panel(
-            title,
-            [
-                ("Target", args.target),
-                ("Mode", "keep staged" if args.keep_staged else "keep files"),
-            ],
-        )
+    _print_summary(
+        title,
+        [
+            ("Target", args.target),
+            ("Mode", "keep staged" if args.keep_staged else "keep files"),
+        ],
     )
-    print()
 
     git.run(
         ["git", "reset", mode, args.target],
@@ -833,20 +809,16 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
             DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE if args.hard_init else DEFAULT_REBOOTSTRAP_MESSAGE
         )
     title = "[DRY RUN] Rebootstrap history" if args.dry_run else "Rebootstrap history"
-    print()
-    print(
-        output.panel(
-            title,
-            [
-                ("Branch", branch_name),
-                ("Mode", "empty hard-init" if args.hard_init else "snapshot current files"),
-                ("Backup", str(backup_path)),
-                ("Remote guard", "ignored" if args.allow_remote else "enabled"),
-                ("Commit", commit_message),
-            ],
-        )
+    _print_summary(
+        title,
+        [
+            ("Branch", branch_name),
+            ("Mode", "empty hard-init" if args.hard_init else "snapshot current files"),
+            ("Backup", str(backup_path)),
+            ("Remote guard", "ignored" if args.allow_remote else "enabled"),
+            ("Commit", commit_message),
+        ],
     )
-    print()
 
     print(output.section("Reinitializing"))
     if args.dry_run:

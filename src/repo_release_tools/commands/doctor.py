@@ -18,44 +18,42 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
-from repo_release_tools.ui import bold
-from repo_release_tools.ui.layout import render_table
 from repo_release_tools.version_targets import read_version_string
 
 
-def _check_version_target(target: VersionTarget, root: Path, g) -> tuple[str, bool]:
-    """Return a (label, is_ok) pair for a version target health check."""
+def _check_version_target(target: VersionTarget, root: Path, g) -> tuple[str, bool, str]:
+    """Return the status message, whether it is okay, and its severity."""
     relative = str(target.path.relative_to(root))
     kind_hint = _describe_version_target(target, root=root).split("(", 1)
     suffix = f" ({kind_hint[1]}" if len(kind_hint) > 1 else ""
 
     if not target.path.exists():
-        return f"{relative}{suffix}  {g.bullet.error} not found", False
+        return f"{relative}{suffix} not found", False, "error"
 
     try:
         version = read_version_string(target)
-        return f"{relative}{suffix}  {g.git.clean} {version}", True
+        return f"{relative}{suffix} {version}", True, "ok"
     except (RuntimeError, ValueError):
-        return f"{relative}{suffix}  {g.bullet.warning} version unreadable", True
+        return f"{relative}{suffix} version unreadable", True, "warning"
 
 
-def _check_pin_target(pin: PinTarget, root: Path, g) -> tuple[str, bool]:
-    """Return a (label, is_ok) pair for a pin target health check."""
+def _check_pin_target(pin: PinTarget, root: Path, g) -> tuple[str, bool, str]:
+    """Return the status message, whether it is okay, and its severity."""
     relative = str(pin.path.relative_to(root))
 
     if not pin.path.exists():
-        return f"{relative}  {g.bullet.error} not found", False
+        return f"{relative} not found", False, "error"
 
     try:
         compiled = re.compile(pin.pattern)
     except re.error as exc:
-        return f"{relative}  {g.bullet.error} bad pattern: {exc}", False
+        return f"{relative} bad pattern: {exc}", False, "error"
 
     text = pin.path.read_text(encoding="utf-8")
     if compiled.search(text) is None:
-        return f"{relative}  {g.bullet.warning} no match", True
+        return f"{relative} no match", True, "warning"
 
-    return f"{relative}  {g.git.clean} match", True
+    return f"{relative} match", True, "ok"
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
@@ -86,29 +84,32 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
     source = "(auto-detected)" if config.autodetected else str(config.config_file.relative_to(root))
     group_count = len(config.version_groups)
     plural = "group" if group_count == 1 else "groups"
-    print(bold("rrt doctor"))
-    print(render_table([("config file", source), ("version groups", f"{group_count} {plural}")]))
+    print(output.ok("rrt doctor"))
+    print(output.info(f"Config file: {source}"))
+    print(output.info(f"Version groups: {group_count} {plural}"))
     print()
 
     all_ok = True
 
-    tree_entries: list[tuple[str, bool, list | None]] = []
+    print(output.section("Health checks"))
 
     for group in config.version_groups:
-        group_children: list[tuple[str, bool, list | None]] = []
         group_ok = True
+        statuses: list[str] = []
 
-        # Version targets
-        vtarget_children: list[tuple[str, bool, list | None]] = []
         for target in group.version_targets:
-            label, is_ok = _check_version_target(target, root, g)
-            vtarget_children.append((label, False, None))
-            if not is_ok:
+            message, ok, severity = _check_version_target(target, root, g)
+            symbol = (
+                g.bullet.ok
+                if severity == "ok"
+                else g.bullet.warning
+                if severity == "warning"
+                else g.bullet.error
+            )
+            statuses.append(output.status(symbol, message, indent=2))
+            if not ok:
                 group_ok = False
 
-        group_children.append(("version_targets", True, vtarget_children or None))
-
-        # Pin targets (group-level + global, deduplicated)
         all_pins = group.pin_targets + config.global_pin_targets
         if all_pins:
             seen: set[tuple[object, str]] = set()
@@ -119,35 +120,37 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
                     seen.add(key)
                     unique_pins.append(pin)
 
-            pin_children: list[tuple[str, bool, list | None]] = []
             for pin in unique_pins:
-                label, is_ok = _check_pin_target(pin, root, g)
-                pin_children.append((label, False, None))
-                if not is_ok:
+                message, ok, severity = _check_pin_target(pin, root, g)
+                symbol = (
+                    g.bullet.ok
+                    if severity == "ok"
+                    else g.bullet.warning
+                    if severity == "warning"
+                    else g.bullet.error
+                )
+                statuses.append(output.status(symbol, message, indent=2))
+                if not ok:
                     group_ok = False
 
-            group_children.append(("pin_targets", True, pin_children))
-
-        # Changelog file
         cl = group.changelog_file
         if cl.exists():
-            cl_label = f"{cl.relative_to(root)}  {g.git.clean} exists"
+            message = f"{cl.relative_to(root)} exists"
+            symbol = g.bullet.ok
         else:
-            cl_label = f"{cl.relative_to(root)}  {g.bullet.warning} not found"
+            message = f"{cl.relative_to(root)} not found"
+            symbol = g.bullet.error
             group_ok = False
+        statuses.append(output.status(symbol, message, indent=2))
 
-        group_children.append((cl_label, False, None))
-
-        group_marker = str(g.git.clean) if group_ok else str(g.bullet.error)
-        group_name = f"{group_marker} [{group.name}]"
-        tree_entries.append((group_name, True, group_children))
+        header = output.ok(f"[{group.name}]") if group_ok else output.error(f"[{group.name}]")
+        print(header)
+        for line in statuses:
+            print(line)
+        print()
 
         if not group_ok:
             all_ok = False
-
-    print(output.rule("Health checks"))
-    print(g.tree.render(tree_entries))
-    print()
 
     if all_ok:
         print(output.ok("All health checks passed."))
