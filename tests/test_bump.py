@@ -1893,7 +1893,7 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
     # both write to the same captured stream.
     monkeypatch.setattr(sys, "stdout", tty)
     # Ensure ProgressLine is not disabled by legacy-terminal detection.
-    monkeypatch.setattr("repo_release_tools.output.IS_LEGACY_TERMINAL", False)
+    monkeypatch.setattr("repo_release_tools.ui.progress.IS_LEGACY_TERMINAL", False)
 
     result = cmd_bump(
         Namespace(
