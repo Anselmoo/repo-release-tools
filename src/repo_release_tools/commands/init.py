@@ -67,7 +67,12 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
         )
         return 1
 
-    if explicit_config is not None and explicit_config != target and not args.force:
+    if (
+        explicit_config is not None
+        and explicit_config != target
+        and not args.force
+        and not args.dry_run
+    ):
         relative = explicit_config.relative_to(root)
         print(
             render_error(
@@ -79,7 +84,7 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
         )
         return 1
 
-    if target.exists() and not args.force:
+    if target.exists() and not args.force and not args.dry_run:
         print(
             render_error(
                 f"{DEFAULT_INIT_CONFIG} already exists",
@@ -146,7 +151,7 @@ def _init_manifest(
     except ValueError as exc:
         print(f"{GLYPHS.bullet.warning} {warning(str(exc))}", file=sys.stderr)
         return 1
-    if already_present:
+    if already_present and not args.dry_run:
         print(
             f"{manifest} already contains rrt configuration. "
             "Edit the existing rrt section manually instead of appending a duplicate table.",

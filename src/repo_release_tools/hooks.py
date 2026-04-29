@@ -9,7 +9,9 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from repo_release_tools import git, output
+from repo_release_tools import git
+from repo_release_tools.ui.color import success, warning
+from repo_release_tools.ui.glyphs import GLYPHS
 from repo_release_tools.changelog import (
     SECTION_MAP,
     append_to_unreleased,
@@ -471,9 +473,9 @@ def apply_dedup_to_changelog(
 
 def emit_failure(title: str, details: list[str]) -> int:
     """Render a hook failure message and return a non-zero exit code."""
-    print(output.warning(title, indent=0), file=sys.stderr)
+    print(f"{GLYPHS.bullet.warning} {warning(title)}", file=sys.stderr)
     for detail in details:
-        print(output.status(output.GLYPHS.bullet.dot, detail), file=sys.stderr)
+        print(f"  {GLYPHS.bullet.dot} {detail}", file=sys.stderr)
     return 1
 
 
@@ -630,7 +632,7 @@ def run_update_unreleased(
         changelog_path.write_text(updated, encoding="utf-8")
         git.run(["git", "add", changelog_file], cwd, dry_run=False, label="stage changelog")
         print(
-            output.ok(f"[Unreleased] section updated in {changelog_file}."),
+            f"{GLYPHS.bullet.ok} {success(f'[Unreleased] section updated in {changelog_file}.')}",
             file=sys.stderr,
         )
     return 0
@@ -748,7 +750,7 @@ def run_post_correct(
         return emit_failure("Changelog post-correction failed.", [str(exc)])
     if not added_lines:
         print(
-            output.ok(f"No changelog changes found in {ref!r}. Nothing to correct."),
+            f"{GLYPHS.bullet.ok} {success(f'No changelog changes found in {ref!r}. Nothing to correct.')}",
             file=sys.stderr,
         )
         return 0
@@ -760,7 +762,7 @@ def run_post_correct(
     )
     if not changed:
         print(
-            output.ok("Changelog is already clean. Nothing to correct."),
+            f"{GLYPHS.bullet.ok} {success('Changelog is already clean. Nothing to correct.')}",
             file=sys.stderr,
         )
         return 0
@@ -768,9 +770,7 @@ def run_post_correct(
     removed_count = len(added_lines) - len(deduped_lines)
     noun = "entry" if removed_count == 1 else "entries"
     print(
-        output.ok(
-            f"Post-correction: removed {removed_count} duplicate/contradicting changelog {noun}."
-        ),
+        f"{GLYPHS.bullet.ok} {success(f'Post-correction: removed {removed_count} duplicate/contradicting changelog {noun}.')}",
         file=sys.stderr,
     )
 

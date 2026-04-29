@@ -6,7 +6,8 @@ import subprocess
 
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui.color import subtle
+from repo_release_tools.ui.glyphs import GLYPHS
 
 
 def run(
@@ -20,10 +21,10 @@ def run(
     """Run a command in a repository."""
     pretty = " ".join(cmd)
     if dry_run:
-        print(output.dry_run(f"Would run: {pretty}"))
+        print(subtle(f"{GLYPHS.bullet.skip} [dry-run] Would run: {pretty}"))
         return ""
     if not suppress_announce:
-        print(output.status("$", pretty))
+        print(f"  $ {pretty}")
     result = subprocess.run(
         cmd,
         cwd=cwd,
@@ -34,14 +35,14 @@ def run(
     if result.returncode != 0:
         if result.stdout.strip():
             for line in result.stdout.strip().splitlines():
-                print(output.status(">", line, indent=4))
+                print(f"    > {line}")
         if result.stderr.strip():
             for line in result.stderr.strip().splitlines():
-                print(output.status("!", line, indent=4))
+                print(f"    ! {line}")
         raise RuntimeError(f"{label} failed (exit {result.returncode})")
     if result.stdout.strip():
         for line in result.stdout.strip().splitlines():
-            print(output.status(">", line, indent=4))
+            print(f"    > {line}")
     return result.stdout.strip()
 
 

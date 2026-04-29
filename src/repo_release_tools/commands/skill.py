@@ -64,6 +64,27 @@ def cmd_install(args: argparse.Namespace) -> int:
     """Install the bundled repo-release-tools skill into one or more agent skill dirs."""
     cwd = Path.cwd()
     home = Path.home()
+    if not args.targets:
+        if args.dry_run:
+            p = DryRunPrinter(True)
+            print()
+            p.header("Skill install", Skill=INSTALLED_CLI_SKILL.name)
+            p.section("Available targets")
+            for target_name, resolver in sorted(TARGET_PATHS.items()):
+                location = _display_path(
+                    resolver(cwd, home) / INSTALLED_CLI_SKILL.name / "SKILL.md", cwd=cwd, home=home
+                )
+                p.would_install(INSTALLED_CLI_SKILL.name, target_name, location)
+            print()
+            p.footer("pass --target DEST to install (see targets above)")
+            return 0
+        available = ", ".join(sorted(TARGET_PATHS))
+        print(
+            f"{GLYPHS.bullet.warning} {warning(f'No --target specified. Pass --target DEST (e.g. --target claude-local). Available: {available}.')}",
+            file=sys.stderr,
+        )
+        return 1
+
     install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
 
     p = DryRunPrinter(args.dry_run)
@@ -146,7 +167,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--target",
         dest="targets",
         action="append",
-        required=True,
+        required=False,
         choices=sorted(TARGET_PATHS),
         metavar="DEST",
         help=(

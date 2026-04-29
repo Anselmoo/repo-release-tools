@@ -113,9 +113,9 @@ def require_explicit_confirmation(args: argparse.Namespace) -> bool:
 def _print_summary(title: str, entries: list[tuple[str, str]]) -> None:
     """Print a compact colored command summary without boxed tables."""
     print()
-    print(f"  {GLYPHS.bullet.ok} {success(title)}")
+    print(f"{GLYPHS.bullet.ok} {success(title)}")
     for label, value in entries:
-        print(f"  {GLYPHS.arrow.right} {info(f'{label}: {value}')}")
+        print(f"{GLYPHS.arrow.right} {info(f'{label}: {value}')}")
     print()
 
 
@@ -223,7 +223,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     try:
         status_lines = load_status_lines(root)
     except RuntimeError as exc:
-        print(f"  {GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
+        print(f"{GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
         return 1
     summary = summarize_status(branch_name, status_lines, upstream=upstream)
 
@@ -237,7 +237,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     )
 
     if not status_lines:
-        print(f"  {GLYPHS.bullet.ok} {success('Working tree is clean.')}")
+        print(f"{GLYPHS.bullet.ok} {success('Working tree is clean.')}")
         return 0
 
     print(rule("Changes", width=terminal_width()))
@@ -265,7 +265,7 @@ def cmd_log(args: argparse.Namespace) -> int:
     )
 
     if not lines:
-        print(f"  {GLYPHS.bullet.warning} {warning('No commits found.')}")
+        print(f"{GLYPHS.bullet.warning} {warning('No commits found.')}")
         return 0
 
     for line in lines:
@@ -288,7 +288,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     try:
         status_lines = load_status_lines(root)
     except RuntimeError as exc:
-        print(f"  {GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
+        print(f"{GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
         return 1
     conflicts = conflict_status_lines(status_lines)
     operation = git.in_progress_operation(root)
@@ -391,12 +391,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if failures == 0:
         print()
-        print(f"  {GLYPHS.bullet.ok} {success('Doctor checks passed.')}")
+        print(f"{GLYPHS.bullet.ok} {success('Doctor checks passed.')}")
         return 0
 
     print()
     print(
-        f"  {GLYPHS.bullet.warning} {warning(f'Doctor found {failures} issue(s).')}",
+        f"{GLYPHS.bullet.warning} {warning(f'Doctor found {failures} issue(s).')}",
         file=sys.stderr,
     )
     return 1
@@ -411,8 +411,8 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
     if git.working_tree_clean(root):
         branch_name = git.current_branch(root) or "<detached>"
         upstream = git.upstream_branch(root)
-        print(f"  {GLYPHS.bullet.ok} {success('Working tree is clean.')}")
-        print(f"  {GLYPHS.bullet.dot} {summarize_status(branch_name, [], upstream=upstream)}")
+        print(f"{GLYPHS.bullet.ok} {success('Working tree is clean.')}")
+        print(f"{GLYPHS.arrow.right} {summarize_status(branch_name, [], upstream=upstream)}")
         return 0
 
     branch_name = git.current_branch(root) or "<detached>"
@@ -420,14 +420,14 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
     try:
         changed = load_status_lines(root)
     except RuntimeError as exc:
-        print(f"  {GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
+        print(f"{GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
         return 1
     print(
-        f"  {GLYPHS.bullet.warning} {warning('Working tree has uncommitted changes.')}",
+        f"{GLYPHS.bullet.warning} {warning('Working tree has uncommitted changes.')}",
         file=sys.stderr,
     )
     print(
-        f"  {GLYPHS.bullet.dot} {summarize_status(branch_name, changed, upstream=upstream)}",
+        f"{GLYPHS.arrow.right} {summarize_status(branch_name, changed, upstream=upstream)}",
         file=sys.stderr,
     )
     for line in changed:
@@ -440,7 +440,7 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
     root = Path.cwd()
     if not git.is_git_repository(root):
         print(
-            f"  {GLYPHS.bullet.error} {color_error(f'{root} is not inside a Git work tree.')}",
+            f"{GLYPHS.bullet.error} {color_error(f'{root} is not inside a Git work tree.')}",
             file=sys.stderr,
         )
         return 1
@@ -449,7 +449,7 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
     base_ref = args.base_ref or git.upstream_branch(root)
     if base_ref is not None and not git.ref_exists(root, base_ref):
         print(
-            f"  {GLYPHS.bullet.error} {color_error(f'Base ref {base_ref!r} does not exist.')}",
+            f"{GLYPHS.bullet.error} {color_error(f'Base ref {base_ref!r} does not exist.')}",
             file=sys.stderr,
         )
         return 1
@@ -457,7 +457,7 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
     try:
         status_lines = load_status_lines(root)
     except RuntimeError as exc:
-        print(f"  {GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
+        print(f"{GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
         return 1
 
     conflicts = conflict_status_lines(status_lines)
@@ -519,12 +519,12 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
 
     if failures == 0:
         print()
-        print(f"  {GLYPHS.bullet.ok} {success('Sync analysis passed.')}")
+        print(f"{GLYPHS.bullet.ok} {success('Sync analysis passed.')}")
         return 0
 
     print()
     print(
-        f"  {GLYPHS.bullet.warning} {warning(f'Sync analysis found {failures} issue(s).')}",
+        f"{GLYPHS.bullet.warning} {warning(f'Sync analysis found {failures} issue(s).')}",
         file=sys.stderr,
     )
     return 1
@@ -555,7 +555,7 @@ def run_commit(args: argparse.Namespace, *, stage_all: bool) -> int:
     git.run(["git", "commit", "-m", subject], root, dry_run=args.dry_run, label="git commit")
 
     print()
-    print(f"  {GLYPHS.bullet.ok} {success(f'Done. Created commit: {subject!r}')}")
+    print(f"{GLYPHS.bullet.ok} {success(f'Done. Created commit: {subject!r}')}")
     if args.dry_run:
         print(subtle(f"{GLYPHS.bullet.skip} [dry-run] complete \u2014 no changes made"))
     return 0
@@ -576,7 +576,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     root = Path.cwd()
     if not git.is_git_repository(root):
         print(
-            f"  {GLYPHS.bullet.error} {color_error(f'{root} is not inside a Git work tree.')}",
+            f"{GLYPHS.bullet.error} {color_error(f'{root} is not inside a Git work tree.')}",
             file=sys.stderr,
         )
         return 1
@@ -594,19 +594,19 @@ def cmd_sync(args: argparse.Namespace) -> int:
     try:
         status_lines = load_status_lines(root)
     except RuntimeError as exc:
-        print(f"  {GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
+        print(f"{GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
         return 1
     conflicts = conflict_status_lines(status_lines)
     operation = git.in_progress_operation(root)
     if operation is not None:
         print(
-            f"  {GLYPHS.bullet.error} {color_error(f'Cannot sync while a {operation} is in progress. Resolve or abort it first.')}",
+            f"{GLYPHS.bullet.error} {color_error(f'Cannot sync while a {operation} is in progress. Resolve or abort it first.')}",
             file=sys.stderr,
         )
         return 1
     if conflicts:
         print(
-            f"  {GLYPHS.bullet.error} {color_error('Cannot sync with unresolved merge conflicts.')}",
+            f"{GLYPHS.bullet.error} {color_error('Cannot sync with unresolved merge conflicts.')}",
             file=sys.stderr,
         )
         for line in conflicts:
@@ -645,7 +645,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     except RuntimeError:
         if dirty and not args.dry_run:
             print(
-                f"  {GLYPHS.bullet.warning} {warning('Pull failed. The auto-stash remains on the stash stack.')}",
+                f"{GLYPHS.bullet.warning} {warning('Pull failed. The auto-stash remains on the stash stack.')}",
                 file=sys.stderr,
             )
         raise
@@ -655,7 +655,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
     print()
     print(
-        f"  {GLYPHS.bullet.ok} {success(f'Done. {branch_name} is synced from {upstream} using {strategy}.')}"
+        f"{GLYPHS.bullet.ok} {success(f'Done. {branch_name} is synced from {upstream} using {strategy}.')}"
     )
     if args.dry_run:
         print(subtle(f"{GLYPHS.bullet.skip} [dry-run] complete \u2014 working tree preserved"))
@@ -667,7 +667,7 @@ def cmd_move(args: argparse.Namespace) -> int:
     root = Path.cwd()
     if not git.is_git_repository(root):
         print(
-            f"  {GLYPHS.bullet.error} {color_error(f'{root} is not inside a Git work tree.')}",
+            f"{GLYPHS.bullet.error} {color_error(f'{root} is not inside a Git work tree.')}",
             file=sys.stderr,
         )
         return 1
@@ -701,7 +701,7 @@ def cmd_move(args: argparse.Namespace) -> int:
     except RuntimeError:
         if dirty and not args.dry_run:
             print(
-                f"  {GLYPHS.bullet.warning} {warning('Branch switch failed. The auto-stash remains on the stash stack.')}",
+                f"{GLYPHS.bullet.warning} {warning('Branch switch failed. The auto-stash remains on the stash stack.')}",
                 file=sys.stderr,
             )
         raise
@@ -710,7 +710,7 @@ def cmd_move(args: argparse.Namespace) -> int:
         git.run(["git", "stash", "pop"], root, dry_run=args.dry_run, label="git stash pop")
 
     print()
-    print(f"  {GLYPHS.bullet.ok} {success(f'Done. Switched to {args.target!r}.')}")
+    print(f"{GLYPHS.bullet.ok} {success(f'Done. Switched to {args.target!r}.')}")
     if args.dry_run:
         print(subtle(f"{GLYPHS.bullet.skip} [dry-run] complete — branch switch preview only"))
     return 0
@@ -770,7 +770,7 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
 
     print()
     print(
-        f"  {GLYPHS.bullet.ok} {success(f'Done. Squashed {len(commits)} commit(s) into {subject!r}.')}"
+        f"{GLYPHS.bullet.ok} {success(f'Done. Squashed {len(commits)} commit(s) into {subject!r}.')}"
     )
     if args.dry_run:
         print(subtle(f"{GLYPHS.bullet.skip} [dry-run] complete — commit graph preserved"))
@@ -796,7 +796,7 @@ def cmd_undo_safe(args: argparse.Namespace) -> int:
         label="git reset",
     )
     print()
-    print(f"  {GLYPHS.bullet.ok} {success(f'Done. Reset to {args.target!r} using {mode}.')}")
+    print(f"{GLYPHS.bullet.ok} {success(f'Done. Reset to {args.target!r} using {mode}.')}")
     if args.dry_run:
         print(subtle(f"{GLYPHS.bullet.skip} [dry-run] complete — HEAD unchanged"))
     return 0
@@ -901,7 +901,7 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
             )
     except RuntimeError as exc:
         print(
-            f"  {GLYPHS.bullet.warning} {warning(f'Rebootstrap failed. Original git data is backed up at {backup_path}.')}",
+            f"{GLYPHS.bullet.warning} {warning(f'Rebootstrap failed. Original git data is backed up at {backup_path}.')}",
             file=sys.stderr,
         )
         print(exc, file=sys.stderr)
@@ -910,13 +910,13 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
     print()
     if args.hard_init:
         print(
-            f"  {GLYPHS.bullet.ok} {success(f'Done. Repository history hard-initialized on {branch_name!r}.')}"
+            f"{GLYPHS.bullet.ok} {success(f'Done. Repository history hard-initialized on {branch_name!r}.')}"
         )
     else:
         print(
-            f"  {GLYPHS.bullet.ok} {success(f'Done. Repository history reinitialized on {branch_name!r}.')}"
+            f"{GLYPHS.bullet.ok} {success(f'Done. Repository history reinitialized on {branch_name!r}.')}"
         )
-    print(f"  {GLYPHS.bullet.dot} Original git data: {backup_path}")
+    print(f"{GLYPHS.arrow.right} Original git data: {backup_path}")
     return 0
 
 
@@ -963,10 +963,10 @@ def cmd_diff(args: argparse.Namespace) -> int:
     try:
         raw = git.capture_checked(cmd, root)
     except RuntimeError as exc:
-        print(f"  {GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
+        print(f"{GLYPHS.bullet.error} {color_error(str(exc))}", file=sys.stderr)
         return 1
     if not raw.strip():
-        print(f"  {GLYPHS.bullet.ok} {success('No diff to show.')}")
+        print(f"{GLYPHS.bullet.ok} {success('No diff to show.')}")
         return 0
 
     current_file: str = ""
