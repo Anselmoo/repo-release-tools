@@ -533,7 +533,9 @@ def test_branch_registers_subcommands_and_handlers() -> None:
     assert new_args.branch_command == "new"
     assert new_args.handler is cmd_new
 
-    rescue_args = parser.parse_args(["branch", "rescue", "fix", "recover", "work", "--since", "abc123"])
+    rescue_args = parser.parse_args(
+        ["branch", "rescue", "fix", "recover", "work", "--since", "abc123"]
+    )
     assert rescue_args.branch_command == "rescue"
     assert rescue_args.handler is cmd_rescue
     assert rescue_args.since == "abc123"

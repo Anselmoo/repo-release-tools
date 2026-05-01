@@ -70,9 +70,7 @@ def test_context_from_args_prefers_cli_values_over_env(monkeypatch: pytest.Monke
     monkeypatch.setenv("GITHUB_RUN_ID", "99")
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "3")
 
-    ctx = _context_from_args(
-        _ns(ref="refs/heads/cli", ref_name="", run_id=None, run_attempt="7")
-    )
+    ctx = _context_from_args(_ns(ref="refs/heads/cli", ref_name="", run_id=None, run_attempt="7"))
 
     assert ctx == GitHubContext(
         ref="refs/heads/cli",

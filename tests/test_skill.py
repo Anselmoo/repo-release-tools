@@ -68,9 +68,7 @@ def test_cmd_install_no_targets_dry_run_shows_available_targets(
     assert not (tmp_path / ".copilot").exists()
 
 
-def test_cmd_install_no_targets_without_dry_run_errors(
-    monkeypatch, tmp_path: Path, capsys
-) -> None:
+def test_cmd_install_no_targets_without_dry_run_errors(monkeypatch, tmp_path: Path, capsys) -> None:
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, tmp_path / "home")
 
