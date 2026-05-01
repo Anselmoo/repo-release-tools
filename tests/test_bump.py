@@ -3,6 +3,7 @@ import os
 import sys
 import types
 from contextlib import contextmanager
+import argparse
 from argparse import Namespace
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, Versio
 from repo_release_tools.commands.bump import cmd_bump
 from repo_release_tools.commands.bump import git_log_since_latest_tag
 from repo_release_tools.commands.bump import resolve_changelog_mode
+from repo_release_tools.commands.bump import register
 from repo_release_tools.commands.bump import update_changelog
 from repo_release_tools.versioning import Version
 
@@ -63,6 +65,27 @@ def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path)
     )
 
     assert resolve_changelog_mode(config, None) == "auto"
+
+
+def test_resolve_changelog_mode_defaults_to_generate_for_squash(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="squash",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    assert resolve_changelog_mode(config, None) == "generate"
 
 
 def test_git_log_since_latest_tag_uses_latest_tag_range(
@@ -205,6 +228,19 @@ version = \"0.1.0\"
     assert "release/v0.2.0" in captured.out
     assert "Would update" in captured.out
     assert "no files were modified" in captured.out
+
+
+def test_register_bump_parser_sets_handler_and_defaults() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    register(subparsers)
+
+    args = parser.parse_args(["bump", "patch"])
+    assert args.command == "bump"
+    assert args.bump == "patch"
+    assert args.changelog_mode is None
+    assert args.handler is cmd_bump
 
 
 def test_cmd_bump_dry_run_from_rrt_toml_and_package_json(tmp_path, capsys) -> None:

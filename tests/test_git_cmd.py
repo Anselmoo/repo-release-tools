@@ -11,6 +11,7 @@ def test_infer_commit_type_from_branch() -> None:
     assert git_cmd.infer_commit_type("feat/add-parser") == "feat"
     assert git_cmd.infer_commit_type("main") is None
     assert git_cmd.infer_commit_type("copilot/add-parser") is None
+    assert git_cmd.infer_commit_type("release/v1.2.3") is None
 
 
 def test_cmd_commit_dry_run_uses_branch_type(monkeypatch, capsys) -> None:

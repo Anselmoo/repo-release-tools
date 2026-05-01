@@ -2,6 +2,9 @@ import argparse
 
 from repo_release_tools.commands.branch import BranchName
 from repo_release_tools.commands.branch import cmd_new
+from repo_release_tools.commands.branch import cmd_rescue
+from repo_release_tools.commands.branch import cmd_rename
+from repo_release_tools.commands.branch import register
 from repo_release_tools.hooks import validate_branch_name
 
 
@@ -258,6 +261,47 @@ def test_cmd_rescue_existing_target_branch_returns_error(monkeypatch, capsys) ->
     assert "already exists" in capsys.readouterr().err
 
 
+def test_cmd_rescue_with_since_runs_rescue_flow(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch", lambda root: "main"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.commits_ahead",
+        lambda root, ref: ["abc123 feat: keep this change", "def456 fix: keep that one"],
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: False
+    )
+    ran: list[list[str]] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.run",
+        lambda cmd, root, *, dry_run, label: ran.append(cmd),
+    )
+
+    result = cmd_rescue(
+        argparse.Namespace(
+            type="fix",
+            description=["recover", "work"],
+            scope=None,
+            dry_run=False,
+            since="abc123",
+        )
+    )
+
+    assert result == 0
+    assert ran == [
+        ["git", "checkout", "-b", "fix/recover-work"],
+        ["git", "checkout", "main"],
+        ["git", "reset", "--hard", "abc123"],
+        ["git", "checkout", "fix/recover-work"],
+    ]
+    out = capsys.readouterr().out
+    assert "Rescue commits" in out
+    assert "abc123" in out
+    assert "fix/recover-work" in out
+
+
 # ---------------------------------------------------------------------------
 # cmd_rename
 # ---------------------------------------------------------------------------
@@ -476,3 +520,24 @@ def test_cmd_rename_executes_git_branch_m(monkeypatch, capsys) -> None:
 
     assert result == 0
     assert ran == [["git", "branch", "-m", "build/introduce-v1", "feat/introduce-v1"]]
+
+
+def test_branch_registers_subcommands_and_handlers() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    register(subparsers)
+
+    new_args = parser.parse_args(["branch", "new", "feat", "add", "parser"])
+    assert new_args.command == "branch"
+    assert new_args.branch_command == "new"
+    assert new_args.handler is cmd_new
+
+    rescue_args = parser.parse_args(["branch", "rescue", "fix", "recover", "work", "--since", "abc123"])
+    assert rescue_args.branch_command == "rescue"
+    assert rescue_args.handler is cmd_rescue
+    assert rescue_args.since == "abc123"
+
+    rename_args = parser.parse_args(["branch", "rename", "--type", "fix", "patch"])
+    assert rename_args.branch_command == "rename"
+    assert rename_args.handler is cmd_rename
