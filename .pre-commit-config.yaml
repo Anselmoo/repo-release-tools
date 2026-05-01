@@ -9,7 +9,6 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
-  - repo:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:

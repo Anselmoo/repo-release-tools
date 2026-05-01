@@ -101,4 +101,3 @@ When in doubt which method to call, use this decision table (see `rrt-ux-philoso
 | Closing a command | `p.footer(msg)` |
 | Inline error (fatal) | `p.line(msg, ok=False, stream=sys.stderr)` |
 | **Never use** | `p.line(msg)` without `ok=False` — banned in new code |
-
