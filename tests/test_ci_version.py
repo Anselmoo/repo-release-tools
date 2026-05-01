@@ -19,7 +19,7 @@ from repo_release_tools.commands.ci_version import (
     compute_published_version,
     to_semver,
 )
-from repo_release_tools.config import VersionTarget
+from repo_release_tools.config import MissingRrtConfigError, VersionTarget
 
 
 # ---------------------------------------------------------------------------
@@ -363,6 +363,61 @@ kind = "package_json"
     captured = capsys.readouterr()
     assert result == 0
     assert captured.out.strip() == "0.2.0.dev1201"
+
+
+@pytest.mark.parametrize(
+    ("exc_type", "exc_args", "expected_error"),
+    [
+        (FileNotFoundError, ("missing config",), "No supported rrt config file found."),
+        (
+            MissingRrtConfigError,
+            ("Missing [tool.rrt] configuration in pyproject.toml",),
+            "No [tool.rrt] configuration found.",
+        ),
+        (ValueError, ("bad config",), "bad config"),
+        (RuntimeError, ("boom",), "boom"),
+    ],
+)
+def test_cmd_compute_and_apply_error_paths(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    exc_type: type[Exception],
+    exc_args: tuple[object, ...],
+    expected_error: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    def raise_exc(*args: object, **kwargs: object) -> None:
+        raise exc_type(*exc_args)
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.ci_version.load_or_autodetect_config", raise_exc
+    )
+
+    compute_result = cmd_ci_version_compute(_ns())
+    compute_captured = capsys.readouterr()
+    assert compute_result == 1
+    assert expected_error in compute_captured.err
+
+    apply_result = cmd_ci_version_apply(_ns(version="1.0.0"))
+    apply_captured = capsys.readouterr()
+    assert apply_result == 1
+    assert expected_error in apply_captured.err
+
+
+def test_cmd_sync_no_config_fails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = cmd_ci_version_sync(_ns())
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "No supported rrt config file found." in captured.err
 
 
 # ---------------------------------------------------------------------------
