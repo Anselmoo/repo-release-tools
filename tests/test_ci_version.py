@@ -11,13 +11,15 @@ import pytest
 
 from repo_release_tools.commands.ci_version import (
     GitHubContext,
+    _context_from_args,
     cmd_ci_version_apply,
     cmd_ci_version_compute,
     cmd_ci_version_sync,
+    register,
     compute_published_version,
     to_semver,
 )
-from repo_release_tools.config import VersionTarget
+from repo_release_tools.config import MissingRrtConfigError, VersionTarget
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +62,63 @@ def _ns(**kwargs: object) -> argparse.Namespace:
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
+
+
+def test_context_from_args_prefers_cli_values_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/env")
+    monkeypatch.setenv("GITHUB_REF_NAME", "env-name")
+    monkeypatch.setenv("GITHUB_RUN_ID", "99")
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "3")
+
+    ctx = _context_from_args(_ns(ref="refs/heads/cli", ref_name="", run_id=None, run_attempt="7"))
+
+    assert ctx == GitHubContext(
+        ref="refs/heads/cli",
+        ref_name="env-name",
+        run_id="99",
+        run_attempt="7",
+    )
+
+
+def test_register_wires_ci_version_subcommands() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+    register(subparsers)
+
+    compute_args = parser.parse_args(
+        [
+            "ci-version",
+            "compute",
+            "--base",
+            "1.2.3",
+            "--ref",
+            "refs/heads/main",
+            "--run-id",
+            "4",
+            "--run-attempt",
+            "2",
+        ]
+    )
+    assert compute_args.command == "ci-version"
+    assert compute_args.ci_version_cmd == "compute"
+    assert compute_args.handler is cmd_ci_version_compute
+    assert compute_args.base == "1.2.3"
+    assert compute_args.ref == "refs/heads/main"
+
+    sync_args = parser.parse_args(
+        [
+            "ci-version",
+            "sync",
+            "--base",
+            "1.2.3",
+            "--dry-run",
+            "--run-id",
+            "4",
+        ]
+    )
+    assert sync_args.ci_version_cmd == "sync"
+    assert sync_args.handler is cmd_ci_version_sync
+    assert sync_args.dry_run is True
 
 
 def test_compute_tag_build() -> None:
@@ -304,6 +363,61 @@ kind = "package_json"
     captured = capsys.readouterr()
     assert result == 0
     assert captured.out.strip() == "0.2.0.dev1201"
+
+
+@pytest.mark.parametrize(
+    ("exc_type", "exc_args", "expected_error"),
+    [
+        (FileNotFoundError, ("missing config",), "No supported rrt config file found."),
+        (
+            MissingRrtConfigError,
+            ("Missing [tool.rrt] configuration in pyproject.toml",),
+            "No [tool.rrt] configuration found.",
+        ),
+        (ValueError, ("bad config",), "bad config"),
+        (RuntimeError, ("boom",), "boom"),
+    ],
+)
+def test_cmd_compute_and_apply_error_paths(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    exc_type: type[Exception],
+    exc_args: tuple[object, ...],
+    expected_error: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    def raise_exc(*args: object, **kwargs: object) -> None:
+        raise exc_type(*exc_args)
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.ci_version.load_or_autodetect_config", raise_exc
+    )
+
+    compute_result = cmd_ci_version_compute(_ns())
+    compute_captured = capsys.readouterr()
+    assert compute_result == 1
+    assert expected_error in compute_captured.err
+
+    apply_result = cmd_ci_version_apply(_ns(version="1.0.0"))
+    apply_captured = capsys.readouterr()
+    assert apply_result == 1
+    assert expected_error in apply_captured.err
+
+
+def test_cmd_sync_no_config_fails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = cmd_ci_version_sync(_ns())
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "No supported rrt config file found." in captured.err
 
 
 # ---------------------------------------------------------------------------
@@ -914,9 +1028,7 @@ def test_cmd_apply_uses_shared_progress_line(
             clears.append(1)
 
     monkeypatch.chdir(mixed_project)
-    monkeypatch.setattr(
-        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
-    )
+    monkeypatch.setattr("repo_release_tools.commands.ci_version.ProgressLine", _FakeProgressLine)
 
     result = cmd_ci_version_apply(
         argparse.Namespace(version="0.2.0.dev12345601", dry_run=False, group=None)
@@ -924,7 +1036,9 @@ def test_cmd_apply_uses_shared_progress_line(
 
     assert result == 0
     assert updates == [(0.5, sys.stdout), (1.0, sys.stdout)]
-    assert len(clears) == 1  # clear() called once before the second iteration
+    assert (
+        len(clears) == 2
+    )  # clear() called before the second iteration and once more after the final update
 
 
 def test_cmd_apply_clears_progress_on_semver_error(
@@ -945,9 +1059,7 @@ def test_cmd_apply_clears_progress_on_semver_error(
             clears.append(1)
 
     monkeypatch.chdir(mixed_project)
-    monkeypatch.setattr(
-        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
-    )
+    monkeypatch.setattr("repo_release_tools.commands.ci_version.ProgressLine", _FakeProgressLine)
 
     # An un-convertible '.dev' version triggers the semver_pre early-return path.
     result = cmd_ci_version_apply(
@@ -992,9 +1104,7 @@ version = "0.1.0"
             clears.append(1)
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
-    )
+    monkeypatch.setattr("repo_release_tools.commands.ci_version.ProgressLine", _FakeProgressLine)
 
     result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0", dry_run=False, group=None))
 

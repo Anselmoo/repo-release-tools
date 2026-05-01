@@ -9,7 +9,7 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.skill_assets import INSTALLED_CLI_SKILL
 
 
@@ -62,19 +62,38 @@ def cmd_install(args: argparse.Namespace) -> int:
     """Install the bundled repo-release-tools skill into one or more agent skill dirs."""
     cwd = Path.cwd()
     home = Path.home()
+    if not args.targets:
+        if args.dry_run:
+            p = DryRunPrinter(True)
+            p.blank_line()
+            p.header("Skill install", Skill=INSTALLED_CLI_SKILL.name)
+            p.section("Available targets")
+            for target_name, resolver in sorted(TARGET_PATHS.items()):
+                location = _display_path(
+                    resolver(cwd, home) / INSTALLED_CLI_SKILL.name / "SKILL.md", cwd=cwd, home=home
+                )
+                p.would_install(INSTALLED_CLI_SKILL.name, target_name, location)
+            p.blank_line()
+            p.footer("pass --target DEST to install (see targets above)")
+            return 0
+        available = ", ".join(sorted(TARGET_PATHS))
+        p = DryRunPrinter(False)
+        p.line(
+            f"No --target specified. Pass --target DEST (e.g. --target claude-local). Available: {available}.",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+
     install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
 
-    print()
-    print(
-        output.panel(
-            "[DRY RUN] Skill install" if args.dry_run else "Skill install",
-            [
-                ("Skill", INSTALLED_CLI_SKILL.name),
-                ("Targets", str(len(install_plan))),
-            ],
-        )
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Skill install",
+        Skill=INSTALLED_CLI_SKILL.name,
+        Targets=str(len(install_plan)),
     )
-    print()
 
     conflicts: list[tuple[str, Path]] = []
     for target_name, skills_dir in install_plan:
@@ -85,10 +104,11 @@ def cmd_install(args: argparse.Namespace) -> int:
     if conflicts:
         for target_name, destination in conflicts:
             location = _display_path(destination, cwd=cwd, home=home)
-            print(
-                f"{target_name} already has {INSTALLED_CLI_SKILL.name} at {location}. "
-                "Use --force to overwrite it.",
-                file=sys.stderr,
+            p = DryRunPrinter(False)
+            p.line(
+                f"{target_name} already has {INSTALLED_CLI_SKILL.name} at {location}. Use --force to overwrite it.",
+                ok=False,
+                stream=sys.stderr,
             )
         return 1
 
@@ -96,13 +116,9 @@ def cmd_install(args: argparse.Namespace) -> int:
         for target_name, skills_dir in install_plan:
             destination = skills_dir / INSTALLED_CLI_SKILL.name / "SKILL.md"
             location = _display_path(destination, cwd=cwd, home=home)
-            print(
-                output.dry_run(
-                    f"Would install {INSTALLED_CLI_SKILL.name} to {target_name}: {location}"
-                )
-            )
-        print()
-        print(output.dry_run_complete("no files were modified"))
+            p.would_install(INSTALLED_CLI_SKILL.name, target_name, location)
+        p.blank_line()
+        p.footer("no files were modified")
         return 0
 
     for target_name, skills_dir in install_plan:
@@ -119,15 +135,15 @@ def cmd_install(args: argparse.Namespace) -> int:
             )
         except OSError as exc:
             location = _display_path(destination_file, cwd=cwd, home=home)
-            print(
-                output.warning(
-                    f"Could not install {INSTALLED_CLI_SKILL.name} to {target_name} ({location}): {exc}"
-                ),
-                file=sys.stderr,
+            p = DryRunPrinter(False)
+            p.line(
+                f"Could not install {INSTALLED_CLI_SKILL.name} to {target_name} ({location}): {exc}",
+                ok=False,
+                stream=sys.stderr,
             )
             return 1
         location = _display_path(destination_file, cwd=cwd, home=home)
-        print(output.ok(f"Installed {INSTALLED_CLI_SKILL.name} to {target_name}: {location}"))
+        p.ok(f"Installed {INSTALLED_CLI_SKILL.name} to {target_name}: {location}")
     return 0
 
 
@@ -154,7 +170,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--target",
         dest="targets",
         action="append",
-        required=True,
+        required=False,
         choices=sorted(TARGET_PATHS),
         metavar="DEST",
         help=(

@@ -196,3 +196,12 @@ def test_sparkline_returns_empty_when_no_values() -> None:
 def test_sparkline_returns_flat_line_for_constant_values() -> None:
     rendered = layout.sparkline([3.0, 3.0, 3.0])
     assert rendered == "▁▁▁"
+
+
+def test_section_wraps_section_line_with_heading_style(monkeypatch) -> None:
+    monkeypatch.setattr(
+        layout, "section_line", lambda title, glyph="─", left=2: f"{glyph}{left}:{title}"
+    )
+    monkeypatch.setattr("repo_release_tools.ui.color.heading", lambda text: f"styled:{text}")
+
+    assert layout.section("Build") == f"styled:{layout.GLYPHS.box.h}2:Build"

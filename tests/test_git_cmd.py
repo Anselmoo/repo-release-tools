@@ -4,12 +4,14 @@ import contextlib
 import pytest
 
 from repo_release_tools.commands import git_cmd
+from repo_release_tools import git
 
 
 def test_infer_commit_type_from_branch() -> None:
     assert git_cmd.infer_commit_type("feat/add-parser") == "feat"
     assert git_cmd.infer_commit_type("main") is None
     assert git_cmd.infer_commit_type("copilot/add-parser") is None
+    assert git_cmd.infer_commit_type("release/v1.2.3") is None
 
 
 def test_cmd_commit_dry_run_uses_branch_type(monkeypatch, capsys) -> None:
@@ -655,11 +657,11 @@ def test_resolve_commit_subject_requires_explicit_type_for_uninferable_branch(
 
 
 def test_classify_status_line_covers_all_status_kinds() -> None:
-    assert git_cmd.classify_status_line("?? docs/new.md") == ("untracked", "docs/new.md")
-    assert git_cmd.classify_status_line("UU src/conflict.py") == ("conflict", "src/conflict.py")
-    assert git_cmd.classify_status_line("R  old.py -> new.py") == ("renamed", "old.py -> new.py")
-    assert git_cmd.classify_status_line("A  src/new.py") == ("added", "src/new.py")
-    assert git_cmd.classify_status_line("D  src/old.py") == ("removed", "src/old.py")
+    assert git.classify_status_line("?? docs/new.md") == ("untracked", "docs/new.md")
+    assert git.classify_status_line("UU src/conflict.py") == ("conflict", "src/conflict.py")
+    assert git.classify_status_line("R  old.py -> new.py") == ("renamed", "old.py -> new.py")
+    assert git.classify_status_line("A  src/new.py") == ("added", "src/new.py")
+    assert git.classify_status_line("D  src/old.py") == ("removed", "src/old.py")
 
 
 def test_describe_sync_relation_and_sync_problem_cover_remaining_states() -> None:
@@ -879,7 +881,7 @@ def test_cmd_sync_warns_when_pull_fails_after_auto_stash(monkeypatch, capsys) ->
     monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [" M src/file.py"])
     monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (1, 0))
-    monkeypatch.setattr(git_cmd.output, "spinner_lines", lambda *a, **k: contextlib.nullcontext())
+    monkeypatch.setattr(git_cmd, "spinner_lines", lambda *a, **k: contextlib.nullcontext())
 
     def fake_run(cmd, cwd, *, dry_run, label):
         if cmd[:2] == ["git", "pull"]:
@@ -1045,7 +1047,7 @@ def test_cmd_squash_local_dry_run_success(monkeypatch, capsys) -> None:
 
     assert result == 0
     assert commands == [["git", "reset", "--soft", "abc123"], ["git", "commit", "-m", "feat: add"]]
-    assert "commit graph preserved" in capsys.readouterr().out
+    assert "dry-run" in capsys.readouterr().out
 
 
 def test_cmd_undo_safe_runs_soft_reset_in_dry_run(monkeypatch, capsys) -> None:
@@ -1062,7 +1064,7 @@ def test_cmd_undo_safe_runs_soft_reset_in_dry_run(monkeypatch, capsys) -> None:
 
     assert result == 0
     assert commands == [["git", "reset", "--soft", "HEAD~2"]]
-    assert "HEAD unchanged" in capsys.readouterr().out
+    assert "dry-run" in capsys.readouterr().out
 
 
 def test_cmd_undo_safe_runs_mixed_reset(monkeypatch) -> None:
@@ -1137,7 +1139,7 @@ def test_cmd_rebootstrap_empty_first_dry_run(tmp_path, monkeypatch, capsys) -> N
         ["git", "add", "."],
         ["git", "commit", "-m", git_cmd.DEFAULT_REBOOTSTRAP_MESSAGE],
     ]
-    assert "history preserved via preview only" in capsys.readouterr().out
+    assert "dry-run" in capsys.readouterr().out
 
 
 def test_cmd_rebootstrap_empty_first_non_dry_run(tmp_path, monkeypatch) -> None:
@@ -1266,3 +1268,99 @@ def test_cmd_diff_uses_old_path_when_new_path_is_dev_null(monkeypatch, capsys) -
 
     assert git_cmd.cmd_diff(argparse.Namespace(staged=False, against=None)) == 0
     assert "deleted.txt" in capsys.readouterr().out
+
+
+def test_cmd_status_truncates_long_change_list(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f" M file-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+
+    assert git_cmd.cmd_status(argparse.Namespace()) == 0
+    assert "…and 1 more" in capsys.readouterr().out
+
+
+def test_cmd_doctor_truncates_conflicts(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f"UU conflict-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+
+    def fake_capture(cmd, cwd):
+        if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
+            return "feat: add parser"
+        if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
+            return "CHANGELOG.md\nsrc/repo_release_tools/cli.py"
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(git_cmd.git, "capture", fake_capture)
+
+    assert git_cmd.cmd_doctor(argparse.Namespace(changelog_file="CHANGELOG.md")) == 1
+    assert "…and 1 more" in capsys.readouterr().out
+
+
+def test_cmd_check_dirty_tree_truncates_status_lines(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f" M dirty-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+
+    assert git_cmd.cmd_check_dirty_tree(argparse.Namespace()) == 1
+    assert "…and 1 more" in capsys.readouterr().err
+
+
+def test_cmd_sync_status_truncates_conflicts(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "ref_exists", lambda cwd, ref: True)
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f"UU sync-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (1, 2))
+
+    assert git_cmd.cmd_sync_status(argparse.Namespace(base_ref=None)) == 1
+    assert "…and 1 more" in capsys.readouterr().out
+
+
+def test_cmd_sync_truncates_conflicts(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f"UU sync-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("git.run should not be called")
+        ),
+    )
+
+    assert git_cmd.cmd_sync(argparse.Namespace(merge=False, dry_run=True)) == 1
+    assert "…and 1 more" in capsys.readouterr().err

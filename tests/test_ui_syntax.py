@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+
 from repo_release_tools.ui import syntax
 
 
@@ -213,3 +215,53 @@ def test_colour_first_match_skips_when_token_has_no_ansi_code(monkeypatch) -> No
     monkeypatch.setitem(syntax._RULES, "_test_lang", [("_no_such_token_", re.compile(r"(foo)"))])
     result = syntax.highlight_terminal("foo", "_test_lang")
     assert result == "foo"
+
+
+def test_highlight_terminal_shell_colours_command_flag_and_path(monkeypatch) -> None:
+    monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
+    monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
+
+    result = syntax.highlight_terminal("git status --short ./src /tmp/demo", "shell")
+
+    assert f"{syntax._ANSI['cmd']}git{syntax._RESET}" in result
+    assert f"{syntax._ANSI['flag']}--short{syntax._RESET}" in result
+    assert f"{syntax._ANSI['path']}./src{syntax._RESET}" in result
+    assert f"{syntax._ANSI['path']}/tmp/demo{syntax._RESET}" in result
+
+
+def test_fmt_cmd_uses_shell_highlighting_wrapper(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_highlight(code: str, language: str, *, stream=None) -> str:
+        captured["code"] = code
+        captured["language"] = language
+        captured["stream"] = stream
+        return "rendered"
+
+    monkeypatch.setattr(syntax, "highlight_terminal", fake_highlight)
+
+    stream = io.StringIO()
+    result = syntax.fmt_cmd("git status", stream=stream)
+
+    assert result == "rendered"
+    assert captured == {"code": "git status", "language": "shell", "stream": stream}
+
+
+def test_json_highlight_returns_original_string_for_invalid_json() -> None:
+    invalid = "{not json}"
+
+    assert syntax.json_highlight(invalid) == invalid
+
+
+def test_colour_all_matches_skips_unknown_and_overlapping_tokens() -> None:
+    import re
+
+    rules = [
+        ("cmd", re.compile(r"^(git)")),
+        ("_no_such_token_", re.compile(r"^(git status)")),
+        ("path", re.compile(r"^(git status)")),
+    ]
+
+    result = syntax._colour_all_matches("git status", rules)
+
+    assert result == f"{syntax._ANSI['cmd']}git{syntax._RESET} status"

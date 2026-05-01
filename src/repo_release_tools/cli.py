@@ -23,6 +23,7 @@ from repo_release_tools.commands import (
     skill,
 )
 from repo_release_tools.ui import (
+    DryRunPrinter,
     Style,
     apply_style,
     bold,
@@ -130,6 +131,7 @@ _ROOT_EXAMPLES = (
     "  $ rrt bump patch --dry-run\n"
     "  $ rrt git status\n"
     "  $ rrt doctor\n"
+    "  $ rrt skill install --target copilot-local\n"
     "  $ rrt @args.txt"
 )
 
@@ -371,23 +373,24 @@ class RrtArgumentParser(argparse.ArgumentParser):
         use_color = supports_color(sys.stderr)
         suggestion = self._suggestion_for(message)
 
-        print(file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.blank_line(stream=sys.stderr)
         if use_color:
             prefix = apply_style("✖  error:", color="error", bold=True, stream=sys.stderr)
             detail = apply_style(message, bold=True, stream=sys.stderr)
             help_target = bold(f"{self.prog} --help")
-            print(f"{prefix} {detail}", file=sys.stderr)
+            p.line(f"{prefix} {detail}", stream=sys.stderr)
         else:
             help_target = f"'{self.prog} --help'"
-            print(f"[ERROR] {message}", file=sys.stderr)
+            p.line(f"[ERROR] {message}", ok=False, stream=sys.stderr)
 
         if suggestion:
             rendered_suggestion = apply_style(
                 suggestion, color="warning", bold=True, stream=sys.stderr
             )
-            print(f"  {rendered_suggestion}", file=sys.stderr)
+            p.line(f"  {rendered_suggestion}", stream=sys.stderr)
         help_hint = f"Run {help_target} for usage and examples."
-        print(f"  {subtle(help_hint, stream=sys.stderr)}\n", file=sys.stderr)
+        p.line(f"  {subtle(help_hint, stream=sys.stderr)}\n", stream=sys.stderr)
         self.exit(2)
 
     def _clean_error_message(self, message: str) -> str:

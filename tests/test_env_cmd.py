@@ -38,32 +38,8 @@ def test_cmd_env_prints_panel_when_json_disabled(monkeypatch, capsys) -> None:
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("RRT_COLOR", raising=False)
 
-    banner_calls: list[tuple[str]] = []
-    panel_calls: list[tuple] = []
-
-    def fake_banner(title: str) -> str:
-        banner_calls.append((title,))
-        return "BANNER"
-
-    def fake_panel(
-        title: str,
-        rows: list[tuple[str, str]],
-        *,
-        style: str = "single",
-        expand: bool = False,
-        title_mode: str = "border",
-    ) -> str:
-        panel_calls.append((title, rows, style, title_mode))
-        return "PANEL"
-
-    monkeypatch.setattr(
-        env_cmd, "output", type("FakeOutput", (), {"banner": fake_banner, "panel": fake_panel})
-    )
-
     args = argparse.Namespace(json=False)
     env_cmd.cmd_env(args)
 
     captured = capsys.readouterr()
-    assert "PANEL" in captured.out
-    assert panel_calls and panel_calls[0][0] == "Environment"
-    assert panel_calls[0][3] == "row"
+    assert "Environment" in captured.out

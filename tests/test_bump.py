@@ -1,19 +1,28 @@
 import io
 import os
 import sys
+import types
 from contextlib import contextmanager
+import argparse
 from argparse import Namespace
 from pathlib import Path
 
 import pytest
 
-from repo_release_tools import output
+from repo_release_tools.ui import GLYPHS, render_ok
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.commands.bump import cmd_bump
 from repo_release_tools.commands.bump import git_log_since_latest_tag
 from repo_release_tools.commands.bump import resolve_changelog_mode
+from repo_release_tools.commands.bump import register
 from repo_release_tools.commands.bump import update_changelog
 from repo_release_tools.versioning import Version
+
+# Compatibility shim — maps legacy output.X names to the canonical ui API.
+output = types.SimpleNamespace(
+    ok=render_ok,
+    GLYPHS=GLYPHS,
+)
 
 
 def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
@@ -56,6 +65,27 @@ def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path)
     )
 
     assert resolve_changelog_mode(config, None) == "auto"
+
+
+def test_resolve_changelog_mode_defaults_to_generate_for_squash(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="squash",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    assert resolve_changelog_mode(config, None) == "generate"
 
 
 def test_git_log_since_latest_tag_uses_latest_tag_range(
@@ -131,7 +161,9 @@ def test_update_changelog_promote_dry_run_shows_preview(
     )
 
     output = capsys.readouterr().out
-    assert "Would promote [Unreleased] to [1.1.0]" in output
+    assert "Would update" in output
+    assert "promote [Unreleased]" in output
+    assert "1.1.0" in output
 
 
 def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
@@ -150,8 +182,119 @@ def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
     )
 
     output = capsys.readouterr().out
-    assert "Would prepend to" in output
+    assert "Would update" in output
+    assert "prepend" in output
     assert "…" in output or "..." in output
+
+
+def test_cmd_bump_reports_loaded_config_error(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: (_ for _ in ()).throw(ValueError("broken config")),
+    )
+
+    result = cmd_bump(Namespace(force=False))
+
+    assert result == 1
+    assert "broken config" in capsys.readouterr().err
+
+
+def test_cmd_bump_rejects_autodetected_version_mismatch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.autodetected.toml",
+        version_groups=[group],
+        default_group_name="default",
+        autodetected=True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.check_autodetected_version_consistency",
+        lambda config: "version mismatch",
+    )
+
+    result = cmd_bump(Namespace(force=False))
+
+    assert result == 1
+    err = capsys.readouterr().err
+    assert "auto-detected" in err
+    assert "version mismatch" in err
+
+
+def test_cmd_bump_stages_changelog_and_commits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+    calls: list[list[str]] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.replace_version_in_file", lambda *a, **k: None
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+
+    def fake_run(
+        cmd: list[str], root: Path, *, dry_run: bool, label: str, suppress_announce: bool = False
+    ) -> str:
+        calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=False,
+            no_changelog=False,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert ["git", "checkout", "-b", "release/v0.2.0"] in calls
+    assert ["git", "add", "package.json", "CHANGELOG.md"] in calls
+    assert ["git", "add", "-u"] in calls
+    assert ["git", "commit", "-m", "chore: bump version to v0.2.0"] in calls
 
 
 def test_cmd_bump_dry_run_from_pep621_config(tmp_path, capsys) -> None:
@@ -195,6 +338,19 @@ version = \"0.1.0\"
     assert "release/v0.2.0" in captured.out
     assert "Would update" in captured.out
     assert "no files were modified" in captured.out
+
+
+def test_register_bump_parser_sets_handler_and_defaults() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    register(subparsers)
+
+    args = parser.parse_args(["bump", "patch"])
+    assert args.command == "bump"
+    assert args.bump == "patch"
+    assert args.changelog_mode is None
+    assert args.handler is cmd_bump
 
 
 def test_cmd_bump_dry_run_from_rrt_toml_and_package_json(tmp_path, capsys) -> None:
@@ -1798,8 +1954,8 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
         "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
-    monkeypatch.setattr("repo_release_tools.commands.bump.output.ProgressLine", _FakeProgressLine)
-    monkeypatch.setattr("repo_release_tools.commands.bump.output.spinner_lines", fake_spinner_lines)
+    monkeypatch.setattr("repo_release_tools.commands.bump.ProgressLine", _FakeProgressLine)
+    monkeypatch.setattr("repo_release_tools.commands.bump.spinner_lines", fake_spinner_lines)
     monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_git_run)
 
     result = cmd_bump(
@@ -1820,7 +1976,9 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     assert result == 0
     assert len(progress_instances) == 2
     assert progress_updates == [(0, 0.5), (0, 1.0), (1, 0.5), (1, 1.0)]
-    assert progress_clears == [0, 1]  # clear() called once per progress instance before 2nd item
+    assert (
+        progress_clears == [0, 0, 1, 1]
+    )  # clear() called before second item and again after the final update for each progress instance
     assert spinner_calls == [("Running lock command…", "$ uv lock -U", sys.stdout)]
     assert (["uv", "lock", "-U"], True) in git_calls
 
@@ -1891,7 +2049,7 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
     # both write to the same captured stream.
     monkeypatch.setattr(sys, "stdout", tty)
     # Ensure ProgressLine is not disabled by legacy-terminal detection.
-    monkeypatch.setattr("repo_release_tools.output.IS_LEGACY_TERMINAL", False)
+    monkeypatch.setattr("repo_release_tools.ui.progress.IS_LEGACY_TERMINAL", False)
 
     result = cmd_bump(
         Namespace(
@@ -1939,6 +2097,6 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
     assert "\n" not in expected_bars[-1], "100% bar render itself contains \\n"
 
     # -- 4. Exactly three clear sequences (one before each of iterations 2/3/4)
-    assert raw.count("\r\x1b[2K") == 3, (
-        f"Expected 3 clear sequences, found {raw.count(chr(13) + chr(27) + '[2K')}"
+    assert raw.count("\r\x1b[2K") == 4, (
+        f"Expected 4 clear sequences, found {raw.count(chr(13) + chr(27) + '[2K')}"
     )

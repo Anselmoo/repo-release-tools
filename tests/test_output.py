@@ -1,9 +1,42 @@
 import io
+import types
 
 import pytest
 
-from repo_release_tools import output
-from repo_release_tools.ui.glyphs import GLYPHS
+from repo_release_tools.ui import (
+    GLYPHS,
+    ProgressLine,
+    banner,
+    diff_highlight,
+    highlight_terminal,
+    hyperlink,
+    json_highlight,
+    panel,
+    pretty_print,
+    render_dry_run_complete,
+    render_hint,
+    render_info,
+    section_line,
+    spinner_lines,
+)
+
+# Compatibility shim — maps legacy output.X names to the canonical ui API.
+output = types.SimpleNamespace(
+    panel=panel,
+    banner=banner,
+    info=render_info,
+    hint=render_hint,
+    dry_run_complete=render_dry_run_complete,
+    spinner_lines=spinner_lines,
+    section=section_line,
+    GLYPHS=GLYPHS,
+    ProgressLine=ProgressLine,
+    highlight_terminal=highlight_terminal,
+    hyperlink=hyperlink,
+    pretty_print=pretty_print,
+    json_highlight=json_highlight,
+    diff_highlight=diff_highlight,
+)
 
 
 def test_panel_renders_boxed_summary() -> None:
@@ -159,11 +192,30 @@ def test_panel_title_row_separates_title_from_border() -> None:
     assert lines[2].startswith("├") or lines[2].startswith("+")
 
 
+def test_panel_empty_title_renders_plain_border() -> None:
+    rendered = output.panel("", [("A", "b")])
+
+    lines = rendered.splitlines()
+    assert lines[0].startswith("┌") or lines[0].startswith("+")
+    assert "A" in rendered
+    assert "┌ " not in lines[0] or "┌  " not in lines[0]  # title should not render blank spaces
+
+
+def test_panel_empty_title_row_renders_plain_border() -> None:
+    rendered = output.panel("", [("A", "b")], title_mode="row")
+
+    lines = rendered.splitlines()
+    assert lines[0].startswith("┌") or lines[0].startswith("+")
+    assert lines[1].startswith("├") or lines[1].startswith("+")
+    assert "A" in rendered
+
+
 def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
     """spinner_lines must skip threading when IS_LEGACY_TERMINAL is True."""
     import io
+    import repo_release_tools.ui.progress as _prog
 
-    monkeypatch.setattr(output, "IS_LEGACY_TERMINAL", True)
+    monkeypatch.setattr(_prog, "IS_LEGACY_TERMINAL", True)
     non_tty = io.StringIO()
     with output.spinner_lines("Working…", file=non_tty):
         pass
@@ -233,9 +285,10 @@ class _FakeThread:
 
 def test_spinner_lines_writes_success_status_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     tty = _TtyBuffer()
+    import repo_release_tools.ui.progress as _prog
 
-    monkeypatch.setattr(output.threading, "Event", _FakeEvent)
-    monkeypatch.setattr(output.threading, "Thread", _FakeThread)
+    monkeypatch.setattr(_prog.threading, "Event", _FakeEvent)
+    monkeypatch.setattr(_prog.threading, "Thread", _FakeThread)
 
     with output.spinner_lines("Working", file=tty):
         pass
@@ -247,9 +300,10 @@ def test_spinner_lines_writes_success_status_on_tty(monkeypatch: pytest.MonkeyPa
 
 def test_spinner_lines_writes_detail_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     tty = _TtyBuffer()
+    import repo_release_tools.ui.progress as _prog
 
-    monkeypatch.setattr(output.threading, "Event", _FakeEvent)
-    monkeypatch.setattr(output.threading, "Thread", _FakeThread)
+    monkeypatch.setattr(_prog.threading, "Event", _FakeEvent)
+    monkeypatch.setattr(_prog.threading, "Thread", _FakeThread)
 
     with output.spinner_lines("Working", detail="$ uv lock -U", file=tty):
         pass
@@ -275,10 +329,13 @@ def test_syntax_forwards_stream_to_highlight_terminal(monkeypatch) -> None:
         captured["stream"] = stream
         return "rendered"
 
+    import repo_release_tools.ui.syntax as _syn
+
+    monkeypatch.setattr(_syn, "highlight_terminal", fake_highlight)
     monkeypatch.setattr(output, "highlight_terminal", fake_highlight)
 
     stream = io.StringIO()
-    rendered = output.syntax("print('x')", "python", stream=stream)
+    rendered = output.highlight_terminal("print('x')", "python", stream=stream)
 
     assert rendered == "rendered"
     assert captured["stream"] is stream
@@ -330,9 +387,10 @@ def test_spinner_lines_writes_error_status_on_tty_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tty = _TtyBuffer()
+    import repo_release_tools.ui.progress as _prog
 
-    monkeypatch.setattr(output.threading, "Event", _FakeEvent)
-    monkeypatch.setattr(output.threading, "Thread", _FakeThread)
+    monkeypatch.setattr(_prog.threading, "Event", _FakeEvent)
+    monkeypatch.setattr(_prog.threading, "Thread", _FakeThread)
 
     with pytest.raises(RuntimeError, match="boom"):
         with output.spinner_lines("Exploding", file=tty):
@@ -348,9 +406,9 @@ def test_spinner_lines_writes_error_status_on_tty_exception(
 
 def test_panel_wraps_long_value(monkeypatch) -> None:
     """panel() must wrap values that exceed value_width when terminal is narrow."""
-    import repo_release_tools.output as _out_mod
+    import repo_release_tools.ui.layout as _layout
 
-    monkeypatch.setattr(_out_mod, "terminal_width", lambda default=100: 40)
+    monkeypatch.setattr(_layout, "terminal_width", lambda default=100: 40)
     rendered = output.panel(
         "Wrap test",
         [("Key", "short"), ("Long", "x " * 20)],
@@ -361,7 +419,9 @@ def test_panel_wraps_long_value(monkeypatch) -> None:
 
 
 def test_hyperlink_returns_osc8_when_color_supported(monkeypatch) -> None:
-    monkeypatch.setattr(output.ui_color, "supports_color", lambda stream=None: True)
+    import repo_release_tools.ui.color as _color
+
+    monkeypatch.setattr(_color, "supports_color", lambda stream=None: True)
     result = output.hyperlink("click here", "https://example.com")
     assert "\x1b]8;;" in result
     assert "click here" in result
@@ -369,7 +429,9 @@ def test_hyperlink_returns_osc8_when_color_supported(monkeypatch) -> None:
 
 
 def test_hyperlink_falls_back_to_plain_text_when_no_color(monkeypatch) -> None:
-    monkeypatch.setattr(output.ui_color, "supports_color", lambda stream=None: False)
+    import repo_release_tools.ui.color as _color
+
+    monkeypatch.setattr(_color, "supports_color", lambda stream=None: False)
     result = output.hyperlink("click here", "https://example.com")
     assert result == "click here (https://example.com)"
 
@@ -378,8 +440,10 @@ def test_spinner_lines_cancelled_writes_warning_glyph(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tty = _TtyBuffer()
-    monkeypatch.setattr(output.threading, "Event", _FakeEvent)
-    monkeypatch.setattr(output.threading, "Thread", _FakeThread)
+    import repo_release_tools.ui.progress as _prog
+
+    monkeypatch.setattr(_prog.threading, "Event", _FakeEvent)
+    monkeypatch.setattr(_prog.threading, "Thread", _FakeThread)
 
     with pytest.raises(KeyboardInterrupt):
         with output.spinner_lines("Task", file=tty):
@@ -421,7 +485,9 @@ def test_diff_highlight_empty_returns_empty() -> None:
 
 
 def test_panel_expand_fills_terminal_width(monkeypatch) -> None:
-    monkeypatch.setattr(output, "terminal_width", lambda default=100: 60)
+    import repo_release_tools.ui.layout as _layout
+
+    monkeypatch.setattr(_layout, "terminal_width", lambda default=100: 60)
     result = output.panel("T", [("k", "v")], expand=True)
     # The top border line should be close to 60 - 4 = 56 chars wide
     top_line = result.splitlines()[0]
@@ -429,7 +495,9 @@ def test_panel_expand_fills_terminal_width(monkeypatch) -> None:
 
 
 def test_panel_no_expand_stays_narrow(monkeypatch) -> None:
-    monkeypatch.setattr(output, "terminal_width", lambda default=100: 60)
+    import repo_release_tools.ui.layout as _layout
+
+    monkeypatch.setattr(_layout, "terminal_width", lambda default=100: 60)
     result = output.panel("T", [("k", "short")])
     top_line = result.splitlines()[0]
     # Without expand, the box should be narrower than terminal width

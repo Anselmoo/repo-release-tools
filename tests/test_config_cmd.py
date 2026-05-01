@@ -66,7 +66,7 @@ def test_cmd_config_renders_panel_header(tmp_path: Path, monkeypatch, capsys) ->
     captured = capsys.readouterr().out
     assert rc == 0
     assert "rrt config" in captured
-    assert "version groups" in captured
+    assert "Version groups" in captured
 
 
 def test_cmd_config_shows_autodetected_label(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -237,7 +237,6 @@ def test_register_adds_raw_flag() -> None:
 
 def test_cmd_config_raw_prints_toml(tmp_path: Path, monkeypatch, capsys) -> None:
     from repo_release_tools.commands import config_cmd
-    from repo_release_tools import output
 
     toml_content = '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
     config_path = tmp_path / "pyproject.toml"
@@ -252,7 +251,9 @@ def test_cmd_config_raw_prints_toml(tmp_path: Path, monkeypatch, capsys) -> None
     import repo_release_tools.config as cfg_mod
 
     monkeypatch.setattr(cfg_mod, "load_or_autodetect_config", lambda _: conf)
-    monkeypatch.setattr(output, "highlight_terminal", lambda code, lang, **kw: code)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.config_cmd.highlight_terminal", lambda code, lang, **kw: code
+    )
     monkeypatch.chdir(tmp_path)
 
     args = argparse.Namespace(raw=True)
@@ -300,6 +301,6 @@ def test_cmd_config_aligns_tree_details(tmp_path: Path, monkeypatch, capsys) -> 
     captured = capsys.readouterr()
 
     assert rc == 0
-    assert "release_branch  release/v{version}" in captured.out
-    assert "changelog       CHANGELOG.md" in captured.out
-    assert "lock_command    uv lock" in captured.out
+    assert "release_branch: release/v{version}" in captured.out
+    assert "changelog: CHANGELOG.md" in captured.out
+    assert "lock_command: uv lock" in captured.out

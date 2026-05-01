@@ -9,7 +9,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from repo_release_tools import git, output
+from repo_release_tools import git
+from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.changelog import (
     SECTION_MAP,
     append_to_unreleased,
@@ -471,9 +472,10 @@ def apply_dedup_to_changelog(
 
 def emit_failure(title: str, details: list[str]) -> int:
     """Render a hook failure message and return a non-zero exit code."""
-    print(output.warning(title, indent=0), file=sys.stderr)
+    p = DryRunPrinter(dry_run=False)
+    p.line(title, ok=False, stream=sys.stderr)
     for detail in details:
-        print(output.status(output.GLYPHS.bullet.dot, detail), file=sys.stderr)
+        p.action(detail, stream=sys.stderr)
     return 1
 
 
@@ -629,10 +631,8 @@ def run_update_unreleased(
     if updated != original:
         changelog_path.write_text(updated, encoding="utf-8")
         git.run(["git", "add", changelog_file], cwd, dry_run=False, label="stage changelog")
-        print(
-            output.ok(f"[Unreleased] section updated in {changelog_file}."),
-            file=sys.stderr,
-        )
+        p = DryRunPrinter(False)
+        p.line(f"[Unreleased] section updated in {changelog_file}.", ok=True, stream=sys.stderr)
     return 0
 
 
@@ -747,9 +747,11 @@ def run_post_correct(
     except RuntimeError as exc:
         return emit_failure("Changelog post-correction failed.", [str(exc)])
     if not added_lines:
-        print(
-            output.ok(f"No changelog changes found in {ref!r}. Nothing to correct."),
-            file=sys.stderr,
+        p = DryRunPrinter(False)
+        p.line(
+            f"No changelog changes found in {ref!r}. Nothing to correct.",
+            ok=True,
+            stream=sys.stderr,
         )
         return 0
 
@@ -759,19 +761,17 @@ def run_post_correct(
         changelog_path, added_lines, deduped_lines, added_line_positions=positions
     )
     if not changed:
-        print(
-            output.ok("Changelog is already clean. Nothing to correct."),
-            file=sys.stderr,
-        )
+        p = DryRunPrinter(False)
+        p.line("Changelog is already clean. Nothing to correct.", ok=True, stream=sys.stderr)
         return 0
 
     removed_count = len(added_lines) - len(deduped_lines)
     noun = "entry" if removed_count == 1 else "entries"
-    print(
-        output.ok(
-            f"Post-correction: removed {removed_count} duplicate/contradicting changelog {noun}."
-        ),
-        file=sys.stderr,
+    p = DryRunPrinter(False)
+    p.line(
+        f"Post-correction: removed {removed_count} duplicate/contradicting changelog {noun}.",
+        ok=True,
+        stream=sys.stderr,
     )
 
     if commit:

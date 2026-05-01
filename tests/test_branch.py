@@ -2,6 +2,9 @@ import argparse
 
 from repo_release_tools.commands.branch import BranchName
 from repo_release_tools.commands.branch import cmd_new
+from repo_release_tools.commands.branch import cmd_rescue
+from repo_release_tools.commands.branch import cmd_rename
+from repo_release_tools.commands.branch import register
 from repo_release_tools.hooks import validate_branch_name
 
 
@@ -28,10 +31,81 @@ def test_cmd_new_dry_run_uses_summary_panel(capsys) -> None:
     assert cmd_new(args) == 0
 
     captured = capsys.readouterr()
-    assert "New branch" in captured.out
+    assert captured.out.count("New branch") == 1
     assert "Branch" in captured.out
     assert "feat/add-parser" in captured.out
     assert "[dry-run] complete" in captured.out
+
+
+def test_cmd_new_dry_run_shows_uncommitted_changes(monkeypatch, capsys) -> None:
+    args = argparse.Namespace(
+        type="feat",
+        description=["add", "parser"],
+        scope=None,
+        dry_run=True,
+    )
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch", lambda root: "main"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: False
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.status_porcelain",
+        lambda root: [" M file.py", "?? new.txt"],
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.run",
+        lambda cmd, root, *, dry_run, label: None,
+    )
+
+    assert cmd_new(args) == 0
+    captured = capsys.readouterr().out
+    assert "Would move uncommitted changes to the new branch" in captured
+    assert "file.py" in captured
+    assert "new.txt" in captured
+    assert "Staged" in captured
+    assert "Unstaged" in captured
+
+
+def test_cmd_new_reports_truncated_changed_files(monkeypatch, capsys) -> None:
+    args = argparse.Namespace(
+        type="feat",
+        description=["add", "parser"],
+        scope=None,
+        dry_run=True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.status_porcelain",
+        lambda root: [f" M file-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.run",
+        lambda cmd, root, *, dry_run, label: None,
+    )
+
+    assert cmd_new(args) == 0
+    captured = capsys.readouterr().out
+    assert "…and 1 more" in captured
+
+
+def test_cmd_new_clean_tree_shows_no_move_message(monkeypatch, capsys) -> None:
+    args = argparse.Namespace(
+        type="feat",
+        description=["add", "parser"],
+        scope=None,
+        dry_run=True,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.branch.git.status_porcelain", lambda root: [])
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.run",
+        lambda cmd, root, *, dry_run, label: None,
+    )
+
+    assert cmd_new(args) == 0
+    captured = capsys.readouterr().out
+    assert "No uncommitted changes would be moved." in captured
 
 
 def test_cmd_new_existing_branch_returns_error(monkeypatch, capsys) -> None:
@@ -69,7 +143,8 @@ def test_cmd_new_reports_uncommitted_changes(monkeypatch, capsys) -> None:
         "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: False
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.branch.git.working_tree_clean", lambda root: False
+        "repo_release_tools.commands.branch.git.status_porcelain",
+        lambda root: [" M file.py", "?? new.txt"],
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.branch.git.run",
@@ -80,7 +155,12 @@ def test_cmd_new_reports_uncommitted_changes(monkeypatch, capsys) -> None:
 
     assert result == 0
     assert ran == [["git", "checkout", "-b", "feat/add-parser"]]
-    assert "Uncommitted changes moved to the new branch" in capsys.readouterr().out
+    captured = capsys.readouterr().out
+    assert "Uncommitted changes moved to the new branch" in captured
+    assert "file.py" in captured
+    assert "new.txt" in captured
+    assert "Staged" in captured
+    assert "Unstaged" in captured
 
 
 def test_branch_validation_accepts_magic_ai_types() -> None:
@@ -220,6 +300,47 @@ def test_cmd_rescue_existing_target_branch_returns_error(monkeypatch, capsys) ->
     assert "already exists" in capsys.readouterr().err
 
 
+def test_cmd_rescue_with_since_runs_rescue_flow(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch", lambda root: "main"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.commits_ahead",
+        lambda root, ref: ["abc123 feat: keep this change", "def456 fix: keep that one"],
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.branch_exists", lambda root, name: False
+    )
+    ran: list[list[str]] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.run",
+        lambda cmd, root, *, dry_run, label: ran.append(cmd),
+    )
+
+    result = cmd_rescue(
+        argparse.Namespace(
+            type="fix",
+            description=["recover", "work"],
+            scope=None,
+            dry_run=False,
+            since="abc123",
+        )
+    )
+
+    assert result == 0
+    assert ran == [
+        ["git", "checkout", "-b", "fix/recover-work"],
+        ["git", "checkout", "main"],
+        ["git", "reset", "--hard", "abc123"],
+        ["git", "checkout", "fix/recover-work"],
+    ]
+    out = capsys.readouterr().out
+    assert "Rescue commits" in out
+    assert "abc123" in out
+    assert "fix/recover-work" in out
+
+
 # ---------------------------------------------------------------------------
 # cmd_rename
 # ---------------------------------------------------------------------------
@@ -306,7 +427,7 @@ def test_cmd_rename_no_change_returns_error(monkeypatch, capsys) -> None:
     )
 
     args = argparse.Namespace(
-        type=None,
+        type="feat",
         scope=None,
         no_scope=False,
         description=[],
@@ -315,6 +436,29 @@ def test_cmd_rename_no_change_returns_error(monkeypatch, capsys) -> None:
     result = cmd_rename(args)
 
     assert result == 1
+    assert "Nothing to do." in capsys.readouterr().err
+
+
+def test_cmd_rename_requires_some_change(monkeypatch, capsys) -> None:
+    from repo_release_tools.commands.branch import cmd_rename
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch",
+        lambda root: "feat/my-feature",
+    )
+
+    result = cmd_rename(
+        argparse.Namespace(
+            type=None,
+            scope=None,
+            no_scope=False,
+            description=[],
+            dry_run=True,
+        )
+    )
+
+    assert result == 1
+    assert "Nothing to rename" in capsys.readouterr().err
 
 
 def test_cmd_rename_no_scope_without_description_errors(monkeypatch) -> None:
@@ -336,6 +480,48 @@ def test_cmd_rename_no_scope_without_description_errors(monkeypatch) -> None:
     result = cmd_rename(args)
 
     assert result == 1
+
+
+def test_cmd_rename_rejects_too_long_slug(monkeypatch, capsys) -> None:
+    from repo_release_tools.commands.branch import cmd_rename
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch",
+        lambda root: "feat/" + "a" * 61,
+    )
+
+    args = argparse.Namespace(
+        type="fix",
+        scope=None,
+        no_scope=False,
+        description=[],
+        dry_run=True,
+    )
+    result = cmd_rename(args)
+
+    assert result == 1
+    assert "too long" in capsys.readouterr().err
+
+
+def test_cmd_rename_rejects_invalid_slug_from_scope(monkeypatch, capsys) -> None:
+    from repo_release_tools.commands.branch import cmd_rename
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch",
+        lambda root: "feat/add-login",
+    )
+
+    args = argparse.Namespace(
+        type="feat",
+        scope="!!!",
+        no_scope=False,
+        description=[],
+        dry_run=True,
+    )
+    result = cmd_rename(args)
+
+    assert result == 1
+    assert "kebab-case" in capsys.readouterr().err
 
 
 def test_cmd_rename_type_and_description_no_scope(monkeypatch, capsys) -> None:
@@ -438,3 +624,26 @@ def test_cmd_rename_executes_git_branch_m(monkeypatch, capsys) -> None:
 
     assert result == 0
     assert ran == [["git", "branch", "-m", "build/introduce-v1", "feat/introduce-v1"]]
+
+
+def test_branch_registers_subcommands_and_handlers() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    register(subparsers)
+
+    new_args = parser.parse_args(["branch", "new", "feat", "add", "parser"])
+    assert new_args.command == "branch"
+    assert new_args.branch_command == "new"
+    assert new_args.handler is cmd_new
+
+    rescue_args = parser.parse_args(
+        ["branch", "rescue", "fix", "recover", "work", "--since", "abc123"]
+    )
+    assert rescue_args.branch_command == "rescue"
+    assert rescue_args.handler is cmd_rescue
+    assert rescue_args.since == "abc123"
+
+    rename_args = parser.parse_args(["branch", "rename", "--type", "fix", "patch"])
+    assert rename_args.branch_command == "rename"
+    assert rename_args.handler is cmd_rename

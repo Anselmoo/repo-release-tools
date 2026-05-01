@@ -42,8 +42,12 @@ def test_module_no_args_shows_help_and_exits_with_code_2() -> None:
     )
 
     assert result.returncode == 2
-    assert "[ERROR] the following arguments are required: <command>" in result.stderr
-    assert "Run 'rrt --help' for usage and examples." in result.stderr
+    # Accept either legacy '[ERROR]' prefix or new styled error; check core message
+    assert "the following arguments are required" in result.stderr
+    assert "<command>" in result.stderr
+    # The help hint may be styled; check for the essential phrase and help target
+    assert "for usage and examples." in result.stderr
+    assert "rrt --help" in result.stderr
     assert "repo-release-tools: branch, commit, and version helpers" not in result.stderr
 
 
@@ -56,8 +60,10 @@ def test_branch_new_missing_args_shows_help_and_exits_with_code_2() -> None:
     )
 
     assert result.returncode == 2
-    assert "[ERROR] the following arguments are required: TYPE, description" in result.stderr
-    assert "Run 'rrt branch new --help' for usage and examples." in result.stderr
+    assert "the following arguments are required" in result.stderr
+    assert "TYPE" in result.stderr and "description" in result.stderr
+    assert "for usage and examples." in result.stderr
+    assert "rrt branch new --help" in result.stderr
     assert "Create a new conventionally named branch from" not in result.stderr
 
 
@@ -70,8 +76,10 @@ def test_git_missing_subcommand_shows_help_and_exits_with_code_2() -> None:
     )
 
     assert result.returncode == 2
-    assert "[ERROR] the following arguments are required: <git_command>" in result.stderr
-    assert "Run 'rrt git --help' for usage and examples." in result.stderr
+    assert "the following arguments are required" in result.stderr
+    assert "<git_command>" in result.stderr
+    assert "for usage and examples." in result.stderr
+    assert "rrt git --help" in result.stderr
     assert "Git workflow helpers for repository status" not in result.stderr
 
 
@@ -931,6 +939,16 @@ def test_skill_help_has_examples_and_no_enum_blob(capsys: pytest.CaptureFixture[
     out = capsys.readouterr().out
     assert "Examples" in out
     assert "{install}" not in out
+    assert "  $ rrt skill install --target copilot-local" in out
+
+
+def test_root_help_includes_skill_example(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--help"])
+
+    out = capsys.readouterr().out
     assert "  $ rrt skill install --target copilot-local" in out
 
 

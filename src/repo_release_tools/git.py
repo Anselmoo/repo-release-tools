@@ -6,7 +6,7 @@ import subprocess
 
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui import DryRunPrinter
 
 
 def run(
@@ -20,10 +20,12 @@ def run(
     """Run a command in a repository."""
     pretty = " ".join(cmd)
     if dry_run:
-        print(output.dry_run(f"Would run: {pretty}"))
+        p = DryRunPrinter(dry_run=True)
+        p.would_run(pretty)
         return ""
     if not suppress_announce:
-        print(output.status("$", pretty))
+        p = DryRunPrinter(dry_run=False)
+        p.action(f"$ {pretty}")
     result = subprocess.run(
         cmd,
         cwd=cwd,
@@ -32,16 +34,18 @@ def run(
         check=False,
     )
     if result.returncode != 0:
+        p = DryRunPrinter(dry_run=False)
         if result.stdout.strip():
             for line in result.stdout.strip().splitlines():
-                print(output.status(">", line, indent=4))
+                p.action(line)
         if result.stderr.strip():
             for line in result.stderr.strip().splitlines():
-                print(output.status("!", line, indent=4))
+                p.warn(line, stream=None)
         raise RuntimeError(f"{label} failed (exit {result.returncode})")
     if result.stdout.strip():
+        p = DryRunPrinter(dry_run=False)
         for line in result.stdout.strip().splitlines():
-            print(output.status(">", line, indent=4))
+            p.action(line)
     return result.stdout.strip()
 
 
@@ -224,3 +228,25 @@ def is_git_repository(cwd: Path) -> bool:
         check=False,
     )
     return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def classify_status_line(line: str) -> tuple[str, str]:
+    """Classify a git porcelain status line into a compact diff category.
+
+    Returns a ``(kind, path_text)`` tuple where *kind* is one of:
+    ``"added"``, ``"removed"``, ``"modified"``, ``"renamed"`,
+    ``"conflict"``, or ``"untracked"``.
+    """
+    status_code = line[:2]
+    path_text = line[3:] if len(line) > 3 else line
+    if status_code == "??":
+        return ("untracked", path_text)
+    if "U" in status_code or status_code in {"AA", "DD"}:
+        return ("conflict", path_text)
+    if "R" in status_code or "C" in status_code:
+        return ("renamed", path_text)
+    if "A" in status_code:
+        return ("added", path_text)
+    if "D" in status_code:
+        return ("removed", path_text)
+    return ("modified", path_text)
