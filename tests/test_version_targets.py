@@ -1,5 +1,7 @@
 """Unit tests for the python_version and go_version target kinds."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest

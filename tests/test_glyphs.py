@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 
 from repo_release_tools.ui.glyphs import GLYPHS

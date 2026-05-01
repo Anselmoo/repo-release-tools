@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import types
 
@@ -323,7 +325,7 @@ def test_syntax_forwards_stream_to_highlight_terminal(monkeypatch) -> None:
         line_numbers: bool = False,
         background: str = "dark",
         stream=None,
-    ):
+    ) -> str:
         captured["code"] = code
         captured["language"] = language
         captured["stream"] = stream

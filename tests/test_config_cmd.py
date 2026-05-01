@@ -203,7 +203,7 @@ def test_cmd_config_multiple_groups(tmp_path: Path, monkeypatch, capsys) -> None
 def test_cmd_config_value_error_shows_message(tmp_path: Path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
 
-    def raise_value_error(_root):
+    def raise_value_error(_root) -> None:
         raise ValueError("bad config format")
 
     monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", raise_value_error)

@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import io
 import os
 import sys
 import types
+from collections.abc import Generator
 from contextlib import contextmanager
 import argparse
 from argparse import Namespace
@@ -1924,7 +1927,7 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
             progress_clears.append(len(progress_instances) - 1)
 
     @contextmanager
-    def fake_spinner_lines(label: str, *, detail: str | None = None, file=None):
+    def fake_spinner_lines(label: str, *, detail: str | None = None, file=None) -> Generator[None, None, None]:
         spinner_calls.append((label, detail, file))
         yield
 

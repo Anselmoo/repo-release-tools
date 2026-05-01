@@ -524,7 +524,7 @@ def test_compute_col_width_uses_longest_flag_plus_indent() -> None:
     from repo_release_tools.cli import _compute_col_width
 
     class _FakeAction:
-        def __init__(self, option_strings, metavar=None, choices=None):
+        def __init__(self, option_strings, metavar=None, choices=None) -> None:
             self.option_strings = option_strings
             self.metavar = metavar
             self.choices = choices
@@ -553,7 +553,7 @@ def test_strip_ansi_and_display_len() -> None:
 
 def test_metavar_text_handles_tuple_and_suppressed() -> None:
     class FakeAction:
-        def __init__(self, dest, metavar):
+        def __init__(self, dest, metavar) -> None:
             self.dest = dest
             self.metavar = metavar
 
@@ -564,7 +564,7 @@ def test_metavar_text_handles_tuple_and_suppressed() -> None:
 
 def test_compute_col_width_handles_choice_dict() -> None:
     class FakeAction:
-        def __init__(self, choices):
+        def __init__(self, choices) -> None:
             self._choices_actions = None
             self.choices = choices
             self.option_strings = []
@@ -589,7 +589,7 @@ def test_formatter_compute_col_width_uses_width() -> None:
     formatter = cli.RrtHelpFormatter(prog="rrt", width=100)
 
     class FakeAction:
-        def __init__(self):
+        def __init__(self) -> None:
             self.option_strings = ["-h"]
             self.metavar = None
             self.choices = None
@@ -774,7 +774,7 @@ def test_build_grouped_epilog_includes_known_commands() -> None:
 
 def test_metavar_text_returns_tag_for_dest_without_metavar() -> None:
     class FakeAction:
-        def __init__(self):
+        def __init__(self) -> None:
             self.dest = "name"
             self.metavar = None
 
@@ -783,7 +783,7 @@ def test_metavar_text_returns_tag_for_dest_without_metavar() -> None:
 
 def test_compute_col_width_with_metavar_and_options() -> None:
     class FakeAction:
-        def __init__(self):
+        def __init__(self) -> None:
             self.option_strings = ["--include-maintenance"]
             self.metavar = "MODE"
             self.choices = None
@@ -835,7 +835,7 @@ def test_error_prints_suggestion_for_unrecognized_arguments() -> None:
 
 def test_compute_col_width_with_choices_actions() -> None:
     class SubAction:
-        def __init__(self, dest):
+        def __init__(self, dest) -> None:
             self.dest = dest
 
     class FakeAction:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import contextlib
 
@@ -114,7 +116,7 @@ def test_cmd_doctor_reports_failures(monkeypatch, capsys) -> None:
     )
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
 
-    def fake_capture(cmd, cwd):
+    def fake_capture(cmd, cwd) -> str:
         if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
             return "update stuff"
         if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
@@ -141,7 +143,7 @@ def test_cmd_doctor_reports_success(monkeypatch, capsys) -> None:
     monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [])
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (2, 0))
 
-    def fake_capture(cmd, cwd):
+    def fake_capture(cmd, cwd) -> str:
         if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
             return "feat: add parser"
         if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
@@ -165,7 +167,7 @@ def test_cmd_doctor_uses_commit_subject_for_changelog_risk(monkeypatch, capsys) 
     monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: [])
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
 
-    def fake_capture(cmd, cwd):
+    def fake_capture(cmd, cwd) -> str:
         if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
             return "chore: update docs tooling"
         if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
@@ -193,7 +195,7 @@ def test_cmd_doctor_reports_conflicts_and_sync_need(monkeypatch, capsys) -> None
     )
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (2, 3))
 
-    def fake_capture(cmd, cwd):
+    def fake_capture(cmd, cwd) -> str:
         if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
             return "feat: add parser"
         if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
@@ -462,7 +464,7 @@ def test_cmd_rebootstrap_hard_init_runs_empty_commit_only(tmp_path, monkeypatch)
     commands: list[list[str]] = []
     moved: list[tuple[str, str]] = []
 
-    def fake_run(cmd, cwd, *, dry_run, label):
+    def fake_run(cmd, cwd, *, dry_run, label) -> str:
         commands.append(cmd)
         return ""
 
@@ -567,7 +569,7 @@ def test_cmd_diff_staged_flag(monkeypatch) -> None:
     captured_cmd = {}
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
 
-    def fake_capture(cmd, cwd):
+    def fake_capture(cmd, cwd) -> str:
         captured_cmd["cmd"] = cmd
         return ""
 
@@ -581,7 +583,7 @@ def test_cmd_diff_against_ref(monkeypatch) -> None:
     captured_cmd = {}
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
 
-    def fake_capture(cmd, cwd):
+    def fake_capture(cmd, cwd) -> str:
         captured_cmd["cmd"] = cmd
         return ""
 
@@ -730,7 +732,7 @@ def test_cmd_doctor_reports_missing_changelog_entry(monkeypatch, capsys) -> None
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
     monkeypatch.setattr(git_cmd, "load_extra_branch_types", lambda cwd: ())
 
-    def fake_capture(cmd, cwd):
+    def fake_capture(cmd, cwd) -> str:
         if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
             return "feat: add parser"
         if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
@@ -883,7 +885,7 @@ def test_cmd_sync_warns_when_pull_fails_after_auto_stash(monkeypatch, capsys) ->
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (1, 0))
     monkeypatch.setattr(git_cmd, "spinner_lines", lambda *a, **k: contextlib.nullcontext())
 
-    def fake_run(cmd, cwd, *, dry_run, label):
+    def fake_run(cmd, cwd, *, dry_run, label) -> str:
         if cmd[:2] == ["git", "pull"]:
             raise RuntimeError("pull failed")
         return ""
@@ -901,7 +903,7 @@ def test_cmd_move_warns_when_checkout_fails_after_stash(monkeypatch, capsys) -> 
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
 
-    def fake_run(cmd, cwd, *, dry_run, label):
+    def fake_run(cmd, cwd, *, dry_run, label) -> str:
         if cmd[:2] == ["git", "checkout"]:
             raise RuntimeError("checkout failed")
         return ""
@@ -1297,7 +1299,7 @@ def test_cmd_doctor_truncates_conflicts(monkeypatch, capsys) -> None:
     )
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
 
-    def fake_capture(cmd, cwd):
+    def fake_capture(cmd, cwd) -> str:
         if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
             return "feat: add parser"
         if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:

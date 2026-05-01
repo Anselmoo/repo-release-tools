@@ -223,7 +223,7 @@ def test_cmd_install_returns_one_for_os_error(monkeypatch, tmp_path: Path, capsy
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
 
-    def raise_os_error(self, *args, **kwargs):
+    def raise_os_error(self, *args, **kwargs) -> None:
         raise OSError("boom")
 
     monkeypatch.setattr(Path, "write_text", raise_os_error)

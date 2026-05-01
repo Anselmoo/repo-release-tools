@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import ast
 import re
 import sys
 
 from pathlib import Path
 
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
@@ -51,7 +54,7 @@ def _live_subcommands() -> set[str]:
     return set(subparsers._name_parser_map.keys()) if subparsers else set()  # pragma: no cover
 
 
-def pytest_collection_finish(session) -> None:  # type: ignore[type-arg]
+def pytest_collection_finish(session: pytest.Session) -> None:
     """Enforce the UX simulator docstring contract against the live CLI.
 
     Called after all tests are collected, before any test runs.  Exits with

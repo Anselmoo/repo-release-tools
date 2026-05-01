@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 
 from repo_release_tools.commands.branch import BranchName

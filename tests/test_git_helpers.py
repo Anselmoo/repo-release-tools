@@ -23,7 +23,7 @@ def test_run_dry_run_skips_subprocess(monkeypatch, tmp_path: Path, capsys) -> No
 
 
 def test_run_prints_stdout_on_success(monkeypatch, tmp_path: Path, capsys) -> None:
-    def fake_run(cmd, cwd, capture_output, text, check):
+    def fake_run(cmd, cwd, capture_output, text, check) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "status"]
         return subprocess.CompletedProcess(cmd, 0, stdout="line one\nline two\n", stderr="")
 
@@ -39,7 +39,7 @@ def test_run_prints_stdout_on_success(monkeypatch, tmp_path: Path, capsys) -> No
 
 
 def test_run_can_suppress_initial_command_announcement(monkeypatch, tmp_path: Path, capsys) -> None:
-    def fake_run(cmd, cwd, capture_output, text, check):
+    def fake_run(cmd, cwd, capture_output, text, check) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "status"]
         return subprocess.CompletedProcess(cmd, 0, stdout="line one\n", stderr="")
 
@@ -60,7 +60,7 @@ def test_run_can_suppress_initial_command_announcement(monkeypatch, tmp_path: Pa
 
 
 def test_run_prints_stdout_and_stderr_before_raising(monkeypatch, tmp_path: Path, capsys) -> None:
-    def fake_run(cmd, cwd, capture_output, text, check):
+    def fake_run(cmd, cwd, capture_output, text, check) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 2, stdout="out line\n", stderr="err line\n")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -74,7 +74,7 @@ def test_run_prints_stdout_and_stderr_before_raising(monkeypatch, tmp_path: Path
 
 
 def test_capture_and_capture_checked_strip_output(monkeypatch, tmp_path: Path) -> None:
-    def fake_run(cmd, cwd, capture_output, text, check):
+    def fake_run(cmd, cwd, capture_output, text, check) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 0, stdout="  value\n", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -84,7 +84,7 @@ def test_capture_and_capture_checked_strip_output(monkeypatch, tmp_path: Path) -
 
 
 def test_capture_checked_raises_on_nonzero_exit(monkeypatch, tmp_path: Path) -> None:
-    def fake_run(cmd, cwd, capture_output, text, check):
+    def fake_run(cmd, cwd, capture_output, text, check) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 7, stdout="", stderr="fatal")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -184,7 +184,7 @@ def test_git_dir_merge_base_remote_names_and_repository_detection(
 
 
 def test_status_porcelain_preserves_leading_spaces(monkeypatch, tmp_path: Path) -> None:
-    def fake_run(cmd, cwd, capture_output, text, check):
+    def fake_run(cmd, cwd, capture_output, text, check) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "status", "--short"]
         return subprocess.CompletedProcess(
             cmd,
@@ -201,7 +201,7 @@ def test_status_porcelain_preserves_leading_spaces(monkeypatch, tmp_path: Path) 
 
 
 def test_status_porcelain_raises_on_git_failure(monkeypatch, tmp_path: Path) -> None:
-    def fake_run(cmd, cwd, capture_output, text, check):
+    def fake_run(cmd, cwd, capture_output, text, check) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="fatal")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -215,7 +215,7 @@ def test_status_porcelain_raises_on_git_failure(monkeypatch, tmp_path: Path) -> 
 
 
 def test_ref_exists_checks_rev_parse(monkeypatch, tmp_path: Path) -> None:
-    def fake_run(cmd, cwd, capture_output, text, check):
+    def fake_run(cmd, cwd, capture_output, text, check) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "rev-parse", "--verify", "--quiet", "HEAD~1"]
         return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
 

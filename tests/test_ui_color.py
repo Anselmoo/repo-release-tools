@@ -115,7 +115,7 @@ def test_apply_returns_plain_text_when_no_style_codes(monkeypatch) -> None:
 def test_color_wrappers_forward_stream_to_apply(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_apply(text: str, style: color.Style, *, stream=None):
+    def fake_apply(text: str, style: color.Style, *, stream=None) -> str:
         captured["text"] = text
         captured["style"] = style
         captured["stream"] = stream
