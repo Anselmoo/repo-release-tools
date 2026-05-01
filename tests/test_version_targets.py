@@ -64,7 +64,9 @@ def test_replace_python_version_single_quotes(tmp_path: Path) -> None:
     assert "__version__ = '0.2.0'" in f.read_text(encoding="utf-8")
 
 
-def test_replace_python_version_dry_run_no_write(tmp_path: Path, capsys) -> None:
+def test_replace_python_version_dry_run_no_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     f = tmp_path / "__init__.py"
     original = '__version__ = "1.0.0"\n'
     f.write_text(original, encoding="utf-8")
@@ -195,7 +197,9 @@ def test_replace_go_version_var(tmp_path: Path) -> None:
     assert 'var Version = "1.0.0"' in f.read_text(encoding="utf-8")
 
 
-def test_replace_go_version_dry_run_no_write(tmp_path: Path, capsys) -> None:
+def test_replace_go_version_dry_run_no_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     f = tmp_path / "version.go"
     original = 'package version\n\nconst Version = "1.0.0"\n'
     f.write_text(original, encoding="utf-8")

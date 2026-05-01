@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import io
 
-from repo_release_tools.ui import OutputContext
-from repo_release_tools.ui import messaging
+import pytest
+
+from repo_release_tools.ui import OutputContext, messaging
 
 
-def test_error_renders_plain_text_when_color_disabled(monkeypatch) -> None:
+def test_error_renders_plain_text_when_color_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(messaging, "supports_color", lambda stream=None: True)
     ctx = OutputContext(no_color=True)
 
@@ -19,7 +20,7 @@ def test_error_renders_plain_text_when_color_disabled(monkeypatch) -> None:
     assert "\x1b[" not in result
 
 
-def test_error_renders_colored_message_when_supported(monkeypatch) -> None:
+def test_error_renders_colored_message_when_supported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(messaging, "supports_color", lambda stream=None: True)
     monkeypatch.setattr("repo_release_tools.ui.color.supports_color", lambda stream=None: True)
 
@@ -29,7 +30,7 @@ def test_error_renders_colored_message_when_supported(monkeypatch) -> None:
     assert "Hint:" in result
 
 
-def test_render_helpers_use_expected_glyphs(monkeypatch) -> None:
+def test_render_helpers_use_expected_glyphs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(messaging, "_c_info", lambda message, stream=None: message)
     monkeypatch.setattr(messaging, "_c_subtle", lambda message, stream=None: message)
     monkeypatch.setattr(messaging, "_c_success", lambda message, stream=None: message)
@@ -46,7 +47,7 @@ def test_render_helpers_use_expected_glyphs(monkeypatch) -> None:
     assert messaging.render_action("running").startswith(f"{messaging.GLYPHS.arrow.right} ")
 
 
-def test_dry_run_printer_line_variants_and_blank_lines(monkeypatch) -> None:
+def test_dry_run_printer_line_variants_and_blank_lines(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(messaging, "_c_info", lambda message, stream=None: message)
     monkeypatch.setattr(messaging, "_c_success", lambda message, stream=None: message)
     monkeypatch.setattr("repo_release_tools.ui.color.error", lambda message, stream=None: message)

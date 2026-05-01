@@ -5,25 +5,17 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-
 from collections import Counter
 from pathlib import Path
 
 from repo_release_tools import git
-from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.changelog import (
     SECTION_MAP,
+    ParsedCommit,
     append_to_unreleased,
     detect_changelog_format,
     get_unreleased_entries,
     parse_conventional_commit,
-)
-from repo_release_tools.config import (
-    DEFAULT_CHANGELOG,
-    DEFAULT_CHANGELOG_WORKFLOW,
-    is_missing_tool_rrt_error,
-    load_extra_branch_types,
-    load_or_autodetect_config,
 )
 from repo_release_tools.commands.branch import (
     BRANCH_SLUG_RE,
@@ -32,8 +24,15 @@ from repo_release_tools.commands.branch import (
     normalize_commit_type,
 )
 from repo_release_tools.commands.doctor import cmd_doctor
+from repo_release_tools.config import (
+    DEFAULT_CHANGELOG,
+    DEFAULT_CHANGELOG_WORKFLOW,
+    is_missing_tool_rrt_error,
+    load_extra_branch_types,
+    load_or_autodetect_config,
+)
+from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.versioning import Version
-
 
 ALLOWED_BRANCH_NAMES = ("main", "master", "develop")
 MAGIC_BRANCH_TYPES = ("claude", "codex", "copilot")
@@ -125,7 +124,7 @@ def validate_commit_subject(subject: str) -> str | None:
     )
 
 
-def _parse_subject_for_changelog(subject: str):
+def _parse_subject_for_changelog(subject: str) -> ParsedCommit | None:
     """Parse a commit subject while tolerating fixup and squash prefixes."""
     candidate = subject
     if candidate.startswith(("fixup! ", "squash! ")):

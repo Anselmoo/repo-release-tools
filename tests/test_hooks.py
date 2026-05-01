@@ -1,29 +1,30 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
-from pathlib import Path
-
 from repo_release_tools import hooks
-from repo_release_tools.hooks import branch_requires_changelog
-from repo_release_tools.hooks import changelog_is_updated
-from repo_release_tools.hooks import commit_subject_requires_changelog
-from repo_release_tools.hooks import read_commit_subject
-from repo_release_tools.hooks import run_changelog_check
-from repo_release_tools.hooks import run_pre_commit_changelog
-from repo_release_tools.hooks import run_update_unreleased
-from repo_release_tools.hooks import validate_branch_name
-from repo_release_tools.hooks import is_changelog_meta_commit
-from repo_release_tools.hooks import validate_commit_subject
-from repo_release_tools.hooks import _entries_cancel_out
-from repo_release_tools.hooks import dedup_changelog_entries
-from repo_release_tools.hooks import apply_dedup_to_changelog
-from repo_release_tools.hooks import collect_squash_changelog_hunks
-from repo_release_tools.hooks import run_post_correct
-from repo_release_tools.hooks import _detect_changelog_workflow
-from repo_release_tools.hooks import _resolve_changelog_strategy
+from repo_release_tools.hooks import (
+    _detect_changelog_workflow,
+    _entries_cancel_out,
+    _resolve_changelog_strategy,
+    apply_dedup_to_changelog,
+    branch_requires_changelog,
+    changelog_is_updated,
+    collect_squash_changelog_hunks,
+    commit_subject_requires_changelog,
+    dedup_changelog_entries,
+    is_changelog_meta_commit,
+    read_commit_subject,
+    run_changelog_check,
+    run_post_correct,
+    run_pre_commit_changelog,
+    run_update_unreleased,
+    validate_branch_name,
+    validate_commit_subject,
+)
 
 
 def test_validate_branch_name_accepts_feature_branch() -> None:
@@ -157,14 +158,14 @@ def test_main_check_commit_subject_rejects_invalid_subject() -> None:
     assert hooks.main(["check-commit-subject", "--subject", "update stuff"]) == 1
 
 
-def test_run_dirty_tree_check_accepts_clean_tree(monkeypatch) -> None:
+def test_run_dirty_tree_check_accepts_clean_tree(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: True)
 
     assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 0
 
 
-def test_run_dirty_tree_check_rejects_non_git_directory(monkeypatch) -> None:
+def test_run_dirty_tree_check_rejects_non_git_directory(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: False)
 
     assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1
@@ -195,7 +196,7 @@ def test_run_pre_commit_uses_current_branch_and_extra_types(
     }
 
 
-def test_run_dirty_tree_check_rejects_dirty_tree(monkeypatch) -> None:
+def test_run_dirty_tree_check_rejects_dirty_tree(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: False)
     monkeypatch.setattr(
@@ -207,7 +208,7 @@ def test_run_dirty_tree_check_rejects_dirty_tree(monkeypatch) -> None:
     assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1
 
 
-def test_run_dirty_tree_check_reports_status_failure(monkeypatch) -> None:
+def test_run_dirty_tree_check_reports_status_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: False)
     monkeypatch.setattr(
@@ -219,21 +220,23 @@ def test_run_dirty_tree_check_reports_status_failure(monkeypatch) -> None:
     assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1
 
 
-def test_main_check_dirty_tree_uses_hook_entrypoint(monkeypatch) -> None:
+def test_main_check_dirty_tree_uses_hook_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hooks.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(hooks.git, "working_tree_clean", lambda cwd: True)
 
     assert hooks.main(["check-dirty-tree"]) == 0
 
 
-def test_run_pre_commit_changelog_rejects_missing_staged_changelog(monkeypatch) -> None:
+def test_run_pre_commit_changelog_rejects_missing_staged_changelog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "feat/add-hook-checks")
     monkeypatch.setattr(hooks, "staged_files", lambda cwd: ["src/repo_release_tools/hooks.py"])
 
     assert run_pre_commit_changelog(Path.cwd()) == 1
 
 
-def test_run_pre_commit_changelog_accepts_staged_changelog(monkeypatch) -> None:
+def test_run_pre_commit_changelog_accepts_staged_changelog(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "feat/add-hook-checks")
     monkeypatch.setattr(
         hooks,
@@ -533,7 +536,9 @@ def test_apply_dedup_to_changelog_restricts_removal_to_diff_positions(tmp_path: 
     assert "- remove Node 26" not in content
 
 
-def test_run_post_correct_returns_zero_when_no_diff(monkeypatch, tmp_path: Path) -> None:
+def test_run_post_correct_returns_zero_when_no_diff(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- feat: something\n", encoding="utf-8")
     monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset()))
@@ -541,7 +546,9 @@ def test_run_post_correct_returns_zero_when_no_diff(monkeypatch, tmp_path: Path)
     assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md") == 0
 
 
-def test_run_post_correct_returns_zero_when_already_clean(monkeypatch, tmp_path: Path) -> None:
+def test_run_post_correct_returns_zero_when_already_clean(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
     monkeypatch.setattr(
@@ -553,7 +560,9 @@ def test_run_post_correct_returns_zero_when_already_clean(monkeypatch, tmp_path:
     assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md") == 0
 
 
-def test_run_post_correct_cleans_contradicting_entries(monkeypatch, tmp_path: Path) -> None:
+def test_run_post_correct_cleans_contradicting_entries(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
         "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n- fix typo\n",
@@ -578,7 +587,7 @@ def test_run_post_correct_cleans_contradicting_entries(monkeypatch, tmp_path: Pa
 
 
 def test_run_post_correct_cleans_scope_prefixed_contradicting_entries(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
@@ -607,7 +616,9 @@ def test_run_post_correct_fails_when_changelog_missing(tmp_path: Path) -> None:
     assert run_post_correct(tmp_path, changelog_file="MISSING.md") == 1
 
 
-def test_main_changelog_post_correct_no_diff(monkeypatch, tmp_path: Path) -> None:
+def test_main_changelog_post_correct_no_diff(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
     monkeypatch.setattr(hooks, "collect_squash_changelog_hunks", lambda *a, **kw: ([], frozenset()))
@@ -616,7 +627,9 @@ def test_main_changelog_post_correct_no_diff(monkeypatch, tmp_path: Path) -> Non
     assert hooks.main(["changelog", "post-correct"]) == 0
 
 
-def test_main_changelog_post_correct_explicit_commit(monkeypatch, tmp_path: Path) -> None:
+def test_main_changelog_post_correct_explicit_commit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n- fix typo\n", encoding="utf-8")
     monkeypatch.setattr(
@@ -634,7 +647,9 @@ def test_main_changelog_post_correct_explicit_commit(monkeypatch, tmp_path: Path
 # ---------------------------------------------------------------------------
 
 
-def test_run_post_correct_commits_when_flag_set(monkeypatch, tmp_path: Path) -> None:
+def test_run_post_correct_commits_when_flag_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
         "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n- fix typo\n",
@@ -658,7 +673,9 @@ def test_run_post_correct_commits_when_flag_set(monkeypatch, tmp_path: Path) -> 
     assert any(c[1] == "commit" for c in git_calls)
 
 
-def test_run_post_correct_returns_failure_on_commit_error(monkeypatch, tmp_path: Path) -> None:
+def test_run_post_correct_returns_failure_on_commit_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
         "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n",
@@ -681,7 +698,9 @@ def test_run_post_correct_returns_failure_on_commit_error(monkeypatch, tmp_path:
     assert run_post_correct(tmp_path, changelog_file="CHANGELOG.md", commit=True) == 1
 
 
-def test_main_changelog_post_correct_with_commit_flag(monkeypatch, tmp_path: Path) -> None:
+def test_main_changelog_post_correct_with_commit_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
         "# Changelog\n\n### Maintenance\n- add Node 26\n- remove Node 26\n",
@@ -706,7 +725,9 @@ def test_main_changelog_post_correct_with_commit_flag(monkeypatch, tmp_path: Pat
 # ---------------------------------------------------------------------------
 
 
-def test_collect_squash_changelog_hunks_parses_single_hunk(monkeypatch, tmp_path: Path) -> None:
+def test_collect_squash_changelog_hunks_parses_single_hunk(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     diff = "@@ -1,3 +1,5 @@\n # Changelog\n \n+### Maintenance\n+- add Node 26\n - fix typo\n"
     monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: diff)
 
@@ -716,7 +737,9 @@ def test_collect_squash_changelog_hunks_parses_single_hunk(monkeypatch, tmp_path
     assert positions == frozenset({3, 4})
 
 
-def test_collect_squash_changelog_hunks_multi_hunk(monkeypatch, tmp_path: Path) -> None:
+def test_collect_squash_changelog_hunks_multi_hunk(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     diff = (
         "@@ -1,2 +1,3 @@\n"
         " # Changelog\n"
@@ -735,7 +758,9 @@ def test_collect_squash_changelog_hunks_multi_hunk(monkeypatch, tmp_path: Path) 
     assert positions == frozenset({2, 8})
 
 
-def test_collect_squash_changelog_hunks_empty_diff(monkeypatch, tmp_path: Path) -> None:
+def test_collect_squash_changelog_hunks_empty_diff(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: "")
 
     added, positions = collect_squash_changelog_hunks(tmp_path)
@@ -749,7 +774,9 @@ def test_collect_squash_changelog_hunks_empty_diff(monkeypatch, tmp_path: Path) 
 # ---------------------------------------------------------------------------
 
 
-def test_run_post_correct_fails_on_invalid_ref(monkeypatch, tmp_path: Path) -> None:
+def test_run_post_correct_fails_on_invalid_ref(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n", encoding="utf-8")
     monkeypatch.setattr(

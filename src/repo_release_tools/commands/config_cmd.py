@@ -8,8 +8,8 @@ from pathlib import Path
 
 from repo_release_tools import config as cfg
 from repo_release_tools.ui import (
-    DryRunPrinter,
     GLYPHS,
+    DryRunPrinter,
     highlight_terminal,
 )
 

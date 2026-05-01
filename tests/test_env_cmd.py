@@ -4,10 +4,14 @@ import argparse
 import json
 import sys
 
+import pytest
+
 from repo_release_tools.commands import env_cmd
 
 
-def test_cmd_env_outputs_json(monkeypatch, capsys) -> None:
+def test_cmd_env_outputs_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(sys, "version", "3.12.0 final")
     monkeypatch.setattr(sys, "executable", "/usr/bin/python3")
@@ -29,7 +33,9 @@ def test_cmd_env_outputs_json(monkeypatch, capsys) -> None:
     assert data["RRT_COLOR"] == "standard"
 
 
-def test_cmd_env_prints_panel_when_json_disabled(monkeypatch, capsys) -> None:
+def test_cmd_env_prints_panel_when_json_disabled(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(sys, "version", "3.12.0 final")
     monkeypatch.setattr(sys, "executable", "/usr/bin/python3")

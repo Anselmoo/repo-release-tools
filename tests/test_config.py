@@ -16,7 +16,6 @@ from repo_release_tools.config import (
     load_extra_branch_types,
 )
 
-
 _RRT_CONFIG = """\
 [tool.rrt]
 release_branch = "release/v{version}"

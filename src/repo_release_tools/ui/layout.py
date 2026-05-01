@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import shutil
 import textwrap
-
 from typing import IO, Literal
 
 from repo_release_tools.ui.glyphs import (
@@ -17,7 +16,6 @@ from repo_release_tools.ui.glyphs import (
     display_width,
     pad_right,
 )
-
 
 BoxKind = Literal["single", "rounded", "bold", "ascii"]
 

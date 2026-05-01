@@ -4,6 +4,8 @@ from argparse import Namespace
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from repo_release_tools.commands import init as init_cmd
 from repo_release_tools.commands.init import cmd_init
 from repo_release_tools.config import (
@@ -51,7 +53,7 @@ def test_recommend_init_config_for_hybrid_repo_sets_version_source(tmp_path: Pat
     assert "generated_files =" not in rendered
 
 
-def test_cmd_init_writes_rrt_toml(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_init_writes_rrt_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
         '{\n  "name": "example",\n  "version": "1.2.3"\n}\n',
         encoding="utf-8",
@@ -66,7 +68,9 @@ def test_cmd_init_writes_rrt_toml(monkeypatch, tmp_path: Path) -> None:
     assert 'kind = "package_json"' in content
 
 
-def test_cmd_init_dry_run_does_not_write_file(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_dry_run_does_not_write_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     (tmp_path / "Cargo.toml").write_text(
         '[package]\nname = "example"\nversion = "0.4.0"\n',
         encoding="utf-8",
@@ -137,7 +141,9 @@ def test_recommend_init_section_for_cargo_fallback(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_cmd_init_pyproject_appends_section(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_init_pyproject_appends_section(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "mypkg"\nversion = "1.0.0"\n',
         encoding="utf-8",
@@ -153,7 +159,9 @@ def test_cmd_init_pyproject_appends_section(monkeypatch, tmp_path: Path) -> None
     assert "[[tool.rrt.version_targets]]" in content
 
 
-def test_cmd_init_pyproject_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_pyproject_dry_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "mypkg"\nversion = "1.0.0"\n',
         encoding="utf-8",
@@ -169,7 +177,9 @@ def test_cmd_init_pyproject_dry_run(monkeypatch, tmp_path: Path, capsys) -> None
     assert "Would update pyproject.toml" in captured.out
 
 
-def test_cmd_init_pyproject_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_pyproject_refuses_when_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     result = cmd_init(Namespace(dry_run=False, force=False, target="pyproject"))
 
@@ -178,7 +188,9 @@ def test_cmd_init_pyproject_refuses_when_missing(monkeypatch, tmp_path: Path, ca
     assert "pyproject.toml does not exist" in captured.err
 
 
-def test_cmd_init_pyproject_refuses_if_already_present(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_pyproject_refuses_if_already_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "mypkg"\nversion = "1.0.0"\n\n[tool.rrt]\nrelease_branch = "main"\n',
         encoding="utf-8",
@@ -193,7 +205,7 @@ def test_cmd_init_pyproject_refuses_if_already_present(monkeypatch, tmp_path: Pa
 
 
 def test_cmd_init_pyproject_force_refuses_duplicate_rrt_table(
-    monkeypatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "mypkg"\nversion = "1.0.0"\n\n[tool.rrt]\nrelease_branch = "main"\n',
@@ -213,7 +225,7 @@ def test_cmd_init_pyproject_force_refuses_duplicate_rrt_table(
 # ---------------------------------------------------------------------------
 
 
-def test_cmd_init_cargo_appends_section(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_init_cargo_appends_section(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "Cargo.toml").write_text(
         '[package]\nname = "mylib"\nversion = "0.2.0"\n',
         encoding="utf-8",
@@ -229,7 +241,9 @@ def test_cmd_init_cargo_appends_section(monkeypatch, tmp_path: Path) -> None:
     assert "[[package.metadata.rrt.version_targets]]" in content
 
 
-def test_cmd_init_cargo_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_cargo_dry_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     (tmp_path / "Cargo.toml").write_text(
         '[package]\nname = "mylib"\nversion = "0.2.0"\n',
         encoding="utf-8",
@@ -245,7 +259,9 @@ def test_cmd_init_cargo_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
     assert "Would update Cargo.toml" in captured.out
 
 
-def test_cmd_init_cargo_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_cargo_refuses_when_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     result = cmd_init(Namespace(dry_run=False, force=False, target="cargo"))
 
@@ -254,7 +270,9 @@ def test_cmd_init_cargo_refuses_when_missing(monkeypatch, tmp_path: Path, capsys
     assert "Cargo.toml does not exist" in captured.err
 
 
-def test_cmd_init_cargo_refuses_if_already_present(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_cargo_refuses_if_already_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     (tmp_path / "Cargo.toml").write_text(
         '[package]\nname = "mylib"\nversion = "0.2.0"\n\n[package.metadata.rrt]\nrelease_branch = "main"\n',
         encoding="utf-8",
@@ -269,7 +287,7 @@ def test_cmd_init_cargo_refuses_if_already_present(monkeypatch, tmp_path: Path, 
 
 
 def test_cmd_init_pyproject_detects_existing_array_only(
-    monkeypatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "mypkg"\nversion = "1.0.0"\n\n[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n',
@@ -284,7 +302,9 @@ def test_cmd_init_pyproject_detects_existing_array_only(
     assert "already contains rrt configuration" in captured.err
 
 
-def test_cmd_init_refuses_invalid_pyproject_manifest(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_refuses_invalid_pyproject_manifest(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     (tmp_path / "pyproject.toml").write_text("[project\nname = 'broken'\n", encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
@@ -348,7 +368,7 @@ def test_recommend_init_config_for_go_fallback(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_cmd_init_node_merges_rrt_key(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_init_node_merges_rrt_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
         '{\n  "name": "myapp",\n  "version": "1.0.0"\n}\n',
         encoding="utf-8",
@@ -366,7 +386,9 @@ def test_cmd_init_node_merges_rrt_key(monkeypatch, tmp_path: Path) -> None:
     assert "version_targets" in data["rrt"]
 
 
-def test_cmd_init_node_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_node_dry_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     original = '{\n  "name": "myapp",\n  "version": "1.0.0"\n}\n'
     (tmp_path / "package.json").write_text(original, encoding="utf-8")
 
@@ -379,7 +401,9 @@ def test_cmd_init_node_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
     assert "Would update package.json" in captured.out
 
 
-def test_cmd_init_node_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_node_refuses_when_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     result = cmd_init(Namespace(dry_run=False, force=False, target="node"))
 
@@ -388,7 +412,9 @@ def test_cmd_init_node_refuses_when_missing(monkeypatch, tmp_path: Path, capsys)
     assert "package.json does not exist" in captured.err
 
 
-def test_cmd_init_node_refuses_if_rrt_key_exists(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_node_refuses_if_rrt_key_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     (tmp_path / "package.json").write_text(
         '{\n  "name": "myapp",\n  "version": "1.0.0",\n  "rrt": {"release_branch": "main"}\n}\n',
         encoding="utf-8",
@@ -402,7 +428,9 @@ def test_cmd_init_node_refuses_if_rrt_key_exists(monkeypatch, tmp_path: Path, ca
     assert '"rrt" key' in captured.err or "already contains" in captured.err
 
 
-def test_cmd_init_node_force_overwrites_rrt_key(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_init_node_force_overwrites_rrt_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     (tmp_path / "package.json").write_text(
         '{\n  "name": "myapp",\n  "version": "1.0.0",\n  "rrt": {"release_branch": "old"}\n}\n',
         encoding="utf-8",
@@ -423,7 +451,9 @@ def test_cmd_init_node_force_overwrites_rrt_key(monkeypatch, tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_cmd_init_go_writes_rrt_toml_with_go_template(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_init_go_writes_rrt_toml_with_go_template(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     (tmp_path / "go.mod").write_text("module example.com/mymod\n\ngo 1.22\n", encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
@@ -435,7 +465,9 @@ def test_cmd_init_go_writes_rrt_toml_with_go_template(monkeypatch, tmp_path: Pat
     assert "go_version" in content or "go" in content.lower()
 
 
-def test_cmd_init_go_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_go_dry_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     result = cmd_init(Namespace(dry_run=True, force=False, target="go"))
 
@@ -445,7 +477,7 @@ def test_cmd_init_go_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
     assert "Would update .rrt.toml" in captured.out
 
 
-def test_cmd_init_go_fallback_no_go_mod(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_init_go_fallback_no_go_mod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
     result = cmd_init(Namespace(dry_run=False, force=False, target="go"))
 
@@ -455,7 +487,9 @@ def test_cmd_init_go_fallback_no_go_mod(monkeypatch, tmp_path: Path) -> None:
     assert "go_version" in content
 
 
-def test_cmd_init_reports_config_discovery_error(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_reports_config_discovery_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
 
     def _raise_config_discovery(root: Path) -> Path | None:
@@ -468,7 +502,7 @@ def test_cmd_init_reports_config_discovery_error(monkeypatch, tmp_path: Path, ca
 
 
 def test_cmd_init_refuses_when_other_explicit_config_exists(
-    monkeypatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pyproject.toml").write_text("[project]\nname='example'\n", encoding="utf-8")
@@ -483,7 +517,7 @@ def test_cmd_init_refuses_when_other_explicit_config_exists(
 
 
 def test_cmd_init_refuses_existing_rrt_toml_without_force(
-    monkeypatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".rrt.toml").write_text("[tool.rrt]\n", encoding="utf-8")
@@ -493,7 +527,9 @@ def test_cmd_init_refuses_existing_rrt_toml_without_force(
     assert ".rrt.toml already exists" in capsys.readouterr().err
 
 
-def test_cmd_init_reports_generation_error(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_reports_generation_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(init_cmd, "find_explicit_config_file", lambda root: None)
 
@@ -506,7 +542,9 @@ def test_cmd_init_reports_generation_error(monkeypatch, tmp_path: Path, capsys) 
     assert "Could not generate init config" in capsys.readouterr().err
 
 
-def test_cmd_init_pyproject_reports_generation_error(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_pyproject_reports_generation_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "mypkg"\nversion = "1.0.0"\n',
@@ -523,7 +561,7 @@ def test_cmd_init_pyproject_reports_generation_error(monkeypatch, tmp_path: Path
 
 
 def test_cmd_init_force_write_warns_when_other_config_still_precedes(
-    monkeypatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pyproject.toml").write_text("[project]\nname='example'\n", encoding="utf-8")
@@ -536,7 +574,9 @@ def test_cmd_init_force_write_warns_when_other_config_still_precedes(
     assert "still takes precedence" in capsys.readouterr().out
 
 
-def test_cmd_init_node_rejects_invalid_json(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_node_rejects_invalid_json(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "package.json").write_text("{broken", encoding="utf-8")
 
@@ -544,7 +584,9 @@ def test_cmd_init_node_rejects_invalid_json(monkeypatch, tmp_path: Path, capsys)
     assert "Could not parse package.json" in capsys.readouterr().err
 
 
-def test_cmd_init_node_rejects_non_object_json(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_node_rejects_non_object_json(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "package.json").write_text("[]", encoding="utf-8")
 
@@ -552,7 +594,9 @@ def test_cmd_init_node_rejects_non_object_json(monkeypatch, tmp_path: Path, caps
     assert "top-level object" in capsys.readouterr().err
 
 
-def test_cmd_init_node_reports_generation_error(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_init_node_reports_generation_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "package.json").write_text(
         '{"name": "myapp", "version": "1.0.0"}', encoding="utf-8"

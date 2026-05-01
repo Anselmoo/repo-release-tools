@@ -2,25 +2,27 @@
 
 from __future__ import annotations
 
+import argparse
 import io
 import os
 import sys
 import types
+from argparse import Namespace
 from collections.abc import Generator
 from contextlib import contextmanager
-import argparse
-from argparse import Namespace
 from pathlib import Path
 
 import pytest
 
-from repo_release_tools.ui import GLYPHS, render_ok
+from repo_release_tools.commands.bump import (
+    cmd_bump,
+    git_log_since_latest_tag,
+    register,
+    resolve_changelog_mode,
+    update_changelog,
+)
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
-from repo_release_tools.commands.bump import cmd_bump
-from repo_release_tools.commands.bump import git_log_since_latest_tag
-from repo_release_tools.commands.bump import resolve_changelog_mode
-from repo_release_tools.commands.bump import register
-from repo_release_tools.commands.bump import update_changelog
+from repo_release_tools.ui import GLYPHS, render_ok
 from repo_release_tools.versioning import Version
 
 # Compatibility shim — maps legacy output.X names to the canonical ui API.
@@ -1375,9 +1377,9 @@ def test_update_changelog_adds_unreleased_placeholder_when_absent(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """When no [Unreleased] section exists the bump adds a health-mode placeholder."""
+    from repo_release_tools.changelog import has_unreleased_section
     from repo_release_tools.commands.bump import update_changelog
     from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
-    from repo_release_tools.changelog import has_unreleased_section
 
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
@@ -1603,8 +1605,8 @@ def test_update_changelog_generates_rst_section(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """For a .rst changelog the generated section must use RST underline notation."""
+    from repo_release_tools.changelog import ChangelogFormat, has_unreleased_section
     from repo_release_tools.commands.bump import update_changelog
-    from repo_release_tools.changelog import has_unreleased_section, ChangelogFormat
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
@@ -1945,7 +1947,7 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     progress_instances: list[object] = []
 
     class _FakeProgressLine:
-        def __init__(self, *, file=None) -> None:
+        def __init__(self, *, file: object = None) -> None:
             self.file = file
             progress_instances.append(self)
 
@@ -1957,7 +1959,7 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
 
     @contextmanager
     def fake_spinner_lines(
-        label: str, *, detail: str | None = None, file=None
+        label: str, *, detail: str | None = None, file: object = None
     ) -> Generator[None, None, None]:
         spinner_calls.append((label, detail, file))
         yield
@@ -2057,7 +2059,7 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
         default_group_name="default",
     )
 
-    def fake_replace_version(target, new_version, *, dry_run: bool) -> None:  # noqa: ARG001
+    def fake_replace_version(target: VersionTarget, new_version: str, *, dry_run: bool) -> None:  # noqa: ARG001
         print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
 
     monkeypatch.setattr(

@@ -7,7 +7,6 @@ import re
 import sys
 from pathlib import Path
 
-from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.config import (
     PinTarget,
     VersionTarget,
@@ -18,6 +17,7 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
+from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.version_targets import read_version_string
 
 

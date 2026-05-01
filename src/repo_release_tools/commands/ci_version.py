@@ -26,18 +26,9 @@ import argparse
 import os
 import re
 import sys
-
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools.ui import (
-    DryRunPrinter,
-    GLYPHS,
-    ProgressLine,
-    rule,
-    subtle,
-    terminal_width,
-)
 from repo_release_tools.config import (
     VALID_CI_FORMATS,
     format_autodetected_config_notice,
@@ -46,12 +37,19 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
+from repo_release_tools.ui import (
+    GLYPHS,
+    DryRunPrinter,
+    ProgressLine,
+    rule,
+    subtle,
+    terminal_width,
+)
 from repo_release_tools.version_targets import (
     check_autodetected_version_consistency,
     read_group_current_version,
     replace_version_in_file,
 )
-
 
 # Regex that matches the PEP 440 dev-release suffix so it can be converted
 # to a Cargo-compatible SemVer prerelease identifier.

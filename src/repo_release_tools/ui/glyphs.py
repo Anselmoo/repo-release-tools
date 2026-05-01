@@ -12,7 +12,6 @@ import locale
 import os
 import sys
 import unicodedata
-
 from dataclasses import dataclass, field
 from typing import Iterator, Literal
 
@@ -109,12 +108,15 @@ class Glyph:
     name: str
 
     def __str__(self) -> str:
+        """Return the glyph symbol as a string."""
         return self.symbol
 
     def __mul__(self, count: int) -> str:
+        """Repeat the symbol *count* times."""
         return self.symbol * count
 
     def __rmul__(self, count: int) -> str:
+        """Support ``count * glyph`` multiplication."""
         return self.symbol * count
 
 

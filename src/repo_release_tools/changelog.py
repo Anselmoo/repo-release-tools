@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import datetime as dt
 import re
-
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-
 
 CONVENTIONAL_COMMIT_RE = re.compile(
     r"^(?P<type>feat|fix|docs|style|refactor|perf|test|build|ci|chore|deps)"
@@ -152,7 +150,7 @@ def build_changelog_section(
     include_maintenance: bool,
     fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
 ) -> str:
-    """Render a Keep-a-Changelog style section.
+    r"""Render a Keep-a-Changelog style section.
 
     The *fmt* parameter controls whether Markdown (``## [version]``,
     ``### Sub``) or RST underline (``version - date\\n---``, ``Sub\\n~~~``)

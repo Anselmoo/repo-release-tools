@@ -4,23 +4,26 @@ from __future__ import annotations
 
 import io
 
-from repo_release_tools.ui import syntax
+import pytest
 
+from repo_release_tools.ui import syntax
 
 # ── Plain-text fallbacks ──────────────────────────────────────────────────────
 
 
-def test_highlight_terminal_returns_plain_when_no_color(monkeypatch) -> None:
+def test_highlight_terminal_returns_plain_when_no_color(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "none")
     assert syntax.highlight_terminal("key = 'val'", "toml") == "key = 'val'"
 
 
-def test_highlight_terminal_returns_plain_when_not_tty(monkeypatch) -> None:
+def test_highlight_terminal_returns_plain_when_not_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: False)
     assert syntax.highlight_terminal("key = 'val'", "toml") == "key = 'val'"
 
 
-def test_highlight_terminal_returns_plain_for_unknown_language(monkeypatch) -> None:
+def test_highlight_terminal_returns_plain_for_unknown_language(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     assert syntax.highlight_terminal("some code", "brainfuck") == "some code"
@@ -29,7 +32,7 @@ def test_highlight_terminal_returns_plain_for_unknown_language(monkeypatch) -> N
 # ── TOML highlighting ─────────────────────────────────────────────────────────
 
 
-def test_highlight_terminal_toml_key_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_toml_key_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("name = 'rrt'", "toml")
@@ -37,7 +40,7 @@ def test_highlight_terminal_toml_key_emits_ansi(monkeypatch) -> None:
     assert "name" in result
 
 
-def test_highlight_terminal_toml_comment_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_toml_comment_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("# a comment", "toml")
@@ -45,7 +48,7 @@ def test_highlight_terminal_toml_comment_emits_ansi(monkeypatch) -> None:
     assert "# a comment" in result
 
 
-def test_highlight_terminal_toml_section_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_toml_section_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("[tool.rrt]", "toml")
@@ -53,14 +56,14 @@ def test_highlight_terminal_toml_section_emits_ansi(monkeypatch) -> None:
     assert "[tool.rrt]" in result
 
 
-def test_highlight_terminal_toml_bool_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_toml_bool_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("enabled = true", "toml")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_toml_number_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_toml_number_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("count = 42", "toml")
@@ -70,7 +73,7 @@ def test_highlight_terminal_toml_number_emits_ansi(monkeypatch) -> None:
 # ── ENV highlighting ──────────────────────────────────────────────────────────
 
 
-def test_highlight_terminal_env_key_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_env_key_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("HOME=/home/user", "env")
@@ -81,21 +84,21 @@ def test_highlight_terminal_env_key_emits_ansi(monkeypatch) -> None:
 # ── Python highlighting ───────────────────────────────────────────────────────
 
 
-def test_highlight_terminal_python_keyword_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_python_keyword_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("def foo():", "python")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_python_bool_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_python_bool_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("x = True", "python")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_py_alias_same_as_python(monkeypatch) -> None:
+def test_highlight_terminal_py_alias_same_as_python(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     py = syntax.highlight_terminal("x = True", "py")
@@ -106,7 +109,7 @@ def test_highlight_terminal_py_alias_same_as_python(monkeypatch) -> None:
 # ── Multi-line input ──────────────────────────────────────────────────────────
 
 
-def test_highlight_terminal_multiline_preserves_newlines(monkeypatch) -> None:
+def test_highlight_terminal_multiline_preserves_newlines(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     code = "name = 'rrt'\n# comment\nversion = '1.0.0'"
@@ -118,7 +121,7 @@ def test_highlight_terminal_multiline_preserves_newlines(monkeypatch) -> None:
 # ── JSON highlighting ─────────────────────────────────────────────────────────
 
 
-def test_highlight_terminal_json_key_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_json_key_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal('  "name": "rrt"', "json")
@@ -126,35 +129,37 @@ def test_highlight_terminal_json_key_emits_ansi(monkeypatch) -> None:
     assert "name" in result
 
 
-def test_highlight_terminal_json_string_value_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_json_string_value_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal('  "version": "1.0.0"', "json")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_json_bool_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_json_bool_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("  true", "json")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_json_null_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_json_null_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("  null", "json")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_json_number_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_json_number_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal('  "count": 42', "json")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_json_bracket_line_returns_plain(monkeypatch) -> None:
+def test_highlight_terminal_json_bracket_line_returns_plain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A bare bracket line has no matching rule — plain text (covers no-match return)."""
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
@@ -165,7 +170,7 @@ def test_highlight_terminal_json_bracket_line_returns_plain(monkeypatch) -> None
 # ── Diff highlighting ─────────────────────────────────────────────────────────
 
 
-def test_highlight_terminal_diff_added_emits_green(monkeypatch) -> None:
+def test_highlight_terminal_diff_added_emits_green(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("+new line", "diff")
@@ -173,7 +178,7 @@ def test_highlight_terminal_diff_added_emits_green(monkeypatch) -> None:
     assert "new line" in result
 
 
-def test_highlight_terminal_diff_removed_emits_red(monkeypatch) -> None:
+def test_highlight_terminal_diff_removed_emits_red(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("-old line", "diff")
@@ -181,21 +186,23 @@ def test_highlight_terminal_diff_removed_emits_red(monkeypatch) -> None:
     assert "old line" in result
 
 
-def test_highlight_terminal_diff_hunk_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_diff_hunk_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("@@ -1,3 +1,4 @@", "diff")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_diff_file_header_emits_ansi(monkeypatch) -> None:
+def test_highlight_terminal_diff_file_header_emits_ansi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
     result = syntax.highlight_terminal("--- a/file.py", "diff")
     assert "\x1b[" in result
 
 
-def test_highlight_terminal_diff_context_line_returns_plain(monkeypatch) -> None:
+def test_highlight_terminal_diff_context_line_returns_plain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A context line (space-prefixed) has no diff rule — plain text."""
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
@@ -206,7 +213,9 @@ def test_highlight_terminal_diff_context_line_returns_plain(monkeypatch) -> None
 # ── Coverage: _colour_first_match edge cases ──────────────────────────────────
 
 
-def test_colour_first_match_skips_when_token_has_no_ansi_code(monkeypatch) -> None:
+def test_colour_first_match_skips_when_token_has_no_ansi_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Cover the `if not code: continue` branch in _colour_first_match."""
     import re
 
@@ -217,7 +226,9 @@ def test_colour_first_match_skips_when_token_has_no_ansi_code(monkeypatch) -> No
     assert result == "foo"
 
 
-def test_highlight_terminal_shell_colours_command_flag_and_path(monkeypatch) -> None:
+def test_highlight_terminal_shell_colours_command_flag_and_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
 
@@ -229,10 +240,10 @@ def test_highlight_terminal_shell_colours_command_flag_and_path(monkeypatch) -> 
     assert f"{syntax._ANSI['path']}/tmp/demo{syntax._RESET}" in result
 
 
-def test_fmt_cmd_uses_shell_highlighting_wrapper(monkeypatch) -> None:
+def test_fmt_cmd_uses_shell_highlighting_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
-    def fake_highlight(code: str, language: str, *, stream=None) -> str:
+    def fake_highlight(code: str, language: str, *, stream: object = None) -> str:
         captured["code"] = code
         captured["language"] = language
         captured["stream"] = stream

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from repo_release_tools.ui import syntax
 
 
-def test_highlight_toml_and_json_and_diff_and_shell(monkeypatch) -> None:
+def test_highlight_toml_and_json_and_diff_and_shell(monkeypatch: pytest.MonkeyPatch) -> None:
     # Enable color support and standard level
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
@@ -29,7 +31,7 @@ def test_highlight_toml_and_json_and_diff_and_shell(monkeypatch) -> None:
     assert "git" in out_shell and "\x1b[" in out_shell
 
 
-def test_pretty_print_and_json_string_handling(monkeypatch) -> None:
+def test_pretty_print_and_json_string_handling(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
 
@@ -47,7 +49,7 @@ def test_pretty_print_and_json_string_handling(monkeypatch) -> None:
     assert out_bad == bad
 
 
-def test_highlight_falls_back_when_no_color(monkeypatch) -> None:
+def test_highlight_falls_back_when_no_color(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(syntax, "supports_color", lambda stream=None: False)
     monkeypatch.setattr(syntax, "detect_color_level", lambda: "none")
 

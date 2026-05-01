@@ -49,6 +49,7 @@ class ProgressLine:
     """
 
     def __init__(self, *, file: IO[str] | None = None) -> None:
+        """Initialize the sticky bar; *file* defaults to ``sys.stdout``."""
         self.out = file if file is not None else sys.stdout
         self.enabled = _interactive_output_enabled(self.out)
         self._visible = False

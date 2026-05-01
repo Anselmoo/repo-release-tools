@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import pathlib
 
-from repo_release_tools.commands.branch import BranchName
-from repo_release_tools.commands.branch import cmd_new
-from repo_release_tools.commands.branch import cmd_rescue
-from repo_release_tools.commands.branch import cmd_rename
-from repo_release_tools.commands.branch import register
+import pytest
+
+from repo_release_tools.commands.branch import BranchName, cmd_new, cmd_rename, cmd_rescue, register
 from repo_release_tools.hooks import validate_branch_name
 
 
@@ -24,7 +23,7 @@ def test_branch_name_with_scope() -> None:
     assert branch.commit_title() == "fix(cli): null pointer"
 
 
-def test_cmd_new_dry_run_uses_summary_panel(capsys) -> None:
+def test_cmd_new_dry_run_uses_summary_panel(capsys: pytest.CaptureFixture[str]) -> None:
     args = argparse.Namespace(
         type="feat",
         description=["add", "parser"],
@@ -41,7 +40,9 @@ def test_cmd_new_dry_run_uses_summary_panel(capsys) -> None:
     assert "[dry-run] complete" in captured.out
 
 
-def test_cmd_new_dry_run_shows_uncommitted_changes(monkeypatch, capsys) -> None:
+def test_cmd_new_dry_run_shows_uncommitted_changes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(
         type="feat",
         description=["add", "parser"],
@@ -73,7 +74,9 @@ def test_cmd_new_dry_run_shows_uncommitted_changes(monkeypatch, capsys) -> None:
     assert "Unstaged" in captured
 
 
-def test_cmd_new_reports_truncated_changed_files(monkeypatch, capsys) -> None:
+def test_cmd_new_reports_truncated_changed_files(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(
         type="feat",
         description=["add", "parser"],
@@ -94,7 +97,9 @@ def test_cmd_new_reports_truncated_changed_files(monkeypatch, capsys) -> None:
     assert "…and 1 more" in captured
 
 
-def test_cmd_new_clean_tree_shows_no_move_message(monkeypatch, capsys) -> None:
+def test_cmd_new_clean_tree_shows_no_move_message(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(
         type="feat",
         description=["add", "parser"],
@@ -112,7 +117,9 @@ def test_cmd_new_clean_tree_shows_no_move_message(monkeypatch, capsys) -> None:
     assert "No uncommitted changes would be moved." in captured
 
 
-def test_cmd_new_existing_branch_returns_error(monkeypatch, capsys) -> None:
+def test_cmd_new_existing_branch_returns_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(
         type="feat",
         description=["add", "parser"],
@@ -132,7 +139,9 @@ def test_cmd_new_existing_branch_returns_error(monkeypatch, capsys) -> None:
     assert "already exists" in capsys.readouterr().err
 
 
-def test_cmd_new_reports_uncommitted_changes(monkeypatch, capsys) -> None:
+def test_cmd_new_reports_uncommitted_changes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     args = argparse.Namespace(
         type="feat",
         description=["add", "parser"],
@@ -177,8 +186,10 @@ def test_branch_validation_accepts_magic_ai_types() -> None:
 
 
 def test_normalize_commit_type_invalid_raises() -> None:
-    import pytest
     from argparse import ArgumentTypeError
+
+    import pytest
+
     from repo_release_tools.commands.branch import normalize_commit_type
 
     with pytest.raises((ArgumentTypeError, SystemExit)):
@@ -197,8 +208,10 @@ def test_normalize_commit_type_uppercase_normalized() -> None:
 
 
 def test_join_description_empty_raises() -> None:
-    import pytest
     from argparse import ArgumentTypeError
+
+    import pytest
+
     from repo_release_tools.commands.branch import join_description
 
     with pytest.raises(ArgumentTypeError, match="empty"):
@@ -210,7 +223,7 @@ def test_join_description_empty_raises() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_cmd_rescue_dry_run(capsys) -> None:
+def test_cmd_rescue_dry_run(capsys: pytest.CaptureFixture[str]) -> None:
     """cmd_rescue in dry-run mode should print panel and not touch git."""
     from repo_release_tools.commands.branch import cmd_rescue
 
@@ -231,7 +244,7 @@ def test_cmd_rescue_dry_run(capsys) -> None:
     assert "[dry-run] complete" in captured.out
 
 
-def test_cmd_rescue_dry_run_with_since(capsys) -> None:
+def test_cmd_rescue_dry_run_with_since(capsys: pytest.CaptureFixture[str]) -> None:
     """cmd_rescue with --since in dry-run mode should reference the SHA."""
     from repo_release_tools.commands.branch import cmd_rescue
 
@@ -250,7 +263,9 @@ def test_cmd_rescue_dry_run_with_since(capsys) -> None:
     assert "abc123" in captured.out
 
 
-def test_cmd_rescue_no_commits_returns_error(monkeypatch, capsys) -> None:
+def test_cmd_rescue_no_commits_returns_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Non-dry-run rescue fails when there are no commits ahead to rescue."""
     from repo_release_tools.commands.branch import cmd_rescue
 
@@ -275,7 +290,9 @@ def test_cmd_rescue_no_commits_returns_error(monkeypatch, capsys) -> None:
     assert "Nothing to rescue" in capsys.readouterr().err
 
 
-def test_cmd_rescue_existing_target_branch_returns_error(monkeypatch, capsys) -> None:
+def test_cmd_rescue_existing_target_branch_returns_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Rescue fails when the destination branch already exists."""
     from repo_release_tools.commands.branch import cmd_rescue
 
@@ -304,7 +321,9 @@ def test_cmd_rescue_existing_target_branch_returns_error(monkeypatch, capsys) ->
     assert "already exists" in capsys.readouterr().err
 
 
-def test_cmd_rescue_with_since_runs_rescue_flow(monkeypatch, tmp_path, capsys) -> None:
+def test_cmd_rescue_with_since_runs_rescue_flow(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         "repo_release_tools.commands.branch.git.current_branch", lambda root: "main"
@@ -350,7 +369,9 @@ def test_cmd_rescue_with_since_runs_rescue_flow(monkeypatch, tmp_path, capsys) -
 # ---------------------------------------------------------------------------
 
 
-def test_cmd_rename_type_only_dry_run(monkeypatch, capsys) -> None:
+def test_cmd_rename_type_only_dry_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """--type replaces only the type prefix; slug is preserved."""
     from repo_release_tools.commands.branch import cmd_rename
 
@@ -375,7 +396,9 @@ def test_cmd_rename_type_only_dry_run(monkeypatch, capsys) -> None:
     assert "[dry-run] complete" in out
 
 
-def test_cmd_rename_scope_prepended_dry_run(monkeypatch, capsys) -> None:
+def test_cmd_rename_scope_prepended_dry_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """--scope prepends the scope to the preserved slug."""
     from repo_release_tools.commands.branch import cmd_rename
 
@@ -398,7 +421,9 @@ def test_cmd_rename_scope_prepended_dry_run(monkeypatch, capsys) -> None:
     assert "feat/auth-add-login" in out
 
 
-def test_cmd_rename_full_rebuild_dry_run(monkeypatch, capsys) -> None:
+def test_cmd_rename_full_rebuild_dry_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Providing description words triggers a full BranchName rebuild."""
     from repo_release_tools.commands.branch import cmd_rename
 
@@ -421,7 +446,9 @@ def test_cmd_rename_full_rebuild_dry_run(monkeypatch, capsys) -> None:
     assert "feat/introduce-v2" in out
 
 
-def test_cmd_rename_no_change_returns_error(monkeypatch, capsys) -> None:
+def test_cmd_rename_no_change_returns_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """No change requested should return 1 with a helpful message."""
     from repo_release_tools.commands.branch import cmd_rename
 
@@ -443,7 +470,9 @@ def test_cmd_rename_no_change_returns_error(monkeypatch, capsys) -> None:
     assert "Nothing to do." in capsys.readouterr().err
 
 
-def test_cmd_rename_requires_some_change(monkeypatch, capsys) -> None:
+def test_cmd_rename_requires_some_change(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     from repo_release_tools.commands.branch import cmd_rename
 
     monkeypatch.setattr(
@@ -465,7 +494,7 @@ def test_cmd_rename_requires_some_change(monkeypatch, capsys) -> None:
     assert "Nothing to rename" in capsys.readouterr().err
 
 
-def test_cmd_rename_no_scope_without_description_errors(monkeypatch) -> None:
+def test_cmd_rename_no_scope_without_description_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     """--no-scope without description words is rejected."""
     from repo_release_tools.commands.branch import cmd_rename
 
@@ -486,7 +515,9 @@ def test_cmd_rename_no_scope_without_description_errors(monkeypatch) -> None:
     assert result == 1
 
 
-def test_cmd_rename_rejects_too_long_slug(monkeypatch, capsys) -> None:
+def test_cmd_rename_rejects_too_long_slug(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     from repo_release_tools.commands.branch import cmd_rename
 
     monkeypatch.setattr(
@@ -507,7 +538,9 @@ def test_cmd_rename_rejects_too_long_slug(monkeypatch, capsys) -> None:
     assert "too long" in capsys.readouterr().err
 
 
-def test_cmd_rename_rejects_invalid_slug_from_scope(monkeypatch, capsys) -> None:
+def test_cmd_rename_rejects_invalid_slug_from_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     from repo_release_tools.commands.branch import cmd_rename
 
     monkeypatch.setattr(
@@ -528,7 +561,9 @@ def test_cmd_rename_rejects_invalid_slug_from_scope(monkeypatch, capsys) -> None
     assert "kebab-case" in capsys.readouterr().err
 
 
-def test_cmd_rename_type_and_description_no_scope(monkeypatch, capsys) -> None:
+def test_cmd_rename_type_and_description_no_scope(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """--no-scope with description rebuilds without scope."""
     from repo_release_tools.commands.branch import cmd_rename
 
@@ -551,7 +586,9 @@ def test_cmd_rename_type_and_description_no_scope(monkeypatch, capsys) -> None:
     assert "fix/patch-login" in out
 
 
-def test_cmd_rename_non_conventional_branch_errors(monkeypatch, capsys) -> None:
+def test_cmd_rename_non_conventional_branch_errors(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A branch name without '/' produces a clear error."""
     from repo_release_tools.commands.branch import cmd_rename
 
@@ -574,7 +611,9 @@ def test_cmd_rename_non_conventional_branch_errors(monkeypatch, capsys) -> None:
     assert "convention" in err
 
 
-def test_cmd_rename_branch_already_exists_returns_error(monkeypatch, capsys) -> None:
+def test_cmd_rename_branch_already_exists_returns_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """When the target branch name already exists, return 1."""
     from repo_release_tools.commands.branch import cmd_rename
 
@@ -599,7 +638,9 @@ def test_cmd_rename_branch_already_exists_returns_error(monkeypatch, capsys) -> 
     assert result == 1
 
 
-def test_cmd_rename_executes_git_branch_m(monkeypatch, capsys) -> None:
+def test_cmd_rename_executes_git_branch_m(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Successful non-dry-run rename calls git branch -m."""
     from repo_release_tools.commands.branch import cmd_rename
 

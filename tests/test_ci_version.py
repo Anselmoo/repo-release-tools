@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-
 from pathlib import Path
 from typing import cast
 
@@ -16,12 +15,11 @@ from repo_release_tools.commands.ci_version import (
     cmd_ci_version_apply,
     cmd_ci_version_compute,
     cmd_ci_version_sync,
-    register,
     compute_published_version,
+    register,
     to_semver,
 )
 from repo_release_tools.config import MissingRrtConfigError, VersionTarget
-
 
 # ---------------------------------------------------------------------------
 # Unit – to_semver
@@ -1023,7 +1021,7 @@ def test_cmd_apply_uses_shared_progress_line(
     clears: list[int] = []
 
     class _FakeProgressLine:
-        def __init__(self, *, file=None) -> None:
+        def __init__(self, *, file: object = None) -> None:
             self.file = file
 
         def update_bar(self, value: float, *, width: int = 20) -> None:
@@ -1054,7 +1052,7 @@ def test_cmd_apply_clears_progress_on_semver_error(
     clears: list[int] = []
 
     class _FakeProgressLine:
-        def __init__(self, *, file=None) -> None:
+        def __init__(self, *, file: object = None) -> None:
             self.file = file
 
         def update_bar(self, value: float, *, width: int = 20) -> None:
@@ -1099,7 +1097,7 @@ version = "0.1.0"
     clears: list[int] = []
 
     class _FakeProgressLine:
-        def __init__(self, *, file=None) -> None:
+        def __init__(self, *, file: object = None) -> None:
             self.file = file
 
         def update_bar(self, value: float, *, width: int = 20) -> None:

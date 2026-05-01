@@ -72,16 +72,36 @@ line-length = 100
 target-version = "py312"
 output-format = "full"
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "ANN", "D"]
+# D203 (one-blank-line-before-class) conflicts with D211 (no-blank-line-before-class)
+# D213 (multi-line-summary-second-line) conflicts with D212 (multi-line-summary-first-line)
+# ANN401 disallows 'Any' but we legitimately use it in UI/hook APIs
+ignore = ["D203", "D213", "ANN401", "E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Test files: no docstring rules; allow assert and private member access
+"tests/**/*.py" = ["D"]
+
 [tool.ty.environment]
 python-version = "3.12"
-root = ["src", "tests"]
+extra-paths = ["src"]
 
 [tool.ty.src]
 include = ["src", "tests"]
-respect-ignore-files = true
 
 [tool.ty.terminal]
 output-format = "full"
+
+[tool.ty.rules]
+possibly-unresolved-reference = "error"
+unresolved-import = "error"
+missing-argument = "error"
+invalid-return-type = "error"
+unused-ignore-comment = "warn"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

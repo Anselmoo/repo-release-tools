@@ -139,7 +139,9 @@ def test_build_parser_registers_env_command() -> None:
     assert args.handler.__name__ == "cmd_env"
 
 
-def test_styled_help_applies_to_subcommands(monkeypatch, capsys) -> None:
+def test_styled_help_applies_to_subcommands(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     parser = cli.build_parser()
     monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
 
@@ -528,7 +530,12 @@ def test_compute_col_width_uses_longest_flag_plus_indent() -> None:
     from repo_release_tools.cli import _compute_col_width
 
     class _FakeAction:
-        def __init__(self, option_strings, metavar=None, choices=None) -> None:
+        def __init__(
+            self,
+            option_strings: list[str],
+            metavar: str | None = None,
+            choices: list[str] | None = None,
+        ) -> None:
             self.option_strings = option_strings
             self.metavar = metavar
             self.choices = choices
@@ -557,7 +564,7 @@ def test_strip_ansi_and_display_len() -> None:
 
 def test_metavar_text_handles_tuple_and_suppressed() -> None:
     class FakeAction:
-        def __init__(self, dest, metavar) -> None:
+        def __init__(self, dest: str, metavar: object = None) -> None:
             self.dest = dest
             self.metavar = metavar
 
@@ -568,7 +575,7 @@ def test_metavar_text_handles_tuple_and_suppressed() -> None:
 
 def test_compute_col_width_handles_choice_dict() -> None:
     class FakeAction:
-        def __init__(self, choices) -> None:
+        def __init__(self, choices: object) -> None:
             self._choices_actions = None
             self.choices = choices
             self.option_strings = []
@@ -842,7 +849,7 @@ def test_error_prints_suggestion_for_unrecognized_arguments() -> None:
 
 def test_compute_col_width_with_choices_actions() -> None:
     class SubAction:
-        def __init__(self, dest) -> None:
+        def __init__(self, dest: str) -> None:
             self.dest = dest
 
     class FakeAction:

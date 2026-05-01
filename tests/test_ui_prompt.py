@@ -4,26 +4,30 @@ from __future__ import annotations
 
 import io
 
+import pytest
+
 from repo_release_tools.ui import prompt
 
 
-def test_confirm_returns_default_when_not_tty(monkeypatch) -> None:
+def test_confirm_returns_default_when_not_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin", io.StringIO(""))
     assert prompt.confirm("Continue?", default=True) is True
     assert prompt.confirm("Continue?", default=False) is False
 
 
-def test_ask_returns_default_when_not_tty(monkeypatch) -> None:
+def test_ask_returns_default_when_not_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin", io.StringIO(""))
     assert prompt.ask("Name?", default="Alice") == "Alice"
 
 
-def test_ask_returns_empty_string_when_no_default_and_not_tty(monkeypatch) -> None:
+def test_ask_returns_empty_string_when_no_default_and_not_tty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr("sys.stdin", io.StringIO(""))
     assert prompt.ask("Name?") == ""
 
 
-def test_confirm_yes_when_tty(monkeypatch) -> None:
+def test_confirm_yes_when_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeTTY(io.StringIO):
         def isatty(self) -> bool:
             return True
@@ -33,7 +37,7 @@ def test_confirm_yes_when_tty(monkeypatch) -> None:
     assert prompt.confirm("Continue?") is True
 
 
-def test_confirm_no_when_tty(monkeypatch) -> None:
+def test_confirm_no_when_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin", io.StringIO("n\n"))
     monkeypatch.setattr(
         "sys.stdin",
@@ -43,7 +47,7 @@ def test_confirm_no_when_tty(monkeypatch) -> None:
     assert prompt.confirm("Continue?", default=True) is False
 
 
-def test_confirm_blank_returns_default_when_tty(monkeypatch) -> None:
+def test_confirm_blank_returns_default_when_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "sys.stdin",
         type("TTY", (io.StringIO,), {"isatty": lambda self: True})("\n"),
@@ -53,7 +57,7 @@ def test_confirm_blank_returns_default_when_tty(monkeypatch) -> None:
     assert prompt.confirm("Continue?", default=False) is False
 
 
-def test_ask_reply_when_tty(monkeypatch) -> None:
+def test_ask_reply_when_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "sys.stdin",
         type("TTY", (io.StringIO,), {"isatty": lambda self: True})("Bob\n"),
@@ -62,7 +66,7 @@ def test_ask_reply_when_tty(monkeypatch) -> None:
     assert prompt.ask("Name?") == "Bob"
 
 
-def test_ask_blank_returns_default_when_tty(monkeypatch) -> None:
+def test_ask_blank_returns_default_when_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "sys.stdin",
         type("TTY", (io.StringIO,), {"isatty": lambda self: True})("\n"),
@@ -71,7 +75,7 @@ def test_ask_blank_returns_default_when_tty(monkeypatch) -> None:
     assert prompt.ask("Name?", default="Alice") == "Alice"
 
 
-def test_confirm_eof_returns_default(monkeypatch) -> None:
+def test_confirm_eof_returns_default(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(_: str) -> str:
         raise EOFError
 
@@ -83,7 +87,7 @@ def test_confirm_eof_returns_default(monkeypatch) -> None:
     assert prompt.confirm("Continue?", default=True) is True
 
 
-def test_ask_eof_returns_default(monkeypatch) -> None:
+def test_ask_eof_returns_default(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(_: str) -> str:
         raise EOFError
 
