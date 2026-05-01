@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 import repo_release_tools.ui as ui
 
 
-def test_fmt_path_applies_public_underline_wrapper(monkeypatch) -> None:
+def test_fmt_path_applies_public_underline_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ui, "underline", lambda path: f"underlined:{path}")
 
     assert ui.fmt_path("README.md") == "underlined:README.md"

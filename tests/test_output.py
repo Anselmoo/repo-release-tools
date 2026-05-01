@@ -153,7 +153,7 @@ def test_dry_run_complete_uses_shared_typography() -> None:
     assert rendered.startswith("[-]") or rendered.startswith("⊖")
 
 
-def test_spinner_lines_noop_on_non_tty(capsys) -> None:
+def test_spinner_lines_noop_on_non_tty() -> None:
     """spinner_lines must not crash and must produce no output when not a tty."""
     import io
 
@@ -212,7 +212,7 @@ def test_panel_empty_title_row_renders_plain_border() -> None:
     assert "A" in rendered
 
 
-def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
+def test_spinner_lines_noop_on_legacy_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
     """spinner_lines must skip threading when IS_LEGACY_TERMINAL is True."""
     import io
     import repo_release_tools.ui.progress as _prog
@@ -225,7 +225,7 @@ def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
     assert non_tty.getvalue() == ""
 
 
-def test_spinner_lines_noop_yields_normally(capsys) -> None:
+def test_spinner_lines_noop_yields_normally() -> None:
     """The body of the with block executes even in no-op mode."""
     import io
 
@@ -315,7 +315,9 @@ def test_spinner_lines_writes_detail_on_tty(monkeypatch: pytest.MonkeyPatch) -> 
     assert f"{output.GLYPHS.bullet.ok}  Working  $ uv lock -U" in rendered
 
 
-def test_syntax_forwards_stream_to_highlight_terminal(monkeypatch) -> None:
+def test_syntax_forwards_stream_to_highlight_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: dict[str, object] = {}
 
     def fake_highlight(

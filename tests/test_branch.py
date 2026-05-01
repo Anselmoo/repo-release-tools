@@ -1,3 +1,5 @@
+"""Tests for branch naming and branch commands."""
+
 from __future__ import annotations
 
 import argparse

@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -631,7 +632,11 @@ def test_cmd_sync_invalid_run_attempt_returns_error(
 def test_version_target_non_string_ci_format_raises() -> None:
     """A TOML array/object value for ci_format should give a clear error."""
     # Simulate a mis-configured list value coming from TOML
-    t = VersionTarget(path=Path("x.toml"), kind="pep621", ci_format=["pep440"])  # type: ignore[arg-type]
+    t = VersionTarget(
+        path=Path("x.toml"),
+        kind="pep621",
+        ci_format=cast(str | None, ["pep440"]),
+    )
     with pytest.raises(ValueError, match="must be a string"):
         t.validate()
 

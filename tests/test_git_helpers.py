@@ -1,3 +1,5 @@
+"""Tests for git.py command helpers and dry-run logic."""
+
 from __future__ import annotations
 
 import subprocess

@@ -70,6 +70,18 @@ pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+output-format = "full"
+
+[tool.ty.environment]
+python-version = "3.12"
+root = ["src", "tests"]
+
+[tool.ty.src]
+include = ["src", "tests"]
+respect-ignore-files = true
+
+[tool.ty.terminal]
+output-format = "full"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

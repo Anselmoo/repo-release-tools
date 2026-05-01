@@ -11,6 +11,30 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: rrt-ruff-check
+        name: rrt ruff check
+        entry: uv run ruff check --fix --output-format=full src tests
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: rrt-ruff-format
+        name: rrt ruff format
+        entry: uv run ruff format --check src tests
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: rrt-ty-check
+        name: rrt ty check
+        entry: uv run ty check src tests
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: rrt-ci-lint-gate
         name: rrt ci lint gate
         entry: uvx pre-commit run --all-files --show-diff-on-failure
@@ -29,13 +53,6 @@ repos:
       - id: debug-statements
       - id: check-toml
       - id: check-case-conflict
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.11
-    hooks:
-      - id: ruff
-      - id: ruff-format
-        args: [--check]
 
 
 ci:

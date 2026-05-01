@@ -7,6 +7,7 @@ import re
 import runpy
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -557,9 +558,9 @@ def test_metavar_text_handles_tuple_and_suppressed() -> None:
             self.dest = dest
             self.metavar = metavar
 
-    assert cli._metavar_text(FakeAction("foo", ("BAR", "BAZ"))) == "BAR BAZ"
-    assert cli._metavar_text(FakeAction(argparse.SUPPRESS, None)) == ""
-    assert cli._metavar_text(FakeAction("==SUPPRESS==", None)) == ""
+    assert cli._metavar_text(cast(argparse.Action, FakeAction("foo", ("BAR", "BAZ")))) == "BAR BAZ"
+    assert cli._metavar_text(cast(argparse.Action, FakeAction(argparse.SUPPRESS, None))) == ""
+    assert cli._metavar_text(cast(argparse.Action, FakeAction("==SUPPRESS==", None))) == ""
 
 
 def test_compute_col_width_handles_choice_dict() -> None:
@@ -594,13 +595,14 @@ def test_formatter_compute_col_width_uses_width() -> None:
             self.metavar = None
             self.choices = None
 
-    assert formatter._compute_col_width([FakeAction()]) == 6
+    assert formatter._compute_col_width(cast(list[argparse.Action], [FakeAction()])) == 6
 
 
 def test_decolor_returns_plain_text() -> None:
     formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
 
-    assert formatter._decolor("\x1b[31mred\x1b[0m") == "red"
+    decolor = cast(Callable[[str], str], formatter._decolor)
+    assert decolor("\x1b[31mred\x1b[0m") == "red"
 
 
 def test_start_section_is_noop_for_empty_heading() -> None:
@@ -621,7 +623,7 @@ def test_format_action_skips_suppressed_help() -> None:
     class FakeAction:
         help = argparse.SUPPRESS
 
-    assert formatter._format_action(FakeAction()) == ""
+    assert formatter._format_action(cast(argparse.Action, FakeAction())) == ""
 
 
 def test_render_row_wraps_when_column_underflow() -> None:
@@ -641,7 +643,7 @@ def test_format_subparser_action_uses_choices_dict() -> None:
         _choices_actions = []
         choices = {"foo": FakeParser()}
 
-    result = formatter._format_subparser_action(FakeAction())
+    result = formatter._format_subparser_action(cast(argparse._SubParsersAction, FakeAction()))
 
     assert "foo" in result
     assert "Fake parser" in result
@@ -657,7 +659,7 @@ def test_format_choice_action_renders_choices_and_help() -> None:
         help = "select one"
         dest = "choice"
 
-    rendered = formatter._format_choice_action(FakeAction())
+    rendered = formatter._format_choice_action(cast(argparse.Action, FakeAction()))
 
     assert "CHOICE" in rendered
     assert "one" in rendered
@@ -737,7 +739,7 @@ def test_format_choice_action_renders_without_help() -> None:
         help = None
         dest = "choice"
 
-    rendered = formatter._format_choice_action(FakeAction())
+    rendered = formatter._format_choice_action(cast(argparse.Action, FakeAction()))
 
     assert "CHOICE" in rendered
     assert "one" in rendered
@@ -754,7 +756,7 @@ def test_format_action_uses_choice_action_branch() -> None:
         help = "select one"
         dest = "choice"
 
-    rendered = formatter._format_action(FakeAction())
+    rendered = formatter._format_action(cast(argparse.Action, FakeAction()))
 
     assert "CHOICE" in rendered
     assert "one" in rendered
@@ -778,7 +780,7 @@ def test_metavar_text_returns_tag_for_dest_without_metavar() -> None:
             self.dest = "name"
             self.metavar = None
 
-    assert cli._metavar_text(FakeAction()) == "<name>"
+    assert cli._metavar_text(cast(argparse.Action, FakeAction())) == "<name>"
 
 
 def test_compute_col_width_with_metavar_and_options() -> None:
@@ -804,7 +806,9 @@ def test_format_subparser_action_renders_rows_from_choice_action() -> None:
         _choices_actions = [type("Sub", (), {"dest": "foo", "help": "Foo help"})()]
         choices = None
 
-    rendered = formatter._format_subparser_action(FakeChoiceAction())
+    rendered = formatter._format_subparser_action(
+        cast(argparse._SubParsersAction, FakeChoiceAction())
+    )
 
     assert "foo" in rendered
     assert "Foo help" in rendered

@@ -1,3 +1,5 @@
+"""Pytest configuration and UX contract enforcement for repo-release-tools tests."""
+
 from __future__ import annotations
 
 import ast

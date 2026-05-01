@@ -1,3 +1,5 @@
+"""Tests for version bumping and changelog update logic."""
+
 from __future__ import annotations
 
 import io
@@ -190,7 +192,10 @@ def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
     assert "…" in output or "..." in output
 
 
-def test_cmd_bump_reports_loaded_config_error(monkeypatch, capsys) -> None:
+def test_cmd_bump_reports_loaded_config_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.load_or_autodetect_config",
         lambda root: (_ for _ in ()).throw(ValueError("broken config")),
@@ -300,7 +305,10 @@ kind = "package_json"
     assert ["git", "commit", "-m", "chore: bump version to v0.2.0"] in calls
 
 
-def test_cmd_bump_dry_run_from_pep621_config(tmp_path, capsys) -> None:
+def test_cmd_bump_dry_run_from_pep621_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         """[tool.rrt]
 release_branch = \"release/v{version}\"
@@ -356,7 +364,10 @@ def test_register_bump_parser_sets_handler_and_defaults() -> None:
     assert args.handler is cmd_bump
 
 
-def test_cmd_bump_dry_run_from_rrt_toml_and_package_json(tmp_path, capsys) -> None:
+def test_cmd_bump_dry_run_from_rrt_toml_and_package_json(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """[tool.rrt]
 release_branch = "release/v{version}"
@@ -464,7 +475,9 @@ kind = "package_json"
 
 
 def test_cmd_bump_refuses_existing_release_branch_without_force(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -510,7 +523,9 @@ kind = "package_json"
 
 
 def test_cmd_bump_force_resets_existing_release_branch(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -565,7 +580,10 @@ kind = "package_json"
     assert ["git", "checkout", "-b", "release/v0.1.1"] not in calls
 
 
-def test_cmd_bump_accepts_legacy_double_escaped_pattern(tmp_path: Path, capsys) -> None:
+def test_cmd_bump_accepts_legacy_double_escaped_pattern(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """[tool.rrt]
 release_branch = "release/v{version}"
@@ -605,7 +623,10 @@ pattern = '^(\\\\s*__version__\\\\s*=\\\\s*")([^"]+)(")'
     assert "Would update" in captured.out
 
 
-def test_cmd_bump_requires_group_for_multi_group_config(tmp_path: Path, capsys) -> None:
+def test_cmd_bump_requires_group_for_multi_group_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
 [tool.rrt]
@@ -878,7 +899,10 @@ kind = "package_json"
     assert ["git", "checkout", "main"] in calls
 
 
-def test_cmd_bump_updates_selected_group_only(tmp_path: Path, capsys) -> None:
+def test_cmd_bump_updates_selected_group_only(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
 [tool.rrt]
@@ -1103,7 +1127,9 @@ version = "0.3.0"
 
 
 def test_cmd_bump_python_version_kind_explicit_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """bump updates __version__ in a Python file when kind='python_version' is configured."""
     init_file = tmp_path / "src" / "mypkg" / "__init__.py"
@@ -1927,7 +1953,9 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
             progress_clears.append(len(progress_instances) - 1)
 
     @contextmanager
-    def fake_spinner_lines(label: str, *, detail: str | None = None, file=None) -> Generator[None, None, None]:
+    def fake_spinner_lines(
+        label: str, *, detail: str | None = None, file=None
+    ) -> Generator[None, None, None]:
         spinner_calls.append((label, detail, file))
         yield
 
