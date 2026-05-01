@@ -1268,3 +1268,99 @@ def test_cmd_diff_uses_old_path_when_new_path_is_dev_null(monkeypatch, capsys) -
 
     assert git_cmd.cmd_diff(argparse.Namespace(staged=False, against=None)) == 0
     assert "deleted.txt" in capsys.readouterr().out
+
+
+def test_cmd_status_truncates_long_change_list(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f" M file-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+
+    assert git_cmd.cmd_status(argparse.Namespace()) == 0
+    assert "…and 1 more" in capsys.readouterr().out
+
+
+def test_cmd_doctor_truncates_conflicts(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f"UU conflict-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+
+    def fake_capture(cmd, cwd):
+        if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:
+            return "feat: add parser"
+        if cmd[:5] == ["git", "diff-tree", "--no-commit-id", "--name-only", "--root"]:
+            return "CHANGELOG.md\nsrc/repo_release_tools/cli.py"
+        raise AssertionError(cmd)
+
+    monkeypatch.setattr(git_cmd.git, "capture", fake_capture)
+
+    assert git_cmd.cmd_doctor(argparse.Namespace(changelog_file="CHANGELOG.md")) == 1
+    assert "…and 1 more" in capsys.readouterr().out
+
+
+def test_cmd_check_dirty_tree_truncates_status_lines(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f" M dirty-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
+
+    assert git_cmd.cmd_check_dirty_tree(argparse.Namespace()) == 1
+    assert "…and 1 more" in capsys.readouterr().err
+
+
+def test_cmd_sync_status_truncates_conflicts(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "ref_exists", lambda cwd, ref: True)
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f"UU sync-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (1, 2))
+
+    assert git_cmd.cmd_sync_status(argparse.Namespace(base_ref=None)) == 1
+    assert "…and 1 more" in capsys.readouterr().out
+
+
+def test_cmd_sync_truncates_conflicts(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: "origin/feat/add-parser")
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
+    monkeypatch.setattr(
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [f"UU sync-{i}.py" for i in range(16)],
+    )
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("git.run should not be called")
+        ),
+    )
+
+    assert git_cmd.cmd_sync(argparse.Namespace(merge=False, dry_run=True)) == 1
+    assert "…and 1 more" in capsys.readouterr().err

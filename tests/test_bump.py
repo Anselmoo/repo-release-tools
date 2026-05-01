@@ -187,6 +187,116 @@ def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
     assert "…" in output or "..." in output
 
 
+def test_cmd_bump_reports_loaded_config_error(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: (_ for _ in ()).throw(ValueError("broken config")),
+    )
+
+    result = cmd_bump(Namespace(force=False))
+
+    assert result == 1
+    assert "broken config" in capsys.readouterr().err
+
+
+def test_cmd_bump_rejects_autodetected_version_mismatch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.autodetected.toml",
+        version_groups=[group],
+        default_group_name="default",
+        autodetected=True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.check_autodetected_version_consistency",
+        lambda config: "version mismatch",
+    )
+
+    result = cmd_bump(Namespace(force=False))
+
+    assert result == 1
+    err = capsys.readouterr().err
+    assert "auto-detected" in err
+    assert "version mismatch" in err
+
+
+def test_cmd_bump_stages_changelog_and_commits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+    calls: list[list[str]] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.replace_version_in_file", lambda *a, **k: None
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+
+    def fake_run(
+        cmd: list[str], root: Path, *, dry_run: bool, label: str, suppress_announce: bool = False
+    ) -> str:
+        calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=False,
+            no_changelog=False,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        )
+    )
+
+    assert result == 0
+    assert ["git", "checkout", "-b", "release/v0.2.0"] in calls
+    assert ["git", "add", "package.json", "CHANGELOG.md"] in calls
+    assert ["git", "add", "-u"] in calls
+    assert ["git", "commit", "-m", "chore: bump version to v0.2.0"] in calls
+
+
 def test_cmd_bump_dry_run_from_pep621_config(tmp_path, capsys) -> None:
     (tmp_path / "pyproject.toml").write_text(
         """[tool.rrt]
