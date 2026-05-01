@@ -5,12 +5,10 @@ from __future__ import annotations
 import json
 import re
 import tomllib
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent
 from typing import cast
-
 
 DEFAULT_RELEASE_BRANCH = "release/v{version}"
 DEFAULT_CHANGELOG = "CHANGELOG.md"
@@ -231,7 +229,7 @@ class VersionTarget:
 
 @dataclass(frozen=True)
 class PinTarget:
-    """A single doc/CI pin target updated by 'rrt bump'.
+    r"""A single doc/CI pin target updated by 'rrt bump'.
 
     Unlike ``VersionTarget``, ``PinTarget`` is write-only and does not
     participate in version consistency checks.  Use it to keep version pins

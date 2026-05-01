@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import types
 
@@ -151,7 +153,7 @@ def test_dry_run_complete_uses_shared_typography() -> None:
     assert rendered.startswith("[-]") or rendered.startswith("⊖")
 
 
-def test_spinner_lines_noop_on_non_tty(capsys) -> None:
+def test_spinner_lines_noop_on_non_tty() -> None:
     """spinner_lines must not crash and must produce no output when not a tty."""
     import io
 
@@ -210,9 +212,10 @@ def test_panel_empty_title_row_renders_plain_border() -> None:
     assert "A" in rendered
 
 
-def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
+def test_spinner_lines_noop_on_legacy_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
     """spinner_lines must skip threading when IS_LEGACY_TERMINAL is True."""
     import io
+
     import repo_release_tools.ui.progress as _prog
 
     monkeypatch.setattr(_prog, "IS_LEGACY_TERMINAL", True)
@@ -223,7 +226,7 @@ def test_spinner_lines_noop_on_legacy_terminal(monkeypatch, capsys) -> None:
     assert non_tty.getvalue() == ""
 
 
-def test_spinner_lines_noop_yields_normally(capsys) -> None:
+def test_spinner_lines_noop_yields_normally() -> None:
     """The body of the with block executes even in no-op mode."""
     import io
 
@@ -271,13 +274,13 @@ class _FakeEvent:
 
 
 class _FakeThread:
-    def __init__(self, target, daemon: bool) -> None:
+    def __init__(self, target: object, daemon: bool) -> None:
         self._target = target
         self.daemon = daemon
         self.join_timeout: float | None = None
 
     def start(self) -> None:
-        self._target()
+        self._target()  # ty:ignore[call-non-callable]
 
     def join(self, timeout: float | None = None) -> None:
         self.join_timeout = timeout
@@ -313,7 +316,9 @@ def test_spinner_lines_writes_detail_on_tty(monkeypatch: pytest.MonkeyPatch) -> 
     assert f"{output.GLYPHS.bullet.ok}  Working  $ uv lock -U" in rendered
 
 
-def test_syntax_forwards_stream_to_highlight_terminal(monkeypatch) -> None:
+def test_syntax_forwards_stream_to_highlight_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: dict[str, object] = {}
 
     def fake_highlight(
@@ -322,8 +327,8 @@ def test_syntax_forwards_stream_to_highlight_terminal(monkeypatch) -> None:
         *,
         line_numbers: bool = False,
         background: str = "dark",
-        stream=None,
-    ):
+        stream: object = None,
+    ) -> str:
         captured["code"] = code
         captured["language"] = language
         captured["stream"] = stream
@@ -404,7 +409,7 @@ def test_spinner_lines_writes_error_status_on_tty_exception(
 # ── New Phase 2/3a tests ────────────────────────────────────────────────────
 
 
-def test_panel_wraps_long_value(monkeypatch) -> None:
+def test_panel_wraps_long_value(monkeypatch: pytest.MonkeyPatch) -> None:
     """panel() must wrap values that exceed value_width when terminal is narrow."""
     import repo_release_tools.ui.layout as _layout
 
@@ -418,7 +423,7 @@ def test_panel_wraps_long_value(monkeypatch) -> None:
     assert len(lines) > 5
 
 
-def test_hyperlink_returns_osc8_when_color_supported(monkeypatch) -> None:
+def test_hyperlink_returns_osc8_when_color_supported(monkeypatch: pytest.MonkeyPatch) -> None:
     import repo_release_tools.ui.color as _color
 
     monkeypatch.setattr(_color, "supports_color", lambda stream=None: True)
@@ -428,7 +433,7 @@ def test_hyperlink_returns_osc8_when_color_supported(monkeypatch) -> None:
     assert "https://example.com" in result
 
 
-def test_hyperlink_falls_back_to_plain_text_when_no_color(monkeypatch) -> None:
+def test_hyperlink_falls_back_to_plain_text_when_no_color(monkeypatch: pytest.MonkeyPatch) -> None:
     import repo_release_tools.ui.color as _color
 
     monkeypatch.setattr(_color, "supports_color", lambda stream=None: False)
@@ -454,13 +459,13 @@ def test_spinner_lines_cancelled_writes_warning_glyph(
     assert str(output.GLYPHS.bullet.warning) in rendered
 
 
-def test_pretty_print_returns_string(monkeypatch) -> None:
+def test_pretty_print_returns_string(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(output, "highlight_terminal", lambda code, lang, **kw: code)
     result = output.pretty_print({"a": 1})
     assert "a" in result
 
 
-def test_json_highlight_returns_valid_json(monkeypatch) -> None:
+def test_json_highlight_returns_valid_json(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(output, "highlight_terminal", lambda code, lang, **kw: code)
     result = output.json_highlight({"key": "value"})
     import json
@@ -472,7 +477,7 @@ def test_json_highlight_returns_valid_json(monkeypatch) -> None:
 # ── Phase 3a P3 + panel expand tests ────────────────────────────────────────
 
 
-def test_diff_highlight_returns_non_empty_for_diff_text(monkeypatch) -> None:
+def test_diff_highlight_returns_non_empty_for_diff_text(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(output, "highlight_terminal", lambda code, lang, **kw: code)
     diff = "--- a/file.py\n+++ b/file.py\n@@ -1 +1 @@\n-old\n+new\n"
     result = output.diff_highlight(diff)
@@ -484,7 +489,7 @@ def test_diff_highlight_empty_returns_empty() -> None:
     assert output.diff_highlight("   ") == "   "
 
 
-def test_panel_expand_fills_terminal_width(monkeypatch) -> None:
+def test_panel_expand_fills_terminal_width(monkeypatch: pytest.MonkeyPatch) -> None:
     import repo_release_tools.ui.layout as _layout
 
     monkeypatch.setattr(_layout, "terminal_width", lambda default=100: 60)
@@ -494,7 +499,7 @@ def test_panel_expand_fills_terminal_width(monkeypatch) -> None:
     assert len(top_line) >= 54
 
 
-def test_panel_no_expand_stays_narrow(monkeypatch) -> None:
+def test_panel_no_expand_stays_narrow(monkeypatch: pytest.MonkeyPatch) -> None:
     import repo_release_tools.ui.layout as _layout
 
     monkeypatch.setattr(_layout, "terminal_width", lambda default=100: 60)

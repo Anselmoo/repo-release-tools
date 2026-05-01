@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import sys
-
 from typing import IO
 
 from repo_release_tools.ui.color import (
     apply_style,
-    info as _c_info,
-    subtle as _c_subtle,
-    success as _c_success,
-    warning as _c_warning,
     supports_color,
+)
+from repo_release_tools.ui.color import (
+    info as _c_info,
+)
+from repo_release_tools.ui.color import (
+    subtle as _c_subtle,
+)
+from repo_release_tools.ui.color import (
+    success as _c_success,
+)
+from repo_release_tools.ui.color import (
+    warning as _c_warning,
 )
 from repo_release_tools.ui.context import OutputContext
 from repo_release_tools.ui.font import bold
@@ -123,6 +130,7 @@ class DryRunPrinter:
     """
 
     def __init__(self, dry_run: bool) -> None:
+        """Initialize printer; pass ``dry_run=True`` to prefix commands with ``[DRY RUN]``."""
         self.dry_run = dry_run
         self._width = terminal_width()
 

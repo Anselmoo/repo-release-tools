@@ -14,7 +14,6 @@ from typing import IO
 
 from repo_release_tools.ui.color import detect_color_level, supports_color
 
-
 # ── ANSI colour codes ─────────────────────────────────────────────────────────
 
 _RESET = "\x1b[0m"

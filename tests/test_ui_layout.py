@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from repo_release_tools.ui import layout
 
 
@@ -77,7 +79,7 @@ def test_sparkline_ascii_mode() -> None:
 # ── Phase 2 I4/I7/I8/M8 tests ───────────────────────────────────────────────
 
 
-def test_section_line_auto_width_fills_terminal(monkeypatch) -> None:
+def test_section_line_auto_width_fills_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(layout, "terminal_width", lambda default=100: 80)
     result = layout.section_line("Section")
     # Total length should be ≈ 76 chars (80 - 4 = 76)
@@ -106,7 +108,7 @@ def test_progress_bar_explicit_chars() -> None:
     assert "." in result
 
 
-def test_box_auto_width_does_not_exceed_terminal(monkeypatch) -> None:
+def test_box_auto_width_does_not_exceed_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(layout, "terminal_width", lambda default=100: 40)
     long_line = "x" * 100
     result = layout.box(long_line)
@@ -122,13 +124,13 @@ def test_box_explicit_width() -> None:
     assert len(lines[0]) == 34
 
 
-def test_rule_full_width(monkeypatch) -> None:
+def test_rule_full_width(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(layout, "terminal_width", lambda default=100: 60)
     result = layout.rule()
     assert len(result) == 56  # 60 - 4
 
 
-def test_rule_with_title(monkeypatch) -> None:
+def test_rule_with_title(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(layout, "terminal_width", lambda default=100: 60)
     result = layout.rule("Section")
     assert "Section" in result
@@ -146,7 +148,7 @@ def test_rule_title_only_when_too_wide() -> None:
     assert "very long title that exceeds width" in result
 
 
-def test_terminal_width_returns_default_on_error(monkeypatch) -> None:
+def test_terminal_width_returns_default_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         layout.shutil, "get_terminal_size", lambda fallback: (_ for _ in ()).throw(OSError())
     )
@@ -198,7 +200,7 @@ def test_sparkline_returns_flat_line_for_constant_values() -> None:
     assert rendered == "▁▁▁"
 
 
-def test_section_wraps_section_line_with_heading_style(monkeypatch) -> None:
+def test_section_wraps_section_line_with_heading_style(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         layout, "section_line", lambda title, glyph="─", left=2: f"{glyph}{left}:{title}"
     )

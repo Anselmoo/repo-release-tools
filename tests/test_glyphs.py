@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import sys
 
-from repo_release_tools.ui.glyphs import GLYPHS
-from repo_release_tools.ui.glyphs import Glyph
-from repo_release_tools.ui.glyphs import _detect_legacy_terminal
-from repo_release_tools.ui.glyphs import display_width
+import pytest
+
+from repo_release_tools.ui.glyphs import GLYPHS, Glyph, _detect_legacy_terminal, display_width
 
 
 def test_glyph_multiplies_like_a_string() -> None:
+    """Test that multiplying a Glyph by an integer produces the expected string output."""
     glyph = Glyph("-", "dash")
 
     assert glyph * 3 == "---"
@@ -14,6 +16,7 @@ def test_glyph_multiplies_like_a_string() -> None:
 
 
 def test_git_status_line_stays_compact() -> None:
+    """Test that the git status line remains compact and contains expected values."""
     line = GLYPHS.git.status_line(
         "feat/add-parser",
         ahead=2,
@@ -28,6 +31,7 @@ def test_git_status_line_stays_compact() -> None:
 
 
 def test_diff_line_accepts_line_numbers() -> None:
+    """Test that diff line rendering includes the provided line number and content."""
     rendered = GLYPHS.diff.line("added", "return result", lineno=12)
 
     assert "12" in rendered
@@ -72,21 +76,21 @@ def test_progress_bar_and_spinner_are_available() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_detect_legacy_terminal_dumb(monkeypatch) -> None:
+def test_detect_legacy_terminal_dumb(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TERM", "dumb")
     # Patch sys.platform so this test exercises the TERM branch on Windows CI too.
     monkeypatch.setattr(sys, "platform", "linux")
     assert _detect_legacy_terminal() is True
 
 
-def test_detect_legacy_terminal_no_color(monkeypatch) -> None:
+def test_detect_legacy_terminal_no_color(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NO_COLOR", "1")
     # Patch sys.platform so this test exercises the NO_COLOR branch on Windows CI too.
     monkeypatch.setattr(sys, "platform", "linux")
     assert _detect_legacy_terminal() is True
 
 
-def test_detect_legacy_terminal_normal(monkeypatch) -> None:
+def test_detect_legacy_terminal_normal(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TERM", raising=False)
     monkeypatch.delenv("NO_COLOR", raising=False)
     # Patch sys.platform so this test works on Windows CI too.
@@ -108,10 +112,11 @@ def test_display_width_cjk_full_width() -> None:
     assert display_width("漢字") == 4
 
 
-def test_display_width_ambiguous_narrow_by_default(monkeypatch) -> None:
+def test_display_width_ambiguous_narrow_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Bullet '•' has east_asian_width 'A' – counted as 1 in a non-CJK locale.
     monkeypatch.setenv("RRT_WIDE_AMBIGUOUS", "0")
     from importlib import reload
+
     import repo_release_tools.ui.glyphs as g
 
     reload(g)
@@ -120,9 +125,10 @@ def test_display_width_ambiguous_narrow_by_default(monkeypatch) -> None:
     reload(g)  # restore _AMBIGUOUS_IS_WIDE to its natural value
 
 
-def test_display_width_ambiguous_wide_when_override(monkeypatch) -> None:
+def test_display_width_ambiguous_wide_when_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RRT_WIDE_AMBIGUOUS", "1")
     from importlib import reload
+
     import repo_release_tools.ui.glyphs as g
 
     reload(g)

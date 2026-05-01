@@ -4,6 +4,8 @@ import argparse
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 from repo_release_tools.commands.skill import (
     _dedupe_targets,
     _display_path,
@@ -14,7 +16,7 @@ from repo_release_tools.commands.skill import (
 from repo_release_tools.skill_assets import INSTALLED_CLI_SKILL
 
 
-def _mock_home(monkeypatch, home: Path) -> None:
+def _mock_home(monkeypatch: pytest.MonkeyPatch, home: Path) -> None:
     monkeypatch.setattr("repo_release_tools.commands.skill.Path.home", lambda: home)
 
 
@@ -25,7 +27,7 @@ def test_bundled_skill_matches_checked_in_skill_file() -> None:
     assert checked_in.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
 
 
-def test_cmd_install_writes_local_skill(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_install_writes_local_skill(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
@@ -38,7 +40,9 @@ def test_cmd_install_writes_local_skill(monkeypatch, tmp_path: Path) -> None:
     assert installed.read_text(encoding="utf-8").startswith("---\nname: repo-release-tools\n")
 
 
-def test_cmd_install_dry_run_does_not_write(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_install_dry_run_does_not_write(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
@@ -53,7 +57,7 @@ def test_cmd_install_dry_run_does_not_write(monkeypatch, tmp_path: Path, capsys)
 
 
 def test_cmd_install_no_targets_dry_run_shows_available_targets(
-    monkeypatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
@@ -68,7 +72,9 @@ def test_cmd_install_no_targets_dry_run_shows_available_targets(
     assert not (tmp_path / ".copilot").exists()
 
 
-def test_cmd_install_no_targets_without_dry_run_errors(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_install_no_targets_without_dry_run_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, tmp_path / "home")
 
@@ -81,7 +87,7 @@ def test_cmd_install_no_targets_without_dry_run_errors(monkeypatch, tmp_path: Pa
 
 
 def test_cmd_install_refuses_existing_skill_without_force(
-    monkeypatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
@@ -99,7 +105,9 @@ def test_cmd_install_refuses_existing_skill_without_force(
     assert "Use --force to overwrite it" in captured.err
 
 
-def test_cmd_install_force_overwrites_existing_skill(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_install_force_overwrites_existing_skill(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
@@ -115,7 +123,9 @@ def test_cmd_install_force_overwrites_existing_skill(monkeypatch, tmp_path: Path
     )
 
 
-def test_cmd_install_force_replaces_symlink(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_install_force_replaces_symlink(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
@@ -133,7 +143,7 @@ def test_cmd_install_force_replaces_symlink(monkeypatch, tmp_path: Path) -> None
     assert installed.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
 
 
-def test_cmd_install_force_replaces_file(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_install_force_replaces_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
@@ -149,7 +159,9 @@ def test_cmd_install_force_replaces_file(monkeypatch, tmp_path: Path) -> None:
     assert installed.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
 
 
-def test_cmd_install_global_target_uses_home_directory(monkeypatch, tmp_path: Path) -> None:
+def test_cmd_install_global_target_uses_home_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
@@ -162,7 +174,7 @@ def test_cmd_install_global_target_uses_home_directory(monkeypatch, tmp_path: Pa
 
 
 def test_cmd_install_aborts_all_targets_when_one_conflicts(
-    monkeypatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
@@ -218,12 +230,14 @@ def test_resolve_install_plan_uses_target_mappings(tmp_path: Path) -> None:
     ]
 
 
-def test_cmd_install_returns_one_for_os_error(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_cmd_install_returns_one_for_os_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
 
-    def raise_os_error(self, *args, **kwargs):
+    def raise_os_error(self: object, *args: object, **kwargs: object) -> None:
         raise OSError("boom")
 
     monkeypatch.setattr(Path, "write_text", raise_os_error)

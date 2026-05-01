@@ -1,15 +1,13 @@
 """UI helpers for terminal rendering in repo-release-tools."""
 
 from repo_release_tools.ui.color import (
-    Style,
     THEMES,
+    Style,
     apply,
     apply_style,
-    chrome as chrome,
     detect_color_level,
     error,
     get_theme,
-    heading as heading,
     info,
     set_theme,
     subtle,
@@ -17,6 +15,13 @@ from repo_release_tools.ui.color import (
     supports_color,
     warning,
 )
+from repo_release_tools.ui.color import (
+    chrome as chrome,
+)
+from repo_release_tools.ui.color import (
+    heading as heading,
+)
+from repo_release_tools.ui.color import success as fmt_version
 from repo_release_tools.ui.context import OutputContext
 from repo_release_tools.ui.font import Emphasis, bold, emphasize, italic, underline
 from repo_release_tools.ui.glyphs import GLYPHS
@@ -36,7 +41,6 @@ from repo_release_tools.ui.layout import (
 )
 from repo_release_tools.ui.messaging import (
     DryRunPrinter,
-    error as cli_error,
     render_action,
     render_dry_run,
     render_dry_run_complete,
@@ -47,6 +51,11 @@ from repo_release_tools.ui.messaging import (
     render_status,
     render_warning,
 )
+from repo_release_tools.ui.messaging import (
+    error as cli_error,
+)
+from repo_release_tools.ui.progress import ProgressLine, spinner_lines
+from repo_release_tools.ui.prompt import ask, confirm
 from repo_release_tools.ui.syntax import (
     diff_highlight,
     fmt_cmd,
@@ -54,9 +63,6 @@ from repo_release_tools.ui.syntax import (
     json_highlight,
     pretty_print,
 )
-from repo_release_tools.ui.prompt import ask, confirm
-from repo_release_tools.ui.progress import ProgressLine, spinner_lines
-from repo_release_tools.ui.color import success as fmt_version
 
 
 def fmt_path(path: str) -> str:

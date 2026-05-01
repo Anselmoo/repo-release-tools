@@ -7,16 +7,10 @@ import datetime as dt
 import re
 import shutil
 import sys
-
 from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import git
-from repo_release_tools.ui import (
-    DryRunPrinter,
-    GLYPHS,
-    spinner_lines,
-)
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_description
 from repo_release_tools.config import load_extra_branch_types
 from repo_release_tools.hooks import (
@@ -28,7 +22,11 @@ from repo_release_tools.hooks import (
     validate_branch_name,
     validate_commit_subject,
 )
-
+from repo_release_tools.ui import (
+    GLYPHS,
+    DryRunPrinter,
+    spinner_lines,
+)
 
 COMMIT_TYPES = (*CONVENTIONAL_TYPES, "deps")
 DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE = "chore: bootstrap repository"

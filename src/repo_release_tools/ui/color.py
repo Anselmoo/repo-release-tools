@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import os
 import sys
-
 from dataclasses import dataclass
 from typing import IO, Literal
-
 
 ColorLevel = Literal["none", "standard", "256", "truecolor"]
 

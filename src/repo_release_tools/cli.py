@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-
 import argparse
 import difflib
 import importlib.metadata
 import os
 import re
 import sys
-from typing import Callable, NoReturn, cast
+from collections.abc import Iterable
+from typing import IO, Any, Callable, NoReturn, cast
 
 from repo_release_tools.commands import (
     branch,
@@ -28,13 +28,14 @@ from repo_release_tools.ui import (
     apply_style,
     bold,
     chrome,
-    heading as heading_style,
     rule,
     subtle,
     supports_color,
     terminal_width,
 )
-
+from repo_release_tools.ui import (
+    heading as heading_style,
+)
 
 _ANSI_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
@@ -188,7 +189,8 @@ class RrtHelpFormatter(argparse.RawDescriptionHelpFormatter):
     _suppress_subparsers: bool = False
     _raw_epilog: bool = False
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize formatter with fixed column width and stable ANSI stripping."""
         super().__init__(*args, **kwargs)
         self._col_width = 24
         # Python 3.14 added _set_color() to HelpFormatter which sets self._decolor as
@@ -198,12 +200,20 @@ class RrtHelpFormatter(argparse.RawDescriptionHelpFormatter):
         self._decolor: Callable[[str], str] = _strip_ansi
 
     def _compute_col_width(self, actions: list[argparse.Action]) -> int:
+        """Return column width for the given action list."""
         return _compute_col_width(actions, self._width)
 
     def format_help(self) -> str:
+        """Return formatted help text."""
         return super().format_help()
 
-    def _format_usage(self, usage, actions, groups, prefix) -> str:  # type: ignore[override]
+    def _format_usage(
+        self,
+        usage: str | None,
+        actions: Iterable[argparse.Action],
+        groups: Iterable[argparse._MutuallyExclusiveGroup],
+        prefix: str | None,
+    ) -> str:  # type: ignore[override]
         positionals = [
             _metavar_text(action)
             for action in actions
@@ -218,9 +228,11 @@ class RrtHelpFormatter(argparse.RawDescriptionHelpFormatter):
         return f"{usage_label}  {bold(self._prog)}{options}{positional_text}\n\n"
 
     def _decolor(self, text: str) -> str:
+        """Strip ANSI codes from *text*."""
         return _strip_ansi(text)
 
-    def start_section(self, heading: str | None) -> None:
+    def start_section(self, heading: str | None) -> None:  # type: ignore[override]
+        """Render a styled rule+heading section opener."""
         if not heading:
             return
         normalized = {
@@ -233,9 +245,11 @@ class RrtHelpFormatter(argparse.RawDescriptionHelpFormatter):
         self._add_item(lambda h=styled_heading, r=rule_line: f"\n{r}\n{h}\n{r}\n", [])
 
     def end_section(self) -> None:
+        """End the current section (no-op override)."""
         return None
 
-    def format_epilog(self, epilog: str | None) -> str:
+    def format_epilog(self, epilog: str | None) -> str:  # type: ignore[override]
+        """Return formatted epilog with rule and Examples heading."""
         if not epilog:
             return ""
         if self._raw_epilog:
@@ -326,14 +340,15 @@ class RrtArgumentParser(argparse.ArgumentParser):
     )
     _UNRECOGNIZED_RE = re.compile(r"unrecognized arguments: (?P<args>.+)")
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize parser with rrt defaults and friendly error output."""
         kwargs.setdefault("fromfile_prefix_chars", "@")
         kwargs.setdefault("formatter_class", RrtHelpFormatter)
         super().__init__(*args, **kwargs)
         self._positionals.title = "Arguments"
         self._optionals.title = "Options"
 
-    def _get_formatter(self) -> argparse.HelpFormatter:
+    def _get_formatter(self) -> argparse.HelpFormatter:  # type: ignore[override]
         formatter_class = cast(type[RrtHelpFormatter], self.formatter_class)
         return formatter_class(
             prog=self.prog,
@@ -341,7 +356,8 @@ class RrtArgumentParser(argparse.ArgumentParser):
             max_help_position=24,
         )
 
-    def format_help(self) -> str:
+    def format_help(self) -> str:  # type: ignore[override]
+        """Return formatted help text including epilog."""
         formatter = self._get_formatter()
         all_actions = [action for group in self._action_groups for action in group._group_actions]
         cast(RrtHelpFormatter, formatter)._col_width = _compute_col_width(
@@ -359,16 +375,19 @@ class RrtArgumentParser(argparse.ArgumentParser):
             help_text += cast(RrtHelpFormatter, formatter).format_epilog(self.epilog)
         return help_text
 
-    def print_help(self, file=None) -> None:
+    def print_help(self, file: IO[str] | None = None) -> None:  # type: ignore[override]  # ty: ignore[invalid-method-override]
+        """Write help text to *file* (defaults to stdout)."""
         if file is None:
             file = sys.stdout
         file.write(self.format_help())
 
-    def convert_arg_line_to_args(self, arg_line: str) -> list[str]:
+    def convert_arg_line_to_args(self, arg_line: str) -> list[str]:  # type: ignore[override]
+        """Strip inline comments and split response-file lines."""
         line = arg_line.split("#", 1)[0].strip()
         return line.split() if line else []
 
-    def error(self, message: str) -> NoReturn:
+    def error(self, message: str) -> NoReturn:  # type: ignore[override]
+        """Print a styled error message and exit with code 2."""
         message = self._clean_error_message(message)
         use_color = supports_color(sys.stderr)
         suggestion = self._suggestion_for(message)
@@ -379,18 +398,18 @@ class RrtArgumentParser(argparse.ArgumentParser):
             prefix = apply_style("✖  error:", color="error", bold=True, stream=sys.stderr)
             detail = apply_style(message, bold=True, stream=sys.stderr)
             help_target = bold(f"{self.prog} --help")
-            p.line(f"{prefix} {detail}", stream=sys.stderr)
+            p.line(f"{prefix} {detail}", ok=False, stream=sys.stderr)
         else:
             help_target = f"'{self.prog} --help'"
-            p.line(f"[ERROR] {message}", ok=False, stream=sys.stderr)
+            p.line(message, ok=False, stream=sys.stderr)
 
         if suggestion:
             rendered_suggestion = apply_style(
                 suggestion, color="warning", bold=True, stream=sys.stderr
             )
-            p.line(f"  {rendered_suggestion}", stream=sys.stderr)
+            p.line(f"  {rendered_suggestion}", ok=False, stream=sys.stderr)
         help_hint = f"Run {help_target} for usage and examples."
-        p.line(f"  {subtle(help_hint, stream=sys.stderr)}\n", stream=sys.stderr)
+        p.line(f"  {subtle(help_hint, stream=sys.stderr)}\n", ok=False, stream=sys.stderr)
         self.exit(2)
 
     def _clean_error_message(self, message: str) -> str:

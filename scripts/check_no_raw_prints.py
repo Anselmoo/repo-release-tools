@@ -43,16 +43,3 @@ if errors:
 
 print("No disallowed print(...) found.")
 sys.exit(0)
-
-if errors:
-    print("ERROR: Raw print(...) usage detected outside allowed UI surface:\n", file=sys.stderr)
-    for e in errors:
-        print(e, file=sys.stderr)
-    print(
-        "\nPlease migrate printing to repo_release_tools.ui (DryRunPrinter, color helpers, ProgressLine).",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-print("No disallowed print(...) found.")
-sys.exit(0)

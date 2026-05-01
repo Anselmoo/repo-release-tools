@@ -5,13 +5,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import pytest
+
 from repo_release_tools.commands import config_cmd
 from repo_release_tools.config import (
     RrtConfig,
     VersionGroup,
     VersionTarget,
 )
-
 
 _MINIMAL_CONFIG = """\
 [tool.rrt]
@@ -47,7 +48,9 @@ def _make_config(tmp_path: Path, *, autodetected: bool = False) -> RrtConfig:
     )
 
 
-def test_cmd_config_no_config_file(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_no_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
 
     rc = config_cmd.cmd_config(_ARGS)
@@ -56,7 +59,9 @@ def test_cmd_config_no_config_file(tmp_path: Path, monkeypatch, capsys) -> None:
     assert capsys.readouterr().err  # some guidance printed to stderr
 
 
-def test_cmd_config_renders_panel_header(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_renders_panel_header(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
     monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", lambda _: conf)
@@ -69,7 +74,9 @@ def test_cmd_config_renders_panel_header(tmp_path: Path, monkeypatch, capsys) ->
     assert "Version groups" in captured
 
 
-def test_cmd_config_shows_autodetected_label(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_shows_autodetected_label(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path, autodetected=True)
     monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", lambda _: conf)
@@ -80,7 +87,9 @@ def test_cmd_config_shows_autodetected_label(tmp_path: Path, monkeypatch, capsys
     assert "(auto-detected)" in capsys.readouterr().out
 
 
-def test_cmd_config_shows_explicit_config_file(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_shows_explicit_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path, autodetected=False)
     monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", lambda _: conf)
@@ -92,7 +101,9 @@ def test_cmd_config_shows_explicit_config_file(tmp_path: Path, monkeypatch, caps
     assert "pyproject.toml" in out
 
 
-def test_cmd_config_tree_shows_release_branch(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_tree_shows_release_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
     monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", lambda _: conf)
@@ -103,7 +114,9 @@ def test_cmd_config_tree_shows_release_branch(tmp_path: Path, monkeypatch, capsy
     assert "release/v{version}" in out
 
 
-def test_cmd_config_tree_shows_lock_command(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_tree_shows_lock_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
     monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", lambda _: conf)
@@ -114,7 +127,9 @@ def test_cmd_config_tree_shows_lock_command(tmp_path: Path, monkeypatch, capsys)
     assert "uv lock" in out
 
 
-def test_cmd_config_tree_shows_version_targets(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_tree_shows_version_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
     (tmp_path / "src" / "pkg").mkdir(parents=True)
@@ -126,7 +141,9 @@ def test_cmd_config_tree_shows_version_targets(tmp_path: Path, monkeypatch, caps
     assert "__version__" in out
 
 
-def test_cmd_config_tree_shows_generated_files(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_tree_shows_generated_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
     monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", lambda _: conf)
@@ -138,7 +155,7 @@ def test_cmd_config_tree_shows_generated_files(tmp_path: Path, monkeypatch, caps
 
 
 def test_cmd_config_tree_describes_pattern_target_without_none_label(
-    tmp_path: Path, monkeypatch, capsys
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
     target = VersionTarget(path=tmp_path / "VERSION.txt", pattern=r"^(version=)(.+)$")
@@ -161,7 +178,9 @@ def test_cmd_config_tree_describes_pattern_target_without_none_label(
     assert "[None]" not in out
 
 
-def test_cmd_config_multiple_groups(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_multiple_groups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "src" / "pkg").mkdir(parents=True)
 
@@ -200,10 +219,12 @@ def test_cmd_config_multiple_groups(tmp_path: Path, monkeypatch, capsys) -> None
     assert "2 groups" in out
 
 
-def test_cmd_config_value_error_shows_message(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_value_error_shows_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.chdir(tmp_path)
 
-    def raise_value_error(_root):
+    def raise_value_error(_root: object) -> None:
         raise ValueError("bad config format")
 
     monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", raise_value_error)
@@ -235,7 +256,9 @@ def test_register_adds_raw_flag() -> None:
     assert parsed.raw is True
 
 
-def test_cmd_config_raw_prints_toml(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_raw_prints_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     from repo_release_tools.commands import config_cmd
 
     toml_content = '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
@@ -263,7 +286,9 @@ def test_cmd_config_raw_prints_toml(tmp_path: Path, monkeypatch, capsys) -> None
     assert "tool.rrt" in captured.out
 
 
-def test_cmd_config_raw_unreadable_file(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_raw_unreadable_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     conf = _make_config(tmp_path)
     # Don't create the file so OSError is raised
     import repo_release_tools.config as cfg_mod
@@ -276,7 +301,9 @@ def test_cmd_config_raw_unreadable_file(tmp_path: Path, monkeypatch, capsys) -> 
     assert rc == 1
 
 
-def test_cmd_config_panel_uses_rule_separator(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_panel_uses_rule_separator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     conf = _make_config(tmp_path)
     import repo_release_tools.config as cfg_mod
 
@@ -290,7 +317,9 @@ def test_cmd_config_panel_uses_rule_separator(tmp_path: Path, monkeypatch, capsy
     assert "Version groups" in captured.out
 
 
-def test_cmd_config_aligns_tree_details(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cmd_config_aligns_tree_details(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     conf = _make_config(tmp_path)
     import repo_release_tools.config as cfg_mod
 

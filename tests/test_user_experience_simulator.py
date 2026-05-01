@@ -56,12 +56,17 @@ from __future__ import annotations
 
 import io
 
+import pytest
+
 from repo_release_tools.ui import (
+    DryRunPrinter,
     apply,
     apply_style,
     bold,
+    color,
     detect_color_level,
     error,
+    font,
     info,
     italic,
     progress_bar,
@@ -71,38 +76,36 @@ from repo_release_tools.ui import (
     subtle,
     success,
     supports_color,
+    syntax,
     truncate,
     underline,
     warning,
-    DryRunPrinter,
 )
-from repo_release_tools.ui import color, font, syntax
 from repo_release_tools.ui.context import OutputContext
 from repo_release_tools.ui.glyphs import display_width
 from repo_release_tools.ui.layout import align, box
 from repo_release_tools.ui.prompt import ask, confirm
 
-
 # ── TestColors ────────────────────────────────────────────────────────────────
 
 
 class TestColors:
-    def test_apply_emits_ansi_when_color_supported(self, monkeypatch) -> None:
+    def test_apply_emits_ansi_when_color_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = apply("text", color.Style(fg=31, bold=True))
         assert "\x1b[" in result
         assert result.endswith("\x1b[0m")
 
-    def test_apply_returns_plain_text_without_color(self, monkeypatch) -> None:
+    def test_apply_returns_plain_text_without_color(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         assert apply("text", color.Style(fg=31, bold=True)) == "text"
 
-    def test_no_color_env_disables_supports_color(self, monkeypatch) -> None:
+    def test_no_color_env_disables_supports_color(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         fake_stream = type("S", (io.StringIO,), {"isatty": lambda self: True})()
         assert not supports_color(fake_stream)
 
-    def test_non_tty_stream_disables_color(self, monkeypatch) -> None:
+    def test_non_tty_stream_disables_color(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("RRT_COLOR", raising=False)
         assert not supports_color(io.StringIO())  # StringIO.isatty() → False
 
@@ -111,36 +114,38 @@ class TestColors:
 
 
 class TestSyntaxHighlight:
-    def test_returns_plain_when_color_level_none(self, monkeypatch) -> None:
+    def test_returns_plain_when_color_level_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(syntax, "detect_color_level", lambda: "none")
         result = syntax.highlight_terminal("key = 'val'", "toml")
         assert result == "key = 'val'"
 
-    def test_returns_highlighted_when_color_on_and_toml(self, monkeypatch) -> None:
+    def test_returns_highlighted_when_color_on_and_toml(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
         monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
         result = syntax.highlight_terminal("key = 'val'", "toml")
         assert "\x1b[" in result
         assert "key" in result
 
-    def test_returns_plain_when_non_tty(self, monkeypatch) -> None:
+    def test_returns_plain_when_non_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(syntax, "supports_color", lambda stream=None: False)
         result = syntax.highlight_terminal("key = 'val'", "toml")
         assert result == "key = 'val'"
 
-    def test_json_key_highlighted_when_color_on(self, monkeypatch) -> None:
+    def test_json_key_highlighted_when_color_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
         monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
         result = syntax.highlight_terminal('  "name": "rrt"', "json")
         assert "\x1b[" in result
 
-    def test_diff_added_line_green_when_color_on(self, monkeypatch) -> None:
+    def test_diff_added_line_green_when_color_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
         monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
         result = syntax.highlight_terminal("+added", "diff")
         assert "\x1b[32m" in result
 
-    def test_diff_removed_line_red_when_color_on(self, monkeypatch) -> None:
+    def test_diff_removed_line_red_when_color_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
         monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
         result = syntax.highlight_terminal("-removed", "diff")
@@ -171,7 +176,7 @@ class TestProgressBar:
         result = progress_bar(0.75, width=8, label="Updating")
         assert "Updating" in result
 
-    def test_ascii_fallback_when_dumb_term(self, monkeypatch) -> None:
+    def test_ascii_fallback_when_dumb_term(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TERM", "dumb")
         monkeypatch.delenv("NO_COLOR", raising=False)
         result = progress_bar(0.5, width=6)
@@ -212,23 +217,27 @@ class TestSparkline:
 
 
 class TestPrompts:
-    def test_ask_returns_default_on_non_tty(self, monkeypatch) -> None:
+    def test_ask_returns_default_on_non_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
         assert ask("Name?", default="rrt") == "rrt"
 
-    def test_ask_returns_empty_when_no_default_on_non_tty(self, monkeypatch) -> None:
+    def test_ask_returns_empty_when_no_default_on_non_tty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
         assert ask("Name?") == ""
 
-    def test_confirm_returns_true_default_on_non_tty(self, monkeypatch) -> None:
+    def test_confirm_returns_true_default_on_non_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
         assert confirm("Proceed?", default=True) is True
 
-    def test_confirm_returns_false_default_on_non_tty(self, monkeypatch) -> None:
+    def test_confirm_returns_false_default_on_non_tty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
         assert confirm("Proceed?", default=False) is False
 
-    def test_ask_uses_user_reply_on_tty(self, monkeypatch) -> None:
+    def test_ask_uses_user_reply_on_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         FakeTTY = type("TTY", (io.StringIO,), {"isatty": lambda self: True})
         monkeypatch.setattr("sys.stdin", FakeTTY(""))
         monkeypatch.setattr("builtins.input", lambda _: "repo-release-tools")
@@ -292,25 +301,25 @@ class TestLayout:
 
 
 class TestEmphasis:
-    def test_bold_emits_sgr1_when_color_on(self, monkeypatch) -> None:
+    def test_bold_emits_sgr1_when_color_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             font, "apply", lambda text, style, *, stream=None: f"\x1b[1m{text}\x1b[0m"
         )
         assert "\x1b[1m" in bold("x")
 
-    def test_bold_plain_when_color_off(self, monkeypatch) -> None:
+    def test_bold_plain_when_color_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         assert bold("x") == "x"
 
-    def test_italic_plain_when_color_off(self, monkeypatch) -> None:
+    def test_italic_plain_when_color_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         assert italic("x") == "x"
 
-    def test_underline_plain_when_color_off(self, monkeypatch) -> None:
+    def test_underline_plain_when_color_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         assert underline("x") == "x"
 
-    def test_bold_wraps_text_in_ansi_when_color_on(self, monkeypatch) -> None:
+    def test_bold_wraps_text_in_ansi_when_color_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = bold("hello")
         assert "\x1b[" in result
@@ -321,23 +330,27 @@ class TestEmphasis:
 
 
 class TestApplyStyle:
-    def test_combined_bold_and_named_color_emits_ansi(self, monkeypatch) -> None:
+    def test_combined_bold_and_named_color_emits_ansi(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = apply_style("Done!", bold=True, color="success")
         assert "\x1b[" in result
         assert "Done!" in result
 
-    def test_returns_plain_text_when_color_off(self, monkeypatch) -> None:
+    def test_returns_plain_text_when_color_off(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         assert apply_style("plain", bold=True, color="error") == "plain"
 
-    def test_rgb_fg_uses_truecolor_escape(self, monkeypatch) -> None:
+    def test_rgb_fg_uses_truecolor_escape(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         monkeypatch.setattr(color, "detect_color_level", lambda: "truecolor")
         result = apply_style("colored", fg=(255, 0, 0))
         assert "38;2;255;0;0" in result
 
-    def test_rgb_fg_downsampled_in_standard_no_24bit_code(self, monkeypatch) -> None:
+    def test_rgb_fg_downsampled_in_standard_no_24bit_code(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         monkeypatch.setattr(color, "detect_color_level", lambda: "standard")
         result = apply_style("colored", fg=(255, 0, 0))
@@ -368,41 +381,45 @@ class TestTruncation:
 
 
 class TestColorLevels:
-    def test_no_color_env_returns_none_level(self, monkeypatch) -> None:
+    def test_no_color_env_returns_none_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         assert detect_color_level() == "none"
 
-    def test_colorterm_truecolor_returns_truecolor_level(self, monkeypatch) -> None:
+    def test_colorterm_truecolor_returns_truecolor_level(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("NO_COLOR", raising=False)
         monkeypatch.delenv("RRT_COLOR", raising=False)
         monkeypatch.setenv("COLORTERM", "truecolor")
         assert detect_color_level() == "truecolor"
 
-    def test_colorterm_24bit_returns_truecolor_level(self, monkeypatch) -> None:
+    def test_colorterm_24bit_returns_truecolor_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("NO_COLOR", raising=False)
         monkeypatch.delenv("RRT_COLOR", raising=False)
         monkeypatch.setenv("COLORTERM", "24bit")
         assert detect_color_level() == "truecolor"
 
-    def test_256color_term_returns_256_level(self, monkeypatch) -> None:
+    def test_256color_term_returns_256_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("NO_COLOR", raising=False)
         monkeypatch.delenv("RRT_COLOR", raising=False)
         monkeypatch.delenv("COLORTERM", raising=False)
         monkeypatch.setenv("TERM", "xterm-256color")
         assert detect_color_level() == "256"
 
-    def test_dumb_term_returns_none_level(self, monkeypatch) -> None:
+    def test_dumb_term_returns_none_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("NO_COLOR", raising=False)
         monkeypatch.delenv("RRT_COLOR", raising=False)
         monkeypatch.setenv("TERM", "dumb")
         assert detect_color_level() == "none"
 
-    def test_rrt_color_override_off_returns_none(self, monkeypatch) -> None:
+    def test_rrt_color_override_off_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("NO_COLOR", raising=False)
         monkeypatch.setenv("RRT_COLOR", "0")
         assert detect_color_level() == "none"
 
-    def test_rrt_color_override_truecolor_returns_truecolor(self, monkeypatch) -> None:
+    def test_rrt_color_override_truecolor_returns_truecolor(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("NO_COLOR", raising=False)
         monkeypatch.setenv("RRT_COLOR", "truecolor")
         assert detect_color_level() == "truecolor"
@@ -443,41 +460,43 @@ class TestOutputContext:
 
 
 class TestMessaging:
-    def test_error_emits_ansi_when_color_supported(self, monkeypatch) -> None:
+    def test_error_emits_ansi_when_color_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = error("bad input")
         assert "\x1b[" in result
         assert "bad input" in result
 
-    def test_error_plain_when_no_color(self, monkeypatch) -> None:
+    def test_error_plain_when_no_color(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         assert error("bad input") == "bad input"
 
-    def test_warning_emits_ansi_when_color_supported(self, monkeypatch) -> None:
+    def test_warning_emits_ansi_when_color_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = warning("watch out")
         assert "\x1b[" in result
         assert "watch out" in result
 
-    def test_info_emits_ansi_when_color_supported(self, monkeypatch) -> None:
+    def test_info_emits_ansi_when_color_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = info("note")
         assert "\x1b[" in result
         assert "note" in result
 
-    def test_success_emits_ansi_when_color_supported(self, monkeypatch) -> None:
+    def test_success_emits_ansi_when_color_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = success("done")
         assert "\x1b[" in result
         assert "done" in result
 
-    def test_subtle_emits_ansi_when_color_supported(self, monkeypatch) -> None:
+    def test_subtle_emits_ansi_when_color_supported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = subtle("quiet")
         assert "\x1b[" in result
         assert "quiet" in result
 
-    def test_all_messaging_functions_plain_when_no_color(self, monkeypatch) -> None:
+    def test_all_messaging_functions_plain_when_no_color(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         for fn in (error, warning, info, success, subtle):
             assert fn("msg") == "msg"
@@ -489,21 +508,21 @@ class TestMessaging:
 class TestDryRunPrinter:
     """Verify DryRunPrinter produces consistent, 0-indent output in both modes."""
 
-    def test_header_live_contains_title(self, capsys) -> None:
+    def test_header_live_contains_title(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.header("My command")
         out = capsys.readouterr().out
         assert "My command" in out
         assert "[DRY RUN]" not in out
 
-    def test_header_dry_run_labels_title(self, capsys) -> None:
+    def test_header_dry_run_labels_title(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=True)
         p.header("My command")
         out = capsys.readouterr().out
         assert "[DRY RUN]" in out
         assert "My command" in out
 
-    def test_header_metadata_key_value(self, capsys) -> None:
+    def test_header_metadata_key_value(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.header("Cmd", Version="1.2.3", Branch="main")
         out = capsys.readouterr().out
@@ -512,7 +531,7 @@ class TestDryRunPrinter:
         assert "Branch" in out
         assert "main" in out
 
-    def test_header_not_indented(self, capsys) -> None:
+    def test_header_not_indented(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.header("Zero indent check")
         out = capsys.readouterr().out
@@ -523,28 +542,30 @@ class TestDryRunPrinter:
         stripped = re.sub(r"\x1b\[[0-9;]*m", "", first_line)
         assert not stripped.startswith(" ")
 
-    def test_section_outputs_rule(self, capsys) -> None:
+    def test_section_outputs_rule(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.section("My section")
         out = capsys.readouterr().out
         assert "My section" in out
         assert "─" in out or "-" in out  # rule character
 
-    def test_would_run_only_in_dry_run(self, capsys) -> None:
+    def test_would_run_only_in_dry_run(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=True)
         p.would_run("git commit")
         out = capsys.readouterr().out
         assert "git commit" in out
         assert "[dry-run]" in out
 
-    def test_would_write_shows_path(self, capsys) -> None:
+    def test_would_write_shows_path(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=True)
         p.would_write("CHANGELOG.md", "add entry")
         out = capsys.readouterr().out
         assert "CHANGELOG.md" in out
         assert "add entry" in out
 
-    def test_would_install_shows_name_target_location(self, capsys) -> None:
+    def test_would_install_shows_name_target_location(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         p = DryRunPrinter(dry_run=True)
         p.would_install("skill.md", "copilot-local", "/some/path")
         out = capsys.readouterr().out
@@ -552,39 +573,41 @@ class TestDryRunPrinter:
         assert "copilot-local" in out
         assert "/some/path" in out
 
-    def test_action_contains_message(self, capsys) -> None:
+    def test_action_contains_message(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.action("Cloning repo")
         out = capsys.readouterr().out
         assert "Cloning repo" in out
 
-    def test_meta_shows_key_value(self, capsys) -> None:
+    def test_meta_shows_key_value(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.meta("Ref", "refs/heads/main")
         out = capsys.readouterr().out
         assert "Ref" in out
         assert "refs/heads/main" in out
 
-    def test_ok_contains_message(self, capsys) -> None:
+    def test_ok_contains_message(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.ok("All done")
         out = capsys.readouterr().out
         assert "All done" in out
 
-    def test_warn_contains_message(self, capsys) -> None:
+    def test_warn_contains_message(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.warn("Proceeding anyway")
         out = capsys.readouterr().out
         assert "Proceeding anyway" in out
 
-    def test_footer_live_shows_message_no_dry_run_suffix(self, capsys) -> None:
+    def test_footer_live_shows_message_no_dry_run_suffix(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         p = DryRunPrinter(dry_run=False)
         p.footer("Completed")
         out = capsys.readouterr().out
         assert "Completed" in out
         assert "[dry-run]" not in out
 
-    def test_footer_dry_run_shows_complete_line(self, capsys) -> None:
+    def test_footer_dry_run_shows_complete_line(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=True)
         p.footer("no files were modified")
         out = capsys.readouterr().out
@@ -592,7 +615,9 @@ class TestDryRunPrinter:
         assert "[dry-run]" in out
         assert "complete" in out
 
-    def test_no_color_fallback(self, monkeypatch, capsys) -> None:
+    def test_no_color_fallback(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         p = DryRunPrinter(dry_run=False)
         p.ok("plain output")
@@ -604,7 +629,9 @@ class TestDryRunPrinter:
 class TestFileEntry:
     """Verify DryRunPrinter.file_entry renders each kind with path and correct stream."""
 
-    def test_added_contains_path(self, monkeypatch, capsys) -> None:
+    def test_added_contains_path(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
         p.file_entry("added", "src/foo.py")
@@ -612,42 +639,54 @@ class TestFileEntry:
         assert "src/foo.py" in out
         assert out.strip()
 
-    def test_removed_contains_path(self, monkeypatch, capsys) -> None:
+    def test_removed_contains_path(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
         p.file_entry("removed", "src/foo.py")
         out = capsys.readouterr().out
         assert "src/foo.py" in out
 
-    def test_modified_contains_path(self, monkeypatch, capsys) -> None:
+    def test_modified_contains_path(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
         p.file_entry("modified", "src/foo.py")
         out = capsys.readouterr().out
         assert "src/foo.py" in out
 
-    def test_renamed_contains_path(self, monkeypatch, capsys) -> None:
+    def test_renamed_contains_path(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
         p.file_entry("renamed", "src/foo.py")
         out = capsys.readouterr().out
         assert "src/foo.py" in out
 
-    def test_conflict_contains_path(self, monkeypatch, capsys) -> None:
+    def test_conflict_contains_path(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
         p.file_entry("conflict", "src/foo.py")
         out = capsys.readouterr().out
         assert "src/foo.py" in out
 
-    def test_untracked_contains_path(self, monkeypatch, capsys) -> None:
+    def test_untracked_contains_path(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
         p.file_entry("untracked", "src/foo.py")
         out = capsys.readouterr().out
         assert "src/foo.py" in out
 
-    def test_stream_routes_to_stderr(self, monkeypatch, capsys) -> None:
+    def test_stream_routes_to_stderr(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         import sys
 
         monkeypatch.setenv("NO_COLOR", "1")
@@ -661,7 +700,9 @@ class TestFileEntry:
 class TestListItem:
     """Verify DryRunPrinter.list_item renders bullet text and respects stream=."""
 
-    def test_text_appears_in_stdout(self, monkeypatch, capsys) -> None:
+    def test_text_appears_in_stdout(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
         p.list_item("deploy to staging")
@@ -669,7 +710,9 @@ class TestListItem:
         assert "deploy to staging" in captured.out
         assert captured.err == ""
 
-    def test_stream_routes_to_stderr(self, monkeypatch, capsys) -> None:
+    def test_stream_routes_to_stderr(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         import sys
 
         monkeypatch.setenv("NO_COLOR", "1")
@@ -683,14 +726,14 @@ class TestListItem:
 class TestWarnStream:
     """Verify DryRunPrinter.warn routes output based on the stream= parameter."""
 
-    def test_warn_defaults_to_stdout(self, capsys) -> None:
+    def test_warn_defaults_to_stdout(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=False)
         p.warn("low disk space")
         captured = capsys.readouterr()
         assert "low disk space" in captured.out
         assert captured.err == ""
 
-    def test_warn_explicit_stderr(self, capsys) -> None:
+    def test_warn_explicit_stderr(self, capsys: pytest.CaptureFixture[str]) -> None:
         import sys
 
         p = DryRunPrinter(dry_run=False)

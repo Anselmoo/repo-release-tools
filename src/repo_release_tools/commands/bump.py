@@ -5,16 +5,9 @@ from __future__ import annotations
 import argparse
 import contextlib
 import sys
-
 from pathlib import Path
 
 from repo_release_tools import git
-from repo_release_tools.ui import (
-    DryRunPrinter,
-    GLYPHS,
-    ProgressLine,
-    spinner_lines,
-)
 from repo_release_tools.changelog import (
     build_changelog_section,
     detect_changelog_format,
@@ -30,6 +23,12 @@ from repo_release_tools.config import (
     is_missing_tool_rrt_error,
     iter_config_files,
     load_or_autodetect_config,
+)
+from repo_release_tools.ui import (
+    GLYPHS,
+    DryRunPrinter,
+    ProgressLine,
+    spinner_lines,
 )
 from repo_release_tools.version_targets import (
     check_autodetected_version_consistency,

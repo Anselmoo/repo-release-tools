@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-
 from pathlib import Path
 
 from repo_release_tools.ui import DryRunPrinter

@@ -6,10 +6,8 @@ import argparse
 import json as _json
 import sys
 import tomllib
-
 from pathlib import Path
 
-from repo_release_tools.ui import DryRunPrinter, cli_error as render_error, highlight_terminal
 from repo_release_tools.config import (
     DEFAULT_INIT_CONFIG,
     find_explicit_config_file,
@@ -19,6 +17,8 @@ from repo_release_tools.config import (
     recommend_init_section_for_node,
     recommend_init_section_for_pyproject,
 )
+from repo_release_tools.ui import DryRunPrinter, highlight_terminal
+from repo_release_tools.ui import cli_error as render_error
 
 
 def cmd_init(args: argparse.Namespace) -> int:

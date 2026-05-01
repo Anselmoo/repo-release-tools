@@ -5,13 +5,11 @@ from __future__ import annotations
 import argparse
 import shutil
 import sys
-
 from collections.abc import Iterable
 from pathlib import Path
 
-from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.skill_assets import INSTALLED_CLI_SKILL
-
+from repo_release_tools.ui import DryRunPrinter
 
 TARGET_PATHS = {
     "claude-global": lambda cwd, home: home / ".claude" / "skills",

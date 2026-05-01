@@ -1,21 +1,28 @@
+"""Tests for version bumping and changelog update logic."""
+
+from __future__ import annotations
+
+import argparse
 import io
 import os
 import sys
 import types
-from contextlib import contextmanager
-import argparse
 from argparse import Namespace
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
-from repo_release_tools.ui import GLYPHS, render_ok
+from repo_release_tools.commands.bump import (
+    cmd_bump,
+    git_log_since_latest_tag,
+    register,
+    resolve_changelog_mode,
+    update_changelog,
+)
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
-from repo_release_tools.commands.bump import cmd_bump
-from repo_release_tools.commands.bump import git_log_since_latest_tag
-from repo_release_tools.commands.bump import resolve_changelog_mode
-from repo_release_tools.commands.bump import register
-from repo_release_tools.commands.bump import update_changelog
+from repo_release_tools.ui import GLYPHS, render_ok
 from repo_release_tools.versioning import Version
 
 # Compatibility shim — maps legacy output.X names to the canonical ui API.
@@ -26,6 +33,7 @@ output = types.SimpleNamespace(
 
 
 def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
+    """Test that resolve_changelog_mode returns the requested mode when provided."""
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
         name="default",
@@ -47,6 +55,7 @@ def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
 
 
 def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path) -> None:
+    """Test that resolve_changelog_mode defaults to 'auto' for incremental workflow."""
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
         name="default",
@@ -68,6 +77,7 @@ def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path)
 
 
 def test_resolve_changelog_mode_defaults_to_generate_for_squash(tmp_path: Path) -> None:
+    """Test that resolve_changelog_mode defaults to 'generate' for squash workflow."""
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
         name="default",
@@ -187,7 +197,10 @@ def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
     assert "…" in output or "..." in output
 
 
-def test_cmd_bump_reports_loaded_config_error(monkeypatch, capsys) -> None:
+def test_cmd_bump_reports_loaded_config_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.load_or_autodetect_config",
         lambda root: (_ for _ in ()).throw(ValueError("broken config")),
@@ -297,7 +310,10 @@ kind = "package_json"
     assert ["git", "commit", "-m", "chore: bump version to v0.2.0"] in calls
 
 
-def test_cmd_bump_dry_run_from_pep621_config(tmp_path, capsys) -> None:
+def test_cmd_bump_dry_run_from_pep621_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / "pyproject.toml").write_text(
         """[tool.rrt]
 release_branch = \"release/v{version}\"
@@ -353,7 +369,10 @@ def test_register_bump_parser_sets_handler_and_defaults() -> None:
     assert args.handler is cmd_bump
 
 
-def test_cmd_bump_dry_run_from_rrt_toml_and_package_json(tmp_path, capsys) -> None:
+def test_cmd_bump_dry_run_from_rrt_toml_and_package_json(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """[tool.rrt]
 release_branch = "release/v{version}"
@@ -461,7 +480,9 @@ kind = "package_json"
 
 
 def test_cmd_bump_refuses_existing_release_branch_without_force(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -507,7 +528,9 @@ kind = "package_json"
 
 
 def test_cmd_bump_force_resets_existing_release_branch(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -562,7 +585,10 @@ kind = "package_json"
     assert ["git", "checkout", "-b", "release/v0.1.1"] not in calls
 
 
-def test_cmd_bump_accepts_legacy_double_escaped_pattern(tmp_path: Path, capsys) -> None:
+def test_cmd_bump_accepts_legacy_double_escaped_pattern(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """[tool.rrt]
 release_branch = "release/v{version}"
@@ -602,7 +628,10 @@ pattern = '^(\\\\s*__version__\\\\s*=\\\\s*")([^"]+)(")'
     assert "Would update" in captured.out
 
 
-def test_cmd_bump_requires_group_for_multi_group_config(tmp_path: Path, capsys) -> None:
+def test_cmd_bump_requires_group_for_multi_group_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
 [tool.rrt]
@@ -875,7 +904,10 @@ kind = "package_json"
     assert ["git", "checkout", "main"] in calls
 
 
-def test_cmd_bump_updates_selected_group_only(tmp_path: Path, capsys) -> None:
+def test_cmd_bump_updates_selected_group_only(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
 [tool.rrt]
@@ -1100,7 +1132,9 @@ version = "0.3.0"
 
 
 def test_cmd_bump_python_version_kind_explicit_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """bump updates __version__ in a Python file when kind='python_version' is configured."""
     init_file = tmp_path / "src" / "mypkg" / "__init__.py"
@@ -1343,9 +1377,9 @@ def test_update_changelog_adds_unreleased_placeholder_when_absent(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """When no [Unreleased] section exists the bump adds a health-mode placeholder."""
+    from repo_release_tools.changelog import has_unreleased_section
     from repo_release_tools.commands.bump import update_changelog
     from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
-    from repo_release_tools.changelog import has_unreleased_section
 
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
@@ -1571,8 +1605,8 @@ def test_update_changelog_generates_rst_section(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """For a .rst changelog the generated section must use RST underline notation."""
+    from repo_release_tools.changelog import ChangelogFormat, has_unreleased_section
     from repo_release_tools.commands.bump import update_changelog
-    from repo_release_tools.changelog import has_unreleased_section, ChangelogFormat
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
@@ -1913,7 +1947,7 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     progress_instances: list[object] = []
 
     class _FakeProgressLine:
-        def __init__(self, *, file=None) -> None:
+        def __init__(self, *, file: object = None) -> None:
             self.file = file
             progress_instances.append(self)
 
@@ -1924,7 +1958,9 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
             progress_clears.append(len(progress_instances) - 1)
 
     @contextmanager
-    def fake_spinner_lines(label: str, *, detail: str | None = None, file=None):
+    def fake_spinner_lines(
+        label: str, *, detail: str | None = None, file: object = None
+    ) -> Generator[None, None, None]:
         spinner_calls.append((label, detail, file))
         yield
 
@@ -2023,7 +2059,7 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
         default_group_name="default",
     )
 
-    def fake_replace_version(target, new_version, *, dry_run: bool) -> None:  # noqa: ARG001
+    def fake_replace_version(target: VersionTarget, new_version: str, *, dry_run: bool) -> None:  # noqa: ARG001
         print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
 
     monkeypatch.setattr(

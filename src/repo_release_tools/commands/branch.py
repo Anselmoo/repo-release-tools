@@ -5,13 +5,11 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-
 from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import git
-from repo_release_tools.ui import DryRunPrinter, GLYPHS
-
+from repo_release_tools.ui import GLYPHS, DryRunPrinter
 
 CONVENTIONAL_TYPES = (
     "feat",
