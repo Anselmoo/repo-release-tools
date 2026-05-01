@@ -9,6 +9,7 @@ from repo_release_tools.ui.glyphs import display_width
 
 
 def test_glyph_multiplies_like_a_string() -> None:
+    """Test that multiplying a Glyph by an integer produces the expected string output."""
     glyph = Glyph("-", "dash")
 
     assert glyph * 3 == "---"
@@ -16,6 +17,7 @@ def test_glyph_multiplies_like_a_string() -> None:
 
 
 def test_git_status_line_stays_compact() -> None:
+    """Test that the git status line remains compact and contains expected values."""
     line = GLYPHS.git.status_line(
         "feat/add-parser",
         ahead=2,
@@ -30,6 +32,7 @@ def test_git_status_line_stays_compact() -> None:
 
 
 def test_diff_line_accepts_line_numbers() -> None:
+    """Test that diff line rendering includes the provided line number and content."""
     rendered = GLYPHS.diff.line("added", "return result", lineno=12)
 
     assert "12" in rendered

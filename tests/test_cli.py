@@ -18,6 +18,7 @@ from repo_release_tools.ui import OutputContext, color
 
 
 def test_module_help_smoke() -> None:
+    """Test that running the CLI with --help returns the expected help output and exit code 0."""
     result = subprocess.run(
         [sys.executable, "-m", "repo_release_tools", "--help"],
         capture_output=True,
@@ -35,6 +36,7 @@ def test_module_help_smoke() -> None:
 
 
 def test_module_no_args_shows_help_and_exits_with_code_2() -> None:
+    """Test that running the CLI with no arguments shows help and exits with code 2."""
     result = subprocess.run(
         [sys.executable, "-m", "repo_release_tools"],
         capture_output=True,
@@ -53,6 +55,7 @@ def test_module_no_args_shows_help_and_exits_with_code_2() -> None:
 
 
 def test_branch_new_missing_args_shows_help_and_exits_with_code_2() -> None:
+    """Test that running 'branch new' with missing args shows help and exits with code 2."""
     result = subprocess.run(
         [sys.executable, "-m", "repo_release_tools", "branch", "new"],
         capture_output=True,

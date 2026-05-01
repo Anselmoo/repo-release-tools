@@ -31,6 +31,7 @@ output = types.SimpleNamespace(
 
 
 def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
+    """Test that resolve_changelog_mode returns the requested mode when provided."""
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
         name="default",
@@ -52,6 +53,7 @@ def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
 
 
 def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path) -> None:
+    """Test that resolve_changelog_mode defaults to 'auto' for incremental workflow."""
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
         name="default",
@@ -73,6 +75,7 @@ def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path)
 
 
 def test_resolve_changelog_mode_defaults_to_generate_for_squash(tmp_path: Path) -> None:
+    """Test that resolve_changelog_mode defaults to 'generate' for squash workflow."""
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
         name="default",
