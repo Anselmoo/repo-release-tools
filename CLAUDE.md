@@ -38,12 +38,19 @@ Three product surfaces share the same codebase:
 | `version_targets.py` | Read/write versions across pep621, package.json, go_version, python_version, and custom regex targets |
 | `versioning.py` | Semver bump logic |
 | `git.py` | Low-level git helpers |
-| `ui/` | Terminal rendering: `color`, `font`, `glyphs`, `layout`, `syntax`, `prompt`, `messaging`, `progress` |
-| `output/` | **Canonical public rendering API** — wraps `ui/` internally. Import from here in all new code. Swap the backing layer here (e.g. rich, typer) without changing callers. `output.py` deleted. |
+| `ui/` | **Canonical public rendering API** — `color`, `font`, `glyphs`, `layout`, `syntax`, `prompt`, `messaging`, `progress`. Import from `repo_release_tools.ui` in all new code. |
 
 ### UI layer
 
-`src/repo_release_tools/output/` is the canonical public rendering API. It wraps `src/repo_release_tools/ui/` internally — `ui/` is the implementation layer and may not be imported directly in new code. New CLI output uses `DryRunPrinter` from `ui/messaging.py` (re-exported via `output/`).
+`src/repo_release_tools/ui/` is the canonical public rendering API. Import helpers via the single consolidated block:
+
+```python
+from repo_release_tools.ui import (
+    DryRunPrinter, bold, error, info, rule, success, terminal_width, warning,
+)
+```
+
+New CLI output uses `DryRunPrinter` from `ui/messaging.py` (re-exported via `ui/__init__.py`).
 
 ## Key conventions
 
@@ -52,7 +59,7 @@ Three product surfaces share the same codebase:
 - **Changelog**: Keep-a-Changelog format; `[Unreleased]` is auto-managed by `rrt-update-unreleased` — never edit it manually when the hook is active
 - **Dry-run**: all mutating commands accept `--dry-run`; prototype with it first
 - **No new runtime dependencies** for CLI/UI work
-- **Coverage floor**: 85.71% — treat drops as a blocker; add tests before opening a PR. Low-coverage files: `ui/syntax.py`, `ui/color.py`, `ui/layout.py`, `ui/font.py`, `cli.py`, `output.py`
+- **Coverage floor**: 85.71% — treat drops as a blocker; add tests before opening a PR. Low-coverage files: `ui/syntax.py`, `ui/color.py`, `ui/layout.py`, `ui/font.py`, `cli.py`
 
 ## Config
 

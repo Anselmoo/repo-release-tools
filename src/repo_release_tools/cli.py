@@ -379,18 +379,18 @@ class RrtArgumentParser(argparse.ArgumentParser):
             prefix = apply_style("✖  error:", color="error", bold=True, stream=sys.stderr)
             detail = apply_style(message, bold=True, stream=sys.stderr)
             help_target = bold(f"{self.prog} --help")
-            p.line(f"{prefix} {detail}", stream=sys.stderr)
+            p.line(f"{prefix} {detail}", ok=False, stream=sys.stderr)
         else:
             help_target = f"'{self.prog} --help'"
-            p.line(f"[ERROR] {message}", ok=False, stream=sys.stderr)
+            p.line(message, ok=False, stream=sys.stderr)
 
         if suggestion:
             rendered_suggestion = apply_style(
                 suggestion, color="warning", bold=True, stream=sys.stderr
             )
-            p.line(f"  {rendered_suggestion}", stream=sys.stderr)
+            p.line(f"  {rendered_suggestion}", ok=False, stream=sys.stderr)
         help_hint = f"Run {help_target} for usage and examples."
-        p.line(f"  {subtle(help_hint, stream=sys.stderr)}\n", stream=sys.stderr)
+        p.line(f"  {subtle(help_hint, stream=sys.stderr)}\n", ok=False, stream=sys.stderr)
         self.exit(2)
 
     def _clean_error_message(self, message: str) -> str:
