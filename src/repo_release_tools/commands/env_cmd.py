@@ -6,8 +6,7 @@ import argparse
 import json
 import os
 import sys
-
-from repo_release_tools import output
+from repo_release_tools.ui import DryRunPrinter
 
 ENV_EPILOG = "  $ rrt env\n  $ rrt env --json"
 
@@ -25,10 +24,13 @@ def cmd_env(args: argparse.Namespace) -> int:
     ]
 
     if args.json:
-        print(json.dumps(dict(values), indent=2))
+        sys.stdout.write(json.dumps(dict(values), indent=2) + "\n")
         return 0
 
-    print(output.panel("Environment", values, style="single", expand=True, title_mode="row"))
+    p = DryRunPrinter(dry_run=False)
+    p.ok("Environment")
+    for name, value in values:
+        p.meta(name, str(value))
     return 0
 
 

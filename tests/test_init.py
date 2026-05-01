@@ -78,7 +78,7 @@ def test_cmd_init_dry_run_does_not_write_file(monkeypatch, tmp_path: Path, capsy
     captured = capsys.readouterr()
     assert result == 0
     assert not (tmp_path / ".rrt.toml").exists()
-    assert "Would write .rrt.toml" in captured.out
+    assert "Would update .rrt.toml" in captured.out
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ def test_cmd_init_pyproject_dry_run(monkeypatch, tmp_path: Path, capsys) -> None
     captured = capsys.readouterr()
     assert result == 0
     assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == original
-    assert "Would append to pyproject.toml" in captured.out
+    assert "Would update pyproject.toml" in captured.out
 
 
 def test_cmd_init_pyproject_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -242,7 +242,7 @@ def test_cmd_init_cargo_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
     captured = capsys.readouterr()
     assert result == 0
     assert (tmp_path / "Cargo.toml").read_text(encoding="utf-8") == original
-    assert "Would append to Cargo.toml" in captured.out
+    assert "Would update Cargo.toml" in captured.out
 
 
 def test_cmd_init_cargo_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -376,7 +376,7 @@ def test_cmd_init_node_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
     captured = capsys.readouterr()
     assert result == 0
     assert (tmp_path / "package.json").read_text(encoding="utf-8") == original
-    assert 'Would add "rrt" key to package.json' in captured.out
+    assert "Would update package.json" in captured.out
 
 
 def test_cmd_init_node_refuses_when_missing(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -442,7 +442,7 @@ def test_cmd_init_go_dry_run(monkeypatch, tmp_path: Path, capsys) -> None:
     captured = capsys.readouterr()
     assert result == 0
     assert not (tmp_path / ".rrt.toml").exists()
-    assert "Would write .rrt.toml" in captured.out
+    assert "Would update .rrt.toml" in captured.out
 
 
 def test_cmd_init_go_fallback_no_go_mod(monkeypatch, tmp_path: Path) -> None:

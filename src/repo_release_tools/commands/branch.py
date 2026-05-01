@@ -9,7 +9,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools import git, output
+from repo_release_tools import git
+from repo_release_tools.ui import DryRunPrinter, GLYPHS
 
 
 CONVENTIONAL_TYPES = (
@@ -26,6 +27,7 @@ CONVENTIONAL_TYPES = (
 )
 
 SLUG_MAX = 60
+STATUS_MAX = 15
 BRANCH_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 BRANCH_EPILOG = (
@@ -83,6 +85,16 @@ def add_common_branch_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dry-run", action="store_true", help="Preview without touching git.")
 
 
+def _count_status_changes(status_lines: list[str]) -> tuple[int, int]:
+    staged = 0
+    unstaged = 0
+    for line in status_lines:
+        if len(line) >= 2:
+            staged += 1 if line[0] != " " else 0
+            unstaged += 1 if line[1] != " " else 0
+    return staged, unstaged
+
+
 def cmd_new(args: argparse.Namespace) -> int:
     """Create a new branch."""
     root = Path.cwd()
@@ -92,39 +104,50 @@ def cmd_new(args: argparse.Namespace) -> int:
     commit_title = branch.commit_title()
 
     base = "<current>" if args.dry_run else git.current_branch(root)
-    title = "[DRY RUN] New branch" if args.dry_run else "New branch"
-    print()
-    print(output.banner(title, style="bold"))
-    print(
-        output.panel(
-            title,
-            [("Base", base), ("Branch", branch_name), ("Title", commit_title)],
-            style="mixed",
-        )
-    )
-    print()
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header("New branch", Base=base, Branch=branch_name, Title=commit_title)
 
     if not args.dry_run and git.branch_exists(root, branch_name):
-        print(
+        p.line(
             f"Branch '{branch_name}' already exists. Delete it first or choose a different description.",
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
-    has_changes = not args.dry_run and not git.working_tree_clean(root)
+    status_lines = git.status_porcelain(root)
+    dirty = bool(status_lines)
+    staged_count, unstaged_count = _count_status_changes(status_lines)
 
-    print(output.section("Creating branch"))
+    p.section("Creating branch")
     git.run(
         ["git", "checkout", "-b", branch_name], root, dry_run=args.dry_run, label="git checkout -b"
     )
 
-    if has_changes:
-        print(f"{output.action('Uncommitted changes moved to the new branch.')}\n")
+    if dirty:
+        action_text = (
+            "Would move uncommitted changes to the new branch."
+            if args.dry_run
+            else "Uncommitted changes moved to the new branch."
+        )
+        p.action(action_text)
+        p.meta("Files changed", str(len(status_lines)))
+        p.meta("Staged", str(staged_count))
+        p.meta("Unstaged", str(unstaged_count))
+        p.section("Changed files")
+        shown = status_lines[:STATUS_MAX]
+        for line in shown:
+            p.file_entry(*git.classify_status_line(line))
+        if len(status_lines) > STATUS_MAX:
+            p.action(f"…and {len(status_lines) - STATUS_MAX} more")
+    else:
+        clean_message = (
+            "No uncommitted changes would be moved." if args.dry_run else "Working tree clean."
+        )
+        p.ok(clean_message)
 
-    print(output.ok(f"Done. Suggested commit title: {commit_title}"))
-    print()
-    if args.dry_run:
-        print(output.dry_run_complete("no changes made"))
+    p.footer(f"Done. Suggested commit title: {commit_title}")
     return 0
 
 
@@ -153,17 +176,19 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
     # Validate: at least one change must be requested
     if not new_type_arg and not scope and not no_scope and not description_words:
-        print(
+        DryRunPrinter(False).line(
             "Nothing to rename. Specify --type, --scope, --no-scope, or new description words.",
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
     # --no-scope without description means we can't strip the embedded scope from the slug
     if no_scope and not description_words:
-        print(
+        DryRunPrinter(False).line(
             "--no-scope requires description words so the slug can be rebuilt without a scope.",
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
@@ -172,7 +197,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
     try:
         current_type, current_slug = _parse_current_branch(current_branch)
     except ValueError as exc:
-        print(exc, file=sys.stderr)
+        DryRunPrinter(False).line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     new_type = new_type_arg or current_type
@@ -194,17 +219,19 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
         # Validate the resulting slug against the same rules used by branch creation
         if len(new_slug) > SLUG_MAX:
-            print(
+            DryRunPrinter(False).line(
                 f"Computed slug {new_slug!r} is too long ({len(new_slug)} > {SLUG_MAX}). "
                 "Provide a new description to rebuild the slug.",
-                file=sys.stderr,
+                ok=False,
+                stream=sys.stderr,
             )
             return 1
         if not BRANCH_SLUG_RE.fullmatch(new_slug):
-            print(
+            DryRunPrinter(False).line(
                 f"Computed slug {new_slug!r} is not valid kebab-case. "
                 "Provide a new description to rebuild the slug.",
-                file=sys.stderr,
+                ok=False,
+                stream=sys.stderr,
             )
             return 1
 
@@ -213,31 +240,28 @@ def cmd_rename(args: argparse.Namespace) -> int:
         commit_title = f"{new_type}{scope_part}: <preserved description>"
 
     if new_name == current_branch:
-        print("Branch name is unchanged. Nothing to do.", file=sys.stderr)
+        DryRunPrinter(False).line(
+            "Branch name is unchanged. Nothing to do.", ok=False, stream=sys.stderr
+        )
         return 1
 
-    g = output.GLYPHS
-    title = "[DRY RUN] Rename branch" if args.dry_run else "Rename branch"
-    print()
-    print(output.banner(title, style="bold"))
-    print(
-        output.panel(
-            title,
-            [
-                (f"{g.git.branch} From", current_branch),
-                (f"{g.diff.renamed} To", new_name),
-                (f"{g.arrow.right} Commit title", commit_title),
-            ],
-            style="mixed",
-        )
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Rename branch",
+        **{
+            f"{GLYPHS.git.branch} From": current_branch,
+            f"{GLYPHS.diff.renamed} To": new_name,
+            f"{GLYPHS.arrow.right} Commit title": commit_title,
+        },
     )
-    print()
 
     if not args.dry_run:
         if git.branch_exists(root, new_name):
-            print(
+            p.line(
                 f"Branch '{new_name}' already exists. Delete it first or choose a different name.",
-                file=sys.stderr,
+                ok=False,
+                stream=sys.stderr,
             )
             return 1
         git.run(
@@ -246,10 +270,9 @@ def cmd_rename(args: argparse.Namespace) -> int:
             dry_run=False,
             label="git branch -m",
         )
-        print(output.ok(f"Done. Renamed '{current_branch}' {g.diff.renamed} '{new_name}'."))
-    print()
-    if args.dry_run:
-        print(output.dry_run_complete("no changes made"))
+        p.footer(f"Done. Renamed '{current_branch}' {GLYPHS.diff.renamed} '{new_name}'.")
+    else:
+        p.footer("no changes made")
     return 0
 
 
@@ -270,47 +293,42 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         log_lines = [] if args.dry_run else git.commits_ahead(root, remote_ref)
         reset_target = remote_ref
 
-    title = "[DRY RUN] Rescue commits" if args.dry_run else "Rescue commits"
-    print()
-    print(output.banner(title, style="bold"))
-    print(
-        output.panel(
-            title,
-            [
-                ("From", origin_branch),
-                ("Branch", branch_name),
-                ("Reset to", reset_target),
-                ("Title", commit_title),
-            ],
-            style="mixed",
-        )
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Rescue commits",
+        From=origin_branch,
+        Branch=branch_name,
+        **{"Reset to": reset_target, "Title": commit_title},
     )
-    print()
 
     if not log_lines and not args.dry_run:
         ref_label = args.since or f"origin/{origin_branch}"
-        print(
+        p.line(
             f"No commits found ahead of '{ref_label}'. Nothing to rescue. Use --since <sha> to override.",
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
-    print(output.section("Commits to rescue"))
+    p.section("Commits to rescue")
     if log_lines:
         for line in log_lines:
-            print(output.status(output.GLYPHS.bullet.dot, line))
+            p.list_item(line)
     else:
         ahead = args.since or f"origin/{origin_branch}"
-        print(output.dry_run(f"Would detect commits ahead of {ahead}"))
+        p.would_run(f"git log {ahead}..HEAD --oneline")
 
     if not args.dry_run and git.branch_exists(root, branch_name):
-        print(
+        p.line(
             f"Branch '{branch_name}' already exists. Delete it first or choose a different description.",
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
-    print(f"\n{output.section('Creating rescue branch')}")
+    p.blank_line()
+    p.section("Creating rescue branch")
     git.run(
         ["git", "checkout", "-b", branch_name],
         root,
@@ -318,7 +336,8 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         label="git checkout -b rescue",
     )
 
-    print(f"\n{output.section('Resetting origin branch')}")
+    p.blank_line()
+    p.section("Resetting origin branch")
     git.run(
         ["git", "checkout", origin_branch], root, dry_run=args.dry_run, label="git checkout origin"
     )
@@ -329,23 +348,19 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         label="git reset --hard",
     )
 
-    print(f"\n{output.section('Switching back to rescue branch')}")
+    p.blank_line()
+    p.section("Switching back to rescue branch")
     git.run(
         ["git", "checkout", branch_name], root, dry_run=args.dry_run, label="git checkout rescue"
     )
 
     rescued_count = "Selected" if args.dry_run else str(len(log_lines))
-    print()
-    print(
-        output.ok(
-            f"Done. {rescued_count} commit(s) rescued into '{branch_name}'. "
-            f"'{origin_branch}' reset to '{reset_target}'. "
-            f"Suggested commit title: {commit_title}"
-        )
+    p.blank_line()
+    p.footer(
+        f"Done. {rescued_count} commit(s) rescued into '{branch_name}'. "
+        f"'{origin_branch}' reset to '{reset_target}'. "
+        f"Suggested commit title: {commit_title}"
     )
-    print()
-    if args.dry_run:
-        print(output.dry_run_complete("no changes made"))
     return 0
 
 

@@ -1,19 +1,26 @@
 import io
 import os
 import sys
+import types
 from contextlib import contextmanager
 from argparse import Namespace
 from pathlib import Path
 
 import pytest
 
-from repo_release_tools import output
+from repo_release_tools.ui import GLYPHS, render_ok
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.commands.bump import cmd_bump
 from repo_release_tools.commands.bump import git_log_since_latest_tag
 from repo_release_tools.commands.bump import resolve_changelog_mode
 from repo_release_tools.commands.bump import update_changelog
 from repo_release_tools.versioning import Version
+
+# Compatibility shim — maps legacy output.X names to the canonical ui API.
+output = types.SimpleNamespace(
+    ok=render_ok,
+    GLYPHS=GLYPHS,
+)
 
 
 def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
@@ -131,7 +138,9 @@ def test_update_changelog_promote_dry_run_shows_preview(
     )
 
     output = capsys.readouterr().out
-    assert "Would promote [Unreleased] to [1.1.0]" in output
+    assert "Would update" in output
+    assert "promote [Unreleased]" in output
+    assert "1.1.0" in output
 
 
 def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
@@ -150,7 +159,8 @@ def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
     )
 
     output = capsys.readouterr().out
-    assert "Would prepend to" in output
+    assert "Would update" in output
+    assert "prepend" in output
     assert "…" in output or "..." in output
 
 
@@ -1798,8 +1808,8 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
         "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
-    monkeypatch.setattr("repo_release_tools.commands.bump.output.ProgressLine", _FakeProgressLine)
-    monkeypatch.setattr("repo_release_tools.commands.bump.output.spinner_lines", fake_spinner_lines)
+    monkeypatch.setattr("repo_release_tools.commands.bump.ProgressLine", _FakeProgressLine)
+    monkeypatch.setattr("repo_release_tools.commands.bump.spinner_lines", fake_spinner_lines)
     monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_git_run)
 
     result = cmd_bump(
@@ -1820,7 +1830,9 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     assert result == 0
     assert len(progress_instances) == 2
     assert progress_updates == [(0, 0.5), (0, 1.0), (1, 0.5), (1, 1.0)]
-    assert progress_clears == [0, 1]  # clear() called once per progress instance before 2nd item
+    assert (
+        progress_clears == [0, 0, 1, 1]
+    )  # clear() called before second item and again after the final update for each progress instance
     assert spinner_calls == [("Running lock command…", "$ uv lock -U", sys.stdout)]
     assert (["uv", "lock", "-U"], True) in git_calls
 
@@ -1891,7 +1903,7 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
     # both write to the same captured stream.
     monkeypatch.setattr(sys, "stdout", tty)
     # Ensure ProgressLine is not disabled by legacy-terminal detection.
-    monkeypatch.setattr("repo_release_tools.output.IS_LEGACY_TERMINAL", False)
+    monkeypatch.setattr("repo_release_tools.ui.progress.IS_LEGACY_TERMINAL", False)
 
     result = cmd_bump(
         Namespace(
@@ -1939,6 +1951,6 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
     assert "\n" not in expected_bars[-1], "100% bar render itself contains \\n"
 
     # -- 4. Exactly three clear sequences (one before each of iterations 2/3/4)
-    assert raw.count("\r\x1b[2K") == 3, (
-        f"Expected 3 clear sequences, found {raw.count(chr(13) + chr(27) + '[2K')}"
+    assert raw.count("\r\x1b[2K") == 4, (
+        f"Expected 4 clear sequences, found {raw.count(chr(13) + chr(27) + '[2K')}"
     )

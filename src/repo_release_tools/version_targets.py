@@ -8,7 +8,7 @@ import tomllib
 
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui import DryRunPrinter, GLYPHS
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.versioning import Version
 
@@ -58,11 +58,14 @@ def replace_version_in_file(
         )
 
     if dry_run:
-        print(output.dry_run(f'Would update {path}: version = "{new_version}"'))
+        p = DryRunPrinter(dry_run=True)
+        p.would_write(str(path), detail=f'version = "{new_version}"')
         return
 
     path.write_text(updated, encoding="utf-8")
-    print(output.ok(f'{path}  {output.GLYPHS.arrow.right}  version = "{new_version}"'))
+    msg = f'{path}  {GLYPHS.arrow.right}  version = "{new_version}"'
+    p = DryRunPrinter(dry_run=False)
+    p.ok(msg)
 
 
 def read_current_version(config: RrtConfig) -> Version:
@@ -259,19 +262,24 @@ def replace_pin_in_file(
 
     match = search_pattern(text, target.pattern)
     if match is None:
-        print(output.warning(f"Pin pattern did not match in {path} — skipping"))
+        p = DryRunPrinter(dry_run=dry_run)
+        p.warn(f"Pin pattern did not match in {path} — skipping")
         return
 
     current = match.group(2)
     if current == new_version:
-        print(output.status(output.GLYPHS.bullet.dot, f"{path}  already at {new_version}"))
+        p = DryRunPrinter(dry_run=dry_run)
+        p.line(f"{path}  already at {new_version}", ok=None)
         return
 
     updated = replace_pattern_version(text, target.pattern, new_version, count=0)
 
     if dry_run:
-        print(output.dry_run(f'Would update {path}: pin = "{new_version}"'))
+        p = DryRunPrinter(dry_run=True)
+        p.would_write(str(path), detail=f'pin = "{new_version}"')
         return
 
     path.write_text(updated, encoding="utf-8")
-    print(output.ok(f'{path}  {output.GLYPHS.arrow.right}  pin = "{new_version}"'))
+    msg = f'{path}  {GLYPHS.arrow.right}  pin = "{new_version}"'
+    p = DryRunPrinter(dry_run=False)
+    p.ok(msg)

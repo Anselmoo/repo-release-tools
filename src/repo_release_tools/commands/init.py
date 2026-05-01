@@ -9,7 +9,7 @@ import tomllib
 
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui import DryRunPrinter, cli_error as render_error, highlight_terminal
 from repo_release_tools.config import (
     DEFAULT_INIT_CONFIG,
     find_explicit_config_file,
@@ -19,7 +19,6 @@ from repo_release_tools.config import (
     recommend_init_section_for_node,
     recommend_init_section_for_pyproject,
 )
-from repo_release_tools.ui.messaging import error as render_error
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -36,15 +35,6 @@ def cmd_init(args: argparse.Namespace) -> int:
     return _init_rrt_toml(args)
 
 
-def _print_dry_run_preview(message: str, preview: str) -> None:
-    """Render a standard dry-run preview block."""
-    print(output.dry_run(message))
-    print()
-    print(preview)
-    print()
-    print(output.dry_run_complete("no files were modified"))
-
-
 def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     """Write a recommended local .rrt.toml file."""
     root = Path.cwd()
@@ -53,60 +43,66 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     try:
         explicit_config = find_explicit_config_file(root)
     except (ValueError, RuntimeError) as exc:
-        print(output.warning(f"Could not read existing configuration: {exc}"), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(f"Could not read existing configuration: {exc}", ok=False, stream=sys.stderr)
         return 1
 
-    if explicit_config is not None and explicit_config != target and not args.force:
+    if (
+        explicit_config is not None
+        and explicit_config != target
+        and not args.force
+        and not args.dry_run
+    ):
         relative = explicit_config.relative_to(root)
-        print(
+        p = DryRunPrinter(False)
+        p.line(
             render_error(
                 f"configuration already exists in {relative}",
                 hint=f"Use --force to overwrite {DEFAULT_INIT_CONFIG}.",
                 stream=sys.stderr,
             ),
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
-    if target.exists() and not args.force:
-        print(
+    if target.exists() and not args.force and not args.dry_run:
+        p = DryRunPrinter(False)
+        p.line(
             render_error(
                 f"{DEFAULT_INIT_CONFIG} already exists",
                 hint="Use --force to overwrite it.",
                 stream=sys.stderr,
             ),
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
     try:
         config_text = recommend_init_config_for_go(root) if go else recommend_init_config(root)
     except (ValueError, RuntimeError) as exc:
-        print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(f"Could not generate init config: {exc}", ok=False, stream=sys.stderr)
         return 1
 
-    g = output.GLYPHS
-    print()
-    print(
-        output.panel(
-            "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [(f"{g.git.commit} File", DEFAULT_INIT_CONFIG)],
-        )
-    )
-    print()
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header("Init config", File=DEFAULT_INIT_CONFIG)
 
     if args.dry_run:
-        _print_dry_run_preview(f"Would write {DEFAULT_INIT_CONFIG}:", config_text)
+        p.would_write(DEFAULT_INIT_CONFIG)
+        p.section("Preview")
+        p.line(highlight_terminal(config_text, "toml"))
+        p.footer("no files were modified")
         return 0
 
     target.write_text(config_text + "\n", encoding="utf-8")
-    print(output.ok(f"Wrote {DEFAULT_INIT_CONFIG}"))
+    p.ok(f"Wrote {DEFAULT_INIT_CONFIG}")
     if explicit_config is not None and explicit_config != target:
         relative = explicit_config.relative_to(root)
-        print(
-            output.warning(
-                f"{relative} still takes precedence over {DEFAULT_INIT_CONFIG} during config discovery."
-            )
+        p.warn(
+            f"{relative} still takes precedence over {DEFAULT_INIT_CONFIG} during config discovery."
         )
     return 0
 
@@ -122,10 +118,12 @@ def _init_manifest(
     manifest_path = root / manifest
 
     if not manifest_path.exists():
-        print(
+        p = DryRunPrinter(False)
+        p.line(
             f"{manifest} does not exist in the current directory. "
             f"Create it first, or run `rrt init` (without --target) to write {DEFAULT_INIT_CONFIG}.",
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
@@ -134,13 +132,16 @@ def _init_manifest(
     try:
         already_present = _has_rrt_section(manifest, existing_text)
     except ValueError as exc:
-        print(output.warning(str(exc)), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
-    if already_present:
-        print(
+    if already_present and not args.dry_run:
+        p = DryRunPrinter(False)
+        p.line(
             f"{manifest} already contains rrt configuration. "
             "Edit the existing rrt section manually instead of appending a duplicate table.",
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
@@ -150,26 +151,24 @@ def _init_manifest(
         else:
             section_text = recommend_init_section_for_cargo(root)
     except (ValueError, RuntimeError) as exc:
-        print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(f"Could not generate init config: {exc}", ok=False, stream=sys.stderr)
         return 1
 
-    g = output.GLYPHS
-    print()
-    print(
-        output.panel(
-            "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [(f"{g.git.commit} File", manifest), ("Section", section_label)],
-        )
-    )
-    print()
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header("Init config", File=manifest, Section=section_label)
 
     if args.dry_run:
-        _print_dry_run_preview(f"Would append to {manifest}:", section_text)
+        p.would_write(manifest, f"append {section_label}")
+        p.section("Preview")
+        p.line(highlight_terminal(section_text, "toml"))
+        p.footer("no files were modified")
         return 0
 
     separator = "\n" if existing_text.endswith("\n") else "\n\n"
     manifest_path.write_text(existing_text + separator + section_text + "\n", encoding="utf-8")
-    print(output.ok(f"Appended {section_label} to {manifest}"))
+    p.ok(f"Appended {section_label} to {manifest}")
     return 0
 
 
@@ -179,55 +178,59 @@ def _init_package_json(args: argparse.Namespace) -> int:
     manifest_path = root / "package.json"
 
     if not manifest_path.exists():
-        print(
+        p = DryRunPrinter(False)
+        p.line(
             "package.json does not exist in the current directory. "
             f"Create it first, or run `rrt init` (without --target) to write {DEFAULT_INIT_CONFIG}.",
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
     try:
         data: dict = _json.loads(manifest_path.read_text(encoding="utf-8"))
     except _json.JSONDecodeError as exc:
-        print(output.warning(f"Could not parse package.json: {exc}"), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(f"Could not parse package.json: {exc}", ok=False, stream=sys.stderr)
         return 1
 
     if not isinstance(data, dict):
-        print(output.warning("package.json must contain a top-level object."), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line("package.json must contain a top-level object.", ok=False, stream=sys.stderr)
         return 1
 
     if "rrt" in data and not args.force:
-        print(
+        p = DryRunPrinter(False)
+        p.line(
             'package.json already contains an "rrt" key. Use --force to overwrite it.',
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
     try:
         rrt_dict = recommend_init_section_for_node(root)
     except (ValueError, RuntimeError) as exc:
-        print(output.warning(f"Could not generate init config: {exc}"), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(f"Could not generate init config: {exc}", ok=False, stream=sys.stderr)
         return 1
 
     preview = _json.dumps({"rrt": rrt_dict}, indent=2)
 
-    g = output.GLYPHS
-    print()
-    print(
-        output.panel(
-            "[DRY RUN] Init config" if args.dry_run else "Init config",
-            [(f"{g.git.commit} File", "package.json"), ("Key", '"rrt"')],
-        )
-    )
-    print()
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header("Init config", File="package.json", Key='"rrt"')
 
     if args.dry_run:
-        _print_dry_run_preview('Would add "rrt" key to package.json:', preview)
+        p.would_write("package.json", 'add "rrt" key')
+        p.section("Preview")
+        p.line(highlight_terminal(preview, "json"))
+        p.footer("no files were modified")
         return 0
 
     data["rrt"] = rrt_dict
     manifest_path.write_text(_json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print(output.ok('Added "rrt" to package.json'))
+    p.ok('Added "rrt" to package.json')
     return 0
 
 

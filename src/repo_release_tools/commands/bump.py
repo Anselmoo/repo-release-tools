@@ -8,7 +8,13 @@ import sys
 
 from pathlib import Path
 
-from repo_release_tools import git, output
+from repo_release_tools import git
+from repo_release_tools.ui import (
+    DryRunPrinter,
+    GLYPHS,
+    ProgressLine,
+    spinner_lines,
+)
 from repo_release_tools.changelog import (
     build_changelog_section,
     detect_changelog_format,
@@ -85,7 +91,8 @@ def update_changelog(
     """
     path = config.changelog_file
     if not path.exists():
-        print(output.warning(f"{path} not found {output.GLYPHS.typography.mdash} skipping"))
+        p = DryRunPrinter(False)
+        p.line(f"{path} not found {GLYPHS.typography.mdash} skipping", ok=False)
         return
 
     existing = path.read_text(encoding="utf-8")
@@ -97,19 +104,16 @@ def update_changelog(
         do_promote = False
     elif changelog_mode == "promote":
         if not has_entries:
+            p = DryRunPrinter(False)
             if has_unreleased_section(existing, fmt):
-                print(
-                    output.warning(
-                        f"[Unreleased] section in {path} is empty"
-                        f" {output.GLYPHS.typography.mdash} nothing to promote."
-                    )
+                p.line(
+                    f"[Unreleased] section in {path} is empty {GLYPHS.typography.mdash} nothing to promote.",
+                    ok=False,
                 )
             else:
-                print(
-                    output.warning(
-                        f"No [Unreleased] section found in {path}"
-                        f" {output.GLYPHS.typography.mdash} nothing to promote."
-                    )
+                p.line(
+                    f"No [Unreleased] section found in {path} {GLYPHS.typography.mdash} nothing to promote.",
+                    ok=False,
                 )
             return
         do_promote = True
@@ -120,14 +124,16 @@ def update_changelog(
     if do_promote:
         section_text = promote_unreleased(existing, version, fmt)
         if dry_run:
-            print(output.dry_run(f"Would promote [Unreleased] to [{version}] in {path}:"))
+            p = DryRunPrinter(True)
+            p.would_write(str(path), f"promote [Unreleased] → [{version}]")
             for line in section_text.splitlines()[:PREVIEW_LINES]:
-                print(output.status(">", line, indent=4))
+                p.line(f"    > {line}")
             if len(section_text.splitlines()) > PREVIEW_LINES:
-                print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
+                p.list_item(f"> {GLYPHS.typography.ellipsis}")
             return
         path.write_text(section_text, encoding="utf-8")
-        print(output.ok(f"{path} updated (promoted [Unreleased] to [{version}])"))
+        p = DryRunPrinter(False)
+        p.ok(f"{path} updated (promoted [Unreleased] to [{version}])")
         return
 
     # ---- Generate section from git log (heading / hash notation) -----------
@@ -142,15 +148,17 @@ def update_changelog(
     section_text = insert_generated_section(existing, section, fmt)
 
     if dry_run:
-        print(output.dry_run(f"Would prepend to {path}:"))
+        p = DryRunPrinter(True)
+        p.would_write(str(path), "prepend generated entries")
         for line in section_text.splitlines()[:PREVIEW_LINES]:
-            print(output.status(">", line, indent=4))
+            p.line(f"    > {line}")
         if len(section_text.splitlines()) > PREVIEW_LINES:
-            print(output.status(">", str(output.GLYPHS.typography.ellipsis), indent=4))
+            p.list_item(f"> {GLYPHS.typography.ellipsis}")
         return
 
     path.write_text(section_text, encoding="utf-8")
-    print(output.ok(f"{path} updated"))
+    p = DryRunPrinter(False)
+    p.ok(f"{path} updated")
 
 
 def cmd_bump(args: argparse.Namespace) -> int:
@@ -160,30 +168,40 @@ def cmd_bump(args: argparse.Namespace) -> int:
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
-        print(output.warning("No supported rrt config file found."), file=sys.stderr)
-        print(format_missing_tool_rrt_guidance(root, []), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
+        p.line(format_missing_tool_rrt_guidance(root, []), ok=False, stream=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            print(output.warning("No [tool.rrt] configuration found."), file=sys.stderr)
-            print(format_missing_tool_rrt_guidance(root, iter_config_files(root)), file=sys.stderr)
+            p = DryRunPrinter(False)
+            p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
+            p.line(
+                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
+                ok=False,
+                stream=sys.stderr,
+            )
             return 1
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     if config.autodetected:
-        print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(format_autodetected_config_notice(config), ok=False, stream=sys.stderr)
         if mismatch := check_autodetected_version_consistency(config):
-            print(mismatch, file=sys.stderr)
+            p.line(mismatch, ok=False, stream=sys.stderr)
             return 1
 
     try:
         group = config.resolve_group(args.group)
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     current = read_group_current_version(group)
@@ -193,51 +211,51 @@ def cmd_bump(args: argparse.Namespace) -> int:
         try:
             new = Version.parse(args.bump)
         except ValueError as exc:
-            print(str(exc), file=sys.stderr)
+            p = DryRunPrinter(False)
+            p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
 
     branch_name = group.release_branch.format(version=new)
     current_branch = "<current>" if args.dry_run else git.current_branch(root)
     base = args.base_branch or current_branch
 
-    title = "[DRY RUN] Version bump" if args.dry_run else "Version bump"
-    print()
-    print(
-        output.panel(
-            title,
-            [
-                ("Current", f"{current} {output.GLYPHS.arrow.right} {new}"),
-                ("Branch", branch_name),
-                ("Base", base),
-            ],
-        )
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Version bump",
+        Current=f"{current} {GLYPHS.arrow.right} {new}",
+        Branch=branch_name,
+        Base=base,
     )
-    print()
 
     branch_exists = False
     if not args.dry_run:
         if not git.working_tree_clean(root):
-            print(
+            p = DryRunPrinter(False)
+            p.line(
                 "Working tree has uncommitted changes. Commit or stash them first, or use --dry-run.",
-                file=sys.stderr,
+                ok=False,
+                stream=sys.stderr,
             )
             return 1
         branch_exists = git.branch_exists(root, branch_name)
         if branch_exists and not force:
-            print(
+            p = DryRunPrinter(False)
+            p.line(
                 f"Branch '{branch_name}' already exists. Delete it first or choose a different version.",
-                file=sys.stderr,
+                ok=False,
+                stream=sys.stderr,
             )
             return 1
         if current_branch != base:
             git.run(["git", "checkout", base], root, dry_run=False, label="git checkout base")
         if branch_exists:
-            print(
-                output.warning(f"Branch '{branch_name}' already exists. Resetting it with --force.")
-            )
+            msg = f"Branch '{branch_name}' already exists. Resetting it with --force."
+            p = DryRunPrinter(False)
+            p.line(msg)
 
-    version_progress = output.ProgressLine(file=sys.stdout)
-    print(output.section("Updating version strings"))
+    version_progress = ProgressLine(file=sys.stdout)
+    p.section("Updating version strings")
     total_targets = len(group.version_targets)
     for i, target in enumerate(group.version_targets, 1):
         if total_targets > 1 and i > 1:
@@ -245,11 +263,13 @@ def cmd_bump(args: argparse.Namespace) -> int:
         replace_version_in_file(target, str(new), dry_run=args.dry_run)
         if total_targets > 1:
             version_progress.update_bar(i / total_targets)
+    if total_targets > 1:
+        version_progress.clear()
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins and not getattr(args, "no_pin_sync", False):
-        pin_progress = output.ProgressLine(file=sys.stdout)
-        print(f"\n{output.section('Updating doc pins')}")
+        pin_progress = ProgressLine(file=sys.stdout)
+        p.section("Updating doc pins")
         seen_pin_keys: set[tuple[object, str]] = set()
         unique_pins: list = []
         for pin in all_pins:
@@ -264,9 +284,11 @@ def cmd_bump(args: argparse.Namespace) -> int:
             replace_pin_in_file(pin, str(new), dry_run=args.dry_run)
             if total_pins > 1:
                 pin_progress.update_bar(i / total_pins)
+        if total_pins > 1:
+            pin_progress.clear()
 
     if not args.no_changelog:
-        print(f"\n{output.section('Updating changelog')}")
+        p.section("Updating changelog")
         effective_changelog_mode = resolve_changelog_mode(
             config, getattr(args, "changelog_mode", None)
         )
@@ -284,13 +306,13 @@ def cmd_bump(args: argparse.Namespace) -> int:
         )
 
     if group.lock_command and not args.no_update:
-        print(f"\n{output.section('Refreshing lockfiles')}")
+        p.section("Refreshing lockfiles")
         spinner = (
             contextlib.nullcontext()
             if args.dry_run
-            else output.spinner_lines(
+            else spinner_lines(
                 "Running lock command…",
-                detail=output.status("$", " ".join(group.lock_command), indent=0).strip(),
+                detail=f"$ {' '.join(group.lock_command)}",
                 file=sys.stdout,
             )
         )
@@ -303,7 +325,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 suppress_announce=True,
             )
 
-    print(f"\n{output.section('Git')}")
+    p.section("Git")
     create_flag = "-B" if force else "-b"
     git.run(
         ["git", "checkout", create_flag, branch_name],
@@ -334,15 +356,15 @@ def cmd_bump(args: argparse.Namespace) -> int:
         git.run(["git", "add", "-u"], root, dry_run=args.dry_run, label="git add -u")
         commit_msg = f"chore: bump version to v{new}"
         git.run(["git", "commit", "-m", commit_msg], root, dry_run=args.dry_run, label="git commit")
-        print()
-        print(output.ok(f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"))
+        done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
+        p.footer(done_msg)
     else:
-        print()
-        print(output.ok(f"Done. Branch '{branch_name}' created and files staged."))
-
+        done_msg = f"Done. Branch '{branch_name}' created and files staged."
+        p.meta("Base branch", base)
+        p.footer(done_msg)
     if args.dry_run:
-        print(output.status(output.GLYPHS.bullet.dot, f"Base branch: {base}"))
-        print(output.dry_run_complete("no files were modified"))
+        # Provide an explicit dry-run completion line expected by some tests
+        p.line("no files were modified")
     return 0
 
 

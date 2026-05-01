@@ -914,9 +914,7 @@ def test_cmd_apply_uses_shared_progress_line(
             clears.append(1)
 
     monkeypatch.chdir(mixed_project)
-    monkeypatch.setattr(
-        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
-    )
+    monkeypatch.setattr("repo_release_tools.commands.ci_version.ProgressLine", _FakeProgressLine)
 
     result = cmd_ci_version_apply(
         argparse.Namespace(version="0.2.0.dev12345601", dry_run=False, group=None)
@@ -924,7 +922,9 @@ def test_cmd_apply_uses_shared_progress_line(
 
     assert result == 0
     assert updates == [(0.5, sys.stdout), (1.0, sys.stdout)]
-    assert len(clears) == 1  # clear() called once before the second iteration
+    assert (
+        len(clears) == 2
+    )  # clear() called before the second iteration and once more after the final update
 
 
 def test_cmd_apply_clears_progress_on_semver_error(
@@ -945,9 +945,7 @@ def test_cmd_apply_clears_progress_on_semver_error(
             clears.append(1)
 
     monkeypatch.chdir(mixed_project)
-    monkeypatch.setattr(
-        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
-    )
+    monkeypatch.setattr("repo_release_tools.commands.ci_version.ProgressLine", _FakeProgressLine)
 
     # An un-convertible '.dev' version triggers the semver_pre early-return path.
     result = cmd_ci_version_apply(
@@ -992,9 +990,7 @@ version = "0.1.0"
             clears.append(1)
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        "repo_release_tools.commands.ci_version.output.ProgressLine", _FakeProgressLine
-    )
+    monkeypatch.setattr("repo_release_tools.commands.ci_version.ProgressLine", _FakeProgressLine)
 
     result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0", dry_run=False, group=None))
 

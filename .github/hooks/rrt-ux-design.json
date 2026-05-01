@@ -1,10 +1,30 @@
 {
     "hooks": {
+        // Fires once per user turn — before Claude processes the prompt.
+        // Scans any rrt source files mentioned in the prompt for existing
+        // violations and injects the UX contract reminder when output-related
+        // keywords are detected.
         "UserPromptSubmit": [
             {
                 "type": "command",
                 "command": "python3 .github/hooks/rrt_ux_guard.py",
                 "timeout": 5
+            }
+        ],
+        // Fires before every Write / Edit / MultiEdit tool call.
+        // BLOCKS the write (exit 2) if the new content contains hard
+        // violations (raw ANSI escapes).  Injects a warning for soft
+        // violations (deprecated output.py calls) but allows the write.
+        "PreToolUse": [
+            {
+                "matcher": "Write|Edit|MultiEdit|str_replace_based_edit",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 .github/hooks/rrt_ux_write_guard.py",
+                        "timeout": 5
+                    }
+                ]
             }
         ]
     }

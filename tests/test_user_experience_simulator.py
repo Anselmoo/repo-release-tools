@@ -74,6 +74,7 @@ from repo_release_tools.ui import (
     truncate,
     underline,
     warning,
+    DryRunPrinter,
 )
 from repo_release_tools.ui import color, font, syntax
 from repo_release_tools.ui.context import OutputContext
@@ -480,3 +481,220 @@ class TestMessaging:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         for fn in (error, warning, info, success, subtle):
             assert fn("msg") == "msg"
+
+
+# ── TestDryRunPrinter ─────────────────────────────────────────────────────────
+
+
+class TestDryRunPrinter:
+    """Verify DryRunPrinter produces consistent, 0-indent output in both modes."""
+
+    def test_header_live_contains_title(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.header("My command")
+        out = capsys.readouterr().out
+        assert "My command" in out
+        assert "[DRY RUN]" not in out
+
+    def test_header_dry_run_labels_title(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.header("My command")
+        out = capsys.readouterr().out
+        assert "[DRY RUN]" in out
+        assert "My command" in out
+
+    def test_header_metadata_key_value(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.header("Cmd", Version="1.2.3", Branch="main")
+        out = capsys.readouterr().out
+        assert "Version" in out
+        assert "1.2.3" in out
+        assert "Branch" in out
+        assert "main" in out
+
+    def test_header_not_indented(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.header("Zero indent check")
+        out = capsys.readouterr().out
+        first_line = out.splitlines()[0]
+        # strip ANSI codes to check there is no leading space
+        import re
+
+        stripped = re.sub(r"\x1b\[[0-9;]*m", "", first_line)
+        assert not stripped.startswith(" ")
+
+    def test_section_outputs_rule(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.section("My section")
+        out = capsys.readouterr().out
+        assert "My section" in out
+        assert "─" in out or "-" in out  # rule character
+
+    def test_would_run_only_in_dry_run(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.would_run("git commit")
+        out = capsys.readouterr().out
+        assert "git commit" in out
+        assert "[dry-run]" in out
+
+    def test_would_write_shows_path(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.would_write("CHANGELOG.md", "add entry")
+        out = capsys.readouterr().out
+        assert "CHANGELOG.md" in out
+        assert "add entry" in out
+
+    def test_would_install_shows_name_target_location(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.would_install("skill.md", "copilot-local", "/some/path")
+        out = capsys.readouterr().out
+        assert "skill.md" in out
+        assert "copilot-local" in out
+        assert "/some/path" in out
+
+    def test_action_contains_message(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.action("Cloning repo")
+        out = capsys.readouterr().out
+        assert "Cloning repo" in out
+
+    def test_meta_shows_key_value(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.meta("Ref", "refs/heads/main")
+        out = capsys.readouterr().out
+        assert "Ref" in out
+        assert "refs/heads/main" in out
+
+    def test_ok_contains_message(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.ok("All done")
+        out = capsys.readouterr().out
+        assert "All done" in out
+
+    def test_warn_contains_message(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.warn("Proceeding anyway")
+        out = capsys.readouterr().out
+        assert "Proceeding anyway" in out
+
+    def test_footer_live_shows_message_no_dry_run_suffix(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.footer("Completed")
+        out = capsys.readouterr().out
+        assert "Completed" in out
+        assert "[dry-run]" not in out
+
+    def test_footer_dry_run_shows_complete_line(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.footer("no files were modified")
+        out = capsys.readouterr().out
+        assert "no files were modified" in out
+        assert "[dry-run]" in out
+        assert "complete" in out
+
+    def test_no_color_fallback(self, monkeypatch, capsys) -> None:
+        monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
+        p = DryRunPrinter(dry_run=False)
+        p.ok("plain output")
+        out = capsys.readouterr().out
+        assert "\x1b[" not in out
+        assert "plain output" in out
+
+
+class TestFileEntry:
+    """Verify DryRunPrinter.file_entry renders each kind with path and correct stream."""
+
+    def test_added_contains_path(self, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.file_entry("added", "src/foo.py")
+        out = capsys.readouterr().out
+        assert "src/foo.py" in out
+        assert out.strip()
+
+    def test_removed_contains_path(self, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.file_entry("removed", "src/foo.py")
+        out = capsys.readouterr().out
+        assert "src/foo.py" in out
+
+    def test_modified_contains_path(self, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.file_entry("modified", "src/foo.py")
+        out = capsys.readouterr().out
+        assert "src/foo.py" in out
+
+    def test_renamed_contains_path(self, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.file_entry("renamed", "src/foo.py")
+        out = capsys.readouterr().out
+        assert "src/foo.py" in out
+
+    def test_conflict_contains_path(self, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.file_entry("conflict", "src/foo.py")
+        out = capsys.readouterr().out
+        assert "src/foo.py" in out
+
+    def test_untracked_contains_path(self, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.file_entry("untracked", "src/foo.py")
+        out = capsys.readouterr().out
+        assert "src/foo.py" in out
+
+    def test_stream_routes_to_stderr(self, monkeypatch, capsys) -> None:
+        import sys
+
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.file_entry("added", "x.py", stream=sys.stderr)
+        captured = capsys.readouterr()
+        assert "x.py" in captured.err
+        assert "x.py" not in captured.out
+
+
+class TestListItem:
+    """Verify DryRunPrinter.list_item renders bullet text and respects stream=."""
+
+    def test_text_appears_in_stdout(self, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.list_item("deploy to staging")
+        captured = capsys.readouterr()
+        assert "deploy to staging" in captured.out
+        assert captured.err == ""
+
+    def test_stream_routes_to_stderr(self, monkeypatch, capsys) -> None:
+        import sys
+
+        monkeypatch.setenv("NO_COLOR", "1")
+        p = DryRunPrinter(dry_run=False)
+        p.list_item("deploy to staging", stream=sys.stderr)
+        captured = capsys.readouterr()
+        assert "deploy to staging" in captured.err
+        assert "deploy to staging" not in captured.out
+
+
+class TestWarnStream:
+    """Verify DryRunPrinter.warn routes output based on the stream= parameter."""
+
+    def test_warn_defaults_to_stdout(self, capsys) -> None:
+        p = DryRunPrinter(dry_run=False)
+        p.warn("low disk space")
+        captured = capsys.readouterr()
+        assert "low disk space" in captured.out
+        assert captured.err == ""
+
+    def test_warn_explicit_stderr(self, capsys) -> None:
+        import sys
+
+        p = DryRunPrinter(dry_run=False)
+        p.warn("low disk space", stream=sys.stderr)
+        captured = capsys.readouterr()
+        assert "low disk space" in captured.err
+        assert "low disk space" not in captured.out

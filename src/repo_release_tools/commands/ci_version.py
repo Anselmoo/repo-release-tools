@@ -30,7 +30,14 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools import output
+from repo_release_tools.ui import (
+    DryRunPrinter,
+    GLYPHS,
+    ProgressLine,
+    rule,
+    subtle,
+    terminal_width,
+)
 from repo_release_tools.config import (
     VALID_CI_FORMATS,
     format_autodetected_config_notice,
@@ -142,25 +149,32 @@ def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
     try:
         config = load_or_autodetect_config(root)
         if config.autodetected:
-            print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
+            p = DryRunPrinter(dry_run=False)
+            p.line(format_autodetected_config_notice(config), ok=False, stream=sys.stderr)
             if mismatch := check_autodetected_version_consistency(config):
-                print(mismatch, file=sys.stderr)
+                p.line(mismatch, ok=False, stream=sys.stderr)
                 return None
         group = config.resolve_group(getattr(args, "group", None))
         return str(read_group_current_version(group))
     except FileNotFoundError:
-        print(output.warning("No supported rrt config file found."), file=sys.stderr)
-        print(format_missing_tool_rrt_guidance(root, []), file=sys.stderr)
+        p = DryRunPrinter(dry_run=False)
+        p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
+        p.action(format_missing_tool_rrt_guidance(root, []), stream=sys.stderr)
         return None
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            print(output.warning("No [tool.rrt] configuration found."), file=sys.stderr)
-            print(format_missing_tool_rrt_guidance(root, iter_config_files(root)), file=sys.stderr)
+            p = DryRunPrinter(dry_run=False)
+            p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
+            p.action(
+                format_missing_tool_rrt_guidance(root, iter_config_files(root)), stream=sys.stderr
+            )
             return None
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(dry_run=False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return None
     except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(dry_run=False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return None
 
 
@@ -186,9 +200,11 @@ def cmd_ci_version_compute(args: argparse.Namespace) -> int:
     try:
         version = compute_published_version(base, context)
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(dry_run=False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
-    print(version)
+    # Machine-readable output: keep raw version on stdout
+    sys.stdout.write(version + "\n")
     return 0
 
 
@@ -204,36 +220,46 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     try:
         config = load_or_autodetect_config(root)
         if config.autodetected:
-            print(output.warning(format_autodetected_config_notice(config)), file=sys.stderr)
+            p = DryRunPrinter(dry_run=False)
+            p.line(format_autodetected_config_notice(config), ok=False, stream=sys.stderr)
         group = config.resolve_group(getattr(args, "group", None))
     except FileNotFoundError:
-        print(output.warning("No supported rrt config file found."), file=sys.stderr)
-        print(format_missing_tool_rrt_guidance(root, []), file=sys.stderr)
+        p = DryRunPrinter(dry_run=False)
+        p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
+        p.action(format_missing_tool_rrt_guidance(root, []), stream=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            print(output.warning("No [tool.rrt] configuration found."), file=sys.stderr)
-            print(format_missing_tool_rrt_guidance(root, iter_config_files(root)), file=sys.stderr)
+            p = DryRunPrinter(dry_run=False)
+            p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
+            p.action(
+                format_missing_tool_rrt_guidance(root, iter_config_files(root)), stream=sys.stderr
+            )
             return 1
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(dry_run=False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(dry_run=False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     ci_targets = [t for t in group.version_targets if t.ci_format in VALID_CI_FORMATS]
     if not ci_targets:
-        print(
+        p = DryRunPrinter(False)
+        p.line(
             "No version targets with ci_format configured. "
             'Add ci_format = "pep440" or ci_format = "semver_pre" to the selected version group.',
-            file=sys.stderr,
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
     version: str = args.version
 
-    progress = output.ProgressLine(file=sys.stdout)
-    print(output.section("Applying CI versions"))
+    progress = ProgressLine(file=sys.stdout)
+    p = DryRunPrinter(args.dry_run)
+    p.line(rule("Applying CI versions", width=terminal_width()))
     total = len(ci_targets)
     for i, target in enumerate(ci_targets, 1):
         if target.ci_format == "semver_pre":
@@ -243,10 +269,12 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             # rather than writing an invalid Cargo SemVer string.
             if version_str == version and ".dev" in version:
                 progress.clear()
-                print(
+                p_err = DryRunPrinter(False)
+                p_err.line(
                     f"Cannot convert {version!r} to a Cargo-compatible SemVer prerelease. "
                     "Only versions ending in '.dev<digits>' are supported (e.g. 0.2.0.dev42).",
-                    file=sys.stderr,
+                    ok=False,
+                    stream=sys.stderr,
                 )
                 return 1
         else:
@@ -257,16 +285,22 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             replace_version_in_file(target, version_str, dry_run=args.dry_run)
         except (FileNotFoundError, RuntimeError) as exc:
             progress.clear()
-            print(str(exc), file=sys.stderr)
+            p = DryRunPrinter(False)
+            p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
         if total > 1:
             progress.update_bar(i / total)
 
-    print()
+    progress.clear()
+    p.blank_line()
     if args.dry_run:
-        print(output.dry_run_complete("no files were modified"))
+        p.line(
+            subtle(
+                f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no files were modified"
+            )
+        )
     else:
-        print(output.ok("Done."))
+        p.ok("Done.")
     return 0
 
 
@@ -284,10 +318,11 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
     try:
         version = compute_published_version(base, context)
     except ValueError as exc:
-        print(str(exc), file=sys.stderr)
+        p = DryRunPrinter(False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
-    g = output.GLYPHS
-    print(output.action(f"{g.diff.modified} Applying published version: {version}"))
+    p = DryRunPrinter(False)
+    p.action(f"Applying published version: {version}")
 
     apply_args = argparse.Namespace(
         version=version, dry_run=args.dry_run, group=getattr(args, "group", None)
