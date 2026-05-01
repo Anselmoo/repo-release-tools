@@ -52,6 +52,36 @@ def test_cmd_install_dry_run_does_not_write(monkeypatch, tmp_path: Path, capsys)
     assert "[dry-run] complete" in captured.out
 
 
+def test_cmd_install_no_targets_dry_run_shows_available_targets(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, home)
+
+    result = cmd_install(Namespace(targets=None, dry_run=True, force=False))
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Available targets" in captured.out
+    assert "pass --target DEST to install" in captured.out
+    assert not (tmp_path / ".copilot").exists()
+
+
+def test_cmd_install_no_targets_without_dry_run_errors(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, tmp_path / "home")
+
+    result = cmd_install(Namespace(targets=None, dry_run=False, force=False))
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "No --target specified" in captured.err
+    assert "Available:" in captured.err
+
+
 def test_cmd_install_refuses_existing_skill_without_force(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:

@@ -11,9 +11,11 @@ import pytest
 
 from repo_release_tools.commands.ci_version import (
     GitHubContext,
+    _context_from_args,
     cmd_ci_version_apply,
     cmd_ci_version_compute,
     cmd_ci_version_sync,
+    register,
     compute_published_version,
     to_semver,
 )
@@ -60,6 +62,65 @@ def _ns(**kwargs: object) -> argparse.Namespace:
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
+
+
+def test_context_from_args_prefers_cli_values_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/env")
+    monkeypatch.setenv("GITHUB_REF_NAME", "env-name")
+    monkeypatch.setenv("GITHUB_RUN_ID", "99")
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "3")
+
+    ctx = _context_from_args(
+        _ns(ref="refs/heads/cli", ref_name="", run_id=None, run_attempt="7")
+    )
+
+    assert ctx == GitHubContext(
+        ref="refs/heads/cli",
+        ref_name="env-name",
+        run_id="99",
+        run_attempt="7",
+    )
+
+
+def test_register_wires_ci_version_subcommands() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+    register(subparsers)
+
+    compute_args = parser.parse_args(
+        [
+            "ci-version",
+            "compute",
+            "--base",
+            "1.2.3",
+            "--ref",
+            "refs/heads/main",
+            "--run-id",
+            "4",
+            "--run-attempt",
+            "2",
+        ]
+    )
+    assert compute_args.command == "ci-version"
+    assert compute_args.ci_version_cmd == "compute"
+    assert compute_args.handler is cmd_ci_version_compute
+    assert compute_args.base == "1.2.3"
+    assert compute_args.ref == "refs/heads/main"
+
+    sync_args = parser.parse_args(
+        [
+            "ci-version",
+            "sync",
+            "--base",
+            "1.2.3",
+            "--dry-run",
+            "--run-id",
+            "4",
+        ]
+    )
+    assert sync_args.ci_version_cmd == "sync"
+    assert sync_args.handler is cmd_ci_version_sync
+    assert sync_args.dry_run is True
 
 
 def test_compute_tag_build() -> None:
