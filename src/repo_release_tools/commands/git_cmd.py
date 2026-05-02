@@ -1,4 +1,77 @@
-"""Opinionated Git workflow helpers for rrt."""
+"""Run opinionated Git workflow helpers for rrt.
+
+`rrt git` bundles the repository workflows that are used most often while
+developing and releasing this project. The command group favors compact,
+human-readable summaries with explicit safety checks before any destructive
+operation.
+
+Most commands are designed to run from a Git work tree and emit a short
+summary first, followed by the details needed to act on the result.
+
+## Command families
+
+### Inspection
+
+- `status` shows the current branch, upstream, and a compact view of worktree
+  changes.
+- `diff` renders a condensed diff for the working tree, staged changes, or a
+  specific ref.
+- `log` shows recent commits with short SHAs, subjects, and refs.
+- `doctor` runs a repository health report for common rrt workflow rules.
+- `sync-status` reports unresolved conflicts and ahead/behind drift against a
+  sync base.
+- `check-dirty-tree` exits non-zero when the worktree is dirty, which makes it
+  useful for hooks and CI.
+
+### Commit drafting
+
+- `commit` creates one conventional commit and infers the type from the current
+  branch when possible.
+- `commit-all` stages all tracked and untracked files before creating the
+  commit.
+- `squash-local` squashes commits ahead of an upstream branch or `--base-ref`
+  into one conventional commit.
+
+### Branch maintenance and synchronization
+
+- `sync` fetches, auto-stashes dirty changes when needed, and pulls from the
+  upstream branch.
+- `move` switches branches safely and can create the target branch first.
+- `undo-safe` resets to another ref while keeping changes staged or in the
+  working tree.
+- `rebootstrap` backs up `.git`, reinitializes the repository, and creates a
+  fresh history snapshot or empty bootstrap commit.
+
+## Behavior details
+
+- Commit subjects use conventional commit syntax with optional scope and
+  breaking markers.
+- Commands that support `--dry-run` preview the git operations without making
+  changes.
+- Several commands refuse to continue when the repository is in an unsafe
+  state, such as unresolved conflicts, an in-progress merge or rebase, or a
+  missing upstream branch.
+- `rebootstrap` requires explicit confirmation before it can destroy history.
+
+## Examples
+
+```text
+$ rrt git status
+$ rrt git commit "refresh help examples"
+$ rrt git sync --dry-run
+$ rrt git squash-local --base-ref origin/main "ship parser"
+$ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
+```
+
+## Safety notes
+
+- `sync` and `move` auto-stash local changes, but a failed pull or checkout can
+  leave the stash on the stack.
+- `undo-safe` and `rebootstrap` can rewrite repository history; use them only
+  when that is intended.
+- `rebootstrap` also guards against accidental use on repositories with
+  configured remotes unless explicitly allowed.
+"""
 
 from __future__ import annotations
 
@@ -1058,9 +1131,53 @@ def add_commit_arguments(parser: argparse.ArgumentParser) -> None:
 GIT_EPILOG = (
     "  $ rrt git status\n"
     "  $ rrt git diff --against HEAD~1\n"
-    '  $ rrt git commit fix "make output clearer"\n'
+    '  $ rrt git commit --type fix "make output clearer"\n'
     "  $ rrt git sync\n"
     "  $ rrt git undo-safe"
+)
+
+GIT_STATUS_EXAMPLES = "  $ rrt git status"
+
+GIT_DIFF_EXAMPLES = "  $ rrt git diff\n  $ rrt git diff --staged\n  $ rrt git diff --against HEAD~1"
+
+GIT_LOG_EXAMPLES = "  $ rrt git log\n  $ rrt git log --limit 20"
+
+GIT_DOCTOR_EXAMPLES = "  $ rrt git doctor\n  $ rrt git doctor --changelog-file docs/CHANGELOG.md"
+
+GIT_SYNC_STATUS_EXAMPLES = "  $ rrt git sync-status\n  $ rrt git sync-status --base-ref origin/main"
+
+GIT_CHECK_DIRTY_TREE_EXAMPLES = "  $ rrt git check-dirty-tree"
+
+GIT_COMMIT_EXAMPLES = (
+    '  $ rrt git commit "refresh help examples"\n'
+    '  $ rrt git commit --type fix --scope cli "handle empty config"\n'
+    '  $ rrt git commit --breaking "ship parser v2"'
+)
+
+GIT_COMMIT_ALL_EXAMPLES = (
+    '  $ rrt git commit-all "refresh release metadata"\n'
+    '  $ rrt git commit-all --type chore --scope deps "update lockfiles"'
+)
+
+GIT_SYNC_EXAMPLES = "  $ rrt git sync\n  $ rrt git sync --merge\n  $ rrt git sync --dry-run"
+
+GIT_MOVE_EXAMPLES = "  $ rrt git move release/v1.2.0\n  $ rrt git move -b feat/help-copy --dry-run"
+
+GIT_SQUASH_LOCAL_EXAMPLES = (
+    '  $ rrt git squash-local "ship parser"\n'
+    '  $ rrt git squash-local --base-ref origin/main --type fix "repair sync handling"'
+)
+
+GIT_UNDO_SAFE_EXAMPLES = (
+    "  $ rrt git undo-safe\n"
+    "  $ rrt git undo-safe --keep-staged\n"
+    "  $ rrt git undo-safe --target HEAD~2 --dry-run"
+)
+
+GIT_REBOOTSTRAP_EXAMPLES = (
+    "  $ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run\n"
+    "  $ rrt git rebootstrap --yes-i-know-this-destroys-history --empty-first\n"
+    "  $ rrt git rebootstrap --yes-i-know-this-destroys-history --hard-init --branch main"
 )
 
 
@@ -1082,12 +1199,16 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     status_parser = git_sub.add_parser(
         "status",
         help="Show a compact branch and worktree status view.",
+        description="Show the current branch, upstream, and compact typed worktree changes for the repository.",
+        epilog=GIT_STATUS_EXAMPLES,
     )
     status_parser.set_defaults(handler=cmd_status)
 
     diff_parser = git_sub.add_parser(
         "diff",
         help="Show a compact diff using rrt glyph formatting.",
+        description="Render a compact tracked-file diff with rrt glyphs for working-tree, staged, or ref-based changes.",
+        epilog=GIT_DIFF_EXAMPLES,
     )
     diff_parser.add_argument(
         "--staged",
@@ -1105,6 +1226,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     log_parser = git_sub.add_parser(
         "log",
         help="Show a compact commit history view.",
+        description="Show recent commits in a compact rrt log view with short SHAs, subjects, and refs.",
+        epilog=GIT_LOG_EXAMPLES,
     )
     log_parser.add_argument(
         "-n",
@@ -1118,6 +1241,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     doctor_parser = git_sub.add_parser(
         "doctor",
         help="Run a compact repository health report for rrt workflows.",
+        description="Run branch, upstream, worktree, conflict, commit-subject, and changelog checks for an rrt workflow.",
+        epilog=GIT_DOCTOR_EXAMPLES,
     )
     doctor_parser.add_argument(
         "--changelog-file",
@@ -1129,6 +1254,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     sync_status_parser = git_sub.add_parser(
         "sync-status",
         help="Analyze unresolved conflicts and whether sync/rebase work is needed.",
+        description="Report merge or rebase blockers plus ahead/behind drift against the upstream branch or --base-ref.",
+        epilog=GIT_SYNC_STATUS_EXAMPLES,
     )
     sync_status_parser.add_argument(
         "--base-ref",
@@ -1141,12 +1268,16 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     dirty_parser = git_sub.add_parser(
         "check-dirty-tree",
         help="Exit non-zero when the working tree is dirty. Useful in hooks and CI.",
+        description="Exit non-zero when the working tree is dirty and print a compact status summary for hooks or CI.",
+        epilog=GIT_CHECK_DIRTY_TREE_EXAMPLES,
     )
     dirty_parser.set_defaults(handler=cmd_check_dirty_tree)
 
     commit_parser = git_sub.add_parser(
         "commit",
         help="Create a conventional commit, inferring type from the current branch.",
+        description="Create one conventional commit from the provided description, inferring the type from the current branch when possible.",
+        epilog=GIT_COMMIT_EXAMPLES,
     )
     add_commit_arguments(commit_parser)
     commit_parser.set_defaults(handler=cmd_commit)
@@ -1154,6 +1285,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     commit_all_parser = git_sub.add_parser(
         "commit-all",
         help="Stage all files and create a conventional commit from the branch context.",
+        description="Stage all tracked and untracked changes, then create one conventional commit from the current branch context.",
+        epilog=GIT_COMMIT_ALL_EXAMPLES,
     )
     add_commit_arguments(commit_all_parser)
     commit_all_parser.set_defaults(handler=cmd_commit_all)
@@ -1161,6 +1294,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     sync_parser = git_sub.add_parser(
         "sync",
         help="Fetch, stash if needed, and pull the current branch safely.",
+        description="Fetch, auto-stash when needed, and pull the current branch from its upstream using rebase by default.",
+        epilog=GIT_SYNC_EXAMPLES,
     )
     sync_parser.add_argument(
         "--merge",
@@ -1173,6 +1308,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     move_parser = git_sub.add_parser(
         "move",
         help="Switch branches safely by stashing and restoring local changes.",
+        description="Switch to another branch, optionally creating it, while auto-stashing and restoring local changes when needed.",
+        epilog=GIT_MOVE_EXAMPLES,
     )
     move_parser.add_argument("target", help="Target branch name.")
     move_parser.add_argument(
@@ -1187,6 +1324,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     squash_parser = git_sub.add_parser(
         "squash-local",
         help="Squash local commits since upstream or a base ref into one commit.",
+        description="Squash commits ahead of the upstream branch or --base-ref into one conventional commit.",
+        epilog=GIT_SQUASH_LOCAL_EXAMPLES,
     )
     add_commit_arguments(squash_parser)
     squash_parser.add_argument(
@@ -1200,6 +1339,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     undo_parser = git_sub.add_parser(
         "undo-safe",
         help="Undo a commit while keeping work staged or in the working tree.",
+        description="Reset to HEAD~1 or another target while keeping changes staged (--keep-staged) or in the working tree.",
+        epilog=GIT_UNDO_SAFE_EXAMPLES,
     )
     undo_parser.add_argument(
         "--target",
@@ -1218,6 +1359,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     rebootstrap_parser = git_sub.add_parser(
         "rebootstrap",
         help="Destroy current git history and create a fresh repository history.",
+        description="Back up the current .git directory, reinitialize the repository, and create a fresh history snapshot or empty bootstrap commit.",
+        epilog=GIT_REBOOTSTRAP_EXAMPLES,
     )
     rebootstrap_parser.add_argument(
         "--yes-i-know-this-destroys-history",

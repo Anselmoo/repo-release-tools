@@ -1,4 +1,64 @@
-"""Version bump command."""
+"""Bump a release version and prepare the associated release branch.
+
+## Overview
+
+This command reads the active ``[tool.rrt]`` configuration, computes a new
+version, updates configured files, and creates the release branch named by the
+selected version group.
+
+The bump value may be one of:
+
+* ``major``, ``minor``, or ``patch`` to increment the current version
+* an explicit version string such as ``2.1.0``
+
+## What the command updates
+
+Depending on the selected version group, the command can update:
+
+* version targets defined in ``[[tool.rrt.version_targets]]``
+* dependency or documentation pins configured for the group
+* the changelog file
+* lockfiles, when the group defines a lock command
+
+## Release workflow
+
+1. Load the repository config from ``[tool.rrt]``.
+2. Resolve the selected version group.
+3. Compute the new version from the current group version or the explicit
+   ``<bump>`` value.
+4. Update version targets and optional pin targets.
+5. Update the changelog unless ``--no-changelog`` is set.
+6. Run the configured lock command unless ``--no-update`` is set.
+7. Create the release branch and stage or commit the resulting changes.
+
+## Changelog behavior
+
+The changelog update logic supports three modes:
+
+* ``auto`` - promote ``[Unreleased]`` when it has entries, otherwise generate a
+  new section from git history
+* ``promote`` - require a non-empty ``[Unreleased]`` section and rename it to
+  the new version heading
+* ``generate`` - always generate a fresh section from the commit log
+
+When an empty ``[Unreleased]`` placeholder exists, generated content is kept
+below it so the placeholder stays at the top of the file.
+
+## Safety notes
+
+* The working tree must be clean unless ``--dry-run`` is used.
+* Existing release branches are refused unless ``--force`` is set.
+* ``--no-commit`` leaves the branch created with staged changes only.
+* ``--dry-run`` previews the planned file edits and git actions without writing
+  to disk.
+
+## Examples
+
+* ``rrt bump patch``
+* ``rrt bump minor --dry-run``
+* ``rrt bump 2.1.0 --no-changelog --no-commit``
+* ``rrt bump major --base-branch develop``
+"""
 
 from __future__ import annotations
 

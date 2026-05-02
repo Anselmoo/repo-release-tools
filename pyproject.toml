@@ -39,7 +39,30 @@ requires = ["uv_build>=0.9.26,<0.12.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["pytest>=8.0", "pytest-cov>=7.1.0", "ruff>=0.14.0", "ty>=0.0.26"]
+dev = [
+    "poethepoet>=0.45.0",
+    "pytest>=8.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.14.0",
+    "ty>=0.0.26",
+]
+
+[tool.poe.groups.docs]
+heading = "Documentation"
+
+[tool.poe.groups.docs.tasks.docs-generate]
+help = "Regenerate the CLI reference and topic docs from source."
+script = "generate_cli_docs:task_generate"
+env.PYTHONPATH = "scripts"
+
+[tool.poe.groups.docs.tasks.docs-check]
+help = "Verify all generated docs match their source-owned content."
+script = "generate_cli_docs:task_check"
+env.PYTHONPATH = "scripts"
+
+[tool.poe.groups.docs.tasks.docs]
+help = "Regenerate generated docs and confirm they are current."
+sequence = ["docs-generate", "docs-check"]
 
 [tool.rrt]
 

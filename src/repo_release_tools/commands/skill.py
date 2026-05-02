@@ -1,4 +1,45 @@
-"""Skill installation commands."""
+"""Install the bundled repo-release-tools agent skill.
+
+## Overview
+
+`rrt skill` manages installation of the packaged `repo-release-tools` skill
+into tool-specific skill directories. The only implemented subcommand is
+`install`.
+
+## Target surfaces
+
+The install command can write to local or global skill roots for:
+
+- Claude: `.claude/skills`
+- Codex: `.codex/skills`
+- Copilot: `.copilot/skills`
+
+Each target receives a directory named after the bundled skill, containing
+`SKILL.md`.
+
+## Behavior
+
+- Accepts one or more `--target` values; duplicates are ignored after first use.
+- Resolves local targets relative to the current working directory and global
+  targets relative to the home directory.
+- Refuses to overwrite an existing installation unless `--force` is provided.
+- Supports `--dry-run` previews that show the resolved destination paths
+  without writing files.
+
+## Examples
+
+- `rrt skill install --target copilot-local`
+- `rrt skill install --target claude-local --target codex-local`
+- `rrt skill install --target copilot-global --force --dry-run`
+
+## Caveats
+
+- `rrt skill` requires a subcommand; use `rrt skill install ...`.
+- Without `--target`, the command prints available destinations in dry-run
+  mode and otherwise fails.
+- Existing symlinks, files, or directories at the destination are replaced
+  only when `--force` is used.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +66,85 @@ SKILL_EXAMPLES = (
     "  $ rrt skill install --target copilot-local\n"
     "  $ rrt skill install --target claude-local --target codex-local"
 )
+
+SKILL_INSTALL_EXAMPLES = (
+    "  $ rrt skill install --target copilot-local\n"
+    "  $ rrt skill install --target claude-local --target codex-local\n"
+    "  $ rrt skill install --target copilot-global --force --dry-run"
+)
+
+SKILLS_DOC = """# Skills
+
+This repository bundles two agent skills:
+
+- `/.github/skills/repo-release-tools-uvx/SKILL.md` — zero-install guidance
+- `/.github/skills/repo-release-tools/SKILL.md` — guidance for an installed `rrt`
+
+If you need the exact CLI syntax for branch, Git, or skill commands, use the
+[RRT CLI reference](rrt-cli.md) first.
+
+## Which skill to use
+
+### `repo-release-tools-uvx`
+
+Use this when `repo-release-tools` is not installed and you want quick
+`uvx`-based usage examples for branches, bumps, or one-off release automation.
+
+### `repo-release-tools`
+
+Use this when `rrt` is already available and you want help with:
+
+- `rrt branch ...` naming and branch repair
+- `rrt bump ...` release versioning
+- `rrt git ...` workflow helpers
+- `rrt doctor` / `rrt config`
+- `rrt skill install ...`
+- hook and CI workflow guidance that points back to the main docs
+
+## Installing the bundled CLI skill
+
+Install into one or more agent skill locations with:
+
+```bash
+rrt skill install --target copilot-local
+rrt skill install --target claude-local --target codex-local
+rrt skill install --target copilot-global --dry-run
+rrt skill install --target codex-global --force
+```
+
+Supported targets:
+
+| Target | Directory |
+|---|---|
+| `copilot-local` | `.copilot/skills` |
+| `claude-local` | `.claude/skills` |
+| `codex-local` | `.codex/skills` |
+| `copilot-global` | `~/.copilot/skills` |
+| `claude-global` | `~/.claude/skills` |
+| `codex-global` | `~/.codex/skills` |
+
+The installer refuses to overwrite an existing skill unless you pass `--force`.
+Use `--dry-run` to preview the destination paths first.
+
+## Related docs
+
+- [RRT CLI](rrt-cli.md)
+- [pre-commit / lefthook](pre-commit.md)
+- [GitHub Action](github-action.md)
+- [Git magic](git-magic.md)
+
+## Skill eval fixtures
+
+Keep the canonical skill eval prompts in `/evals/evals.json`.
+
+Structured workspace artifacts under
+`.github/skills/repo-release-tools-workspace/` may be committed as evidence of an
+evaluation run. Do **not** commit ad-hoc execution transcripts
+(`transcript.md`).
+"""
+
+# Ordered source-owned topic docs for docs generation.
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("skill", SKILLS_DOC),)
 
 
 def _dedupe_targets(targets: Iterable[str]) -> list[str]:
@@ -163,6 +283,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     install_parser = skill_sub.add_parser(
         "install",
         help="Install the bundled repo-release-tools skill into agent skill directories.",
+        description="Install the bundled repo-release-tools skill into one or more local or global agent skill directories.",
+        epilog=SKILL_INSTALL_EXAMPLES,
     )
     install_parser.add_argument(
         "--target",

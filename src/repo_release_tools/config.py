@@ -287,6 +287,27 @@ class VersionGroup:
 
 
 @dataclass(frozen=True)
+class EolOverride:
+    """A per-cycle EOL date override for a specific language."""
+
+    language: str
+    cycle: str
+    eol: str  # YYYY-MM-DD
+
+
+@dataclass(frozen=True)
+class EolConfig:
+    """EOL lifecycle tracking configuration under [tool.rrt.eol]."""
+
+    languages: tuple[str, ...] = ("python",)
+    warn_days: int = 180
+    error_days: int = 0
+    fetch_live: bool = False
+    allow_eol: bool = False
+    overrides: tuple[EolOverride, ...] = ()
+
+
+@dataclass(frozen=True)
 class RrtConfig:
     """Loaded rrt configuration."""
 
@@ -297,6 +318,7 @@ class RrtConfig:
     autodetected: bool = False
     extra_branch_types: tuple[str, ...] = ()
     global_pin_targets: list[PinTarget] = field(default_factory=list)
+    eol: EolConfig | None = None
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""
@@ -987,6 +1009,70 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         default_group_name=default_group_name,
         extra_branch_types=extra_branch_types,
         global_pin_targets=_load_pin_targets(root, raw.get("pin_targets", [])),
+        eol=_load_eol_config(raw.get("eol")),
+    )
+
+
+def _load_eol_config(raw: object) -> EolConfig | None:
+    """Parse an optional [tool.rrt.eol] table into an EolConfig."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("tool.rrt.eol must be a table")
+
+    d: dict[str, object] = cast(dict[str, object], raw)
+
+    raw_langs = d.get("languages") or ["python"]
+    if not isinstance(raw_langs, list) or not all(isinstance(x, str) for x in raw_langs):
+        raise ValueError("tool.rrt.eol.languages must be a list of strings")
+
+    raw_warn = d.get("warn_days")
+    warn_days = 180 if raw_warn is None else raw_warn
+    if not isinstance(warn_days, int):
+        raise ValueError("tool.rrt.eol.warn_days must be an integer")
+
+    raw_error = d.get("error_days")
+    error_days = 0 if raw_error is None else raw_error
+    if not isinstance(error_days, int):
+        raise ValueError("tool.rrt.eol.error_days must be an integer")
+
+    raw_fetch = d.get("fetch_live")
+    fetch_live = False if raw_fetch is None else raw_fetch
+    if not isinstance(fetch_live, bool):
+        raise ValueError("tool.rrt.eol.fetch_live must be a boolean")
+
+    raw_allow = d.get("allow_eol")
+    allow_eol = False if raw_allow is None else raw_allow
+    if not isinstance(allow_eol, bool):
+        raise ValueError("tool.rrt.eol.allow_eol must be a boolean")
+
+    raw_overrides = d.get("overrides") or []
+    if not isinstance(raw_overrides, list):
+        raise ValueError("tool.rrt.eol.overrides must be an array of tables")
+
+    overrides: list[EolOverride] = []
+    for entry in raw_overrides:
+        if not isinstance(entry, dict):
+            raise ValueError("Each tool.rrt.eol.overrides entry must be a table")
+        e = cast(dict[str, object], entry)
+        language = e.get("language")
+        cycle = e.get("cycle")
+        eol = e.get("eol")
+        if not isinstance(language, str) or not language:
+            raise ValueError("tool.rrt.eol.overrides[].language must be a non-empty string")
+        if not isinstance(cycle, str) or not cycle:
+            raise ValueError("tool.rrt.eol.overrides[].cycle must be a non-empty string")
+        if not isinstance(eol, str) or not eol:
+            raise ValueError("tool.rrt.eol.overrides[].eol must be a non-empty YYYY-MM-DD string")
+        overrides.append(EolOverride(language=language, cycle=cycle, eol=eol))
+
+    return EolConfig(
+        languages=tuple(cast(list[str], raw_langs)),
+        warn_days=warn_days,
+        error_days=error_days,
+        fetch_live=fetch_live,
+        allow_eol=allow_eol,
+        overrides=tuple(overrides),
     )
 
 

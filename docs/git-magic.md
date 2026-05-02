@@ -1,110 +1,60 @@
 # Git magic
 
-`repo-release-tools` does not want to become a generic Git alias pack. The
-goal is narrower: ship a set of opinionated commit and branch workflows that
-protect release hygiene and stay reusable across CLI, hooks, and GitHub
-Actions.
+`repo-release-tools` ships a small set of opinionated Git workflows for branch
+health, commit drafting, sync, and history repair.
 
-Some early workflow discussions were inspired by
-[`joseluisq/gitnow`](https://github.com/joseluisq/gitnow), but `rrt` reshapes
-the surface around conventional branches, commit policy, and release safety.
+This page is generated from `repo_release_tools.git.GIT_MAGIC_DOC`.
+This page stays workflow-oriented. For the full command surface and option
+details, see [docs/rrt-cli.md](rrt-cli.md).
 
-## 11 magic workflow patterns
+## Workflow map
 
-1. Branch-driven commit drafting
-   Use `rrt git commit "message"` to infer the conventional commit type from the
-   current branch, keeping branch intent and commit intent aligned.
-2. Stage-and-commit sweep
-   Use `rrt git commit-all "message"` when you want one explicit snapshot
-   commit, but still want `rrt` to build the conventional subject.
-3. Dirty-tree sync
-   Use `rrt git sync` to fetch, auto-stash local work, pull, then restore the
-   worktree. Rebase is the default path because the product assumes linear
-   history where possible.
-4. Sync analysis
-   Use `rrt git doctor` for the broad repo health view, and `rrt git
-   sync-status` before a pull or after a failed rebase when you want the focused
-   sync preflight: whether a merge/rebase is already in progress, which paths
-   are conflicted, and whether the branch is behind or diverged from its base.
-5. Safe branch move
-   Use `rrt git move <branch>` to switch branches without manually juggling a
-   stash.
-6. Wrong-branch rescue
-   Use `rrt branch rescue <type> "description"` when commits landed on the wrong
-   branch and need to be moved into a correctly named branch.
-7. Local story squash
-   Use `rrt git squash-local "message"` to collapse a local branch into one
-   reviewable conventional commit before push.
-8. Safe undo
-   Use `rrt git undo-safe` or `rrt git undo-safe --keep-staged` to rewind a bad
-   commit without losing the work.
-9. Dirty-tree gate
-   Use `rrt git check-dirty-tree` when a hook, script, or CI job should fail if
-   the repo is not clean. The command now prints a compact branch status line
-   plus typed change entries for modified, added, removed, renamed, conflicted,
-   and untracked paths.
-10. Release bump envelope
-   Use `rrt bump ...` when the workflow should create the branch, stage the
-   version files, refresh generated files, and create the release commit in one
-   pass.
-11. History rebootstrap
-    Use `rrt git rebootstrap` only for deliberate history replacement, such as
-    templates or pre-publication cleanup. It stays behind a destructive
-    confirmation flag and remote guard, and `--hard-init` recreates git metadata
-    from scratch while keeping the new history to a single empty commit.
+- **Inspect** — `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
+  `check-dirty-tree`
+- **Draft commits** — `rrt git commit`, `commit-all`, `squash-local`
+- **Move and sync** — `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
+- **Branch workflows** — `rrt branch new`, `rescue`, `rename`
+
+## What the Git helpers optimize for
+
+- compact, human-readable summaries first
+- explicit safety checks before destructive actions
+- conventional commit subjects and conventional branch names when possible
+- reuse across local CLI, hooks, and CI
+
+## Notable behavior
+
+- `rrt git commit` infers the commit type from the current branch only when the
+  branch is a conventional `type/slug` branch.
+- Branches named `main`, `master`, `develop`, `release/v<semver>`, AI helper
+  branches, bot branches, and custom branch prefixes are treated as special
+  cases and may require `--type` for commit drafting.
+- `sync` and `move` auto-stash local changes when needed.
+- `undo-safe` and `rebootstrap` can rewrite history; `rebootstrap` also
+  requires explicit confirmation before it destroys the current repository
+  history.
+- Commands that support `--dry-run` preview git operations without changing the
+  worktree.
 
 ## Current command surface
 
-```bash
+```text
 rrt git status
-rrt git log -n 12
+rrt git diff
+rrt git log
 rrt git doctor
 rrt git sync-status
 rrt git check-dirty-tree
 rrt git commit "handle empty config"
 rrt git commit-all "snapshot parser cleanup"
 rrt git sync
-rrt git diff
-rrt git diff --staged
-rrt git diff --against HEAD~3
 rrt git move feat/new-parser
 rrt git squash-local "ship parser cleanup"
 rrt git undo-safe --keep-staged
 rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
-rrt git rebootstrap --yes-i-know-this-destroys-history --hard-init --dry-run
 ```
 
-## Reuse in hooks and Actions
+## See also
 
-Yes. These workflows can later back both local hooks and GitHub Actions.
-
-The important point is to reuse the same low-level signals everywhere:
-
-- current branch name and inferred branch type
-- current commit subject and conventional-commit validity
-- dirty vs clean working tree
-- upstream configured vs missing
-- commits ahead of a base ref
-- changelog required vs missing
-
-`repo_release_tools.git.working_tree_clean()` already gives the dirty-tree
-signal, and the existing hook layer already validates branch names, commit
-subjects, and changelog requirements. `rrt-hooks check-dirty-tree` now exposes
-the same clean-worktree signal for reuse in hooks and GitHub Actions. The next
-step is to keep adding small, shared predicates like these instead of burying
-policy inside one CLI command.
-
-That gives one policy model with several entrypoints:
-
-- `rrt git ...` for interactive workflow
-- `rrt-hooks ...` for local enforcement
-- GitHub Actions for CI enforcement
-- `rrt git doctor` for one-shot cross-checks of branch state, commit subject,
-  dirty tree status, upstream wiring, and changelog risk
-
-## Design rules
-
-- Prefer workflows over aliases.
-- Prefer validation and preview over hidden Git side effects.
-- Keep destructive operations explicit and hard to trigger accidentally.
-- Keep commit generation aligned with conventional branches and release policy.
+- [Conventional branches](semantic-branches.md)
+- [Generated CLI reference](rrt-cli.md)

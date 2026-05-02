@@ -1,4 +1,46 @@
-"""Environment introspection command for rrt."""
+"""Inspect the process environment and runtime context used by rrt.
+
+## Overview
+
+This command is a compact diagnostics tool for answering "what environment am
+I running in?" It does not read repository configuration. Instead, it reports
+the interpreter and terminal-related values that can affect rrt output.
+
+## What it reports
+
+The standard text view prints:
+
+- platform
+- Python version
+- Python executable path
+- `TERM`
+- `COLORTERM`
+- whether `NO_COLOR` is enabled
+- `RRT_COLOR`
+
+The `NO_COLOR` field is normalized to a friendly enabled/disabled value rather
+than echoing the raw environment variable.
+
+## JSON mode
+
+Use `--json` to emit the same fields as a JSON object. This is useful for
+automation, debugging, and documentation tooling that prefers structured
+output.
+
+## Examples
+
+```bash
+rrt env
+rrt env --json
+```
+
+## Caveats
+
+- This command reports only a small set of environment values that are most
+  relevant to rrt behavior.
+- It is a snapshot of the current process, not a probe of the wider shell or
+  login environment.
+"""
 
 from __future__ import annotations
 

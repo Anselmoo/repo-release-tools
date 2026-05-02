@@ -1,34 +1,34 @@
 # Skills
 
-This repository includes two bundled agent skills:
+This repository bundles two agent skills:
 
-- `/.github/skills/repo-release-tools-uvx/SKILL.md`
-- `/.github/skills/repo-release-tools/SKILL.md`
+- `/.github/skills/repo-release-tools-uvx/SKILL.md` — zero-install guidance
+- `/.github/skills/repo-release-tools/SKILL.md` — guidance for an installed `rrt`
 
-## Which one to use
+If you need the exact CLI syntax for branch, Git, or skill commands, use the
+[RRT CLI reference](rrt-cli.md) first.
+
+## Which skill to use
 
 ### `repo-release-tools-uvx`
 
-Use the existing `uvx` skill when you want zero-install guidance such as:
-
-- `uvx repo-release-tools branch new ...`
-- `uvx repo-release-tools bump ...`
-- ephemeral CI or one-off release automation
+Use this when `repo-release-tools` is not installed and you want quick
+`uvx`-based usage examples for branches, bumps, or one-off release automation.
 
 ### `repo-release-tools`
 
-Use the installed-CLI skill when `rrt` is already available on the machine and
-you want guidance for:
+Use this when `rrt` is already available and you want help with:
 
-- branch naming with `rrt branch ...`
-- release bumps with `rrt bump ...`
-- hook setup with `rrt-hooks ...`
+- `rrt branch ...` naming and branch repair
+- `rrt bump ...` release versioning
+- `rrt git ...` workflow helpers
 - `rrt doctor` / `rrt config`
-- GitHub Action and changelog workflow configuration
+- `rrt skill install ...`
+- hook and CI workflow guidance that points back to the main docs
 
 ## Installing the bundled CLI skill
 
-The `repo-release-tools` package includes a bundled installer command:
+Install into one or more agent skill locations with:
 
 ```bash
 rrt skill install --target copilot-local
@@ -48,21 +48,21 @@ Supported targets:
 | `claude-global` | `~/.claude/skills` |
 | `codex-global` | `~/.codex/skills` |
 
-The installer refuses to overwrite an existing installed skill unless you pass
-`--force`. Use `--dry-run` to preview the copy targets first.
+The installer refuses to overwrite an existing skill unless you pass `--force`.
+Use `--dry-run` to preview the destination paths first.
+
+## Related docs
+
+- [RRT CLI](rrt-cli.md)
+- [pre-commit / lefthook](pre-commit.md)
+- [GitHub Action](github-action.md)
+- [Git magic](git-magic.md)
 
 ## Skill eval fixtures
 
-Keep the canonical skill eval prompts in:
+Keep the canonical skill eval prompts in `/evals/evals.json`.
 
-- `/evals/evals.json`
-
-That file is part of the repo and should be tracked so future skill iterations
-can reuse the same prompts and expectations.
-
-Structured workspace artifacts under `.github/skills/repo-release-tools-workspace/`
-(such as `benchmark.json`, `benchmark.md`, `review.html`, and per-eval `eval-N/` answer
-files) are part of the repo and may be committed as evidence of an evaluation run.
-
-Do **not** commit ad-hoc execution transcripts (`transcript.md`).  Those files are
-already listed in `.gitignore` and should stay out of git.
+Structured workspace artifacts under
+`.github/skills/repo-release-tools-workspace/` may be committed as evidence of an
+evaluation run. Do **not** commit ad-hoc execution transcripts
+(`transcript.md`).

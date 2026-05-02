@@ -1,23 +1,53 @@
-"""CI version computation and application command.
+"""Compute and apply CI release versions from ``[tool.rrt]`` config.
 
-Mirrors the behaviour of the ``scripts/ci_version.py`` helper used by
-``copilot-plugin-manager``, but driven by ``[tool.rrt]`` configuration
-rather than hard-coded file paths.
+## Overview
 
-Version semantics
------------------
-* **Tag builds** (``refs/tags/v*``): the tag name with the ``v`` prefix
-  stripped is used as-is.
-* **Main branch** (``refs/heads/main``): a PEP 440 dev release is computed
-  as ``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``.
-* **All other refs**: the base version is returned unchanged.
+This command mirrors the behavior of the repository's CI version helper, but
+uses the active ``[tool.rrt]`` configuration to discover version targets and
+group defaults.
 
-When applying a version the output format depends on the ``ci_format``
-field on each ``[[tool.rrt.version_targets]]`` entry:
+It is organized into three subcommands:
 
-* ``"pep440"``    – version string applied unchanged (``0.2.0.dev12345601``).
-* ``"semver_pre"`` – version converted via :func:`to_semver` before writing
-  (``0.2.0-dev.12345601``).
+* ``compute`` - print the published version for the current GitHub Actions run
+* ``apply`` - write an explicit version string to all configured CI targets
+* ``sync`` - compute the published version and immediately apply it
+
+## Version rules
+
+The computed CI version depends on the Git ref:
+
+* ``refs/tags/v*`` - return the tag name with the leading ``v`` removed
+* ``refs/heads/main`` - build a PEP 440 dev release using
+  ``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``
+* any other ref - return the base version unchanged
+
+CLI flags such as ``--ref``, ``--ref-name``, ``--run-id``, ``--run-attempt``,
+``--base``, and ``--group`` override the corresponding environment variables
+and config defaults when present.
+
+## Output formats
+
+When applying a version, each target uses its configured ``ci_format``:
+
+* ``pep440`` - write the version string unchanged
+* ``semver_pre`` - convert a PEP 440 dev release into a Cargo-compatible
+  prerelease string via ``to_semver()``
+
+Only targets with a valid ``ci_format`` are updated.
+
+## Safety notes
+
+* ``compute`` writes a single machine-readable version line to stdout.
+* ``apply`` and ``sync`` validate the selected config and fail fast on missing
+  or incompatible targets.
+* ``sync`` is equivalent to ``compute`` followed by ``apply`` using the result.
+* ``--dry-run`` previews file updates without modifying the repository.
+
+## Examples
+
+* ``rrt ci-version compute``
+* ``rrt ci-version apply 1.2.3.dev4``
+* ``rrt ci-version sync``
 """
 
 from __future__ import annotations
@@ -332,6 +362,21 @@ CI_VERSION_EXAMPLES = (
     "  $ rrt ci-version compute\n  $ rrt ci-version apply 1.2.3.dev4\n  $ rrt ci-version sync"
 )
 
+CI_VERSION_COMPUTE_EXAMPLES = (
+    "  $ rrt ci-version compute\n"
+    "  $ rrt ci-version compute --base 1.2.3 --ref refs/heads/main --run-id 42 --run-attempt 3"
+)
+
+CI_VERSION_APPLY_EXAMPLES = (
+    "  $ rrt ci-version apply 1.2.3.dev4201\n"
+    "  $ rrt ci-version apply 1.2.3.dev4201 --group backend --dry-run"
+)
+
+CI_VERSION_SYNC_EXAMPLES = (
+    "  $ rrt ci-version sync --dry-run\n"
+    "  $ rrt ci-version sync --group backend --ref refs/heads/main --run-id 42 --run-attempt 1"
+)
+
 
 # ---------------------------------------------------------------------------
 # CLI registration
@@ -401,6 +446,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     compute_parser = sub.add_parser(
         "compute",
         help="Print the published version for the current GitHub Actions run.",
+        description="Print the CI/published version for the current GitHub Actions context, using --base and --group overrides when provided.",
+        epilog=CI_VERSION_COMPUTE_EXAMPLES,
     )
     _add_compute_args(compute_parser)
     compute_parser.set_defaults(handler=cmd_ci_version_compute)
@@ -409,6 +456,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     apply_parser = sub.add_parser(
         "apply",
         help="Apply a concrete version string to all ci_format-configured targets.",
+        description="Apply one explicit CI version string to every configured ci_format target in the selected version group.",
+        epilog=CI_VERSION_APPLY_EXAMPLES,
     )
     apply_parser.add_argument(
         "version",
@@ -429,6 +478,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     sync_parser = sub.add_parser(
         "sync",
         help="Compute the published version from GitHub Actions env and apply it.",
+        description="Compute the current GitHub Actions CI version and apply it to every configured ci_format target.",
+        epilog=CI_VERSION_SYNC_EXAMPLES,
     )
     _add_compute_args(sync_parser)
     sync_parser.add_argument(

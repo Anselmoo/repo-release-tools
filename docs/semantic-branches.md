@@ -1,11 +1,11 @@
 # Conventional branches for trunk-based publishing
 
-`repo-release-tools` uses conventional branches to keep short-lived trunk-based
-publishing understandable to humans, hooks, and automation.
+`repo-release-tools` uses conventional branches to keep trunk-based publishing
+predictable for humans, hooks, and automation.
 
-This is a thin naming layer over trunk-based development. The repository stays
-centered on small branches and fast merges, but branch names carry intent so
-release automation can stay deterministic.
+This page is generated from `repo_release_tools.commands.branch.SEMANTIC_BRANCHES_DOC`.
+The canonical command reference is [docs/rrt-cli.md](rrt-cli.md). This page
+summarizes the naming rules that the CLI and hooks enforce.
 
 ## Standard format
 
@@ -19,7 +19,9 @@ Examples:
 - `fix/handle-tag-workflows`
 - `docs/split-readme-into-docs`
 
-## Supported branch types
+## Built-in branch types
+
+Conventional branch types are accepted out of the box:
 
 - `feat`
 - `fix`
@@ -32,77 +34,58 @@ Examples:
 - `style`
 - `build`
 
-Special branch names still supported:
+## Special names
+
+These branch names are also valid:
 
 - `main`
 - `master`
 - `develop`
 - `release/v<semver>`
 
+`release/v<semver>` is validated as a semver-aware special case, not as a free
+form `type/slug` branch.
+
 ## AI helper branches
 
-For AI-assisted delivery flows, `repo-release-tools` also accepts:
+Branches created by assistant-driven workflows are accepted with these prefixes:
 
 - `claude/...`
 - `codex/...`
 - `copilot/...`
 
-These are compatibility prefixes for assistant-managed branches. Conventional
-commit semantics still belong in the commit subject, because changelog policy
-and release notes are driven from commit messages.
+They still use normal slug validation, so the suffix should stay lowercase and
+kebab-cased.
 
-## Bot branches
+## Bot and custom branches
 
-Branches created by dependency update bots are accepted out of the box:
+Branches created by dependency bots are accepted too:
 
 - `dependabot/...`
 - `renovate/...`
 
-Bot branch slugs are not validated for kebab-case or length since they use
-externally-generated naming conventions (e.g.
-`dependabot/npm_and_yarn/lodash-4.17.21`).
-
-## Custom branch types
-
-If you need additional branch prefixes beyond the built-in set, add them to
-your rrt configuration:
+Custom prefixes can be added through configuration:
 
 ```toml
 [tool.rrt]
 extra_branch_types = ["greenkeeper", "snyk"]
 ```
 
-Custom types follow the same passthrough rules as bot branches — their slugs
-are not validated for kebab-case or length.
+Bot and custom prefixes are treated as passthrough types. Their suffixes are
+only required to be non-empty, because upstream tools often generate slugs with
+slashes or underscores.
 
-## Release branches
+## Why the rules matter
 
-`release/v<semver>` is validated as a special case before the type prefix
-check. The `release` prefix is intentionally not part of the conventional types
-because release branches require a valid semver suffix rather than a free-form
-slug.
+- branch names stay readable in review queues
+- commit subjects and branch types stay aligned
+- release automation can distinguish ordinary work from release branches
+- hooks and CI can apply one consistent policy across local and remote checks
 
-## Why this fits trunk-based publishing
+## Related commands
 
-Conventional branches help teams:
-
-- scan review queues quickly
-- align branch intent with changelog policy
-- keep automation predictable
-- merge small changes back to trunk with less ambiguity
-- keep release branches explicit when a version cut is being prepared
-
-In practice this means:
-
-- `feat/*` for feature work that should land back on trunk quickly
-- `fix/*` for corrective changes
-- `chore/*`, `docs/*`, `ci/*`, and similar types for supporting work
-- `release/v<semver>` when you are preparing a publishable release branch
-
-## Typical workflow
-
-1. Branch from `main`
-2. Use a conventional branch name
-3. Keep commits small and conventional
-4. Update `CHANGELOG.md` when needed
-5. Merge back quickly
+- `rrt branch new`
+- `rrt branch rescue`
+- `rrt branch rename`
+- `rrt git commit`
+- `rrt git doctor`

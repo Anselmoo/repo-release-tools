@@ -956,6 +956,98 @@ def test_skill_help_has_examples_and_no_enum_blob(capsys: pytest.CaptureFixture[
     assert "  $ rrt skill install --target copilot-local" in out
 
 
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (
+            ["doctor", "--help"],
+            [
+                "Validate the resolved rrt configuration for the current repository.",
+                "Checks configured version targets, pin patterns, changelog files, and optional runtime EOL policy",
+                "Examples",
+                "  $ rrt doctor",
+            ],
+        ),
+        (
+            ["config", "--help"],
+            [
+                "Inspect the resolved rrt configuration after discovery and auto-detection.",
+                "Use --raw to print the underlying config file instead of the rendered tree view.",
+                "Examples",
+                "  $ rrt config --raw",
+            ],
+        ),
+        (
+            ["eol", "--help"],
+            [
+                "Check detected host runtimes and project minimum versions against end-of-life dates.",
+                "CLI flags override the configured thresholds for this invocation.",
+                "Examples",
+                "  $ rrt eol --language node --fetch-live",
+            ],
+        ),
+        (
+            ["init", "--help"],
+            [
+                "Generate a starter rrt configuration for the current repository or manifest.",
+                'Overwrite an existing .rrt.toml or package.json "rrt" key when writing those targets.',
+                "Examples",
+                "  $ rrt init --target node --force",
+            ],
+        ),
+    ],
+)
+def test_top_level_help_docs_are_useful(
+    argv: list[str], expected: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(argv)
+
+    out = capsys.readouterr().out
+    for snippet in expected:
+        assert snippet in out
+
+
+def test_git_commit_help_has_nested_examples(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["git", "commit", "--help"])
+
+    out = capsys.readouterr().out
+    assert "Examples" in out
+    assert '  $ rrt git commit --type fix --scope cli "handle empty config"' in out
+    assert '  $ rrt git commit --breaking "ship parser v2"' in out
+
+
+def test_ci_version_compute_help_has_nested_examples(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["ci-version", "compute", "--help"])
+
+    out = capsys.readouterr().out
+    assert "Examples" in out
+    assert (
+        "  $ rrt ci-version compute --base 1.2.3 --ref refs/heads/main --run-id 42 --run-attempt 3"
+        in out
+    )
+
+
+def test_skill_install_help_has_nested_examples(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["skill", "install", "--help"])
+
+    out = capsys.readouterr().out
+    assert "Examples" in out
+    assert "local or global agent skill directories" in out
+    assert "  $ rrt skill install --target copilot-global --force --dry-run" in out
+
+
 def test_root_help_includes_skill_example(capsys: pytest.CaptureFixture[str]) -> None:
     parser = cli.build_parser()
 

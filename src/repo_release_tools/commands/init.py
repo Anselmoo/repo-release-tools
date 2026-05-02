@@ -1,4 +1,47 @@
-"""Repository init command."""
+"""Initialize repo-release-tools configuration for a repository.
+
+## Overview
+
+`rrt init` writes a starter configuration for the current repository. It can
+either create a standalone `.rrt.toml` file or merge an rrt section into an
+existing project manifest.
+
+The command is designed to be safe by default: it refuses to overwrite
+existing config unless `--force` is used, and `--dry-run` shows the exact
+output without touching files.
+
+## Target surfaces
+
+- `.rrt.toml` (default)
+- `pyproject.toml` -> `[tool.rrt]`
+- `Cargo.toml` -> `[package.metadata.rrt]`
+- `package.json` -> `"rrt"` key
+- `.rrt.toml` with Go-oriented recommendations (`--target go`)
+
+## Behavior
+
+- Detects an existing explicit config discovered by repo-release-tools and
+  warns when a new `.rrt.toml` would lose precedence.
+- Refuses to append duplicate rrt sections to TOML manifests.
+- Validates that `package.json` contains a top-level object before merging.
+- Prints a rendered preview in dry-run mode.
+
+## Examples
+
+- `rrt init`
+- `rrt init --dry-run`
+- `rrt init --target pyproject`
+- `rrt init --target node --force`
+- `rrt init --target go`
+
+## Caveats
+
+- `--target pyproject` and `--target cargo` append to an existing file only;
+  they do not create missing manifests.
+- `--target node` replaces the top-level `"rrt"` key in `package.json`.
+- `--target go` keeps the `.rrt.toml` filename but uses Go-oriented
+  recommendations.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +62,13 @@ from repo_release_tools.config import (
 )
 from repo_release_tools.ui import DryRunPrinter, highlight_terminal
 from repo_release_tools.ui import cli_error as render_error
+
+INIT_EPILOG = (
+    "  $ rrt init --dry-run\n"
+    "  $ rrt init --target pyproject\n"
+    "  $ rrt init --target node --force\n"
+    "  $ rrt init --target go"
+)
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -253,12 +303,19 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser = subparsers.add_parser(
         "init",
         help="Generate a recommended rrt configuration for the current repository.",
+        description=(
+            "Generate a starter rrt configuration for the current repository or manifest.\n\n"
+            "By default this writes .rrt.toml. Use --target to append or merge equivalent "
+            "configuration into pyproject.toml, Cargo.toml, package.json, or a Go-oriented "
+            ".rrt.toml template."
+        ),
+        epilog=INIT_EPILOG,
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing files.")
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite an existing .rrt.toml or package.json rrt key.",
+        help='Overwrite an existing .rrt.toml or package.json "rrt" key when writing those targets.',
     )
     parser.add_argument(
         "--target",
@@ -267,12 +324,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="FORMAT",
         help=(
             "Where to write the rrt configuration. "
-            "rrt-toml (default): create .rrt.toml; "
+            "rrt-toml (default): write .rrt.toml; "
             "pyproject: append [tool.rrt] to pyproject.toml; "
             "cargo: append [package.metadata.rrt] to Cargo.toml; "
-            'node: merge "rrt" key into package.json; '
-            "go: create .rrt.toml with the recommended Go config, "
-            "falling back to auto-detected targets when available."
+            'node: merge or replace the "rrt" key in package.json; '
+            "go: write .rrt.toml with the recommended Go template."
         ),
     )
     parser.set_defaults(handler=cmd_init)

@@ -41,6 +41,7 @@ Affected entrypoints:
 -   doctor  Check the health of the rrt configuration (files, patterns, versions)
 -   config  Show the resolved rrt configuration for this repository
 -   env     Show environment variables and interpreter details that affect rrt behavior
+-   eol     Check host runtimes and project minimums against EOL dates
 
 ## Git Workflow
 -   branch  Branch management helpers for conventional branch naming
