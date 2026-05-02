@@ -106,6 +106,7 @@ COMMAND_DOC_MODULES: dict[str, object] = {
     "skill": cli.skill,
 }
 
+
 def _collect_source_owned_topic_docs(modules: Sequence[object]) -> dict[str, str]:
     """Collect source-owned topic docs exported by modules."""
     collected: dict[str, str] = {}
@@ -116,14 +117,23 @@ def _collect_source_owned_topic_docs(modules: Sequence[object]) -> dict[str, str
 
 
 SOURCE_OWNED_TOPIC_DOCS = _collect_source_owned_topic_docs(
-    (rrt_package, branch_module, git_helpers, hooks_module, action_module, skill_module,
-     doctor_module, eol_module)
+    (
+        rrt_package,
+        branch_module,
+        git_helpers,
+        hooks_module,
+        action_module,
+        skill_module,
+        doctor_module,
+        eol_module,
+    )
 )
 
 
 def _render_topic_doc(slug: str) -> str:
     """Return a source-owned topic doc by slug."""
     return SOURCE_OWNED_TOPIC_DOCS[slug]
+
 
 COMMAND_DOC_SOURCES: dict[str, CommandDocSource] = {
     "branch": CommandDocSource(render=lambda: _render_topic_doc("branch")),
@@ -445,7 +455,9 @@ def task_check() -> int:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the generator CLI parser."""
-    parser = argparse.ArgumentParser(description="Generate docs/rrt-cli.md from the live rrt parser.")
+    parser = argparse.ArgumentParser(
+        description="Generate docs/rrt-cli.md from the live rrt parser."
+    )
     parser.add_argument(
         "--output",
         type=Path,
