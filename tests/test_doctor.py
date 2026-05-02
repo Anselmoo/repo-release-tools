@@ -490,6 +490,20 @@ def test_doctor_eol_warn_status(
     assert rc == 0
 
 
+def test_doctor_eol_unknown_status_is_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """unknown status stays non-fatal and does not fail doctor."""
+    _setup_eol_doctor(tmp_path, monkeypatch, host_status="unknown", proj_status="unknown")
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "One or more EOL checks failed." not in out
+    assert "All EOL checks passed." in out
+
+
 def test_doctor_eol_error_status_returns_1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

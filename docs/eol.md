@@ -1,8 +1,8 @@
 Runtime end-of-life (EOL) tracking for repo-release-tools.
 
-Supports Python, Go, Node.js, and Rust.  Bundled data provides offline
+Supports Python, Go, Node.js, and Rust. Bundled data provides offline
 operation; pass ``fetch_live=True`` to pull fresh data from
-https://endoflife.date/api/<language>.json.
+https://endoflife.date/api/v1/products/<slug>/.
 
 Rust uses a rolling-release model — only the latest stable is supported.
 The meaningful check for Rust is how many releases behind the host/project
@@ -14,8 +14,8 @@ minimum is, not a date-based deadline.
 |---|---|---|
 | `python` | `python --version` / `requires-python` | Date-based |
 | `go` | `go version` / `go.mod` | Date-based (two latest minors supported) |
-| `nodejs` / `node` | `node --version` / `.nvmrc` / `engines.node` | Date-based (LTS only) |
-| `rust` | `rustc --version` / `rust-toolchain.toml` | Rolling-release (lag-based) |
+| `nodejs` / `node` | `node --version` / `engines.node` | Date-based (LTS only) |
+| `rust` | `rustc --version` / `Cargo.toml` `rust-version` | Rolling-release (lag-based) |
 
 Pass the lowercase keyword to `--language` or `languages` in `[tool.rrt.eol]`.
 
@@ -25,7 +25,7 @@ rrt ships a bundled snapshot of EOL data (updated with each release). This
 enables fully offline operation with no external requests.
 
 Pass `--fetch-live` to pull fresh records from
-[endoflife.date](https://endoflife.date/api/<language>.json) for the current
+[endoflife.date](https://endoflife.date/api/v1/products/python/) for the current
 invocation. Live data is never cached — the bundled snapshot is always the
 default.
 
@@ -48,8 +48,8 @@ Add to `pyproject.toml` (or `.rrt.toml`):
 ```toml
 [tool.rrt.eol]
 languages = ["python", "node"]
-warn_days   = 90    # warn N days before EOL (default: 90)
-error_days  = 30    # error N days before EOL (default: 30)
+warn_days   = 180   # warn N days before EOL (default: 180)
+error_days  = 0     # error on actual EOL by default
 allow_eol   = false # downgrade EOL errors to warnings (default: false)
 fetch_live  = false # refresh from endoflife.date at runtime (default: false)
 
@@ -63,8 +63,8 @@ eol      = "2026-06-01"   # ISO 8601
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `languages` | list[str] | `["python"]` | Languages to check |
-| `warn_days` | int | `90` | Days-before-EOL warning threshold |
-| `error_days` | int | `30` | Days-before-EOL error threshold |
+| `warn_days` | int | `180` | Days-before-EOL warning threshold |
+| `error_days` | int | `0` | Days-before-EOL error threshold |
 | `allow_eol` | bool | `false` | Downgrade EOL failures to warnings |
 | `fetch_live` | bool | `false` | Pull fresh data from endoflife.date |
 | `overrides` | list | `[]` | Per-cycle EOL date overrides |
@@ -82,8 +82,8 @@ For each language rrt tries to detect two versions:
 |---|---|---|
 | Python | `sys.version` | `requires-python` in `pyproject.toml` |
 | Go | `go version` | `go` directive in `go.mod` |
-| Node.js | `node --version` | `engines.node` in `package.json` or `.nvmrc` |
-| Rust | `rustc --version` | `channel` in `rust-toolchain.toml` |
+| Node.js | `node --version` | `engines.node` in `package.json` |
+| Rust | `rustc --version` | `rust-version` in `Cargo.toml` |
 
 When a version cannot be detected, rrt reports `not detected` without failing
 that specific check.

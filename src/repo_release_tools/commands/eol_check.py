@@ -84,6 +84,7 @@ from repo_release_tools.eol import (
     detect_host_version,
     detect_project_minimum,
     get_eol_records,
+    resolve_override_eol,
 )
 from repo_release_tools.ui import DryRunPrinter
 
@@ -100,19 +101,12 @@ def _override_for(
     overrides: tuple[EolOverride, ...],
 ) -> date | None:
     """Return a configured EOL date override for (language, cycle), or None."""
-    from repo_release_tools.eol import _parse_cycle  # noqa: PLC0415
+    return resolve_override_eol(language, version, overrides)
 
-    cycle = _parse_cycle(version)
-    if cycle is None:
-        return None
-    lang_lower = language.lower()
-    for ov in overrides:
-        if ov.language.lower() == lang_lower and ov.cycle == cycle:
-            try:
-                return date.fromisoformat(ov.eol)
-            except ValueError:
-                return None
-    return None
+
+def _int_override(value: int | None, fallback: int) -> int:
+    """Return the explicit CLI value when provided, otherwise the fallback."""
+    return fallback if value is None else value
 
 
 def _status_label(status: EolStatus) -> str:
@@ -150,7 +144,7 @@ def _emit_check(
     msg = f"  {label}: {version} — {_status_label(status)}{detail}"
     if status in ("ok", "info"):
         p.line(msg, ok=True)
-    elif status == "warn":
+    elif status in ("warn", "unknown"):
         p.warn(msg)
     else:
         p.line(msg, ok=False)
@@ -238,16 +232,16 @@ def cmd_eol(args: argparse.Namespace) -> int:
 
     if eol_cfg is not None:
         # Merge: CLI flags take priority over config-file values
-        warn_days: int = getattr(args, "warn_days", None) or eol_cfg.warn_days
-        error_days: int = getattr(args, "error_days", None) or eol_cfg.error_days
+        warn_days = _int_override(getattr(args, "warn_days", None), eol_cfg.warn_days)
+        error_days = _int_override(getattr(args, "error_days", None), eol_cfg.error_days)
         fetch_live: bool = getattr(args, "fetch_live", False) or eol_cfg.fetch_live
         allow_eol: bool = getattr(args, "allow_eol", False) or eol_cfg.allow_eol
         overrides = eol_cfg.overrides
         lang_arg: str | None = getattr(args, "language", None)
         languages: tuple[str, ...] = (lang_arg,) if lang_arg else eol_cfg.languages
     else:
-        warn_days = getattr(args, "warn_days", None) or 180
-        error_days = getattr(args, "error_days", None) or 0
+        warn_days = _int_override(getattr(args, "warn_days", None), 180)
+        error_days = _int_override(getattr(args, "error_days", None), 0)
         fetch_live = getattr(args, "fetch_live", False)
         allow_eol = getattr(args, "allow_eol", False)
         overrides = ()

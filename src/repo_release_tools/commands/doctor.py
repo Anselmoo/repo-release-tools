@@ -88,6 +88,7 @@ from repo_release_tools.eol import (
     detect_host_version,
     detect_project_minimum,
     get_eol_records,
+    resolve_override_eol,
 )
 from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.version_targets import read_version_string
@@ -239,24 +240,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
         for language in eol_cfg.languages:
             records = get_eol_records(language, fetch_live=eol_cfg.fetch_live)
 
-            # Build override map for this language
-            from datetime import date as _date  # noqa: PLC0415
-
-            def _override(ver: str) -> _date | None:
-                from repo_release_tools.eol import _parse_cycle  # noqa: PLC0415
-
-                cycle = _parse_cycle(ver)
-                if cycle is None:
-                    return None
-                lang_lower = language.lower()
-                for ov in eol_cfg.overrides:
-                    if ov.language.lower() == lang_lower and ov.cycle == cycle:
-                        try:
-                            return _date.fromisoformat(ov.eol)
-                        except ValueError:
-                            return None
-                return None
-
             for label, version in [
                 ("Host runtime", detect_host_version(language)),
                 ("Project minimum", detect_project_minimum(language, root)),
@@ -264,7 +247,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
                 if version is None:
                     p.warn(f"  {language} {label}: not detected")
                     continue
-                ov = _override(version)
+                ov = resolve_override_eol(language, version, eol_cfg.overrides)
                 status, record = check_eol_status(
                     version,
                     records,
@@ -283,7 +266,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
                 msg = f"  {language} {label}: {version}{detail}"
                 if status in ("ok", "info"):
                     p.line(msg, ok=True)
-                elif status == "warn":
+                elif status in ("warn", "unknown"):
                     p.warn(msg)
                 else:
                     p.line(msg, ok=False)
