@@ -202,7 +202,7 @@ def test_run_dirty_tree_check_rejects_dirty_tree(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(
         hooks.git,
         "status_porcelain",
-        lambda cwd: [" M src/repo_release_tools/cli.py", "?? docs/git-magic.md"],
+        lambda cwd: [" M src/repo_release_tools/cli.py", "?? docs/git.md"],
     )
 
     assert hooks.run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.") == 1

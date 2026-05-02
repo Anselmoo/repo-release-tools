@@ -65,12 +65,12 @@ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
 
 ## See also
 
-- [Conventional branches](semantic-branches.md)
+- [Conventional branches](branch.md)
 - [Generated CLI reference](rrt-cli.md)
 """
 
 # Ordered source-owned topic docs for future generic docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git-magic", GIT_MAGIC_DOC),)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", GIT_MAGIC_DOC),)
 
 
 def run(

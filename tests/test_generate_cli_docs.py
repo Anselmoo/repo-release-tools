@@ -104,16 +104,16 @@ def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
     assert docs.generate_git_magic_markdown().startswith("# Git magic")
     assert docs.GENERATED_DOC_TARGETS[0].output_path.name == "rrt-cli.md"
     assert len(docs.GENERATED_DOC_TARGETS) >= 3
-    assert "semantic-branches" in docs.TOPIC_PAGE_OUTPUTS
-    assert "git-magic" in docs.TOPIC_PAGE_OUTPUTS
+    assert "branch" in docs.TOPIC_PAGE_OUTPUTS
+    assert "git" in docs.TOPIC_PAGE_OUTPUTS
 
 
 def test_task_generate_and_check_cover_all_generated_docs(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     docs = _load_generator_module()
-    semantic_path = tmp_path / "semantic-branches.md"
-    git_path = tmp_path / "git-magic.md"
+    semantic_path = tmp_path / "branch.md"
+    git_path = tmp_path / "git.md"
     cli_path = tmp_path / "rrt-cli.md"
 
     setattr(
@@ -137,7 +137,7 @@ def test_task_generate_and_check_cover_all_generated_docs(
     assert docs.task_check() == 1
 
     captured = capsys.readouterr()
-    assert "semantic-branches.md is stale" in captured.err
+    assert "branch.md is stale" in captured.err
 
 
 def test_apply_generated_docs_check_mode_fails_for_stale_file(tmp_path: Path) -> None:

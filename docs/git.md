@@ -56,5 +56,5 @@ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
 
 ## See also
 
-- [Conventional branches](semantic-branches.md)
+- [Conventional branches](branch.md)
 - [Generated CLI reference](rrt-cli.md)

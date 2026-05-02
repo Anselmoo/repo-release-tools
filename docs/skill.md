@@ -54,9 +54,9 @@ Use `--dry-run` to preview the destination paths first.
 ## Related docs
 
 - [RRT CLI](rrt-cli.md)
-- [pre-commit / lefthook](pre-commit.md)
-- [GitHub Action](github-action.md)
-- [Git magic](git-magic.md)
+- [pre-commit / lefthook](hooks.md)
+- [GitHub Action](action.md)
+- [Git magic](git.md)
 
 ## Skill eval fixtures
 

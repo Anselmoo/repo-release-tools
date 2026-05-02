@@ -218,7 +218,7 @@ def test_status_porcelain_preserves_leading_spaces(
         return subprocess.CompletedProcess(
             cmd,
             0,
-            stdout=" M src/repo_release_tools/cli.py\n?? docs/git-magic.md\n",
+            stdout=" M src/repo_release_tools/cli.py\n?? docs/git.md\n",
             stderr="",
         )
 
@@ -226,7 +226,7 @@ def test_status_porcelain_preserves_leading_spaces(
 
     lines = git.status_porcelain(tmp_path)
 
-    assert lines == [" M src/repo_release_tools/cli.py", "?? docs/git-magic.md"]
+    assert lines == [" M src/repo_release_tools/cli.py", "?? docs/git.md"]
 
 
 def test_status_porcelain_raises_on_git_failure(

@@ -105,9 +105,7 @@ slashes or underscores.
 """
 
 # Ordered source-owned topic docs for future generic docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (
-    ("semantic-branches", SEMANTIC_BRANCHES_DOC),
-)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("branch", SEMANTIC_BRANCHES_DOC),)
 
 CONVENTIONAL_TYPES = (
     "feat",

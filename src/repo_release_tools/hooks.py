@@ -1349,7 +1349,7 @@ repos:
 
 # Ordered source-owned topic docs for docs generation.
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (
-    ("pre-commit", PRE_COMMIT_DOC),
+    ("hooks", PRE_COMMIT_DOC),
     ("agent-instructions", AGENT_INSTRUCTIONS_DOC),
 )
 

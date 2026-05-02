@@ -126,8 +126,8 @@ def _render_topic_doc(slug: str) -> str:
     return SOURCE_OWNED_TOPIC_DOCS[slug]
 
 COMMAND_DOC_SOURCES: dict[str, CommandDocSource] = {
-    "branch": CommandDocSource(render=lambda: _render_topic_doc("semantic-branches")),
-    "git": CommandDocSource(render=lambda: _render_topic_doc("git-magic")),
+    "branch": CommandDocSource(render=lambda: _render_topic_doc("branch")),
+    "git": CommandDocSource(render=lambda: _render_topic_doc("git")),
     "doctor": CommandDocSource(render=lambda: _render_topic_doc("doctor")),
     "eol": CommandDocSource(render=lambda: inspect.getdoc(eol_check_module) or ""),
 }
@@ -335,20 +335,20 @@ def generate_markdown() -> str:
 
 def generate_semantic_branches_markdown() -> str:
     """Return the generated semantic branches topic page."""
-    return _render_topic_doc("semantic-branches")
+    return _render_topic_doc("branch")
 
 
 def generate_git_magic_markdown() -> str:
     """Return the generated Git magic topic page."""
-    return _render_topic_doc("git-magic")
+    return _render_topic_doc("git")
 
 
 TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
     "index": Path("docs/index.md"),
-    "semantic-branches": Path("docs/semantic-branches.md"),
-    "git-magic": Path("docs/git-magic.md"),
-    "pre-commit": Path("docs/pre-commit.md"),
-    "github-action": Path("docs/github-action.md"),
+    "branch": Path("docs/branch.md"),
+    "git": Path("docs/git.md"),
+    "hooks": Path("docs/hooks.md"),
+    "action": Path("docs/action.md"),
     "skill": Path("docs/skill.md"),
     "agent-instructions": Path("docs/agent-instructions.md"),
     "doctor": Path("docs/doctor.md"),

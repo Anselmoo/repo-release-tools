@@ -118,4 +118,4 @@ when your repository relies on config-driven version updates.
 """
 
 # Ordered source-owned topic docs for docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("github-action", GITHUB_ACTION_DOC),)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("action", GITHUB_ACTION_DOC),)

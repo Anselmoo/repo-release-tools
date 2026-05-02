@@ -102,5 +102,5 @@ that specific check.
 
 - [rrt eol (CLI)](rrt-cli.md)
 - [rrt doctor](doctor.md)
-- [GitHub Action](github-action.md)
-- [pre-commit / lefthook](pre-commit.md)
+- [GitHub Action](action.md)
+- [pre-commit / lefthook](hooks.md)

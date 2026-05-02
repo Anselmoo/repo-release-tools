@@ -62,5 +62,5 @@ rrt doctor
 
 - [Runtime EOL tracking](eol.md)
 - [rrt eol (CLI)](rrt-cli.md)
-- [pre-commit / lefthook](pre-commit.md)
-- [GitHub Action](github-action.md)
+- [pre-commit / lefthook](hooks.md)
+- [GitHub Action](action.md)
