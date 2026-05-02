@@ -1,4 +1,70 @@
-"""rrt doctor — health-check the rrt configuration for the current repository."""
+"""Validate the health of the resolved rrt configuration for the current repository.
+
+## Overview
+
+`rrt doctor` is a repository health check for release automation. It inspects
+the active configuration and looks for the kinds of issues that usually cause
+release jobs to fail late: missing files, broken patterns, unreadable version
+targets, and optional runtime EOL policy problems.
+
+## What it checks
+
+For each resolved version group, the command checks:
+
+- version target files exist
+- version target values can be read
+- pin target patterns compile as regular expressions
+- pin target files contain at least one match
+- the group changelog file exists
+
+It also checks any global pin targets, deduplicating repeated path/pattern
+pairs so the same target is not reported twice.
+
+If `[tool.rrt.eol]` is configured, the command adds a runtime EOL section that
+checks the configured languages against the repository's host runtime and
+project minimum versions.
+
+## Output and severity
+
+The command prints a grouped report for each version group and an overall
+status at the end.
+
+- missing targets and missing changelog files are errors
+- unreadable version content is reported as a warning
+- pin patterns that compile but do not match are reported as a warning
+- valid matches and readable targets are reported as OK
+
+For EOL checks, the command uses the configured thresholds from `[tool.rrt.eol]`
+and reports the host runtime and project minimum for each configured language.
+
+## Config discovery behavior
+
+If no config file can be found, the command prints repository guidance and
+exits with an error.
+
+If a config is auto-detected, the command emits a notice on stderr before the
+main report so you can tell that rrt did not use an explicitly selected file.
+
+## Examples
+
+```bash
+rrt doctor
+```
+
+## Caveats
+
+- The command reports health for the resolved configuration, not just the
+  visible file in the current directory.
+- EOL checks are only shown when EOL policy is configured.
+- A warning does not fail the command; only error-level findings do.
+
+## Related docs
+
+- [Runtime EOL tracking](eol.md)
+- [rrt eol (CLI)](rrt-cli.md)
+- [pre-commit / lefthook](hooks.md)
+- [GitHub Action](action.md)
+"""
 
 from __future__ import annotations
 
@@ -17,8 +83,20 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
+from repo_release_tools.eol import (
+    check_eol_status,
+    detect_host_version,
+    detect_project_minimum,
+    get_eol_records,
+    resolve_override_eol,
+)
 from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.version_targets import read_version_string
+
+DOCTOR_EPILOG = "  $ rrt doctor"
+
+# Docs live in the module docstring above — consistent with bump.py / ci_version.py.
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("doctor", __doc__ or ""),)
 
 
 def _check_version_target(target: VersionTarget, root: Path) -> tuple[str, bool, str]:
@@ -150,10 +228,60 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
 
     if all_ok:
         p.ok("All health checks passed.")
-        return 0
     else:
         p.line("One or more health checks failed.", ok=False)
-        return 1
+
+    # EOL section — only shown when [tool.rrt.eol] is configured
+    if config.eol is not None:
+        eol_cfg = config.eol
+        p.blank_line()
+        p.section("Runtime EOL")
+        eol_all_ok = True
+        for language in eol_cfg.languages:
+            records = get_eol_records(language, fetch_live=eol_cfg.fetch_live)
+
+            for label, version in [
+                ("Host runtime", detect_host_version(language)),
+                ("Project minimum", detect_project_minimum(language, root)),
+            ]:
+                if version is None:
+                    p.warn(f"  {language} {label}: not detected")
+                    continue
+                ov = resolve_override_eol(language, version, eol_cfg.overrides)
+                status, record = check_eol_status(
+                    version,
+                    records,
+                    language=language,
+                    warn_days=eol_cfg.warn_days,
+                    error_days=eol_cfg.error_days,
+                    allow_eol=eol_cfg.allow_eol,
+                    override_eol=ov,
+                )
+                detail = ""
+                if record is not None:
+                    if record.is_eol:
+                        detail = " (EOL)"
+                    elif record.eol_date is not None:
+                        detail = f" (EOL {record.eol_date})"
+                msg = f"  {language} {label}: {version}{detail}"
+                if status in ("ok", "info"):
+                    p.line(msg, ok=True)
+                elif status in ("warn", "unknown"):
+                    p.warn(msg)
+                else:
+                    p.line(msg, ok=False)
+                    if not eol_cfg.allow_eol:
+                        eol_all_ok = False
+                        all_ok = False
+        p.blank_line()
+        if eol_all_ok:
+            p.ok("All EOL checks passed.")
+        else:
+            p.line("One or more EOL checks failed.", ok=False)
+
+    if all_ok:
+        return 0
+    return 1
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -161,5 +289,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser = subparsers.add_parser(
         "doctor",
         help="Check the health of the rrt configuration (files, patterns, versions).",
+        description=(
+            "Validate the resolved rrt configuration for the current repository.\n\n"
+            "Checks configured version targets, pin patterns, changelog files, and optional "
+            "runtime EOL policy so you can catch broken release automation before a bump or "
+            "release run."
+        ),
+        epilog=DOCTOR_EPILOG,
     )
     parser.set_defaults(handler=cmd_doctor)

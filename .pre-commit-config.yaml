@@ -35,6 +35,15 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: rrt-cli-docs
+        name: rrt cli docs
+        entry: uv run python scripts/generate_cli_docs.py --write --fail-on-change
+        language: system
+        files: '^src/repo_release_tools/'
+        always_run: false
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: rrt-ci-lint-gate
         name: rrt ci lint gate
         entry: uvx pre-commit run --all-files --show-diff-on-failure

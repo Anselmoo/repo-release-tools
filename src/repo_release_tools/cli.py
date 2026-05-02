@@ -18,6 +18,7 @@ from repo_release_tools.commands import (
     config_cmd,
     doctor,
     env_cmd,
+    eol_check,
     git_cmd,
     init,
     skill,
@@ -91,7 +92,7 @@ def _compute_col_width(actions: list[argparse.Action], width: int | None = None)
 
 COMMAND_GROUPS: dict[str, list[str]] = {
     "Version & Release": ["bump", "ci-version"],
-    "Repository Health": ["doctor", "config", "env"],
+    "Repository Health": ["doctor", "config", "env", "eol"],
     "Git Workflow": ["branch", "git"],
     "Setup & Tooling": ["init", "skill"],
 }
@@ -524,6 +525,7 @@ def build_parser() -> argparse.ArgumentParser:
     config_cmd.register(cast(argparse._SubParsersAction, subparsers))
     doctor.register(cast(argparse._SubParsersAction, subparsers))
     env_cmd.register(cast(argparse._SubParsersAction, subparsers))
+    eol_check.register(cast(argparse._SubParsersAction, subparsers))
     git_cmd.register(cast(argparse._SubParsersAction, subparsers))
     init.register(cast(argparse._SubParsersAction, subparsers))
     skill.register(cast(argparse._SubParsersAction, subparsers))

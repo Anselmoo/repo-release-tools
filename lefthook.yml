@@ -1,6 +1,6 @@
 # lefthook.yml — git hooks powered by repo-release-tools
 # Setup: uv tool install repo-release-tools && lefthook install
-# Docs: https://github.com/Anselmoo/repo-release-tools/blob/main/docs/pre-commit.md
+# Docs: https://github.com/Anselmoo/repo-release-tools/blob/main/docs/hooks.md
 
 commit-msg:
   commands:

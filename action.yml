@@ -46,6 +46,9 @@ inputs:
   check-doctor:
     description: Whether to run rrt doctor health checks (version targets, pin targets, changelog)
     default: "false"
+  check-eol:
+    description: Whether to check host runtimes and project minimums against end-of-life dates
+    default: "false"
 
 runs:
   using: composite
@@ -128,3 +131,11 @@ runs:
       run: |
         set -euo pipefail
         rrt-hooks doctor
+
+    - name: Check runtime EOL status
+      if: inputs.check-eol == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        rrt-hooks check-eol

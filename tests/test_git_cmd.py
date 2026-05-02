@@ -45,7 +45,7 @@ def test_cmd_status_renders_summary_and_entries(
     monkeypatch.setattr(
         git_cmd.git,
         "status_porcelain",
-        lambda cwd: [" M src/repo_release_tools/cli.py", "?? docs/git-magic.md"],
+        lambda cwd: [" M src/repo_release_tools/cli.py", "?? docs/git.md"],
     )
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (2, 1))
     args = argparse.Namespace()
@@ -56,7 +56,7 @@ def test_cmd_status_renders_summary_and_entries(
     assert "Git status" in captured.out
     assert "feat/add-parser" in captured.out
     assert "src/repo_release_tools/cli.py" in captured.out
-    assert "docs/git-magic.md" in captured.out
+    assert "docs/git.md" in captured.out
 
 
 def test_cmd_status_renders_clean_tree(
@@ -389,7 +389,7 @@ def test_cmd_check_dirty_tree_reports_status_lines(
     monkeypatch.setattr(
         git_cmd.git,
         "status_porcelain",
-        lambda cwd: [" M src/repo_release_tools/cli.py", "?? docs/git-magic.md"],
+        lambda cwd: [" M src/repo_release_tools/cli.py", "?? docs/git.md"],
     )
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (2, 1))
     args = argparse.Namespace()
@@ -400,7 +400,7 @@ def test_cmd_check_dirty_tree_reports_status_lines(
     assert "Working tree has uncommitted changes." in captured.err
     assert "feat/add-parser" in captured.err
     assert "src/repo_release_tools/cli.py" in captured.err
-    assert "docs/git-magic.md" in captured.err
+    assert "docs/git.md" in captured.err
 
 
 def test_cmd_check_dirty_tree_reports_status_failure(

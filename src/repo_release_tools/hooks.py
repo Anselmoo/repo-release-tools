@@ -24,6 +24,7 @@ from repo_release_tools.commands.branch import (
     normalize_commit_type,
 )
 from repo_release_tools.commands.doctor import cmd_doctor
+from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
@@ -919,6 +920,10 @@ def main(argv: list[str] | None = None) -> int:
         "changelog",
         help="Changelog management commands.",
     )
+    subparsers.add_parser(
+        "check-eol",
+        help="Check host runtimes and project minimums against EOL dates.",
+    )
     changelog_subparsers = changelog_parser.add_subparsers(
         dest="changelog_command",
         required=True,
@@ -966,6 +971,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.")
     if parsed.command == "doctor":
         return cmd_doctor(parsed)
+    if parsed.command == "check-eol":
+        return cmd_eol_check(parsed)
     if parsed.command == "update-unreleased":
         if parsed.message_file is not None:
             # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
@@ -1013,6 +1020,338 @@ def main(argv: list[str] | None = None) -> int:
         strategy=parsed.strategy,
         branch=parsed.branch,
     )
+
+
+PRE_COMMIT_DOC = """# pre-commit
+
+`repo-release-tools` publishes reusable hooks in `.pre-commit-hooks.yaml`.
+
+The first decision is not *which hook do I add?* — it is *which changelog
+workflow does this repo follow?*
+
+## Choose the workflow first
+
+| Workflow | Recommended hooks | Best for |
+|---|---|---|
+| `incremental` *(default)* | `rrt-branch-name`, `rrt-commit-subject`, plus `rrt-update-unreleased` **or** `rrt-changelog` | teams that maintain changelog state while developing |
+| `squash` | `rrt-branch-name`, `rrt-commit-subject`, optional `rrt-dirty-tree` / `rrt-doctor` | repos that squash many commits and do changelog work at release time |
+
+With `changelog_workflow = "squash"`, the changelog-writing and changelog-check
+hooks intentionally skip changelog enforcement. You can leave them configured
+during migration, but the cleaner setup is to remove them and keep only the
+non-changelog policy hooks.
+
+## Incremental workflow: keep `[Unreleased]` current
+
+```yaml
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.1.0
+    hooks:
+      - id: rrt-branch-name
+      - id: rrt-update-unreleased
+      - id: rrt-commit-subject
+```
+
+Install both hook types:
+
+```bash
+pre-commit install --hook-type pre-commit --hook-type commit-msg
+```
+
+This setup keeps `CHANGELOG.md` moving with development. `rrt-update-unreleased`
+auto-writes changelog bullets for changelog-relevant commit types, while
+`rrt-commit-subject` enforces Conventional Commits.
+
+If you prefer manual changelog edits instead of auto-writing them, replace
+`rrt-update-unreleased` with `rrt-changelog`.
+
+## Squash workflow: keep local policy, skip per-commit changelog noise
+
+```yaml
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.1.0
+    hooks:
+      - id: rrt-branch-name
+      - id: rrt-commit-subject
+```
+
+Use this when pull requests are squash-merged and you do not want ten tiny
+commit-level changelog bullets to become one giant release footnote monster.
+Pair it with:
+
+- `changelog_workflow = "squash"` in repo config
+- GitHub Action `changelog-strategy: "auto"` or `"release-only"`
+- `rrt bump` to generate release-time changelog content
+
+## Hook overview
+
+| Hook | Stage | Description |
+|---|---|---|
+| `rrt-branch-name` | pre-commit | Validate branch naming convention |
+| `rrt-update-unreleased` | commit-msg | Auto-write a bullet under `[Unreleased]` for changelog-relevant commits |
+| `rrt-changelog` | pre-commit | Require a staged changelog update for changelog-relevant work |
+| `rrt-commit-subject` | commit-msg | Validate Conventional Commit subjects |
+| `rrt-dirty-tree` | pre-push / manual | Fail on uncommitted changes |
+| `rrt-doctor` | manual | Run `rrt doctor` health checks on `rrt` config |
+
+`rrt-update-unreleased` and `rrt-changelog` are alternatives for the
+incremental workflow. You usually want one or the other, not both.
+
+## Optional guards
+
+### Dirty tree check
+
+`rrt-dirty-tree` is not enabled in the minimal configs because a normal
+`pre-commit` run happens while the working tree is intentionally dirty. It is
+better suited for `pre-push` or manual execution when you want to enforce a
+clean repository before publishing work:
+
+```yaml
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.1.0
+    hooks:
+      - id: rrt-dirty-tree
+        stages: [pre-push]
+```
+
+### Doctor check
+
+`rrt-doctor` runs `rrt doctor` health checks against every version target and
+pin target in `[tool.rrt]`. It is registered at the `manual` stage so it does
+not run on every commit — invoke it on demand before releases:
+
+```bash
+pre-commit run rrt-doctor --hook-stage manual
+# or directly:
+rrt doctor
+```
+
+You can also run the same dirty-tree logic directly:
+
+```bash
+rrt-hooks check-dirty-tree
+```
+
+## Post-correction mode (squash-merge workflows)
+
+When a pull request is merged via **squash merge**, GitHub condenses all
+per-commit changelog entries into the squash commit. The result can be
+fragmented micro-commit noise in `CHANGELOG.md` — for example several
+`"CI: add Node 26"` / `"CI: remove Node 26"` pairs that cancel each other out.
+
+`rrt-hooks changelog post-correct` consolidates those entries by:
+
+1. Inspecting the diff that the squash commit introduced to `CHANGELOG.md`.
+2. Removing **exact duplicate** bullet entries (case-insensitive).
+3. Removing **semantically-cancelling pairs** — e.g. `"CI: add Node 26"` followed by
+   `"CI: remove Node 26"`, or bare `"add X"` / `"remove X"`.  Scope prefixes
+   (e.g. `CI:`, `Deps:`) must match for entries to be considered a pair.
+4. Rewriting `CHANGELOG.md` in-place with the cleaned content, restricting
+   removals to the exact diff hunk so older release sections are never touched.
+5. Optionally creating a follow-up commit (`--commit`).
+
+### Quick usage
+
+```bash
+# auto mode — use HEAD as the squash commit (default when no SHA given)
+rrt-hooks changelog post-correct
+
+# explicit squash commit SHA
+rrt-hooks changelog post-correct --squash-commit abc1234
+
+# write a follow-up commit automatically
+rrt-hooks changelog post-correct --commit
+```
+
+### As a GitHub Actions step (post-merge on default branch)
+
+```yaml
+- name: Consolidate changelog after squash merge
+  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  run: uvx --from repo-release-tools rrt-hooks changelog post-correct --commit
+```
+
+### Options
+
+| Flag | Description |
+|---|---|
+| `--squash-commit SHA` | Explicit commit SHA to inspect (defaults to `HEAD`) |
+| `--output PATH` | Changelog file to rewrite (default: `CHANGELOG.md`) |
+| `--commit` | Create a follow-up commit with the corrected changelog |
+
+---
+
+## Lefthook setup
+
+[Lefthook](https://github.com/evilmartians/lefthook) can run the same local
+policy with an installed `rrt-hooks` binary.
+
+Install `repo-release-tools` so `rrt-hooks` is on `PATH`, then add the commands
+that match your workflow.
+
+### Incremental workflow example
+
+```yaml
+# lefthook.yml
+commit-msg:
+  commands:
+    rrt-update-unreleased:
+      run: rrt-hooks update-unreleased --message-file {1}
+    rrt-commit-subject:
+      run: rrt-hooks commit-msg {1}
+
+pre-commit:
+  commands:
+    rrt-branch-name:
+      run: rrt-hooks pre-commit
+
+pre-push:
+  commands:
+    rrt-changelog:
+      run: rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
+```
+
+### Squash workflow example
+
+```yaml
+# lefthook.yml
+commit-msg:
+  commands:
+    rrt-commit-subject:
+      run: rrt-hooks commit-msg {1}
+
+pre-commit:
+  commands:
+    rrt-branch-name:
+      run: rrt-hooks pre-commit
+```
+
+### Comparison: pre-commit vs. lefthook
+
+| Policy | pre-commit | lefthook |
+|---|---|---|
+| Auto-write changelog | `rrt-update-unreleased` (commit-msg) | `rrt-update-unreleased --message-file {1}` |
+| Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` |
+| Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-hooks pre-commit` |
+| Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --strategy unreleased` |
+"""
+
+AGENT_INSTRUCTIONS_DOC = """# repo-release-tools — Hook & Action Reference
+
+<!-- Static context for agents: read this before using any prompt block below. -->
+
+## Agent context
+
+**Repo:** <https://github.com/Anselmoo/repo-release-tools> · Python ≥ 3.12 · `uv_build`
+
+**Entry points** (from `pyproject.toml`):
+- `rrt-hooks` → `repo_release_tools.hooks:main` — git hook runner (installed binary, NOT a uvx shortcut)
+- `rrt` → `repo_release_tools.cli:app` — developer CLI
+
+**Key files:**
+| File | Role |
+|---|---|
+| `src/repo_release_tools/hooks.py` | All `rrt-hooks` subcommand logic |
+| `src/repo_release_tools/changelog.py` | Changelog parsing, `[Unreleased]` management |
+| `.pre-commit-hooks.yaml` | Hook definitions consumed by pre-commit |
+| `lefthook.yml` | Lefthook configuration (repo root) |
+| `action.yml` | Composite GitHub Action |
+
+**Verification commands:**
+```bash
+uv run pytest tests/test_hooks.py -x -q   # fast unit tests
+uvx pre-commit run --all-files             # lint (ruff, line-length 100)
+```
+
+**Assumptions:** `pre-commit`, `lefthook`, and `uv` are already installed. Do not recommend `brew install`, `pip install pre-commit`, or `apt install` for these tools.
+
+---
+
+## pre-commit / lefthook
+
+### Activate pre-commit hooks
+
+> Use the following prompt to activate pre-commit hooks for repo-release-tools.
+
+````prompt
+<context>
+Repo: https://github.com/Anselmoo/repo-release-tools
+Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
+Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
+Assume pre-commit is already installed.
+</context>
+
+Activate the pre-commit hooks for this repository. A `.pre-commit-config.yaml` must exist (see prompt below). Then run:
+
+```bash
+pre-commit install --install-hooks
+```
+
+This installs hooks for every stage declared in `default_install_hook_types`. Commit-msg-stage hooks require `commit-msg` in that list — omitting it silently skips `rrt-update-unreleased` and `rrt-commit-subject`.
+````
+
+### Activate lefthook hooks
+
+> Use the following prompt to activate lefthook hooks for repo-release-tools.
+
+````prompt
+<context>
+Repo: https://github.com/Anselmoo/repo-release-tools
+Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
+Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
+Assume lefthook and uv are already installed.
+</context>
+
+Activate lefthook hooks. A `lefthook.yml` must exist at the repo root (see prompt below). Then run:
+
+```bash
+uv tool install repo-release-tools   # installs rrt-hooks binary
+lefthook install                      # registers git hooks
+```
+
+DO NOT use `uvx --from repo-release-tools rrt-hooks …` in `lefthook.yml` — `rrt-hooks` is an installed binary, not a uvx shortcut.
+````
+
+### .pre-commit-config.yaml — incremental workflow (auto-write changelog)
+
+> Use the following prompt to configure pre-commit with auto-write changelog.
+
+````prompt
+<context>
+Repo: https://github.com/Anselmoo/repo-release-tools
+Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
+Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
+Assume pre-commit is already installed.
+</context>
+
+Create `.pre-commit-config.yaml` at the repo root with this content:
+
+```yaml
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.1.0
+    hooks:
+      - id: rrt-branch-name
+      - id: rrt-update-unreleased
+      - id: rrt-commit-subject
+```
+````
+"""
+
+# Ordered source-owned topic docs for docs generation.
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (
+    ("hooks", PRE_COMMIT_DOC),
+    ("agent-instructions", AGENT_INSTRUCTIONS_DOC),
+)
 
 
 if __name__ == "__main__":

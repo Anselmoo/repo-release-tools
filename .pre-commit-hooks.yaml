@@ -56,3 +56,13 @@
   always_run: true
   stages: [manual]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-eol-check
+  name: repo-release-tools EOL check
+  description: Check host runtimes and declared project minimums against end-of-life dates
+  entry: rrt-hooks check-eol
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
+  minimum_pre_commit_version: "3.2.0"

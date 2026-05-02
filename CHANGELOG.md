@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Added
+- `rrt eol` command and `rrt-hooks check-eol` hook for tracking language end-of-life (Python, Go, Node.js, Rust)
+- `[tool.rrt.eol]` config block with `languages`, `warn_days`, `error_days`, `fetch_live`, `allow_eol`, and per-cycle `overrides`
+- `rrt-eol-check` pre-commit hook definition and `check-eol` GitHub Action input
+- EOL status integrated into `rrt doctor` when `[tool.rrt.eol]` is configured
+
+### Changed
+- `git.py` module docstring now documents all 11 workflow patterns and full command surface
+
 ## [1.1.0] - 2026-04-28
 
 ### Added

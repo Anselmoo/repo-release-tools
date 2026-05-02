@@ -7,10 +7,13 @@ import pytest
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
+    EolConfig,
+    EolOverride,
     VersionTarget,
     autodetect_config,
     find_changelog_file,
     find_config_file,
+    find_explicit_config_file,
     format_autodetected_config_notice,
     load_config,
     load_extra_branch_types,
@@ -103,6 +106,18 @@ def test_find_config_file_reports_supported_locations(tmp_path: Path) -> None:
         match="pyproject.toml, package.json, Cargo.toml, .rrt.toml, .config/rrt.toml",
     ):
         find_config_file(tmp_path)
+
+
+def test_find_explicit_config_file_returns_none_when_candidates_lack_tool_rrt(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'example'\n", encoding="utf-8")
+    (tmp_path / ".rrt.toml").write_text("[tool.other]\nvalue = 1\n", encoding="utf-8")
+    config_dir = tmp_path / ".config"
+    config_dir.mkdir()
+    (config_dir / "rrt.toml").write_text("[tool.something]\nvalue = 2\n", encoding="utf-8")
+
+    assert find_explicit_config_file(tmp_path) is None
 
 
 @pytest.mark.parametrize(
@@ -1130,3 +1145,185 @@ version = "0.1.0"
 
     with pytest.raises(ValueError, match="non-empty 'pattern' string"):
         load_config_from_path(tmp_path, cfg_file)
+
+
+# ---------------------------------------------------------------------------
+# _load_eol_config — via load_config
+# ---------------------------------------------------------------------------
+
+_BASE_RRT_CONFIG = """\
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "0.1.0"
+"""
+
+
+def _write_eol_cfg(tmp_path: Path, extra: str) -> None:
+    """Write a pyproject.toml with [tool.rrt.eol] appended to the base config."""
+    (tmp_path / "pyproject.toml").write_text(
+        _BASE_RRT_CONFIG + extra,
+        encoding="utf-8",
+    )
+
+
+def test_load_config_eol_section_absent() -> None:
+    """When no [tool.rrt.eol] key is present, config.eol is None."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td)
+        (p / "pyproject.toml").write_text(_BASE_RRT_CONFIG, encoding="utf-8")
+        cfg = load_config(p)
+        assert cfg.eol is None
+
+
+def test_load_config_eol_defaults(tmp_path: Path) -> None:
+    """[tool.rrt.eol] with no fields uses all defaults."""
+    _write_eol_cfg(tmp_path, "\n[tool.rrt.eol]\n")
+    cfg = load_config(tmp_path)
+    assert isinstance(cfg.eol, EolConfig)
+    assert cfg.eol.languages == ("python",)
+    assert cfg.eol.warn_days == 180
+    assert cfg.eol.error_days == 0
+    assert cfg.eol.fetch_live is False
+    assert cfg.eol.allow_eol is False
+    assert cfg.eol.overrides == ()
+
+
+def test_load_config_eol_full(tmp_path: Path) -> None:
+    """[tool.rrt.eol] with all fields populated."""
+    _write_eol_cfg(
+        tmp_path,
+        '\n[tool.rrt.eol]\nlanguages = ["python", "nodejs"]\n'
+        "warn_days = 90\nerror_days = 30\nfetch_live = true\nallow_eol = true\n",
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.eol is not None
+    assert cfg.eol.languages == ("python", "nodejs")
+    assert cfg.eol.warn_days == 90
+    assert cfg.eol.error_days == 30
+    assert cfg.eol.fetch_live is True
+    assert cfg.eol.allow_eol is True
+
+
+def test_load_config_eol_with_overrides(tmp_path: Path) -> None:
+    """[tool.rrt.eol.overrides] are parsed into EolOverride tuples."""
+    _write_eol_cfg(
+        tmp_path,
+        '\n[tool.rrt.eol]\nlanguages = ["python"]\n\n'
+        '[[tool.rrt.eol.overrides]]\nlanguage = "python"\ncycle = "3.12"\neol = "2026-12-31"\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.eol is not None
+    assert len(cfg.eol.overrides) == 1
+    ov = cfg.eol.overrides[0]
+    assert isinstance(ov, EolOverride)
+    assert ov.language == "python"
+    assert ov.cycle == "3.12"
+    assert ov.eol == "2026-12-31"
+
+
+def test_load_config_eol_languages_not_list(tmp_path: Path) -> None:
+    """Non-list languages value raises ValueError."""
+    _write_eol_cfg(tmp_path, '\n[tool.rrt.eol]\nlanguages = "python"\n')
+    with pytest.raises(ValueError, match="languages must be a list"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_warn_days_not_int(tmp_path: Path) -> None:
+    """Non-integer warn_days raises ValueError."""
+    _write_eol_cfg(tmp_path, '\n[tool.rrt.eol]\nwarn_days = "bad"\n')
+    with pytest.raises(ValueError, match="warn_days must be an integer"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_error_days_not_int(tmp_path: Path) -> None:
+    """Non-integer error_days raises ValueError."""
+    _write_eol_cfg(tmp_path, '\n[tool.rrt.eol]\nerror_days = "bad"\n')
+    with pytest.raises(ValueError, match="error_days must be an integer"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_fetch_live_not_bool(tmp_path: Path) -> None:
+    """Non-boolean fetch_live raises ValueError."""
+    _write_eol_cfg(tmp_path, '\n[tool.rrt.eol]\nfetch_live = "yes"\n')
+    with pytest.raises(ValueError, match="fetch_live must be a boolean"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_allow_eol_not_bool(tmp_path: Path) -> None:
+    """Non-boolean allow_eol raises ValueError."""
+    _write_eol_cfg(tmp_path, "\n[tool.rrt.eol]\nallow_eol = 1\n")
+    with pytest.raises(ValueError, match="allow_eol must be a boolean"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_section_must_be_table(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+eol = "bad"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"tool\.rrt\.eol must be a table"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_overrides_not_list(tmp_path: Path) -> None:
+    """Non-list overrides raises ValueError."""
+    _write_eol_cfg(tmp_path, '\n[tool.rrt.eol]\noverrides = "bad"\n')
+    with pytest.raises(ValueError, match="overrides must be an array"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_override_entry_must_be_table(tmp_path: Path) -> None:
+    _write_eol_cfg(tmp_path, '\n[tool.rrt.eol]\noverrides = ["bad"]\n')
+
+    with pytest.raises(ValueError, match="Each tool.rrt.eol.overrides entry must be a table"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_override_missing_language(tmp_path: Path) -> None:
+    """Override entry without language raises ValueError."""
+    _write_eol_cfg(
+        tmp_path,
+        '\n[tool.rrt.eol]\n\n[[tool.rrt.eol.overrides]]\ncycle = "3.12"\neol = "2026-12-31"\n',
+    )
+    with pytest.raises(ValueError, match="language must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_override_missing_cycle(tmp_path: Path) -> None:
+    """Override entry without cycle raises ValueError."""
+    _write_eol_cfg(
+        tmp_path,
+        '\n[tool.rrt.eol]\n\n[[tool.rrt.eol.overrides]]\nlanguage = "python"\neol = "2026-12-31"\n',
+    )
+    with pytest.raises(ValueError, match="cycle must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_override_missing_eol(tmp_path: Path) -> None:
+    """Override entry without eol date raises ValueError."""
+    _write_eol_cfg(
+        tmp_path,
+        '\n[tool.rrt.eol]\n\n[[tool.rrt.eol.overrides]]\nlanguage = "python"\ncycle = "3.12"\n',
+    )
+    with pytest.raises(ValueError, match=r"overrides\[\]\.eol must be a non-empty"):
+        load_config(tmp_path)

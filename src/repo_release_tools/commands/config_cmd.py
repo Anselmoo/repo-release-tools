@@ -1,4 +1,70 @@
-"""rrt config — visualise the resolved rrt configuration for the current repository."""
+"""Inspect the resolved rrt configuration for the current repository.
+
+## Overview
+
+This command shows the configuration that rrt will actually use after
+repository discovery and any automatic config-file detection. It is the
+fastest way to answer:
+
+- Which config file did rrt pick?
+- Which version groups were resolved?
+- Which files and targets belong to each group?
+
+Use this command when you want to verify release metadata before running a
+bump, changelog update, or release workflow.
+
+## What the command reports
+
+The default view renders a tree-style summary with:
+
+- the config file source, or an "auto-detected" notice when no explicit file
+  was selected
+- the number of version groups in the resolved configuration
+- each version group name
+- per-group details for:
+  - `release_branch`
+  - `changelog`
+  - `lock_command`, when configured
+  - `generated_files`, when configured
+  - `version_targets`
+
+Each version target is rendered using the same internal description that rrt
+uses elsewhere, so the output is intended to be directly useful in generated
+CLI documentation.
+
+## Raw mode
+
+`--raw` prints the underlying config file instead of the rendered tree. The
+file is syntax-highlighted when possible and written directly to standard
+output.
+
+This is useful when you want to inspect the exact TOML/text content that rrt
+loaded, rather than the resolved structure.
+
+## Failure behavior
+
+The command exits with a non-zero status when:
+
+- no config file can be found
+- the config file cannot be loaded
+- the resolved config is invalid
+- the raw file cannot be read in `--raw` mode
+
+In these cases, the command writes the error or discovery guidance to stderr.
+
+## Examples
+
+```bash
+rrt config
+rrt config --raw
+```
+
+## Caveats
+
+- Paths in the tree are shown relative to the current repository root.
+- The resolved output reflects discovery and auto-detection, not just the
+  contents of one file.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +78,8 @@ from repo_release_tools.ui import (
     DryRunPrinter,
     highlight_terminal,
 )
+
+CONFIG_EPILOG = "  $ rrt config\n  $ rrt config --raw"
 
 
 def _render_group_details(group: cfg.VersionGroup, root: Path) -> list[str]:
@@ -87,6 +155,13 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser = subparsers.add_parser(
         "config",
         help="Show the resolved rrt configuration for this repository.",
+        description=(
+            "Inspect the resolved rrt configuration after discovery and auto-detection.\n\n"
+            "Shows which config file rrt will use, the version groups it resolved, and the "
+            "targets each group manages. Use --raw to print the underlying config file "
+            "instead of the rendered tree view."
+        ),
+        epilog=CONFIG_EPILOG,
     )
     parser.add_argument(
         "--raw",

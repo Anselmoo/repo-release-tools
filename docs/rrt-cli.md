@@ -1,507 +1,1505 @@
 # RRT CLI
 
-The installed command is `rrt`.
+<!-- Auto-generated from repo_release_tools.cli.build_parser(); run `poe docs-generate` to refresh. -->
 
-Use the CLI when you want the local developer workflow: branch helpers, version
-bumps, config inspection, Git shortcuts, and release automation.
+This reference is generated from the live `argparse` configuration in
+`repo_release_tools.cli` and `src/repo_release_tools/commands/*.py`.
 
-## Install
+Use `poe docs-generate` to rewrite this file or `poe docs-check` to
+verify it is current.
 
-```bash
-pip install repo-release-tools
+## Global help
+
+```text
+Usage:  rrt [OPTIONS] <command>
+
+repo-release-tools: branch, commit, and version helpers for Git repositories.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --version        Show version and exit.
+  --format FORMAT  Output format. Defaults to text.
+  --no-color       Disable all ANSI color output.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Version & Release
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  bump        Bump project version using [tool.rrt] config.
+  ci-version  Compute and apply CI pre-release versions (PEP 440 / SemVer).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Repository Health
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  doctor  Validate the resolved rrt configuration for the current repository.
+  config  Inspect the resolved rrt configuration after discovery and auto-detection.
+  env     Show environment variables and interpreter details that affect rrt behavior.
+  eol     Check detected host runtimes and project minimum versions against end-of-life dates.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Git Workflow
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  branch  Branch management helpers for conventional branch naming.
+  git     Git workflow helpers for repository status, commit, sync, and history operations.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Setup & Tooling
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  init   Generate a starter rrt configuration for the current repository or manifest.
+  skill  Install the bundled repo-release-tools agent skill.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt branch new feat "add parser"
+  $ rrt branch rename --type fix --scope api "repair config loader"
+  $ rrt bump patch --dry-run
+  $ rrt git status
+  $ rrt doctor
+  $ rrt skill install --target copilot-local
+  $ rrt @args.txt
 ```
 
-Or run it without installing:
+## `rrt bump`
 
-```bash
-uvx repo-release-tools branch new feat "add parser"
+Bump a release version and prepare the associated release branch.
+
+### Overview
+
+This command reads the active ``[tool.rrt]`` configuration, computes a new
+version, updates configured files, and creates the release branch named by the
+selected version group.
+
+The bump value may be one of:
+
+* ``major``, ``minor``, or ``patch`` to increment the current version
+* an explicit version string such as ``2.1.0``
+
+### What the command updates
+
+Depending on the selected version group, the command can update:
+
+* version targets defined in ``[[tool.rrt.version_targets]]``
+* dependency or documentation pins configured for the group
+* the changelog file
+* lockfiles, when the group defines a lock command
+
+### Release workflow
+
+1. Load the repository config from ``[tool.rrt]``.
+2. Resolve the selected version group.
+3. Compute the new version from the current group version or the explicit
+   ``<bump>`` value.
+4. Update version targets and optional pin targets.
+5. Update the changelog unless ``--no-changelog`` is set.
+6. Run the configured lock command unless ``--no-update`` is set.
+7. Create the release branch and stage or commit the resulting changes.
+
+### Changelog behavior
+
+The changelog update logic supports three modes:
+
+* ``auto`` - promote ``[Unreleased]`` when it has entries, otherwise generate a
+  new section from git history
+* ``promote`` - require a non-empty ``[Unreleased]`` section and rename it to
+  the new version heading
+* ``generate`` - always generate a fresh section from the commit log
+
+When an empty ``[Unreleased]`` placeholder exists, generated content is kept
+below it so the placeholder stays at the top of the file.
+
+### Safety notes
+
+* The working tree must be clean unless ``--dry-run`` is used.
+* Existing release branches are refused unless ``--force`` is set.
+* ``--no-commit`` leaves the branch created with staged changes only.
+* ``--dry-run`` previews the planned file edits and git actions without writing
+  to disk.
+
+### Examples
+
+* ``rrt bump patch``
+* ``rrt bump minor --dry-run``
+* ``rrt bump 2.1.0 --no-changelog --no-commit``
+* ``rrt bump major --base-branch develop``
+
+```text
+Usage:  rrt bump [OPTIONS] <bump>
+
+Bump project version using [tool.rrt] config.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <bump>                 major | minor | patch | <semver>  — bump kind or explicit version
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help             Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Release control
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  --dry-run              Preview changes without writing to disk.
+  --force                Reset the release branch if it already exists.
+  --no-commit            Skip the git commit step.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Content
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  --no-changelog         Do not update the changelog file.
+  --no-pin-sync          Skip dependency pin synchronisation.
+  --no-update            Skip the lockfile update step.
+  --include-maintenance  Include maintenance commits in changelog.
+  --changelog-mode MODE  How to write changelog entries (auto | promote | generate).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Git
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  --base-branch BRANCH   Branch to base the release on.
+  --group GROUP          Version group to bump when multiple groups are configured.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt bump patch
+  $ rrt bump minor --dry-run
+  $ rrt bump 2.1.0 --no-changelog --no-commit
+  $ rrt bump major --base-branch develop
 ```
 
-## Quickstart
+## `rrt ci-version`
+
+Compute and apply CI release versions from ``[tool.rrt]`` config.
+
+### Overview
+
+This command mirrors the behavior of the repository's CI version helper, but
+uses the active ``[tool.rrt]`` configuration to discover version targets and
+group defaults.
+
+It is organized into three subcommands:
+
+* ``compute`` - print the published version for the current GitHub Actions run
+* ``apply`` - write an explicit version string to all configured CI targets
+* ``sync`` - compute the published version and immediately apply it
+
+### Version rules
+
+The computed CI version depends on the Git ref:
+
+* ``refs/tags/v*`` - return the tag name with the leading ``v`` removed
+* ``refs/heads/main`` - build a PEP 440 dev release using
+  ``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``
+* any other ref - return the base version unchanged
+
+CLI flags such as ``--ref``, ``--ref-name``, ``--run-id``, ``--run-attempt``,
+``--base``, and ``--group`` override the corresponding environment variables
+and config defaults when present.
+
+### Output formats
+
+When applying a version, each target uses its configured ``ci_format``:
+
+* ``pep440`` - write the version string unchanged
+* ``semver_pre`` - convert a PEP 440 dev release into a Cargo-compatible
+  prerelease string via ``to_semver()``
+
+Only targets with a valid ``ci_format`` are updated.
+
+### Safety notes
+
+* ``compute`` writes a single machine-readable version line to stdout.
+* ``apply`` and ``sync`` validate the selected config and fail fast on missing
+  or incompatible targets.
+* ``sync`` is equivalent to ``compute`` followed by ``apply`` using the result.
+* ``--dry-run`` previews file updates without modifying the repository.
+
+### Examples
+
+* ``rrt ci-version compute``
+* ``rrt ci-version apply 1.2.3.dev4``
+* ``rrt ci-version sync``
+
+```text
+Usage:  rrt ci-version [OPTIONS] <ci_version_cmd>
+
+Compute and apply CI pre-release versions (PEP 440 / SemVer).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  compute     Print the published version for the current GitHub Actions run.
+  apply       Apply a concrete version string to all ci_format-configured targets.
+  sync        Compute the published version from GitHub Actions env and apply it.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt ci-version compute
+  $ rrt ci-version apply 1.2.3.dev4
+  $ rrt ci-version sync
+```
+
+### `rrt ci-version compute`
+
+```text
+Usage:  rrt ci-version compute [OPTIONS]
+
+Print the CI/published version for the current GitHub Actions context, using --base and --group overrides when provided.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --group GROUP    Version group to read/apply when multiple release groups are configured.
+  --base VERSION   Base version to compute from (default: read from first configured version target).
+  --ref REF        Git ref override (default: $GITHUB_REF).
+  --ref-name NAME  Git ref-name override (default: $GITHUB_REF_NAME).
+  --run-id ID      GitHub Actions run ID override (default: $GITHUB_RUN_ID).
+  --run-attempt N  GitHub Actions run-attempt override (default: $GITHUB_RUN_ATTEMPT).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt ci-version compute
+  $ rrt ci-version compute --base 1.2.3 --ref refs/heads/main --run-id 42 --run-attempt 3
+```
+
+### `rrt ci-version apply`
+
+```text
+Usage:  rrt ci-version apply [OPTIONS] <version>
+
+Apply one explicit CI version string to every configured ci_format target in the selected version group.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <version>      Version string to apply (e.g. 0.2.0.dev12345601).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --dry-run      Preview without writing changes.
+  --group GROUP  Version group to update when multiple release groups are configured.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt ci-version apply 1.2.3.dev4201
+  $ rrt ci-version apply 1.2.3.dev4201 --group backend --dry-run
+```
+
+### `rrt ci-version sync`
+
+```text
+Usage:  rrt ci-version sync [OPTIONS]
+
+Compute the current GitHub Actions CI version and apply it to every configured ci_format target.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --group GROUP    Version group to read/apply when multiple release groups are configured.
+  --base VERSION   Base version to compute from (default: read from first configured version target).
+  --ref REF        Git ref override (default: $GITHUB_REF).
+  --ref-name NAME  Git ref-name override (default: $GITHUB_REF_NAME).
+  --run-id ID      GitHub Actions run ID override (default: $GITHUB_RUN_ID).
+  --run-attempt N  GitHub Actions run-attempt override (default: $GITHUB_RUN_ATTEMPT).
+  --dry-run        Preview without writing changes.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt ci-version sync --dry-run
+  $ rrt ci-version sync --group backend --ref refs/heads/main --run-id 42 --run-attempt 1
+```
+
+## `rrt doctor`
+
+Validate the health of the resolved rrt configuration for the current repository.
+
+### Overview
+
+`rrt doctor` is a repository health check for release automation. It inspects
+the active configuration and looks for the kinds of issues that usually cause
+release jobs to fail late: missing files, broken patterns, unreadable version
+targets, and optional runtime EOL policy problems.
+
+### What it checks
+
+For each resolved version group, the command checks:
+
+- version target files exist
+- version target values can be read
+- pin target patterns compile as regular expressions
+- pin target files contain at least one match
+- the group changelog file exists
+
+It also checks any global pin targets, deduplicating repeated path/pattern
+pairs so the same target is not reported twice.
+
+If `[tool.rrt.eol]` is configured, the command adds a runtime EOL section that
+checks the configured languages against the repository's host runtime and
+project minimum versions.
+
+### Output and severity
+
+The command prints a grouped report for each version group and an overall
+status at the end.
+
+- missing targets and missing changelog files are errors
+- unreadable version content is reported as a warning
+- pin patterns that compile but do not match are reported as a warning
+- valid matches and readable targets are reported as OK
+
+For EOL checks, the command uses the configured thresholds from `[tool.rrt.eol]`
+and reports the host runtime and project minimum for each configured language.
+
+### Config discovery behavior
+
+If no config file can be found, the command prints repository guidance and
+exits with an error.
+
+If a config is auto-detected, the command emits a notice on stderr before the
+main report so you can tell that rrt did not use an explicitly selected file.
+
+### Examples
 
 ```bash
-rrt init
+rrt doctor
+```
+
+### Caveats
+
+- The command reports health for the resolved configuration, not just the
+  visible file in the current directory.
+- EOL checks are only shown when EOL policy is configured.
+- A warning does not fail the command; only error-level findings do.
+
+### Related docs
+
+- [Runtime EOL tracking](eol.md)
+- [rrt eol (CLI)](rrt-cli.md)
+- [pre-commit / lefthook](hooks.md)
+- [GitHub Action](action.md)
+
+```text
+Usage:  rrt doctor [OPTIONS]
+
+Validate the resolved rrt configuration for the current repository.
+
+Checks configured version targets, pin patterns, changelog files, and optional runtime EOL policy so you can catch broken release automation before a bump or release run.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt doctor
+```
+
+## `rrt config`
+
+Inspect the resolved rrt configuration for the current repository.
+
+### Overview
+
+This command shows the configuration that rrt will actually use after
+repository discovery and any automatic config-file detection. It is the
+fastest way to answer:
+
+- Which config file did rrt pick?
+- Which version groups were resolved?
+- Which files and targets belong to each group?
+
+Use this command when you want to verify release metadata before running a
+bump, changelog update, or release workflow.
+
+### What the command reports
+
+The default view renders a tree-style summary with:
+
+- the config file source, or an "auto-detected" notice when no explicit file
+  was selected
+- the number of version groups in the resolved configuration
+- each version group name
+- per-group details for:
+  - `release_branch`
+  - `changelog`
+  - `lock_command`, when configured
+  - `generated_files`, when configured
+  - `version_targets`
+
+Each version target is rendered using the same internal description that rrt
+uses elsewhere, so the output is intended to be directly useful in generated
+CLI documentation.
+
+### Raw mode
+
+`--raw` prints the underlying config file instead of the rendered tree. The
+file is syntax-highlighted when possible and written directly to standard
+output.
+
+This is useful when you want to inspect the exact TOML/text content that rrt
+loaded, rather than the resolved structure.
+
+### Failure behavior
+
+The command exits with a non-zero status when:
+
+- no config file can be found
+- the config file cannot be loaded
+- the resolved config is invalid
+- the raw file cannot be read in `--raw` mode
+
+In these cases, the command writes the error or discovery guidance to stderr.
+
+### Examples
+
+```bash
 rrt config
-rrt skill install --target copilot-local
-rrt branch new feat "add parser"
-rrt git commit "add parser"
-rrt git doctor
-rrt bump patch
+rrt config --raw
 ```
 
-If your repo already has a simple `pyproject.toml`, `package.json`, or
-`Cargo.toml`, `rrt bump` and `rrt ci-version` can often work without explicit
-config. Run `rrt init` when you want `rrt` to write the current recommendation
-into `.rrt.toml` or a native manifest file.
+### Caveats
 
-## Core commands
+- Paths in the tree are shown relative to the current repository root.
+- The resolved output reflects discovery and auto-detection, not just the
+  contents of one file.
+
+```text
+Usage:  rrt config [OPTIONS]
+
+Inspect the resolved rrt configuration after discovery and auto-detection.
+
+Shows which config file rrt will use, the version groups it resolved, and the targets each group manages. Use --raw to print the underlying config file instead of the rendered tree view.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --raw       Show the raw config file with syntax highlighting instead of the tree view.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt config
+  $ rrt config --raw
+```
+
+## `rrt env`
+
+Inspect the process environment and runtime context used by rrt.
+
+### Overview
+
+This command is a compact diagnostics tool for answering "what environment am
+I running in?" It does not read repository configuration. Instead, it reports
+the interpreter and terminal-related values that can affect rrt output.
+
+### What it reports
+
+The standard text view prints:
+
+- platform
+- Python version
+- Python executable path
+- `TERM`
+- `COLORTERM`
+- whether `NO_COLOR` is enabled
+- `RRT_COLOR`
+
+The `NO_COLOR` field is normalized to a friendly enabled/disabled value rather
+than echoing the raw environment variable.
+
+### JSON mode
+
+Use `--json` to emit the same fields as a JSON object. This is useful for
+automation, debugging, and documentation tooling that prefers structured
+output.
+
+### Examples
 
 ```bash
-rrt init
-rrt config
-rrt skill install --target copilot-local
-rrt branch new feat "add parser"
-rrt branch rescue fix "recover release work"
-rrt branch rename --type feat
-rrt branch rename --scope cli
-rrt branch rename fix "add helper" --scope utils
-rrt git commit "add parser"
-rrt git sync
-rrt git diff
-rrt git diff --staged
-rrt bump patch
-rrt bump patch --force
-rrt bump minor --dry-run
-rrt bump 1.2.3 --no-changelog
+rrt env
+rrt env --json
 ```
 
-Use `rrt bump ... --force` when you need to recreate an existing release branch
-from the chosen base after last-minute fixes, without deleting the branch by
-hand first.
+### Caveats
 
-## Branch rename
+- This command reports only a small set of environment values that are most
+  relevant to rrt behavior.
+- It is a snapshot of the current process, not a probe of the wider shell or
+  login environment.
 
-Rename the **current** branch, updating any combination of type, scope, and
-description without leaving the repo in a broken state.
+```text
+Usage:  rrt env [OPTIONS]
+
+Show environment variables and interpreter details that affect rrt behavior.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --json      Output the environment as JSON.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt env
+  $ rrt env --json
+```
+
+## `rrt eol`
+
+Check detected runtimes and project minimum versions against end-of-life policy.
+
+### Overview
+
+`rrt eol` helps you answer two questions for one or more languages:
+
+- Is the current host runtime still supported?
+- Is the repository's declared minimum version still supported?
+
+It is designed for release pipelines and maintenance workflows where runtime
+support windows matter.
+
+### What the command checks
+
+For each requested language, the command checks:
+
+- the host runtime detected on the current machine
+- the project minimum version detected from the repository
+
+Each version is compared against EOL records and classified as:
+
+- supported
+- expiring soon
+- end-of-life
+- unknown
+
+When the runtime cannot be detected, the command prints `not detected` instead
+of failing that check.
+
+### Data sources
+
+By default, rrt uses bundled EOL data. With `--fetch-live`, it refreshes the
+records from endoflife.date for the current run.
+
+Language selection comes from the resolved configuration when available. If no
+EOL config is present, the command defaults to Python.
+
+### Policy behavior
+
+The effective thresholds come from `[tool.rrt.eol]` when configured, with CLI
+flags applied on top for the current invocation.
+
+Important policy switches:
+
+- `--warn-days` sets the warning window
+- `--error-days` sets the failure window
+- `--allow-eol` downgrades EOL failures to warnings
+- `--language` limits the check to one language
+
+### Output
+
+The command prints a small summary first, then one section per language with
+host runtime and project minimum results. If all checks pass it ends with a
+success line; otherwise it prints a failure line and returns a non-zero exit
+code.
+
+### Examples
 
 ```bash
-# Change only the type — slug is kept as-is
-rrt branch rename --type feat
-
-# Prepend a scope to the existing slug
-rrt branch rename --scope cli
-
-# Change type + scope (slug kept)
-rrt branch rename --type feat --scope cli
-
-# Full rebuild: type inferred from current branch, new description
-rrt branch rename fix add helper --scope utils
-
-# Remove scope and restate description
-rrt branch rename --no-scope feat "add parser"
-
-# Preview without touching git
-rrt branch rename --type docs --dry-run
+rrt eol
+rrt eol --language node --fetch-live
+rrt eol --warn-days 90 --error-days 30
 ```
 
-### How it works
+### Caveats
 
-| What you provide | Behaviour |
-|---|---|
-| `--type` only | Replaces the `type/` prefix; slug unchanged |
-| `--scope` only | Prepends `{scope}-` to the existing slug |
-| description words | Rebuilds from scratch using `BranchName(type, description, scope)` |
-| `--no-scope` + words | Rebuilds without any scope prefix |
+- Supported languages are limited to the values exposed by rrt's EOL helpers.
+- Configured EOL overrides apply per language and version cycle.
+- `--allow-eol` changes exit-code behavior, not the underlying status labels.
 
-`rrt branch rename` calls `git branch -m <old> <new>` — only a local rename,
-no remote tracking branches are moved. Push the new name with
-`git push origin :<old> <new>` or `git push --set-upstream origin <new>` as
-needed.
+```text
+Usage:  rrt eol [OPTIONS]
 
-## Git workflows
+Check detected host runtimes and project minimum versions against end-of-life dates.
 
-`rrt git` is intentionally not a full alias layer over raw Git. It focuses on
-repeatable workflows that match `repo-release-tools` policy:
+Uses bundled EOL data by default and can refresh from endoflife.date on demand. When [tool.rrt.eol] is configured, CLI flags override the configured thresholds for this invocation.
 
-- `rrt git status` shows a compact branch summary and typed worktree entries
-- `rrt git log` shows recent history in a compact `rrt`-styled view
-- `rrt git doctor` checks branch policy, upstream state, dirty tree,
-  merge/rebase blockers, sync drift, latest commit subject, and changelog risk
-  in one report
-- `rrt git sync-status` is the focused sync preflight view: it analyzes whether a
-  merge/rebase is already in progress, whether unresolved conflicts remain, and
-  whether the branch is behind or diverged from its sync base
-- `rrt git diff` renders the working-tree diff with `rrt` glyph formatting —
-  added, removed, and unchanged lines are styled distinctly. Use `--staged` to
-  inspect staged changes before a commit, or `--against <ref>` to diff against
-  any commit or ref
-- `rrt git commit "message"` builds a conventional commit and infers the type
-  from the current branch when possible
-- `rrt git commit-all "message"` stages all files first, then creates the
-  conventional commit
-- `rrt git sync` fetches, auto-stashes when needed, then pulls with rebase by
-  default, showing a compact branch/worktree summary in the preview panel
-- `rrt git move <branch>` switches branches without dropping local changes
-- `rrt git squash-local "message"` squashes local commits since upstream into
-  one conventional commit
-- `rrt git undo-safe` rewinds a commit while keeping work staged or unstaged
-- `rrt git check-dirty-tree` exits non-zero when the working tree is dirty, for
-  use in hooks and CI, with typed entries for dirty paths
-- `rrt git rebootstrap` destroys history and creates a fresh initial history,
-  guarded by an explicit confirmation flag; add `--hard-init` to recreate git
-  metadata from scratch while leaving the working tree untracked behind one
-  empty initial commit
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-See [Git magic](git-magic.md) for the design rationale and the full workflow
-catalog.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --language LANG  Check one language only (go, node, nodejs, python, rust). Default: from config or python.
+  --fetch-live     Fetch fresh EOL data from endoflife.date instead of using bundled snapshot.
+  --warn-days N    Warn when EOL is within N days (default: 180 or from config).
+  --error-days N   Error when EOL is within N days (default: 0 or from config = only on actual EOL).
+  --allow-eol      Downgrade errors to warnings (useful during migration grace periods).
 
-## Config inspection
-
-```bash
-rrt config
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt eol
+  $ rrt eol --language node --fetch-live
+  $ rrt eol --warn-days 90 --error-days 30
 ```
 
-`rrt config` reads the resolved configuration for the current repository and
-prints it as a tree. It covers every version group: release branch, changelog
-path, lock command, version targets (file path and detection kind), and
-generated files.
+## `rrt branch`
 
-When no explicit config exists, `rrt config` shows what `rrt` would auto-detect
-in zero-config mode — the same picture that `bump` and `ci-version` would act
-on. When a `[tool.rrt]` section is found, the output reflects the explicit
-configuration as loaded.
+### Conventional branches for trunk-based publishing
 
-```
-┌ rrt config ────────────────────────┐
-│ config file    │ (auto-detected)   │
-├────────────────┼───────────────────┤
-│ version groups │ 1 group           │
-└────────────────┴───────────────────┘
+`repo-release-tools` uses conventional branches to keep trunk-based publishing
+predictable for humans, hooks, and automation.
 
-└── [default]/
-    ├── release_branch  release/v{version}
-    ├── changelog       CHANGELOG.md
-    ├── lock_command    uv lock -U
-    ├── version_targets/
-    │   ├── pyproject.toml ([project].version)
-    │   └── src/pkg/__init__.py (__version__)
-    └── generated_files/
-        └── uv.lock
+This page is generated from `repo_release_tools.commands.branch.SEMANTIC_BRANCHES_DOC`.
+The canonical command reference is [docs/rrt-cli.md](rrt-cli.md). This page
+summarizes the naming rules that the CLI and hooks enforce.
+
+#### Standard format
+
+```text
+<type>/<kebab-case-description>
 ```
 
-Run `rrt config` to answer "what does rrt know about this repo?" before your
-first `rrt bump`.
+Examples:
 
-## Zero-config mode
+- `feat/add-config-discovery`
+- `fix/handle-tag-workflows`
+- `docs/split-readme-into-docs`
 
-For basic versioning, `rrt` can work without `[tool.rrt]`.
+#### Built-in branch types
 
-- `bump` and `ci-version` auto-detect root-level `pyproject.toml`, `package.json`,
-  and `Cargo.toml`
-- If multiple version files are found, they are updated together
-- Auto-detected files must already agree on the current version before `bump`
-- Go does not have a standard in-file project version, so Go repos still need
-  explicit config for file updates
+Conventional branch types are accepted out of the box:
 
-Add `[tool.rrt]` later only when you want fine-tuning such as grouped releases,
-custom release branches, changelog paths, lock commands, generated files, or
-pattern-based targets. Run `rrt init` when you want `rrt` to write a
-recommended `.rrt.toml` for the current repo shape.
+- `feat`
+- `fix`
+- `chore`
+- `docs`
+- `refactor`
+- `test`
+- `ci`
+- `perf`
+- `style`
+- `build`
 
-## Init
+#### Special names
 
-```bash
-rrt init
-rrt init --dry-run
-rrt init --force
-rrt init --target pyproject
-rrt init --target cargo
-rrt init --target node
-rrt init --target go
-rrt init --target pyproject --dry-run
-```
+These branch names are also valid:
 
-`rrt init` writes a recommended rrt configuration block for the current repository.
+- `main`
+- `master`
+- `develop`
+- `release/v<semver>`
 
-### Targets
+`release/v<semver>` is validated as a semver-aware special case, not as a free
+form `type/slug` branch.
 
-| Flag | Output |
-|---|---|
-| *(default)* | Creates `.rrt.toml` in the repo root |
-| `--target pyproject` | Appends `[tool.rrt]` to an existing `pyproject.toml` |
-| `--target cargo` | Appends `[package.metadata.rrt]` to an existing `Cargo.toml` |
-| `--target node` | Merges `"rrt": { ... }` into an existing `package.json` |
-| `--target go` | Creates `.rrt.toml` with the recommended Go config, falling back to auto-detected targets when available |
+#### AI helper branches
 
-`--target pyproject`, `--target cargo`, and `--target node` require the manifest file to already
-exist. All targets auto-detect current version files to produce a tailored
-config block. Use `--force` to overwrite `.rrt.toml` or the `package.json`
-`"rrt"` key. Existing `pyproject.toml` and `Cargo.toml` rrt sections must be
-edited manually instead of appending a duplicate table.
+Branches created by assistant-driven workflows are accepted with these prefixes:
 
-For **Node / JS / TS** repositories, `--target node` reads the existing `package.json`,
-adds a top-level `"rrt"` key, and writes the file back with 2-space JSON indentation.
+- `claude/...`
+- `codex/...`
+- `copilot/...`
 
-For **Go** repositories there is no standard extensible manifest section; both
-`--target go` and the default `rrt init` write `.rrt.toml`. `--target go` uses
-the Go-specific starter template when no existing version targets can be
-auto-detected.
+They still use normal slug validation, so the suffix should stay lowercase and
+kebab-cased.
 
-## Configuration files
+#### Bot and custom branches
 
-`rrt` discovers configuration in this order:
+Branches created by dependency bots are accepted too:
 
-1. `pyproject.toml`
-2. `package.json`
-3. `Cargo.toml`
-4. `.rrt.toml`
-5. `.config/rrt.toml`
+- `dependabot/...`
+- `renovate/...`
 
-Each file stores equivalent `rrt` config in its native format.
-Use `.rrt.toml` or `.config/rrt.toml` for local repo config if you do not want
-to keep release-tool settings in `pyproject.toml`.
-
-- `pyproject.toml`, `.rrt.toml`, `.config/rrt.toml`: `[tool.rrt]`
-- `package.json`: top-level `"rrt": { ... }`
-- `Cargo.toml`: `[package.metadata.rrt]` or `[workspace.metadata.rrt]`
-
-Go does not have a standard extensible manifest section like `package.json` or
-`Cargo.toml`, so Go repos should use `.rrt.toml` or `.config/rrt.toml`.
-
-## Skill install
-
-Use `rrt skill install` to copy the bundled installed-CLI skill into an agent
-skill directory:
-
-```bash
-rrt skill install --target copilot-local
-rrt skill install --target claude-local --target codex-local
-rrt skill install --target copilot-global --dry-run
-rrt skill install --target codex-global --force
-```
-
-### Targets
-
-| Target | Directory |
-|---|---|
-| `copilot-local` | `.copilot/skills` |
-| `claude-local` | `.claude/skills` |
-| `codex-local` | `.codex/skills` |
-| `copilot-global` | `~/.copilot/skills` |
-| `claude-global` | `~/.claude/skills` |
-| `codex-global` | `~/.codex/skills` |
-
-The command installs the bundled `repo-release-tools` skill. It refuses to
-overwrite an existing installation unless `--force` is provided.
-
-## Minimal config
-
-```toml
-[tool.rrt]
-release_branch = "release/v{version}"
-changelog_file = "CHANGELOG.md"
-changelog_workflow = "incremental"  # or "squash"
-
-[[tool.rrt.version_targets]]
-path = "pyproject.toml"
-kind = "pep621"
-```
-
-## Changelog workflows
-
-`rrt` supports two changelog workflows so the CLI can match how a repository
-actually merges work.
-
-### `incremental` (default)
-
-Use `incremental` when the repository maintains changelog state during regular
-development.
-
-- works well with `rrt-update-unreleased` or `rrt-changelog`
-- keeps `[Unreleased]` current as changes land
-- makes `rrt bump` default to the normal `auto` changelog behavior
-
-### `squash`
-
-Use `squash` when pull requests are squash-merged and per-commit changelog
-updates would create noisy or misleading release notes.
-
-- local changelog hooks skip changelog enforcement
-- GitHub Action `changelog-strategy: auto` resolves to `release-only`
-- `rrt bump` defaults to `generate` so release notes are built at release time
-
-Set it in repo config:
-
-```toml
-[tool.rrt]
-changelog_workflow = "squash"
-```
-
-## Custom branch types
-
-By default the branch name validator accepts the standard conventional types
-(`feat`, `fix`, `chore`, …), AI helper prefixes (`claude`, `codex`, `copilot`),
-and bot prefixes (`dependabot`, `renovate`). To allow additional prefixes:
+Custom prefixes can be added through configuration:
 
 ```toml
 [tool.rrt]
 extra_branch_types = ["greenkeeper", "snyk"]
 ```
 
-Custom types follow the same passthrough rules as bot branches — their slugs
-are not validated for kebab-case format or length.
+Bot and custom prefixes are treated as passthrough types. Their suffixes are
+only required to be non-empty, because upstream tools often generate slugs with
+slashes or underscores.
 
-Equivalent native examples:
+#### Why the rules matter
 
-```json
-{
-  "name": "example",
-  "version": "1.2.3",
-  "rrt": {
-    "version_targets": [
-      {
-        "path": "package.json",
-        "kind": "package_json"
-      }
-    ]
-  }
-}
+- branch names stay readable in review queues
+- commit subjects and branch types stay aligned
+- release automation can distinguish ordinary work from release branches
+- hooks and CI can apply one consistent policy across local and remote checks
+
+#### Related commands
+
+- `rrt branch new`
+- `rrt branch rescue`
+- `rrt branch rename`
+- `rrt git commit`
+- `rrt git doctor`
+
+```text
+Usage:  rrt branch [OPTIONS] <branch_command>
+
+Branch management helpers for conventional branch naming.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  new         Create a new conventionally named branch.
+  rescue      Move commits to a new branch and reset the current branch.
+  rename      Rename the current branch: change type, scope, description, or any combination.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt branch new feat "add parser"
+  $ rrt branch new fix "repair config loader" --scope api
+  $ rrt branch rename --type fix --scope api "fix config loader"
+  $ rrt branch rescue feat "rescue work in progress"
 ```
 
-```toml
-[package]
-name = "example"
-version = "1.2.3"
+### `rrt branch new`
 
-[package.metadata.rrt]
+```text
+Usage:  rrt branch new [OPTIONS] TYPE <description>
 
-[[package.metadata.rrt.version_targets]]
-path = "Cargo.toml"
-section = "package"
-field = "version"
+Create a new conventionally named branch from a commit type, optional scope, and description.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  TYPE
+  <description>  Short branch description.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --scope SCOPE  Optional scope.
+  --dry-run      Preview without touching git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt branch new feat "add parser"
+  $ rrt branch new fix "repair config loader" --scope api
+  $ rrt branch rename --type fix --scope api "fix config loader"
+  $ rrt branch rescue feat "rescue work in progress"
 ```
 
-## Version target modes
+### `rrt branch rescue`
 
-- `kind = "pep621"` for `[project].version`
-- `kind = "package_json"` for the top-level `version` in `package.json`
-- `pattern` for regex-driven replacements
-- `section` + `field` for TOML field updates
+```text
+Usage:  rrt branch rescue [OPTIONS] TYPE <description>
 
-## Generated files
+Rescue commits onto a new branch and reset the current branch to a safe point.
 
-Use `generated_files` for lockfiles or other generated artifacts that should be
-staged with a bump:
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  TYPE
+  <description>  Short branch description.
 
-```toml
-[tool.rrt]
-lock_command = ["pnpm", "install", "--lockfile-only"]
-generated_files = ["pnpm-lock.yaml"]
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --scope SCOPE  Optional scope.
+  --dry-run      Preview without touching git.
+  --since SHA    Rescue commits since this SHA instead of origin/<branch>.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt branch new feat "add parser"
+  $ rrt branch new fix "repair config loader" --scope api
+  $ rrt branch rename --type fix --scope api "fix config loader"
+  $ rrt branch rescue feat "rescue work in progress"
 ```
 
-Default lock refresh is auto-detected when possible:
+### `rrt branch rename`
 
-- `package.json`: `pnpm install`, `yarn install`, or `npm install`
-- Poetry: `poetry lock`
-- Rust: `cargo update --workspace` when `Cargo.lock` is present
-- Go-targeted repos: `go mod tidy`, staging `go.mod` and `go.sum`
+```text
+Usage:  rrt branch rename [OPTIONS] <description>
 
-## Hybrid repositories
+Rename the current branch using conventional branch naming rules.
 
-For repos with multiple release surfaces, use `version_groups` and select the
-group explicitly with `--group` when needed.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <description>  New branch description words (replaces the current description).
 
-```toml
-[tool.rrt]
-default_group = "python"
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --type TYPE    New conventional commit type (e.g. feat, fix, build).
+  --scope SCOPE  New scope to prefix the slug with.
+  --no-scope     Remove the scope from the new branch name (requires description words).
+  --dry-run      Preview the rename without touching git.
 
-[[tool.rrt.version_groups]]
-name = "python"
-release_branch = "release/python/v{version}"
-generated_files = ["uv.lock"]
-version_source = "pyproject.toml"
-
-[[tool.rrt.version_groups.version_targets]]
-path = "pyproject.toml"
-kind = "pep621"
-
-[[tool.rrt.version_groups]]
-name = "web"
-release_branch = "release/web/v{version}"
-generated_files = ["pnpm-lock.yaml"]
-version_source = "package.json"
-
-[[tool.rrt.version_groups.version_targets]]
-path = "package.json"
-kind = "package_json"
-ci_format = "pep440"
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt branch new feat "add parser"
+  $ rrt branch new fix "repair config loader" --scope api
+  $ rrt branch rename --type fix --scope api "fix config loader"
+  $ rrt branch rescue feat "rescue work in progress"
 ```
 
-Examples:
+## `rrt git`
 
-```bash
-rrt bump patch --group web
-rrt ci-version compute --group python
-rrt ci-version apply 1.4.0.dev1201 --group web
+### Git magic
+
+`repo-release-tools` ships a small set of opinionated Git workflows for branch
+health, commit drafting, sync, and history repair.
+
+This page is generated from `repo_release_tools.git.GIT_MAGIC_DOC`.
+This page stays workflow-oriented. For the full command surface and option
+details, see [docs/rrt-cli.md](rrt-cli.md).
+
+#### Workflow map
+
+- **Inspect** — `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
+  `check-dirty-tree`
+- **Draft commits** — `rrt git commit`, `commit-all`, `squash-local`
+- **Move and sync** — `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
+- **Branch workflows** — `rrt branch new`, `rescue`, `rename`
+
+#### What the Git helpers optimize for
+
+- compact, human-readable summaries first
+- explicit safety checks before destructive actions
+- conventional commit subjects and conventional branch names when possible
+- reuse across local CLI, hooks, and CI
+
+#### Notable behavior
+
+- `rrt git commit` infers the commit type from the current branch only when the
+  branch is a conventional `type/slug` branch.
+- Branches named `main`, `master`, `develop`, `release/v<semver>`, AI helper
+  branches, bot branches, and custom branch prefixes are treated as special
+  cases and may require `--type` for commit drafting.
+- `sync` and `move` auto-stash local changes when needed.
+- `undo-safe` and `rebootstrap` can rewrite history; `rebootstrap` also
+  requires explicit confirmation before it destroys the current repository
+  history.
+- Commands that support `--dry-run` preview git operations without changing the
+  worktree.
+
+#### Current command surface
+
+```text
+rrt git status
+rrt git diff
+rrt git log
+rrt git doctor
+rrt git sync-status
+rrt git check-dirty-tree
+rrt git commit "handle empty config"
+rrt git commit-all "snapshot parser cleanup"
+rrt git sync
+rrt git move feat/new-parser
+rrt git squash-local "ship parser cleanup"
+rrt git undo-safe --keep-staged
+rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
 ```
 
-## Pin targets — auto-sync doc/CI version pins
+#### See also
 
-`pin_targets` lets you declare files that contain version pins (e.g. GitHub Action refs, pre-commit `rev:` tags) and have `rrt bump` update them automatically alongside the main version bump.
+- [Conventional branches](branch.md)
+- [Generated CLI reference](rrt-cli.md)
 
-### Config
+```text
+Usage:  rrt git [OPTIONS] <git_command>
 
-Add entries to `pyproject.toml` (or `.rrt.toml`) using a 3-group capture pattern:
-`(prefix)(bare_semver)(suffix)` — groups 1 and 3 are kept verbatim; group 2 is replaced.
+Git workflow helpers for repository status, commit, sync, and history operations.
 
-```toml
-# Global — applies to all version groups
-[[tool.rrt.pin_targets]]
-path = "docs/github-action.md"
-pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  status            Show a compact branch and worktree status view.
+  diff              Show a compact diff using rrt glyph formatting.
+  log               Show a compact commit history view.
+  doctor            Run a compact repository health report for rrt workflows.
+  sync-status       Analyze unresolved conflicts and whether sync/rebase work is needed.
+  check-dirty-tree  Exit non-zero when the working tree is dirty. Useful in hooks and CI.
+  commit            Create a conventional commit, inferring type from the current branch.
+  commit-all        Stage all files and create a conventional commit from the branch context.
+  sync              Fetch, stash if needed, and pull the current branch safely.
+  move              Switch branches safely by stashing and restoring local changes.
+  squash-local      Squash local commits since upstream or a base ref into one commit.
+  undo-safe         Undo a commit while keeping work staged or in the working tree.
+  rebootstrap       Destroy current git history and create a fresh repository history.
 
-[[tool.rrt.pin_targets]]
-path = "docs/pre-commit.md"
-pattern = '(rev: v)(\d+\.\d+\.\d+)()'
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
 
-# Per-group — only applied when bumping that group
-[[tool.rrt.version_groups.pin_targets]]
-path = "README.md"
-pattern = '(badge/version-v)(\d+\.\d+\.\d+)(-blue)'
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git status
+  $ rrt git diff --against HEAD~1
+  $ rrt git commit --type fix "make output clearer"
+  $ rrt git sync
+  $ rrt git undo-safe
 ```
+
+### `rrt git status`
+
+```text
+Usage:  rrt git status [OPTIONS]
+
+Show the current branch, upstream, and compact typed worktree changes for the repository.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git status
+```
+
+### `rrt git diff`
+
+```text
+Usage:  rrt git diff [OPTIONS]
+
+Render a compact tracked-file diff with rrt glyphs for working-tree, staged, or ref-based changes.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --staged       Show staged changes instead of working-tree changes.
+  --against REF  Diff against a specific commit or ref.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git diff
+  $ rrt git diff --staged
+  $ rrt git diff --against HEAD~1
+```
+
+### `rrt git log`
+
+```text
+Usage:  rrt git log [OPTIONS]
+
+Show recent commits in a compact rrt log view with short SHAs, subjects, and refs.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  -n, --limit  Number of commits to show.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git log
+  $ rrt git log --limit 20
+```
+
+### `rrt git doctor`
+
+```text
+Usage:  rrt git doctor [OPTIONS]
+
+Run branch, upstream, worktree, conflict, commit-subject, and changelog checks for an rrt workflow.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --changelog-file  Changelog path used for doctor checks.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git doctor
+  $ rrt git doctor --changelog-file docs/CHANGELOG.md
+```
+
+### `rrt git sync-status`
+
+```text
+Usage:  rrt git sync-status [OPTIONS]
+
+Report merge or rebase blockers plus ahead/behind drift against the upstream branch or --base-ref.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help      Show this message and exit.
+  --base-ref REF  Ref to analyze against. Defaults to the current upstream branch.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git sync-status
+  $ rrt git sync-status --base-ref origin/main
+```
+
+### `rrt git check-dirty-tree`
+
+```text
+Usage:  rrt git check-dirty-tree [OPTIONS]
+
+Exit non-zero when the working tree is dirty and print a compact status summary for hooks or CI.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git check-dirty-tree
+```
+
+### `rrt git commit`
+
+```text
+Usage:  rrt git commit [OPTIONS] <description>
+
+Create one conventional commit from the provided description, inferring the type from the current branch when possible.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <description>  Commit description words.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --type TYPE    Explicit conventional commit type. Defaults to the current branch type.
+  --scope SCOPE  Optional commit scope.
+  --breaking     Mark the commit as breaking.
+  --dry-run      Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git commit "refresh help examples"
+  $ rrt git commit --type fix --scope cli "handle empty config"
+  $ rrt git commit --breaking "ship parser v2"
+```
+
+### `rrt git commit-all`
+
+```text
+Usage:  rrt git commit-all [OPTIONS] <description>
+
+Stage all tracked and untracked changes, then create one conventional commit from the current branch context.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <description>  Commit description words.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --type TYPE    Explicit conventional commit type. Defaults to the current branch type.
+  --scope SCOPE  Optional commit scope.
+  --breaking     Mark the commit as breaking.
+  --dry-run      Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git commit-all "refresh release metadata"
+  $ rrt git commit-all --type chore --scope deps "update lockfiles"
+```
+
+### `rrt git sync`
+
+```text
+Usage:  rrt git sync [OPTIONS]
+
+Fetch, auto-stash when needed, and pull the current branch from its upstream using rebase by default.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --merge     Use plain git pull instead of git pull --rebase.
+  --dry-run   Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git sync
+  $ rrt git sync --merge
+  $ rrt git sync --dry-run
+```
+
+### `rrt git move`
+
+```text
+Usage:  rrt git move [OPTIONS] <target>
+
+Switch to another branch, optionally creating it, while auto-stashing and restoring local changes when needed.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <target>      Target branch name.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help    Show this message and exit.
+  -b, --create  Create the target branch before switching to it.
+  --dry-run     Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git move release/v1.2.0
+  $ rrt git move -b feat/help-copy --dry-run
+```
+
+### `rrt git squash-local`
+
+```text
+Usage:  rrt git squash-local [OPTIONS] <description>
+
+Squash commits ahead of the upstream branch or --base-ref into one conventional commit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <description>   Commit description words.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help      Show this message and exit.
+  --type TYPE     Explicit conventional commit type. Defaults to the current branch type.
+  --scope SCOPE   Optional commit scope.
+  --breaking      Mark the commit as breaking.
+  --dry-run       Preview without changing git.
+  --base-ref REF  Base ref to squash against. Defaults to the current upstream branch.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git squash-local "ship parser"
+  $ rrt git squash-local --base-ref origin/main --type fix "repair sync handling"
+```
+
+### `rrt git undo-safe`
+
+```text
+Usage:  rrt git undo-safe [OPTIONS]
+
+Reset to HEAD~1 or another target while keeping changes staged (--keep-staged) or in the working tree.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --target REF   Ref to reset to. Defaults to HEAD~1.
+  --keep-staged  Use git reset --soft so changes stay staged.
+  --dry-run      Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git undo-safe
+  $ rrt git undo-safe --keep-staged
+  $ rrt git undo-safe --target HEAD~2 --dry-run
+```
+
+### `rrt git rebootstrap`
+
+```text
+Usage:  rrt git rebootstrap [OPTIONS]
+
+Back up the current .git directory, reinitialize the repository, and create a fresh history snapshot or empty bootstrap commit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help                          Show this message and exit.
+  --yes-i-know-this-destroys-history  Required confirmation for the destructive history reset.
+  --allow-remote                      Allow rebootstrap even when remotes are configured.
+  --hard-init                         Recreate .git and make only one empty initial commit, leaving files untracked.
+  --branch BRANCH                     Initial branch name for the new repository. Defaults to the current branch.
+  --message                           Commit message for the new initial commit.
+  --empty-first                       Create an empty bootstrap commit before adding files.
+  --empty-message                     Commit message for the optional empty bootstrap commit.
+  --dry-run                           Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
+  $ rrt git rebootstrap --yes-i-know-this-destroys-history --empty-first
+  $ rrt git rebootstrap --yes-i-know-this-destroys-history --hard-init --branch main
+```
+
+## `rrt init`
+
+Initialize repo-release-tools configuration for a repository.
+
+### Overview
+
+`rrt init` writes a starter configuration for the current repository. It can
+either create a standalone `.rrt.toml` file or merge an rrt section into an
+existing project manifest.
+
+The command is designed to be safe by default: it refuses to overwrite
+existing config unless `--force` is used, and `--dry-run` shows the exact
+output without touching files.
+
+### Target surfaces
+
+- `.rrt.toml` (default)
+- `pyproject.toml` -> `[tool.rrt]`
+- `Cargo.toml` -> `[package.metadata.rrt]`
+- `package.json` -> `"rrt"` key
+- `.rrt.toml` with Go-oriented recommendations (`--target go`)
 
 ### Behavior
 
-- Runs after version string updates, before changelog and git commit.
-- Files are staged alongside the main version files.
-- If a pattern matches multiple lines, all occurrences are updated.
-- A warning is printed when the pattern produces no match.
-- Already-current pins are left unchanged and a status line is printed.
+- Detects an existing explicit config discovered by repo-release-tools and
+  warns when a new `.rrt.toml` would lose precedence.
+- Refuses to append duplicate rrt sections to TOML manifests.
+- Validates that `package.json` contains a top-level object before merging.
+- Prints a rendered preview in dry-run mode.
 
-### Skip flag
+### Examples
 
-```bash
-rrt bump minor --no-pin-sync   # skip pin_targets for this run
+- `rrt init`
+- `rrt init --dry-run`
+- `rrt init --target pyproject`
+- `rrt init --target node --force`
+- `rrt init --target go`
+
+### Caveats
+
+- `--target pyproject` and `--target cargo` append to an existing file only;
+  they do not create missing manifests.
+- `--target node` replaces the top-level `"rrt"` key in `package.json`.
+- `--target go` keeps the `.rrt.toml` filename but uses Go-oriented
+  recommendations.
+
+```text
+Usage:  rrt init [OPTIONS]
+
+Generate a starter rrt configuration for the current repository or manifest.
+
+By default this writes .rrt.toml. Use --target to append or merge equivalent configuration into pyproject.toml, Cargo.toml, package.json, or a Go-oriented .rrt.toml template.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --dry-run        Preview without writing files.
+  --force          Overwrite an existing .rrt.toml or package.json "rrt" key when writing those targets.
+  --target FORMAT  Where to write the rrt configuration. rrt-toml (default): write .rrt.toml; pyproject: append [tool.rrt] to pyproject.toml; cargo: append [package.metadata.rrt] to Cargo.toml; node: merge or replace the "rrt" key in package.json; go: write .rrt.toml with the recommended Go template.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt init --dry-run
+  $ rrt init --target pyproject
+  $ rrt init --target node --force
+  $ rrt init --target go
 ```
 
-## Health checks — rrt doctor
+## `rrt skill`
 
-`rrt doctor` verifies that the current `[tool.rrt]` configuration is internally
-consistent and all referenced files are reachable:
+Install the bundled repo-release-tools agent skill.
 
-```bash
-rrt doctor
+### Overview
+
+`rrt skill` manages installation of the packaged `repo-release-tools` skill
+into tool-specific skill directories. The only implemented subcommand is
+`install`.
+
+### Target surfaces
+
+The install command can write to local or global skill roots for:
+
+- Claude: `.claude/skills`
+- Codex: `.codex/skills`
+- Copilot: `.copilot/skills`
+
+Each target receives a directory named after the bundled skill, containing
+`SKILL.md`.
+
+### Behavior
+
+- Accepts one or more `--target` values; duplicates are ignored after first use.
+- Resolves local targets relative to the current working directory and global
+  targets relative to the home directory.
+- Refuses to overwrite an existing installation unless `--force` is provided.
+- Supports `--dry-run` previews that show the resolved destination paths
+  without writing files.
+
+### Examples
+
+- `rrt skill install --target copilot-local`
+- `rrt skill install --target claude-local --target codex-local`
+- `rrt skill install --target copilot-global --force --dry-run`
+
+### Caveats
+
+- `rrt skill` requires a subcommand; use `rrt skill install ...`.
+- Without `--target`, the command prints available destinations in dry-run
+  mode and otherwise fails.
+- Existing symlinks, files, or directories at the destination are replaced
+  only when `--force` is used.
+
+```text
+Usage:  rrt skill [OPTIONS] <skill_command>
+
+Install the bundled repo-release-tools agent skill.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  install     Install the bundled repo-release-tools skill into agent skill directories.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt skill install --target copilot-local
+  $ rrt skill install --target claude-local --target codex-local
 ```
 
-It produces a tree report — green `✔` for passing checks, red `✖` for failures.
+### `rrt skill install`
 
-### What it checks
+```text
+Usage:  rrt skill install [OPTIONS]
 
-| Check | Pass condition | Failure condition |
-|---|---|---|
-| Version target files | File exists at the declared path | File not found → exits 1 |
-| Version target readability | Version string can be read from the file | Unreadable → warning only, exits 0 |
-| Pin target files | File exists at the declared path | File not found → exits 1 |
-| Pin target patterns | Pattern compiles and matches in the file | No match → warning only, exits 0 |
-| Changelog file | File exists at `changelog_file` | File not found → exits 1 |
+Install the bundled repo-release-tools skill into one or more local or global agent skill directories.
 
-### Exit behavior
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-- Exits `0` when all checks pass.
-- Exits `1` when any check fails. Failing checks print a message under `✖`.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --target DEST  Install target. Repeat to install into multiple locations: copilot-local, claude-local, codex-local, copilot-global, claude-global, codex-global.
+  --dry-run      Preview without writing files.
+  --force        Overwrite an existing installed repo-release-tools skill.
 
-### Usage in CI
-
-```yaml
-- uses: Anselmoo/repo-release-tools@v0.1.10
-  with:
-    check-doctor: "true"
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt skill install --target copilot-local
+  $ rrt skill install --target claude-local --target codex-local
+  $ rrt skill install --target copilot-global --force --dry-run
 ```
-
-Or run directly in a workflow step:
-
-```bash
-uvx --from repo-release-tools rrt doctor
-```
-
-Run `rrt doctor` before `rrt bump` to confirm targets are set up correctly.

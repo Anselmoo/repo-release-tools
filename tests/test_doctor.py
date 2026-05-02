@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 from pathlib import Path
 
 import pytest
 
 from repo_release_tools.commands import doctor
 from repo_release_tools.config import (
+    EolConfig,
+    EolOverride,
     PinTarget,
     RrtConfig,
     VersionGroup,
     VersionTarget,
 )
+from repo_release_tools.eol import EolRecord
 
 _ARGS = argparse.Namespace()
 
@@ -26,6 +30,7 @@ def _make_config(
     autodetected: bool = False,
     pin_targets: list[PinTarget] | None = None,
     global_pins: list[PinTarget] | None = None,
+    eol: EolConfig | None = None,
 ) -> RrtConfig:
     target = VersionTarget(
         path=tmp_path / "src" / "pkg" / "__init__.py",
@@ -47,6 +52,7 @@ def _make_config(
         default_group_name="default",
         autodetected=autodetected,
         global_pin_targets=global_pins or [],
+        eol=eol,
     )
 
 
@@ -367,3 +373,239 @@ def test_doctor_global_pins_deduplicated(
     out = capsys.readouterr().out
     # Pin should appear exactly once in tree output
     assert out.count("page.md") == 1
+
+
+# ---------------------------------------------------------------------------
+# EOL section of cmd_doctor
+# ---------------------------------------------------------------------------
+
+_EOL_CFG = EolConfig(
+    languages=("python",),
+    warn_days=180,
+    error_days=0,
+    fetch_live=False,
+    allow_eol=False,
+    overrides=(),
+)
+
+_EOL_RECORD_SUPPORTED = EolRecord(
+    cycle="3.12",
+    release_date=None,
+    eol_date=None,
+    is_eol=False,
+    days_until_eol=None,
+)
+
+
+def _setup_eol_doctor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    eol: EolConfig = _EOL_CFG,
+    host_ver: str | None = "3.12.4",
+    proj_ver: str | None = "3.12.0",
+    host_status: str = "ok",
+    proj_status: str = "ok",
+    record: EolRecord | None = None,
+) -> None:
+    """Set up a doctor run with EOL config and monkeypatched detectors."""
+    conf = _make_config(tmp_path, eol=eol)
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr(doctor, "get_eol_records", lambda *a, **kw: [])
+    monkeypatch.setattr(doctor, "detect_host_version", lambda lang: host_ver)
+    monkeypatch.setattr(doctor, "detect_project_minimum", lambda lang, root: proj_ver)
+    _rec = record or _EOL_RECORD_SUPPORTED
+    monkeypatch.setattr(
+        doctor,
+        "check_eol_status",
+        lambda ver, records, **kw: (host_status if ver == host_ver else proj_status, _rec),
+    )
+
+
+def test_doctor_eol_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When config.eol is None, no EOL section is shown."""
+    conf = _make_config(tmp_path, eol=None)
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert "Runtime EOL" not in capsys.readouterr().out
+
+
+def test_doctor_eol_all_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Both host and project checks pass → 'All EOL checks passed.' printed."""
+    _setup_eol_doctor(tmp_path, monkeypatch)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Runtime EOL" in out
+    assert "All EOL checks passed." in out
+
+
+def test_doctor_eol_host_not_detected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When host version is None a warning is printed but rc stays 0."""
+    _setup_eol_doctor(tmp_path, monkeypatch, host_ver=None)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert "not detected" in capsys.readouterr().out
+
+
+def test_doctor_eol_project_not_detected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When project minimum is None a warning is printed but rc stays 0."""
+    _setup_eol_doctor(tmp_path, monkeypatch, proj_ver=None)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert "not detected" in capsys.readouterr().out
+
+
+def test_doctor_eol_warn_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """warn status does not set all_ok=False → rc == 0."""
+    _setup_eol_doctor(tmp_path, monkeypatch, host_status="warn", proj_status="warn")
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+
+
+def test_doctor_eol_unknown_status_is_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """unknown status stays non-fatal and does not fail doctor."""
+    _setup_eol_doctor(tmp_path, monkeypatch, host_status="unknown", proj_status="unknown")
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "One or more EOL checks failed." not in out
+    assert "All EOL checks passed." in out
+
+
+def test_doctor_eol_error_status_returns_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """error status with allow_eol=False → rc == 1."""
+    _setup_eol_doctor(tmp_path, monkeypatch, host_status="error", proj_status="error")
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    assert "One or more EOL checks failed." in capsys.readouterr().out
+
+
+def test_doctor_eol_error_allow_eol_suppresses_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """error status with allow_eol=True does NOT set all_ok=False."""
+    eol = EolConfig(
+        languages=("python",),
+        warn_days=180,
+        error_days=0,
+        fetch_live=False,
+        allow_eol=True,
+        overrides=(),
+    )
+    _setup_eol_doctor(tmp_path, monkeypatch, eol=eol, host_status="error", proj_status="error")
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+
+
+def test_doctor_eol_detail_is_eol(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """record.is_eol=True → '(EOL)' appears in output."""
+    record = EolRecord(
+        cycle="3.10",
+        release_date=None,
+        eol_date=None,
+        is_eol=True,
+        days_until_eol=None,
+    )
+    _setup_eol_doctor(tmp_path, monkeypatch, record=record)
+
+    doctor.cmd_doctor(_ARGS)
+
+    assert "(EOL)" in capsys.readouterr().out
+
+
+def test_doctor_eol_detail_eol_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """record.eol_date set → date appears in output."""
+    eol_date = date(2028, 10, 31)
+    record = EolRecord(
+        cycle="3.12",
+        release_date=None,
+        eol_date=eol_date,
+        is_eol=False,
+        days_until_eol=900,
+    )
+    _setup_eol_doctor(tmp_path, monkeypatch, record=record)
+
+    doctor.cmd_doctor(_ARGS)
+
+    assert "2028-10-31" in capsys.readouterr().out
+
+
+def test_doctor_eol_with_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """EolConfig with overrides is accepted; doctor runs without error."""
+    eol = EolConfig(
+        languages=("python",),
+        warn_days=180,
+        error_days=0,
+        fetch_live=False,
+        allow_eol=False,
+        overrides=(EolOverride(language="python", cycle="3.12", eol="2026-12-31"),),
+    )
+    _setup_eol_doctor(tmp_path, monkeypatch, eol=eol)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+
+
+def test_doctor_eol_override_invalid_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Override with an invalid ISO date string falls back gracefully (override_eol=None)."""
+    eol = EolConfig(
+        languages=("python",),
+        warn_days=180,
+        error_days=0,
+        fetch_live=False,
+        allow_eol=False,
+        overrides=(EolOverride(language="python", cycle="3.12", eol="not-a-date"),),
+    )
+    _setup_eol_doctor(tmp_path, monkeypatch, eol=eol)
+
+    # Must not raise; bad date silently becomes None
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
