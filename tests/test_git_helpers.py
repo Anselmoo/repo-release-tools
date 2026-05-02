@@ -229,6 +229,20 @@ def test_status_porcelain_preserves_leading_spaces(
     assert lines == [" M src/repo_release_tools/cli.py", "?? docs/git.md"]
 
 
+def test_status_porcelain_can_include_branch_header(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def fake_run(
+        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert cmd == ["git", "status", "--short", "--branch"]
+        return subprocess.CompletedProcess(cmd, 0, stdout="## feat/add-parser\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert git.status_porcelain(tmp_path, include_branch=True) == ["## feat/add-parser"]
+
+
 def test_status_porcelain_raises_on_git_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -272,3 +286,15 @@ def test_in_progress_operation_detects_rebase_and_merge(
     (tmp_path / ".git" / "MERGE_HEAD").write_text("abc123\n", encoding="utf-8")
 
     assert git.in_progress_operation(tmp_path) == "merge"
+
+
+def test_in_progress_operation_returns_none_without_git_dir_or_markers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(git, "git_dir", lambda cwd: None)
+    assert git.in_progress_operation(tmp_path) is None
+
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    monkeypatch.setattr(git, "git_dir", lambda cwd: git_dir)
+    assert git.in_progress_operation(tmp_path) is None

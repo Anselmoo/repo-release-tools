@@ -904,6 +904,12 @@ def test_bump_help_column_alignment_with_color(
             )
 
 
+def test_help_formatter_decolor_strips_ansi_sequences() -> None:
+    formatter = cli.RrtHelpFormatter("rrt")
+
+    assert cli.RrtHelpFormatter._decolor(formatter, "\x1b[31mrrt\x1b[0m") == "rrt"
+
+
 def test_git_help_has_no_enum_blob(capsys: pytest.CaptureFixture[str]) -> None:
     parser = cli.build_parser()
 

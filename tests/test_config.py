@@ -13,6 +13,7 @@ from repo_release_tools.config import (
     autodetect_config,
     find_changelog_file,
     find_config_file,
+    find_explicit_config_file,
     format_autodetected_config_notice,
     load_config,
     load_extra_branch_types,
@@ -105,6 +106,18 @@ def test_find_config_file_reports_supported_locations(tmp_path: Path) -> None:
         match="pyproject.toml, package.json, Cargo.toml, .rrt.toml, .config/rrt.toml",
     ):
         find_config_file(tmp_path)
+
+
+def test_find_explicit_config_file_returns_none_when_candidates_lack_tool_rrt(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'example'\n", encoding="utf-8")
+    (tmp_path / ".rrt.toml").write_text("[tool.other]\nvalue = 1\n", encoding="utf-8")
+    config_dir = tmp_path / ".config"
+    config_dir.mkdir()
+    (config_dir / "rrt.toml").write_text("[tool.something]\nvalue = 2\n", encoding="utf-8")
+
+    assert find_explicit_config_file(tmp_path) is None
 
 
 @pytest.mark.parametrize(
@@ -1251,10 +1264,38 @@ def test_load_config_eol_allow_eol_not_bool(tmp_path: Path) -> None:
         load_config(tmp_path)
 
 
+def test_load_config_eol_section_must_be_table(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+eol = "bad"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"tool\.rrt\.eol must be a table"):
+        load_config(tmp_path)
+
+
 def test_load_config_eol_overrides_not_list(tmp_path: Path) -> None:
     """Non-list overrides raises ValueError."""
     _write_eol_cfg(tmp_path, '\n[tool.rrt.eol]\noverrides = "bad"\n')
     with pytest.raises(ValueError, match="overrides must be an array"):
+        load_config(tmp_path)
+
+
+def test_load_config_eol_override_entry_must_be_table(tmp_path: Path) -> None:
+    _write_eol_cfg(tmp_path, '\n[tool.rrt.eol]\noverrides = ["bad"]\n')
+
+    with pytest.raises(ValueError, match="Each tool.rrt.eol.overrides entry must be a table"):
         load_config(tmp_path)
 
 

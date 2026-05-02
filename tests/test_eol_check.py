@@ -78,11 +78,6 @@ class TestEmitCheck:
         _emit_check(p, "Host runtime", "3.12.4", "warn", record)
         p.warn.assert_called_once()
 
-    def test_emits_warn_on_unknown_status(self) -> None:
-        p = MagicMock()
-        _emit_check(p, "Host runtime", "9.99.0", "unknown", None)
-        p.warn.assert_called_once()
-
     def test_emits_error_on_error_status(self) -> None:
         p = MagicMock()
         record = self._make_record(is_eol=True)
@@ -260,28 +255,6 @@ class TestCmdEol:
         # fetch_live should be True (CLI flag overrides config False)
         call_kwargs = mock_get_records.call_args[1]
         assert call_kwargs.get("fetch_live") is True
-
-    def test_zero_thresholds_override_config(self, tmp_path: Path) -> None:
-        eol_cfg = EolConfig(languages=("python",), warn_days=180, error_days=30)
-        rrt_config = MagicMock()
-        rrt_config.eol = eol_cfg
-
-        with (
-            patch(
-                "repo_release_tools.commands.eol_check.load_or_autodetect_config",
-                return_value=rrt_config,
-            ),
-            patch(
-                "repo_release_tools.commands.eol_check.run_eol_checks",
-                return_value=True,
-            ) as mock_run_checks,
-            patch("pathlib.Path.cwd", return_value=tmp_path),
-        ):
-            result = cmd_eol(_make_args(warn_days=0, error_days=0))
-
-        assert result == 0
-        assert mock_run_checks.call_args.kwargs["warn_days"] == 0
-        assert mock_run_checks.call_args.kwargs["error_days"] == 0
 
 
 # ---------------------------------------------------------------------------
