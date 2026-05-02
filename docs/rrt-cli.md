@@ -399,6 +399,13 @@ rrt doctor
 - EOL checks are only shown when EOL policy is configured.
 - A warning does not fail the command; only error-level findings do.
 
+### Related docs
+
+- [Runtime EOL tracking](eol.md)
+- [rrt eol (CLI)](rrt-cli.md)
+- [pre-commit / lefthook](pre-commit.md)
+- [GitHub Action](github-action.md)
+
 ```text
 Usage:  rrt doctor [OPTIONS]
 

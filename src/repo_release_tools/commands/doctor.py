@@ -57,6 +57,13 @@ rrt doctor
   visible file in the current directory.
 - EOL checks are only shown when EOL policy is configured.
 - A warning does not fail the command; only error-level findings do.
+
+## Related docs
+
+- [Runtime EOL tracking](eol.md)
+- [rrt eol (CLI)](rrt-cli.md)
+- [pre-commit / lefthook](pre-commit.md)
+- [GitHub Action](github-action.md)
 """
 
 from __future__ import annotations
@@ -86,6 +93,9 @@ from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.version_targets import read_version_string
 
 DOCTOR_EPILOG = "  $ rrt doctor"
+
+# Docs live in the module docstring above — consistent with bump.py / ci_version.py.
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("doctor", __doc__ or ""),)
 
 
 def _check_version_target(target: VersionTarget, root: Path) -> tuple[str, bool, str]:

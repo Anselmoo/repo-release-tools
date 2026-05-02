@@ -16,9 +16,12 @@ from typing import Protocol, cast
 import repo_release_tools as rrt_package
 from repo_release_tools import action as action_module
 from repo_release_tools import cli
+from repo_release_tools import eol as eol_module
 from repo_release_tools import git as git_helpers
 from repo_release_tools import hooks as hooks_module
 from repo_release_tools.commands import branch as branch_module
+from repo_release_tools.commands import doctor as doctor_module
+from repo_release_tools.commands import eol_check as eol_check_module
 from repo_release_tools.commands import skill as skill_module
 
 
@@ -113,7 +116,8 @@ def _collect_source_owned_topic_docs(modules: Sequence[object]) -> dict[str, str
 
 
 SOURCE_OWNED_TOPIC_DOCS = _collect_source_owned_topic_docs(
-    (rrt_package, branch_module, git_helpers, hooks_module, action_module, skill_module)
+    (rrt_package, branch_module, git_helpers, hooks_module, action_module, skill_module,
+     doctor_module, eol_module)
 )
 
 
@@ -124,6 +128,8 @@ def _render_topic_doc(slug: str) -> str:
 COMMAND_DOC_SOURCES: dict[str, CommandDocSource] = {
     "branch": CommandDocSource(render=lambda: _render_topic_doc("semantic-branches")),
     "git": CommandDocSource(render=lambda: _render_topic_doc("git-magic")),
+    "doctor": CommandDocSource(render=lambda: _render_topic_doc("doctor")),
+    "eol": CommandDocSource(render=lambda: inspect.getdoc(eol_check_module) or ""),
 }
 
 
@@ -345,6 +351,8 @@ TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
     "github-action": Path("docs/github-action.md"),
     "skill": Path("docs/skill.md"),
     "agent-instructions": Path("docs/agent-instructions.md"),
+    "doctor": Path("docs/doctor.md"),
+    "eol": Path("docs/eol.md"),
 }
 
 
