@@ -90,6 +90,16 @@ pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 path = "README.md"
 pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
 
+[tool.rrt.eol]
+languages = ["python"]
+warn_days = 180
+error_days = 0
+
+[[tool.rrt.eol.overrides]]
+language = "python"
+cycle = "3.12"
+eol = "2026-12-31"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

@@ -530,3 +530,123 @@ class TestDetectProjectMinimum:
     def test_unknown_language_returns_none(self, tmp_path: Path) -> None:
         v = detect_project_minimum("cobol", tmp_path)
         assert v is None
+
+
+# ---------------------------------------------------------------------------
+# EolRecord.from_api_dict — bad date string branches
+# ---------------------------------------------------------------------------
+
+
+class TestEolRecordBadDates:
+    def test_invalid_release_date_string_yields_none(self) -> None:
+        """Bad releaseDate string → release_date is None (lines 219-220)."""
+        entry: dict[str, object] = {
+            "cycle": "3.12",
+            "releaseDate": "not-a-date",
+            "eol": False,
+        }
+        record = EolRecord.from_api_dict(entry, today=date(2025, 6, 1))
+        assert record.release_date is None
+
+    def test_invalid_eol_date_string_yields_none(self) -> None:
+        """Bad eol string → eol_date is None (lines 233-234)."""
+        entry: dict[str, object] = {
+            "cycle": "3.12",
+            "releaseDate": "2022-10-24",
+            "eol": "bad-date-str",
+        }
+        record = EolRecord.from_api_dict(entry, today=date(2025, 6, 1))
+        assert record.eol_date is None
+
+
+# ---------------------------------------------------------------------------
+# _rust_lag_position — cycle not in any record
+# ---------------------------------------------------------------------------
+
+
+class TestRustLagUnknownCycle:
+    def test_unknown_cycle_returns_len(self) -> None:
+        """cycle not in any record → returns len(records) (line 359)."""
+        today = date(2025, 6, 1)
+        entries: list[dict[str, object]] = [
+            {"cycle": "1.95", "eol": False, "releaseDate": "2026-04-16"}
+        ]
+        records = [EolRecord.from_api_dict(e, today=today) for e in entries]
+        lag = _rust_lag_position("9.99.0", records)
+        assert lag == len(records)
+
+
+# ---------------------------------------------------------------------------
+# detect_host_version — unknown language branch
+# ---------------------------------------------------------------------------
+
+
+def test_detect_host_version_unknown_language_returns_none() -> None:
+    """Unknown language slug → _extract_version returns None (line 487)."""
+    result = _extract_version("some output", "cobol")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# detect_project_minimum — exception fallback branches
+# ---------------------------------------------------------------------------
+
+
+def test_python_minimum_toml_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """OSError reading pyproject.toml → _detect_python_minimum returns None (lines 533-534)."""
+    import tomllib
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\npython_requires = ">=3.12"\n', encoding="utf-8"
+    )
+
+    def _raise(_f: object) -> None:
+        raise OSError("disk error")
+
+    monkeypatch.setattr(tomllib, "load", _raise)
+    result = detect_project_minimum("python", tmp_path)
+    assert result is None
+
+
+def test_go_minimum_oserror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """OSError reading go.mod → _detect_go_minimum returns None (lines 546-547)."""
+    (tmp_path / "go.mod").write_text("module example.com/foo\n\ngo 1.22\n", encoding="utf-8")
+
+    from pathlib import Path as _Path
+    from unittest.mock import patch
+
+    with patch.object(_Path, "read_text", side_effect=OSError("err")):
+        result = detect_project_minimum("go", tmp_path)
+    assert result is None
+
+
+def test_node_minimum_invalid_json(tmp_path: Path) -> None:
+    """Invalid JSON in package.json → _detect_node_minimum returns None (lines 562-563)."""
+    (tmp_path / "package.json").write_text("{not valid json}", encoding="utf-8")
+    result = detect_project_minimum("nodejs", tmp_path)
+    assert result is None
+
+
+def test_rust_minimum_non_string_rust_version(tmp_path: Path) -> None:
+    """Integer rust-version in Cargo.toml → _detect_rust_minimum returns None (line 578)."""
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "x"\nrust-version = 185\n', encoding="utf-8"
+    )
+    result = detect_project_minimum("rust", tmp_path)
+    assert result is None
+
+
+def test_rust_minimum_toml_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """OSError reading Cargo.toml → _detect_rust_minimum returns None (lines 581-582)."""
+    import tomllib
+
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "x"\nrust-version = "1.85"\n', encoding="utf-8"
+    )
+
+    def _raise(_f: object) -> None:
+        raise OSError("disk error")
+
+    monkeypatch.setattr(tomllib, "load", _raise)
+    result = detect_project_minimum("rust", tmp_path)
+    assert result is None

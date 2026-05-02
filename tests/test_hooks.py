@@ -1481,3 +1481,9 @@ def test_main_doctor_dispatches_to_cmd_doctor(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(hooks, "cmd_doctor", lambda parsed: 7)
 
     assert hooks.main(["doctor"]) == 7
+
+
+def test_main_check_eol_dispatches_to_cmd_eol_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hooks, "cmd_eol_check", lambda parsed: 0)
+
+    assert hooks.main(["check-eol"]) == 0

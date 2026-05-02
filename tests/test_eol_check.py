@@ -10,8 +10,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from repo_release_tools.commands.eol_check import _emit_check, _status_label, cmd_eol
-from repo_release_tools.config import EolConfig
+from repo_release_tools.commands.eol_check import (
+    _emit_check,
+    _override_for,
+    _status_label,
+    cmd_eol,
+    run_eol_checks,
+)
+from repo_release_tools.config import EolConfig, EolOverride
 from repo_release_tools.eol import EolRecord, EolStatus
 
 # ---------------------------------------------------------------------------
@@ -249,3 +255,153 @@ class TestCmdEol:
         # fetch_live should be True (CLI flag overrides config False)
         call_kwargs = mock_get_records.call_args[1]
         assert call_kwargs.get("fetch_live") is True
+
+
+# ---------------------------------------------------------------------------
+# _override_for
+# ---------------------------------------------------------------------------
+
+
+class TestOverrideFor:
+    def test_no_parseable_cycle_returns_none(self) -> None:
+        """Version string that yields no cycle → None (line 107)."""
+        result = _override_for("python", "not-a-version", ())
+        assert result is None
+
+    def test_matching_override_returns_date(self) -> None:
+        """Matching language+cycle override → parsed date (lines 110-114)."""
+        ov = EolOverride(language="python", cycle="3.12", eol="2026-12-31")
+        result = _override_for("python", "3.12.4", (ov,))
+
+        assert result == date(2026, 12, 31)
+
+    def test_case_insensitive_language_match(self) -> None:
+        """Language comparison is case-insensitive."""
+        ov = EolOverride(language="Python", cycle="3.12", eol="2026-12-31")
+        result = _override_for("python", "3.12.4", (ov,))
+        assert result is not None
+
+    def test_no_matching_override_returns_none(self) -> None:
+        """No matching entry → None."""
+        ov = EolOverride(language="python", cycle="3.11", eol="2024-10-31")
+        result = _override_for("python", "3.12.4", (ov,))
+        assert result is None
+
+    def test_invalid_date_in_override_returns_none(self) -> None:
+        """Matching override with invalid ISO date → ValueError caught, returns None (lines 113-114)."""
+        ov = EolOverride(language="python", cycle="3.12", eol="not-a-date")
+        result = _override_for("python", "3.12.4", (ov,))
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _emit_check — days_until_eol branch
+# ---------------------------------------------------------------------------
+
+
+def test_emit_check_days_until_eol_detail() -> None:
+    """When record has days_until_eol and no eol_date, detail shows '(EOL in Nd)' (line 148)."""
+    p = MagicMock()
+    record = EolRecord(
+        cycle="3.12",
+        release_date=None,
+        eol_date=None,  # no eol_date → falls through to days_until_eol branch
+        is_eol=False,
+        days_until_eol=45,
+    )
+    _emit_check(p, "Host runtime", "3.12.4", "warn", record)
+    call_args = p.warn.call_args[0][0]
+    assert "(EOL in 45d)" in call_args
+
+
+# ---------------------------------------------------------------------------
+# run_eol_checks — host not detected + project error branches
+# ---------------------------------------------------------------------------
+
+
+def test_run_eol_checks_host_not_detected(tmp_path: Path) -> None:
+    """When detect_host_version returns None, host_status is 'unknown' (line 196)."""
+    p = MagicMock()
+    with (
+        patch("repo_release_tools.commands.eol_check.detect_host_version", return_value=None),
+        patch(
+            "repo_release_tools.commands.eol_check.detect_project_minimum",
+            return_value="3.12.0",
+        ),
+        patch("repo_release_tools.commands.eol_check.get_eol_records", return_value=[]),
+    ):
+        all_ok = run_eol_checks(
+            languages=("python",),
+            root=tmp_path,
+            warn_days=180,
+            error_days=0,
+            fetch_live=False,
+            allow_eol=False,
+            overrides=(),
+            p=p,
+        )
+    # Host not detected → warn called; all_ok depends on project status
+    assert all_ok  # project is ok (no records → "unknown" but not "error")
+
+
+def test_run_eol_checks_project_eol_error(tmp_path: Path) -> None:
+    """When project status is 'error', all_ok becomes False (line 219)."""
+    p = MagicMock()
+    eol_record = EolRecord(
+        cycle="3.10",
+        release_date=None,
+        eol_date=date(2023, 10, 1),
+        is_eol=True,
+        days_until_eol=None,
+    )
+    with (
+        patch(
+            "repo_release_tools.commands.eol_check.detect_host_version",
+            return_value="3.12.4",
+        ),
+        patch(
+            "repo_release_tools.commands.eol_check.detect_project_minimum",
+            return_value="3.10.0",
+        ),
+        patch(
+            "repo_release_tools.commands.eol_check.get_eol_records",
+            return_value=[eol_record],
+        ),
+    ):
+        all_ok = run_eol_checks(
+            languages=("python",),
+            root=tmp_path,
+            warn_days=180,
+            error_days=0,
+            fetch_live=False,
+            allow_eol=False,
+            overrides=(),
+            p=p,
+        )
+    assert not all_ok
+
+
+# ---------------------------------------------------------------------------
+# cmd_eol — allow_eol returns 0 even when checks fail (lines 280-281)
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_eol_allow_eol_with_failures_returns_0(tmp_path: Path) -> None:
+    """allow_eol=True: even with all_ok=False, cmd_eol returns 0 (lines 280-281)."""
+    eol_cfg = EolConfig(languages=("python",), warn_days=180, error_days=0, allow_eol=True)
+    rrt_config = MagicMock()
+    rrt_config.eol = eol_cfg
+
+    with (
+        patch(
+            "repo_release_tools.commands.eol_check.load_or_autodetect_config",
+            return_value=rrt_config,
+        ),
+        patch(
+            "repo_release_tools.commands.eol_check.run_eol_checks",
+            return_value=False,
+        ),
+        patch("pathlib.Path.cwd", return_value=tmp_path),
+    ):
+        result = cmd_eol(_make_args(allow_eol=True))
+    assert result == 0
