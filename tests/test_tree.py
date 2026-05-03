@@ -736,3 +736,81 @@ def test_build_entries_relative_to_repo_valueerror(
     )
 
     assert isinstance(result, list)
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for remaining uncovered lines
+# ---------------------------------------------------------------------------
+
+
+def test_batch_ignored_empty_list_returns_empty_set(tmp_path: Path) -> None:
+    """Line 222: _batch_ignored_by_git returns set() immediately for empty input."""
+    result = tree._batch_ignored_by_git([], repo_root=tmp_path)
+    assert result == set()
+
+
+def test_batch_ignored_returns_nonempty_set_from_stdout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line 239: _batch_ignored_by_git returns the set of ignored paths from git stdout."""
+    import subprocess as _sp
+
+    def fake_run(cmd: object, **kw: object) -> SimpleNamespace:
+        return SimpleNamespace(returncode=0, stdout="dist/\nbuild/\n", stderr="")
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+    result = tree._batch_ignored_by_git(["dist/", "build/"], repo_root=tmp_path)
+    assert "dist/" in result
+    assert "build/" in result
+
+
+def test_render_rich_tree_recursive_children(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Line 313: _render_rich_tree's build() recurses for nodes whose children also have children."""
+    fake_console_mod, fake_tree_mod = _make_fake_rich_modules()
+
+    monkeypatch.setattr(tree, "IS_LEGACY_TERMINAL", False)
+    monkeypatch.setitem(sys.modules, "rich.console", fake_console_mod)
+    monkeypatch.setitem(sys.modules, "rich.tree", fake_tree_mod)
+
+    # 3-level depth: src/ → utils/ → helper.py — triggers recursive build() at line 313
+    nested: tree.TreeEntry = ("helper.py", False, None)
+    utils: tree.TreeEntry = ("utils", True, [nested])
+    src: tree.TreeEntry = ("src", True, [utils])
+    entries: list[tree.TreeEntry] = [src]
+
+    result = tree._render_rich_tree(entries)
+    assert isinstance(result, str)
+
+
+def test_build_entries_rel_text_set_to_none_when_equal_repo_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line 378: rel_text is set to None when child.relative_to(repo_root) == Path('.')."""
+    # Create a child directory that IS the repo_root so relative_to returns Path(".")
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "file.txt").write_text("x", encoding="utf-8")
+
+    # _build_entries is called on tmp_path; child 'repo' relative to repo_root == "."
+    import subprocess as _sp
+
+    def fake_run(cmd: object, **kw: object) -> SimpleNamespace:
+        return SimpleNamespace(returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(_sp, "run", fake_run)
+
+    warnings: list[str] = []
+    result = tree._build_entries(
+        tmp_path,
+        root=tmp_path,
+        repo_root=repo_root,
+        depth=1,
+        max_depth=None,
+        dirs_only=False,
+        show_hidden=False,
+        ignore_cache={},
+        warnings=warnings,
+    )
+    assert isinstance(result, list)
+    # 'repo' entry must exist with rel_text=None so it bypasses the ignore cache check
+    assert any(name == "repo" for name, _is_dir, _children in result)

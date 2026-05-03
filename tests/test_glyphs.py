@@ -172,3 +172,110 @@ def test_bold_box_has_bold_corners() -> None:
     bot_line = rendered.splitlines()[2]
     assert top_line.startswith("┏") or top_line.startswith("+")
     assert bot_line.startswith("┗") or bot_line.startswith("+")
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for remaining uncovered lines
+# ---------------------------------------------------------------------------
+
+
+def test_detect_legacy_terminal_on_win32(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Line 22: sys.platform == 'win32' returns True."""
+    from repo_release_tools.ui import glyphs as _g_mod
+
+    monkeypatch.setattr(_g_mod.sys, "platform", "win32")
+    assert _g_mod._detect_legacy_terminal() is True
+
+
+def test_detect_cjk_locale_returns_false_for_none_lang(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Line 48: locale.getlocale() returns (None, ...) → False."""
+    import locale as _locale
+
+    from repo_release_tools.ui import glyphs as _g_mod
+
+    monkeypatch.setattr(_locale, "getlocale", lambda: (None, "UTF-8"))
+    monkeypatch.delenv("RRT_WIDE_AMBIGUOUS", raising=False)
+    assert _g_mod._detect_cjk_locale() is False
+
+
+def test_display_width_skips_combining_and_control_chars() -> None:
+    """Line 71: combining/control characters are skipped (width 0)."""
+    from repo_release_tools.ui.glyphs import display_width
+
+    # U+0301 is a combining acute accent (width 0)
+    assert display_width("e\u0301") == 1
+    # U+200B is a zero-width space (category Cf)
+    assert display_width("a\u200bb") == 2
+
+
+def test_repeat_to_width_zero_width_glyph() -> None:
+    """Line 96: glyph_width <= 0 → returns spaces."""
+    from repo_release_tools.ui.glyphs import Glyph, _repeat_to_width
+
+    # U+200B has display_width 0
+    zero_width_glyph = Glyph("\u200b", "zero")
+    result = _repeat_to_width(zero_width_glyph, 5)
+    assert result == " " * 5
+
+
+def test_box_glyphs_box_renders() -> None:
+    """Lines 148-151: BoxGlyphs.box() renders a 3-line box."""
+    from repo_release_tools.ui.glyphs import BoxGlyphs
+
+    box = BoxGlyphs()
+    result = box.box("hello")
+    lines = result.splitlines()
+    assert len(lines) == 3
+    assert "hello" in lines[1]
+
+
+def test_box_glyphs_double_box_renders() -> None:
+    """Lines 161-164: BoxGlyphs.double_box() renders a 3-line double-border box."""
+    from repo_release_tools.ui.glyphs import BoxGlyphs
+
+    box = BoxGlyphs()
+    result = box.double_box("hello")
+    lines = result.splitlines()
+    assert len(lines) == 3
+    assert "hello" in lines[1]
+
+
+def test_box_glyphs_table_empty_headers_returns_empty() -> None:
+    """Line 175: table() with no headers returns ''."""
+    from repo_release_tools.ui.glyphs import BoxGlyphs
+
+    assert BoxGlyphs().table([], []) == ""
+
+
+def test_box_glyphs_table_row_length_mismatch_raises() -> None:
+    """Line 177: table() with mismatched row length raises ValueError."""
+    import pytest
+
+    from repo_release_tools.ui.glyphs import BoxGlyphs
+
+    with pytest.raises(ValueError, match="table rows must match header count"):
+        BoxGlyphs().table(["A", "B"], [["only_one"]])
+
+
+def test_git_glyphs_log_line_with_refs() -> None:
+    """Lines 439-443: GitGlyphs.log_line() with refs includes ref labels."""
+    from repo_release_tools.ui.glyphs import GitGlyphs
+
+    git = GitGlyphs()
+    result = git.log_line("abc1234", "fix bug", refs=["main", "HEAD"])
+    assert "abc1234" in result
+    assert "main" in result
+    assert "HEAD" in result
+    assert "fix bug" in result
+
+
+def test_git_glyphs_log_line_without_refs() -> None:
+    """Lines 439-443: GitGlyphs.log_line() without refs has no ref brackets."""
+    from repo_release_tools.ui.glyphs import GitGlyphs
+
+    git = GitGlyphs()
+    result = git.log_line("deadbeef", "chore: update deps")
+    assert "deadbee" in result
+    assert "chore: update deps" in result
