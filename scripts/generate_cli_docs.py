@@ -111,6 +111,7 @@ COMMAND_DOC_MODULES: dict[str, object] = {
     "git": cli.git_cmd,
     "init": cli.init,
     "skill": cli.skill,
+    "toc": cli.toc,
     "tree": cli.tree,
 }
 
