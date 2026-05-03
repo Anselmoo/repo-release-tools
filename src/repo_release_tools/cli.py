@@ -23,6 +23,7 @@ from repo_release_tools.commands import (
     git_cmd,
     init,
     skill,
+    toc,
     tree,
 )
 from repo_release_tools.ui import (
@@ -94,7 +95,7 @@ def _compute_col_width(actions: list[argparse.Action], width: int | None = None)
 
 COMMAND_GROUPS: dict[str, list[str]] = {
     "Version & Release": ["bump", "ci-version"],
-    "Repository Health": ["doctor", "config", "env", "eol", "tree", "docs"],
+    "Repository Health": ["doctor", "config", "env", "eol", "toc", "tree", "docs"],
     "Git Workflow": ["branch", "git"],
     "Setup & Tooling": ["init", "skill"],
 }
@@ -531,6 +532,7 @@ def build_parser() -> argparse.ArgumentParser:
     git_cmd.register(cast(argparse._SubParsersAction, subparsers))
     init.register(cast(argparse._SubParsersAction, subparsers))
     skill.register(cast(argparse._SubParsersAction, subparsers))
+    toc.register(cast(argparse._SubParsersAction, subparsers))
     tree.register(cast(argparse._SubParsersAction, subparsers))
     docs_cmd.register(cast(argparse._SubParsersAction, subparsers))
     parser.epilog = _build_grouped_epilog(

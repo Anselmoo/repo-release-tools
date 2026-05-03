@@ -40,6 +40,7 @@ Repository Health
   config  Inspect the resolved rrt configuration after discovery and auto-detection.
   env     Show environment variables and interpreter details that affect rrt behavior.
   eol     Check detected host runtimes and project minimum versions against end-of-life dates.
+  toc     Read a Markdown file and print a nested bullet-list TOC to stdout.
   tree    Render a directory tree from the selected root while respecting gitignore rules.
   docs    Scan source files and extract inline documentation blocks
 
@@ -704,6 +705,87 @@ Examples
   $ rrt eol
   $ rrt eol --language node --fetch-live
   $ rrt eol --warn-days 90 --error-days 30
+```
+
+## `rrt toc`
+
+``rrt toc`` — generate and inject a Markdown table of contents.
+
+### Overview
+
+``rrt toc FILE`` reads a Markdown file and prints a nested bullet list of its
+headings to stdout.  With ``--inject`` and ``--anchor``, the generated TOC is
+written in-place inside a marked anchor block in a target file.
+
+### Usage
+
+```
+rrt toc FILE [--min-level N] [--max-level N]
+rrt toc FILE --inject TARGET --anchor ID [--min-level N] [--max-level N] [--dry-run]
+```
+
+### Anchors
+
+Place a pair of HTML comments in the target file to mark where the TOC
+should live:
+
+```markdown
+<!-- rrt:auto:start:toc -->
+<!-- rrt:auto:end:toc -->
+```
+
+The content between the markers is replaced on every ``rrt toc --inject`` run.
+Everything outside the markers is preserved unchanged.
+
+### Options
+
+| Flag | Default | Description |
+|---|---|---|
+| ``FILE`` | — | Markdown file to parse for headings |
+| ``--inject FILE`` | — | Target file to update in-place |
+| ``--anchor ID`` | — | Anchor ID inside the inject target |
+| ``--min-level N`` | 1 | Shallowest heading level to include (1 = ``#``) |
+| ``--max-level N`` | 6 | Deepest heading level to include (6 = ``######``) |
+| ``--dry-run`` | — | Print result instead of writing (requires ``--inject``) |
+
+``--inject`` and ``--anchor`` must always be used together.
+
+```text
+Usage:  rrt toc [OPTIONS] FILE
+
+Read a Markdown file and print a nested bullet-list TOC to stdout.
+
+With --inject and --anchor the generated TOC is written in-place inside
+an anchor block in a target file.  Markers delimit the block:
+
+  <!-- rrt:auto:start:ID -->
+  <!-- rrt:auto:end:ID -->
+
+Everything outside the markers is preserved unchanged.
+--inject and --anchor must always be used together.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  FILE           Markdown file to parse for headings.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --inject FILE  Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
+  --anchor ID    Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
+  --min-level N  Shallowest heading level to include (default: 1 = #).
+  --max-level N  Deepest heading level to include (default: 6 = ######).
+  --dry-run      Print the result instead of writing (only effective with --inject).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt toc README.md
+  $ rrt toc README.md --min-level 2 --max-level 3
+  $ rrt toc README.md --inject README.md --anchor toc
+  $ rrt toc README.md --inject README.md --anchor toc --dry-run
 ```
 
 ## `rrt tree`
