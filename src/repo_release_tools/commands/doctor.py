@@ -24,6 +24,19 @@ If `[tool.rrt.eol]` is configured, the command adds a runtime EOL section that
 checks the configured languages against the repository's host runtime and
 project minimum versions.
 
+If `[tool.rrt.docs]` is configured, the command adds a docs lockfile section
+that verifies the `.rrt/docs.lock.toml` is consistent with the current source
+tree. It detects three lifecycle events that cause drift:
+
+- **file added** — a source file exists on disk but has no entry in the lockfile
+- **file deleted** — the lockfile references a source file that no longer exists
+- **content modified** — a source file exists but its hash does not match the
+  lockfile entry
+
+All three events are reported as errors so they fail the command. Run
+`rrt docs generate --format toml` to regenerate the lockfile after any of
+these changes.
+
 ## Output and severity
 
 The command prints a grouped report for each version group and an overall
@@ -56,6 +69,8 @@ rrt doctor
 - The command reports health for the resolved configuration, not just the
   visible file in the current directory.
 - EOL checks are only shown when EOL policy is configured.
+- Docs lockfile checks are only shown when `[tool.rrt.docs]` is configured.
+- A missing or stale lockfile is an error, not a warning — it fails the command.
 - A warning does not fail the command; only error-level findings do.
 
 ## Related docs
@@ -71,6 +86,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 from repo_release_tools.config import (
@@ -83,6 +99,7 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
+from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.eol import (
     check_eol_status,
     detect_host_version,
@@ -90,6 +107,7 @@ from repo_release_tools.eol import (
     get_eol_records,
     resolve_override_eol,
 )
+from repo_release_tools.state import docs_lock_path, hash_content, lock_is_current
 from repo_release_tools.ui import DryRunPrinter
 from repo_release_tools.version_targets import read_version_string
 
@@ -278,6 +296,71 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
             p.ok("All EOL checks passed.")
         else:
             p.line("One or more EOL checks failed.", ok=False)
+
+    # Docs lockfile section — only shown when [tool.rrt.docs] is configured
+    if config.docs is not None:
+        docs_cfg = config.docs
+        p.blank_line()
+        p.section("Docs lockfile")
+        docs_ok = True
+
+        lock_path = docs_lock_path(root, docs_cfg.lock_file)
+        rel_lock = str(lock_path.relative_to(root))
+
+        if not lock_path.exists():
+            p.line(f"{rel_lock} not found — run 'rrt docs generate --format toml'", ok=False)
+            docs_ok = False
+        else:
+            entries = extract_docs_from_dir(root, docs_cfg)
+            by_file: dict[str, list[DocEntry]] = defaultdict(list)
+            for entry in entries:
+                by_file[entry.source_file].append(entry)
+
+            sources = []
+            for src_file, src_entries in by_file.items():
+                combined = "".join(e.hash for e in sorted(src_entries, key=lambda e: e.name))
+                sources.append(
+                    {
+                        "source_file": src_file,
+                        "hash": hash_content(combined),
+                        "symbols": [e.name for e in src_entries],
+                        "lang": src_entries[0].lang,
+                    }
+                )
+
+            is_current, drift_messages = lock_is_current(lock_path, sources)
+            if is_current:
+                p.ok(f"{rel_lock} is current")
+            else:
+                for msg in drift_messages:
+                    if msg.startswith("New source not in lockfile:"):
+                        label = msg.replace(
+                            "New source not in lockfile:", "file added, lockfile stale:"
+                        )
+                    elif msg.startswith("Hash mismatch for"):
+                        label = msg.replace(
+                            "Hash mismatch for", "content modified, lockfile stale:"
+                        ).replace(" (lockfile is stale)", "")
+                    elif msg.startswith("Source removed but still in lockfile:"):
+                        label = msg.replace(
+                            "Source removed but still in lockfile:",
+                            "file deleted, lockfile stale:",
+                        )
+                    else:
+                        label = msg
+                    p.line(f"  {label}", ok=False)
+                p.line(
+                    "  Run 'rrt docs generate --format toml' to update the lockfile.",
+                    ok=False,
+                )
+                docs_ok = False
+
+        p.blank_line()
+        if docs_ok:
+            p.ok("Docs lockfile checks passed.")
+        else:
+            p.line("Docs lockfile checks failed.", ok=False)
+            all_ok = False
 
     if all_ok:
         return 0

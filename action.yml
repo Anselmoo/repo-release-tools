@@ -49,6 +49,12 @@ inputs:
   check-eol:
     description: Whether to check host runtimes and project minimums against end-of-life dates
     default: "false"
+  check-docs:
+    description: >-
+      Whether to fail if source-owned docs have drifted from the lockfile.
+      Detects source files added, modified, or deleted without regenerating
+      .rrt/docs.lock.toml.
+    default: "false"
 
 runs:
   using: composite
@@ -139,3 +145,11 @@ runs:
       run: |
         set -euo pipefail
         rrt-hooks check-eol
+
+    - name: Check docs lockfile consistency
+      if: inputs.check-docs == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        rrt-hooks check-docs

@@ -543,6 +543,51 @@ def run_dirty_tree_check(cwd: Path, *, title: str) -> int:
     )
 
 
+def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml") -> int:
+    """Fail if source-owned docs have drifted from the lockfile."""
+    from collections import defaultdict
+
+    from repo_release_tools.config import DocsConfig
+    from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
+    from repo_release_tools.state import docs_lock_path, hash_content, lock_is_current
+
+    try:
+        from repo_release_tools.config import load_config
+
+        cfg = load_config(cwd)
+        doc_config = cfg.docs if cfg.docs is not None else DocsConfig()
+        effective_lock = lock_file if lock_file != ".rrt/docs.lock.toml" else doc_config.lock_file
+    except Exception:  # noqa: BLE001
+        doc_config = DocsConfig()
+        effective_lock = lock_file
+
+    entries = extract_docs_from_dir(cwd, doc_config)
+    by_file: dict[str, list[DocEntry]] = defaultdict(list)
+    for entry in entries:
+        by_file[entry.source_file].append(entry)
+
+    sources = []
+    for src_file, src_entries in by_file.items():
+        combined = "".join(e.hash for e in sorted(src_entries, key=lambda e: e.name))
+        sources.append(
+            {
+                "source_file": src_file,
+                "hash": hash_content(combined),
+                "symbols": [e.name for e in src_entries],
+                "lang": src_entries[0].lang,
+            }
+        )
+
+    lock_path = docs_lock_path(cwd, effective_lock)
+    is_current, messages = lock_is_current(lock_path, sources)
+    if is_current:
+        return 0
+    return emit_failure(
+        "Docs lockfile is stale — run 'rrt docs generate --format toml' to update.",
+        messages,
+    )
+
+
 def run_pre_commit(cwd: Path) -> int:
     """Validate the active branch during pre-commit."""
     branch_name = git.current_branch(cwd)
@@ -909,6 +954,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     subparsers.add_parser(
+        "check-docs",
+        help="Fail if source-owned docs have drifted from the lockfile.",
+    )
+
+    subparsers.add_parser(
         "doctor",
         help="Health-check the rrt configuration for the current repository.",
     )
@@ -966,6 +1016,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_commit_subject_check(parsed.subject, title="Commit subject validation failed.")
     if parsed.command == "check-dirty-tree":
         return run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.")
+    if parsed.command == "check-docs":
+        return run_docs_check(Path.cwd())
     if parsed.command == "doctor":
         return cmd_doctor(parsed)
     if parsed.command == "check-eol":

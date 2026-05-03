@@ -41,6 +41,7 @@ Repository Health
   env     Show environment variables and interpreter details that affect rrt behavior.
   eol     Check detected host runtimes and project minimum versions against end-of-life dates.
   tree    Render a directory tree from the selected root while respecting gitignore rules.
+  docs    Scan source files and extract inline documentation blocks
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Git Workflow
@@ -366,6 +367,19 @@ If `[tool.rrt.eol]` is configured, the command adds a runtime EOL section that
 checks the configured languages against the repository's host runtime and
 project minimum versions.
 
+If `[tool.rrt.docs]` is configured, the command adds a docs lockfile section
+that verifies the `.rrt/docs.lock.toml` is consistent with the current source
+tree. It detects three lifecycle events that cause drift:
+
+- **file added** — a source file exists on disk but has no entry in the lockfile
+- **file deleted** — the lockfile references a source file that no longer exists
+- **content modified** — a source file exists but its hash does not match the
+  lockfile entry
+
+All three events are reported as errors so they fail the command. Run
+`rrt docs generate --format toml` to regenerate the lockfile after any of
+these changes.
+
 ### Output and severity
 
 The command prints a grouped report for each version group and an overall
@@ -398,6 +412,8 @@ rrt doctor
 - The command reports health for the resolved configuration, not just the
   visible file in the current directory.
 - EOL checks are only shown when EOL policy is configured.
+- Docs lockfile checks are only shown when `[tool.rrt.docs]` is configured.
+- A missing or stale lockfile is an error, not a warning — it fails the command.
 - A warning does not fail the command; only error-level findings do.
 
 ### Related docs
@@ -791,6 +807,76 @@ Examples
   $ rrt tree --format markdown --max-depth 3
   $ rrt tree --root src/repo_release_tools --dirs-only
   $ rrt tree --format markdown --inject README.md --anchor project-tree
+```
+
+## `rrt docs`
+
+```text
+Usage:  rrt docs [OPTIONS] <docs_action>
+
+Scan source files and extract inline documentation blocks
+across Python, TypeScript/JavaScript, Go, and Rust.
+
+Sub-actions: generate (default), check
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  generate     Extract docs and emit in the selected format.
+  check        Exit 1 if the docs lockfile is stale.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --root PATH  Project root directory (default: current directory).
+  --dry-run    Print what would be done without writing files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples:
+  rrt docs generate                         # explicit mode, md output to stdout
+  rrt docs generate --format toml           # write .rrt/docs.lock.toml
+  rrt docs generate --format rich           # colourised terminal preview
+  rrt docs check                            # exits 1 if lockfile is stale
+  rrt docs generate --lang python,go        # multi-language extraction
+```
+
+### `rrt docs generate`
+
+```text
+Usage:  rrt docs generate [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help    Show this message and exit.
+  --format      Output format (default: first format in config, usually md).
+  --lang LANGS  Comma-separated language filter, e.g. python,go (overrides config).
+  --root PATH   Project root directory (default: current directory).
+  --dry-run     Print what would be done without writing files.
+```
+
+### `rrt docs check`
+
+```text
+Usage:  rrt docs check [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --lock-file PATH  Path to the lock file (default: from config or .rrt/docs.lock.toml).
+  --root PATH       Project root directory (default: current directory).
 ```
 
 ## `rrt branch`

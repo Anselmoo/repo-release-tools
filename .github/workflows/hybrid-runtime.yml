@@ -62,3 +62,6 @@ jobs:
 
       - name: Run hybrid runtime pytest suite
         run: uv run pytest -q -m runtime tests/test_runtime_hybrid.py
+
+      - name: Run docs extraction smoke tests
+        run: uv run pytest -q -m runtime tests/test_runtime_hybrid.py -k "docs"

@@ -330,3 +330,129 @@ RUNTIME_CASES = [
 @pytest.mark.parametrize("case", RUNTIME_CASES, ids=lambda case: case.name)
 def test_hybrid_runtime_bump_updates_running_examples(case: RuntimeCase, tmp_path: Path) -> None:
     _assert_runtime_flow(case, tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Docs extraction smoke tests (one per language)
+# ---------------------------------------------------------------------------
+
+
+def _make_pyproject(tmp: Path, src_dir: str = "src") -> None:
+    """Write a minimal pyproject.toml so load_config succeeds."""
+    (tmp / "pyproject.toml").write_text(
+        "[project]\nname = 'test-proj'\nversion = '0.1.0'\n"
+        "[tool.rrt.docs]\nsrc_dir = '" + src_dir + "'\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.runtime
+def test_docs_extract_python(tmp_path: Path) -> None:
+    """Explicit # sym: NAME extraction from a Python file."""
+    import sys
+
+    sys.path.insert(0, str(SRC))
+    from repo_release_tools.config import DocsConfig
+    from repo_release_tools.docs_extractor import extract_docs
+
+    src = tmp_path / "example.py"
+    src.write_text(
+        '# sym: HELLO\nHELLO = """Hello from Python."""\n',
+        encoding="utf-8",
+    )
+    config = DocsConfig(extraction_mode="explicit", languages=("python",), src_dir=".")
+    entries = extract_docs(src, config)
+    assert any(e.name == "HELLO" for e in entries), f"Expected HELLO in {entries}"
+
+
+@pytest.mark.runtime
+def test_docs_extract_ts(tmp_path: Path) -> None:
+    """Explicit // sym: NAME extraction from a TypeScript file."""
+    import sys
+
+    sys.path.insert(0, str(SRC))
+    from repo_release_tools.config import DocsConfig
+    from repo_release_tools.docs_extractor import extract_docs
+
+    src = tmp_path / "example.ts"
+    src.write_text(
+        '// sym: HELLO\nconst HELLO = "Hello from TypeScript.";\n',
+        encoding="utf-8",
+    )
+    config = DocsConfig(extraction_mode="explicit", languages=("ts",), src_dir=".")
+    entries = extract_docs(src, config)
+    assert any(e.name == "HELLO" for e in entries), f"Expected HELLO in {entries}"
+
+
+@pytest.mark.runtime
+def test_docs_extract_go(tmp_path: Path) -> None:
+    """Explicit // sym: NAME extraction from a Go file."""
+    import sys
+
+    sys.path.insert(0, str(SRC))
+    from repo_release_tools.config import DocsConfig
+    from repo_release_tools.docs_extractor import extract_docs
+
+    src = tmp_path / "example.go"
+    src.write_text(
+        '// sym: HELLO\n// Hello from Go.\nvar HELLO = "hello"\n',
+        encoding="utf-8",
+    )
+    config = DocsConfig(extraction_mode="explicit", languages=("go",), src_dir=".")
+    entries = extract_docs(src, config)
+    assert any(e.name == "HELLO" for e in entries), f"Expected HELLO in {entries}"
+
+
+@pytest.mark.runtime
+def test_docs_extract_rust(tmp_path: Path) -> None:
+    """Explicit // sym: NAME extraction from a Rust file."""
+    import sys
+
+    sys.path.insert(0, str(SRC))
+    from repo_release_tools.config import DocsConfig
+    from repo_release_tools.docs_extractor import extract_docs
+
+    src = tmp_path / "example.rs"
+    src.write_text(
+        '// sym: HELLO\n// Hello from Rust.\nconst HELLO: &str = "hello";\n',
+        encoding="utf-8",
+    )
+    config = DocsConfig(extraction_mode="explicit", languages=("rust",), src_dir=".")
+    entries = extract_docs(src, config)
+    assert any(e.name == "HELLO" for e in entries), f"Expected HELLO in {entries}"
+
+
+@pytest.mark.runtime
+def test_docs_generate_toml_lockfile(tmp_path: Path) -> None:
+    """rrt docs generate --format toml writes .rrt/docs.lock.toml without crashing."""
+    import sys
+
+    sys.path.insert(0, str(SRC))
+    from repo_release_tools.config import DocsConfig
+    from repo_release_tools.docs_extractor import extract_docs_from_dir
+    from repo_release_tools.docs_formats import render
+    from repo_release_tools.state import docs_lock_path
+
+    # Set up a minimal project tree
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    (src_dir / "mod.py").write_text(
+        '# sym: GREET\nGREET = """Hello rrt docs."""\n',
+        encoding="utf-8",
+    )
+    _make_pyproject(tmp_path, src_dir="src")
+
+    config = DocsConfig(
+        extraction_mode="explicit",
+        languages=("python",),
+        src_dir="src",
+        lock_file=".rrt/docs.lock.toml",
+    )
+    entries = extract_docs_from_dir(tmp_path, config)
+    assert entries, "Expected at least one entry from src/mod.py"
+    render("toml", entries, config, root=tmp_path)
+
+    lock_path = docs_lock_path(tmp_path, config.lock_file)
+    assert lock_path.exists(), f"Expected lockfile at {lock_path}"
+    text = lock_path.read_text(encoding="utf-8")
+    assert "GREET" in text

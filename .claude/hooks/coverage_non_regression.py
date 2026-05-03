@@ -68,9 +68,7 @@ def main() -> int:
 
     failures: list[str] = []
     if current_pct + 1e-9 < target_pct:
-        failures.append(
-            f"Current coverage {current_pct:.2f}% is below target {target_pct:.2f}%"
-        )
+        failures.append(f"Current coverage {current_pct:.2f}% is below target {target_pct:.2f}%")
 
     baseline_pct = None
     try:
