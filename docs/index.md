@@ -25,9 +25,11 @@ the canonical home for the current `rrt` command surface.
 
 ## Then follow the workflow
 
-- [Semantic branches](branch.md) — generated branch naming model
-  and allowed branch types
+<!-- rrt:auto:start:index-topic-links -->
+- [Semantic branches](branch.md) — generated branch naming model and allowed branch types
 - [Git magic](git.md) — generated Git helpers and workflow shortcuts
+- [Project tree](tree.md) — generated guide for `rrt tree` output modes, ignore behavior, and traversal controls
+<!-- rrt:auto:end:index-topic-links -->
 
 ## Changelog workflow
 

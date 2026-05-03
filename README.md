@@ -127,3 +127,231 @@ surface is intentionally narrower and reshaped around conventional branching,
 safe commits, and release automation.
 
 Built with ❤️ for safe, simple release automation.
+
+## Project layout
+
+The tree below is kept in sync automatically. To update it after structural
+changes, run:
+
+```bash
+rrt tree --format rich --inject README.md --anchor project-tree
+```
+
+The command rewrites the content between the `<!-- rrt:auto:start:project-tree -->`
+├── docs/
+│   ├── _config.yml
+│   ├── action.md
+│   ├── agent-instructions.md
+│   ├── branch.md
+│   ├── doctor.md
+│   ├── eol.md
+│   ├── git.md
+│   ├── hooks.md
+│   ├── index.md
+│   ├── rrt-cli.md
+│   ├── skill.md
+│   └── tree.md
+├── evals/
+│   ├── evals-1.json
+│   ├── evals-2.json
+│   └── evals.json
+├── scripts/
+│   ├── check_no_raw_prints.py
+│   └── generate_cli_docs.py
+├── src/
+│   └── repo_release_tools/
+│       ├── commands/
+│       │   ├── __init__.py
+│       │   ├── branch.py
+│       │   ├── bump.py
+│       │   ├── ci_version.py
+│       │   ├── config_cmd.py
+│       │   ├── doctor.py
+│       │   ├── env_cmd.py
+│       │   ├── eol_check.py
+│       │   ├── git_cmd.py
+│       │   ├── init.py
+│       │   ├── skill.py
+│       │   └── tree.py
+│       ├── tools/
+│       │   ├── __init__.py
+│       │   └── inject.py
+│       ├── ui/
+│       │   ├── __init__.py
+│       │   ├── color.py
+│       │   ├── context.py
+│       │   ├── font.py
+│       │   ├── glyphs.py
+│       │   ├── layout.py
+│       │   ├── messaging.py
+│       │   ├── progress.py
+│       │   ├── prompt.py
+│       │   └── syntax.py
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── action.py
+│       ├── changelog.py
+│       ├── cli.py
+│       ├── config.py
+│       ├── eol.py
+│       ├── git.py
+│       ├── hooks.py
+│       ├── skill_assets.py
+│       ├── version_targets.py
+│       └── versioning.py
+├── tests/
+│   ├── conftest.py
+│   ├── test_branch.py
+│   ├── test_bump.py
+│   ├── test_changelog.py
+│   ├── test_ci_version.py
+│   ├── test_cli.py
+│   ├── test_config.py
+│   ├── test_config_cmd.py
+│   ├── test_doctor.py
+│   ├── test_env_cmd.py
+│   ├── test_eol.py
+│   ├── test_eol_check.py
+│   ├── test_generate_cli_docs.py
+│   ├── test_git_cmd.py
+│   ├── test_git_helpers.py
+│   ├── test_glyphs.py
+│   ├── test_hooks.py
+│   ├── test_init.py
+│   ├── test_output.py
+│   ├── test_runtime_hybrid.py
+│   ├── test_skill.py
+│   ├── test_syntax_extra.py
+│   ├── test_tree.py
+│   ├── test_ui_color.py
+│   ├── test_ui_font.py
+│   ├── test_ui_init.py
+│   ├── test_ui_layout.py
+│   ├── test_ui_messaging.py
+│   ├── test_ui_progress.py
+│   ├── test_ui_prompt.py
+│   ├── test_ui_syntax.py
+│   ├── test_user_experience_simulator.py
+│   ├── test_version_targets.py
+│   └── test_versioning.py
+├── action.yml
+├── CHANGELOG.md
+├── CLAUDE.md
+├── cpm.lock
+├── cpm.toml
+├── Dockerfile
+├── lefthook.yml
+├── LICENSE
+├── pyproject.toml
+├── README.md
+└── uv.lock
+and `<!-- rrt:auto:end:project-tree -->` HTML anchors without touching anything
+else in the file. Pass `--dry-run` to preview the result first.
+
+<!-- rrt:auto:start:project-tree -->
+├── docs/
+│   ├── _config.yml
+│   ├── action.md
+│   ├── agent-instructions.md
+│   ├── branch.md
+│   ├── doctor.md
+│   ├── eol.md
+│   ├── git.md
+│   ├── hooks.md
+│   ├── index.md
+│   ├── rrt-cli.md
+│   ├── skill.md
+│   └── tree.md
+├── evals/
+│   ├── evals-1.json
+│   ├── evals-2.json
+│   └── evals.json
+├── scripts/
+│   ├── check_no_raw_prints.py
+│   └── generate_cli_docs.py
+├── src/
+│   └── repo_release_tools/
+│       ├── commands/
+│       │   ├── __init__.py
+│       │   ├── branch.py
+│       │   ├── bump.py
+│       │   ├── ci_version.py
+│       │   ├── config_cmd.py
+│       │   ├── doctor.py
+│       │   ├── env_cmd.py
+│       │   ├── eol_check.py
+│       │   ├── git_cmd.py
+│       │   ├── init.py
+│       │   ├── skill.py
+│       │   └── tree.py
+│       ├── ui/
+│       │   ├── __init__.py
+│       │   ├── color.py
+│       │   ├── context.py
+│       │   ├── font.py
+│       │   ├── glyphs.py
+│       │   ├── layout.py
+│       │   ├── messaging.py
+│       │   ├── progress.py
+│       │   ├── prompt.py
+│       │   └── syntax.py
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── action.py
+│       ├── changelog.py
+│       ├── cli.py
+│       ├── config.py
+│       ├── eol.py
+│       ├── git.py
+│       ├── hooks.py
+│       ├── inject.py
+│       ├── skill_assets.py
+│       ├── version_targets.py
+│       └── versioning.py
+├── tests/
+│   ├── conftest.py
+│   ├── test_branch.py
+│   ├── test_bump.py
+│   ├── test_changelog.py
+│   ├── test_ci_version.py
+│   ├── test_cli.py
+│   ├── test_config.py
+│   ├── test_config_cmd.py
+│   ├── test_doctor.py
+│   ├── test_env_cmd.py
+│   ├── test_eol.py
+│   ├── test_eol_check.py
+│   ├── test_generate_cli_docs.py
+│   ├── test_git_cmd.py
+│   ├── test_git_helpers.py
+│   ├── test_glyphs.py
+│   ├── test_hooks.py
+│   ├── test_init.py
+│   ├── test_output.py
+│   ├── test_runtime_hybrid.py
+│   ├── test_skill.py
+│   ├── test_syntax_extra.py
+│   ├── test_tree.py
+│   ├── test_ui_color.py
+│   ├── test_ui_font.py
+│   ├── test_ui_init.py
+│   ├── test_ui_layout.py
+│   ├── test_ui_messaging.py
+│   ├── test_ui_progress.py
+│   ├── test_ui_prompt.py
+│   ├── test_ui_syntax.py
+│   ├── test_user_experience_simulator.py
+│   ├── test_version_targets.py
+│   └── test_versioning.py
+├── action.yml
+├── CHANGELOG.md
+├── CLAUDE.md
+├── cpm.lock
+├── cpm.toml
+├── Dockerfile
+├── lefthook.yml
+├── LICENSE
+├── pyproject.toml
+├── README.md
+└── uv.lock
+<!-- rrt:auto:end:project-tree -->

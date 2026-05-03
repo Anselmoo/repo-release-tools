@@ -9,9 +9,13 @@ uv sync --all-groups                      # install deps
 uv run pytest -q -m "not runtime"        # unit tests (fast)
 uv run pytest -q -m runtime tests/test_runtime_hybrid.py  # integration tests
 uvx pre-commit run --all-files           # lint (ruff, line-length 100)
+
+# Multi-Python matrix (3.12, 3.13, 3.14)
+uvx --with tox-uv tox -p auto
+uvx --with tox-uv tox -e 3.14 -- tests/test_cli.py -xvs
 ```
 
-Python ≥ 3.12 required. Build system: `uv_build`.
+Python ≥ 3.12 required. Build system: `uv_build`. Coverage floor: **85.71%** — treat drops as a blocker.
 
 ## Module map
 
@@ -21,9 +25,23 @@ Python ≥ 3.12 required. Build system: `uv_build`.
 | `src/repo_release_tools/changelog.py` | Changelog parsing, `[Unreleased]` management, conventional commit → bullet |
 | `src/repo_release_tools/config.py` | Config loading from `pyproject.toml` / `.rrt.toml` / `Cargo.toml` / `package.json` |
 | `src/repo_release_tools/version_targets.py` | Read/write versions in pep621, package.json, go_version, python_version, custom regex |
-| `src/repo_release_tools/commands/` | `branch`, `bump`, `ci-version`, `config`, `git`, `init` command implementations |
+| `src/repo_release_tools/commands/` | `branch`, `bump`, `ci_version`, `config_cmd`, `doctor`, `env_cmd`, `eol_check`, `git_cmd`, `init`, `skill`, `tree` |
+| `src/repo_release_tools/tools/inject.py` | Anchor-based file injection shared by `rrt tree --inject` and `scripts/generate_cli_docs.py` |
+| `src/repo_release_tools/ui/` | Canonical rendering API — import via `from repo_release_tools.ui import ...` |
 | `action.yml` | Composite GitHub Action — wraps `rrt-hooks` for CI enforcement |
 | `.pre-commit-hooks.yaml` | Pre-commit hook definitions (`rrt-branch-name`, `rrt-changelog`, `rrt-update-unreleased`, `rrt-commit-subject`, `rrt-dirty-tree`) |
+
+## UI import pattern
+
+Always import from the public surface — never from submodules:
+
+```python
+from repo_release_tools.ui import (
+    DryRunPrinter, GLYPHS, bold, error, info, rule, success, terminal_width, warning,
+)
+```
+
+Raw `print()` is forbidden outside `src/repo_release_tools/ui/`. Run `python3 scripts/check_no_raw_prints.py` to audit.
 
 ## Key conventions
 
@@ -40,13 +58,13 @@ Python ≥ 3.12 required. Build system: `uv_build`.
 2. **`rrt-hooks`** — git hook runners invoked by pre-commit or lefthook
 3. **GitHub Action** (`Anselmoo/repo-release-tools@v…`) — CI policy gates
 
-See [docs/](../docs/) for detailed usage of each surface.
-
 ## Docs
 
-- [Pre-commit & lefthook hooks](../docs/pre-commit.md)
-- [GitHub Action](../docs/github-action.md)
+- [GitHub Action guide](../docs/action.md)
 - [CLI reference](../docs/rrt-cli.md)
-- [Semantic branch naming](../docs/semantic-branches.md)
-- [Git workflow helpers](../docs/git-magic.md)
-- [Agent implementation guide](../docs/agent-instructions.md)
+- [Hook setup (pre-commit & lefthook)](../docs/hooks.md)
+- [Semantic branch naming](../docs/branch.md)
+- [Git workflow helpers](../docs/git.md)
+- [Agent skills](../docs/skill.md)
+- [Doctor / health checks](../docs/doctor.md)
+- [Project tree command](../docs/tree.md)

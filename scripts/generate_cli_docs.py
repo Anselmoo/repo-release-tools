@@ -23,12 +23,18 @@ from repo_release_tools.commands import branch as branch_module
 from repo_release_tools.commands import doctor as doctor_module
 from repo_release_tools.commands import eol_check as eol_check_module
 from repo_release_tools.commands import skill as skill_module
+from repo_release_tools.commands import tree as tree_module
+from repo_release_tools.tools.inject import (
+    ANCHOR_END_TOKEN,
+    ANCHOR_START_TOKEN,
+    replace_anchored_block,
+)
 
 
 class SupportsWrite(Protocol):
     """Minimal text stream protocol for stdout/stderr injection."""
 
-    def write(self, text: str) -> object:
+    def write(self, s: str, /) -> object:
         """Write text to the underlying stream-like object."""
 
 
@@ -61,6 +67,7 @@ class DocTarget:
 
     output_path: Path
     render: Callable[[], str]
+    anchor_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +111,7 @@ COMMAND_DOC_MODULES: dict[str, object] = {
     "git": cli.git_cmd,
     "init": cli.init,
     "skill": cli.skill,
+    "tree": cli.tree,
 }
 
 
@@ -126,6 +134,7 @@ SOURCE_OWNED_TOPIC_DOCS = _collect_source_owned_topic_docs(
         skill_module,
         doctor_module,
         eol_module,
+        tree_module,
     )
 )
 
@@ -140,6 +149,7 @@ COMMAND_DOC_SOURCES: dict[str, CommandDocSource] = {
     "git": CommandDocSource(render=lambda: _render_topic_doc("git")),
     "doctor": CommandDocSource(render=lambda: _render_topic_doc("doctor")),
     "eol": CommandDocSource(render=lambda: inspect.getdoc(eol_check_module) or ""),
+    "tree": CommandDocSource(render=lambda: _render_topic_doc("tree")),
 }
 
 
@@ -353,10 +363,21 @@ def generate_git_magic_markdown() -> str:
     return _render_topic_doc("git")
 
 
+def generate_index_topic_links_markdown() -> str:
+    """Return the generated topic-link bullets for docs/index.md."""
+    links = [
+        "- [Semantic branches](branch.md) — generated branch naming model and allowed branch types",
+        "- [Git magic](git.md) — generated Git helpers and workflow shortcuts",
+        "- [Project tree](tree.md) — generated guide for `rrt tree` output modes, "
+        "ignore behavior, and traversal controls",
+    ]
+    return "\n".join(links)
+
+
 TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
-    "index": Path("docs/index.md"),
     "branch": Path("docs/branch.md"),
     "git": Path("docs/git.md"),
+    "tree": Path("docs/tree.md"),
     "hooks": Path("docs/hooks.md"),
     "action": Path("docs/action.md"),
     "skill": Path("docs/skill.md"),
@@ -368,7 +389,14 @@ TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
 
 def _build_generated_doc_targets() -> tuple[DocTarget, ...]:
     """Build the registry of generated docs outputs."""
-    targets = [DocTarget(DEFAULT_OUTPUT, generate_markdown)]
+    targets = [
+        DocTarget(DEFAULT_OUTPUT, generate_markdown),
+        DocTarget(
+            Path("docs/index.md"),
+            generate_index_topic_links_markdown,
+            anchor_id="index-topic-links",
+        ),
+    ]
     for slug, output_path in TOPIC_PAGE_OUTPUTS.items():
         targets.append(DocTarget(output_path, lambda slug=slug: _render_topic_doc(slug)))
     return tuple(targets)
@@ -382,6 +410,7 @@ def iter_generated_doc_targets() -> Iterator[DocTarget]:
     yield from GENERATED_DOC_TARGETS
 
 
+
 def apply_generated_docs(
     content: str,
     *,
@@ -389,12 +418,30 @@ def apply_generated_docs(
     check: bool,
     write: bool,
     fail_on_change: bool,
-    stdout: SupportsWrite[str],
-    stderr: SupportsWrite[str],
+    stdout: SupportsWrite,
+    stderr: SupportsWrite,
+    anchor_id: str | None = None,
 ) -> int:
     """Check and/or write generated docs, returning the desired exit code."""
     current = output_path.read_text(encoding="utf-8") if output_path.exists() else None
-    if current == content:
+    desired = content
+
+    if anchor_id is not None:
+        if current is None:
+            stderr.write(
+                f"{output_path} missing required anchor block ({ANCHOR_START_TOKEN}{anchor_id}).\n"
+            )
+            return 1
+        replaced = replace_anchored_block(current, anchor_id=anchor_id, content=content)
+        if replaced is None:
+            stderr.write(
+                f"{output_path} is missing required anchors "
+                f"{ANCHOR_START_TOKEN}{anchor_id} / {ANCHOR_END_TOKEN}{anchor_id}.\n"
+            )
+            return 1
+        desired = replaced
+
+    if current == desired:
         stdout.write(f"{output_path} is up-to-date.\n")
         return 0
 
@@ -403,7 +450,7 @@ def apply_generated_docs(
         return 1
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(content, encoding="utf-8")
+    output_path.write_text(desired, encoding="utf-8")
 
     if fail_on_change:
         stderr.write(
@@ -429,6 +476,7 @@ def task_generate() -> int:
                 fail_on_change=False,
                 stdout=sys.stdout,
                 stderr=sys.stderr,
+                anchor_id=target.anchor_id,
             ),
         )
     return exit_code
@@ -448,6 +496,7 @@ def task_check() -> int:
                 fail_on_change=False,
                 stdout=sys.stdout,
                 stderr=sys.stderr,
+                anchor_id=target.anchor_id,
             ),
         )
     return exit_code

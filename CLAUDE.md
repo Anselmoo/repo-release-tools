@@ -38,6 +38,7 @@ Three product surfaces share the same codebase:
 | `version_targets.py` | Read/write versions across pep621, package.json, go_version, python_version, and custom regex targets |
 | `versioning.py` | Semver bump logic |
 | `git.py` | Low-level git helpers |
+| `tools/inject.py` | Anchor-based file injection — shared by `rrt tree --inject` and `scripts/generate_cli_docs.py` |
 | `ui/` | **Canonical public rendering API** — `color`, `font`, `glyphs`, `layout`, `syntax`, `prompt`, `messaging`, `progress`. Import from `repo_release_tools.ui` in all new code. |
 
 ### UI layer

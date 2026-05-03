@@ -33,6 +33,7 @@ def test_module_help_smoke() -> None:
     assert "git" in result.stdout
     assert "init" in result.stdout
     assert "skill" in result.stdout
+    assert "tree" in result.stdout
 
 
 def test_module_no_args_shows_help_and_exits_with_code_2() -> None:
