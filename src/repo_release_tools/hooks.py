@@ -557,9 +557,15 @@ def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml") -> int:
         cfg = load_config(cwd)
         doc_config = cfg.docs if cfg.docs is not None else DocsConfig()
         effective_lock = lock_file if lock_file != ".rrt/docs.lock.toml" else doc_config.lock_file
-    except Exception:  # noqa: BLE001
-        doc_config = DocsConfig()
-        effective_lock = lock_file
+    except Exception as exc:  # noqa: BLE001
+        if is_missing_tool_rrt_error(exc):
+            doc_config = DocsConfig()
+            effective_lock = lock_file
+        else:
+            return emit_failure(
+                "Failed to load repo-release-tools configuration for docs check.",
+                [str(exc)],
+            )
 
     entries = extract_docs_from_dir(cwd, doc_config)
     by_file: dict[str, list[DocEntry]] = defaultdict(list)

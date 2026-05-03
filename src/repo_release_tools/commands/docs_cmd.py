@@ -75,8 +75,14 @@ from repo_release_tools.config import DocsConfig, load_config
 from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs_formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
-from repo_release_tools.ui import DryRunPrinter, success, warning
-from repo_release_tools.ui import error as color_error
+from repo_release_tools.ui import (
+    DryRunPrinter,
+    success,
+    warning,
+)
+from repo_release_tools.ui import (
+    error as color_error,
+)
 
 # ---------------------------------------------------------------------------
 # Source-owned topic docs (used by scripts/generate_cli_docs.py)
@@ -91,9 +97,7 @@ Usage:
   rrt docs check
 """
 
-SOURCE_OWNED_TOPIC_DOCS = [
-    ("docs", DOCS_OVERVIEW),
-]
+SOURCE_OWNED_TOPIC_DOCS = (("docs", DOCS_OVERVIEW),)
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +124,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
     # Override languages / formats from CLI if provided
     if getattr(args, "lang", None):
-        raw_langs = [l.strip() for l in args.lang.split(",")]  # noqa: E741
+        raw_langs = [l.strip().lower() for l in args.lang.split(",") if l.strip()]  # noqa: E741
         from repo_release_tools.config import _VALID_LANGUAGES
 
         invalid = [ln for ln in raw_langs if ln not in _VALID_LANGUAGES]

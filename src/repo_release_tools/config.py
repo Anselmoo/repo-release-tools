@@ -1190,6 +1190,8 @@ def _load_docs_formats(d: dict[str, object]) -> tuple[str, ...]:
     if not isinstance(raw, list) or not all(isinstance(f, str) for f in raw):
         raise ValueError("tool.rrt.docs.formats must be a list of strings")
     fmts = [str(f).strip().lower() for f in cast(list[str], raw)]
+    if not fmts:
+        raise ValueError("tool.rrt.docs.formats must not be empty; at least one format is required")
     invalid = [f for f in fmts if f not in _VALID_FORMATS]
     if invalid:
         raise ValueError(
