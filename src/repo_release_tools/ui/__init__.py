@@ -24,7 +24,7 @@ from repo_release_tools.ui.color import (
 from repo_release_tools.ui.color import success as fmt_version
 from repo_release_tools.ui.context import OutputContext
 from repo_release_tools.ui.font import Emphasis, bold, emphasize, italic, underline
-from repo_release_tools.ui.glyphs import GLYPHS
+from repo_release_tools.ui.glyphs import GLYPHS, IS_LEGACY_TERMINAL
 from repo_release_tools.ui.layout import (
     align,
     banner,
@@ -72,6 +72,7 @@ def fmt_path(path: str) -> str:
 
 __all__ = [
     "GLYPHS",
+    "IS_LEGACY_TERMINAL",
     "Style",
     "THEMES",
     "Emphasis",

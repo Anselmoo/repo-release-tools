@@ -108,6 +108,19 @@ def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
     assert "git" in docs.TOPIC_PAGE_OUTPUTS
 
 
+def test_generated_doc_targets_include_anchored_index_block() -> None:
+    docs = _load_generator_module()
+
+    index_targets = [
+        target
+        for target in docs.GENERATED_DOC_TARGETS
+        if str(target.output_path).endswith("docs/index.md")
+    ]
+
+    assert len(index_targets) == 1
+    assert index_targets[0].anchor_id == "index-topic-links"
+
+
 def test_task_generate_and_check_cover_all_generated_docs(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -206,3 +219,112 @@ def test_apply_generated_docs_noops_when_content_matches(tmp_path: Path) -> None
     assert exit_code == 0
     assert "up-to-date" in stdout.getvalue()
     assert stderr.getvalue() == ""
+
+
+def test_replace_anchored_block_updates_between_markers() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = (
+        "# header\n"
+        "<!-- rrt:auto:start:example -->\n"
+        "old content\n"
+        "<!-- rrt:auto:end:example -->\n"
+        "# footer\n"
+    )
+
+    updated = replace_anchored_block(existing, anchor_id="example", content="new line")
+
+    assert updated is not None
+    assert "old content" not in updated
+    assert "new line\n" in updated
+    assert "# header" in updated and "# footer" in updated
+
+
+def test_replace_anchored_block_returns_none_when_markers_absent() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = "plain text\nwithout markers\n"
+
+    updated = replace_anchored_block(existing, anchor_id="missing", content="x")
+
+    assert updated is None
+
+
+def test_replace_anchored_block_does_not_match_prefix_anchor_ids() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = (
+        "<!-- rrt:auto:start:index-topic-links -->\nold\n<!-- rrt:auto:end:index-topic-links -->\n"
+    )
+
+    updated = replace_anchored_block(existing, anchor_id="index", content="new")
+
+    assert updated is None
+
+
+def test_replace_anchored_block_raises_for_missing_end_marker() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = "<!-- rrt:auto:start:broken -->\ncontent\n"
+
+    with pytest.raises(ValueError, match="Missing end anchor"):
+        replace_anchored_block(existing, anchor_id="broken", content="x")
+
+
+def test_replace_anchored_block_raises_for_invalid_anchor_id() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    with pytest.raises(ValueError, match="Invalid anchor id"):
+        replace_anchored_block("any content", anchor_id="!invalid", content="x")
+
+
+def test_apply_generated_docs_anchor_mode_replaces_only_block(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "target.md"
+    output_path.write_text(
+        "before\n<!-- rrt:auto:start:block -->\nold\n<!-- rrt:auto:end:block -->\nafter\n",
+        encoding="utf-8",
+    )
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new\ncontent\n",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    rendered = output_path.read_text(encoding="utf-8")
+    assert exit_code == 0
+    assert "before\n" in rendered and "\nafter\n" in rendered
+    assert "old" not in rendered
+    assert "new\ncontent\n" in rendered
+    assert stderr.getvalue() == ""
+
+
+def test_apply_generated_docs_anchor_mode_fails_when_anchor_missing(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "target.md"
+    output_path.write_text("before\nafter\n", encoding="utf-8")
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new\n",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    assert exit_code == 1
+    assert "missing required anchors" in stderr.getvalue()
+    assert output_path.read_text(encoding="utf-8") == "before\nafter\n"

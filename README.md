@@ -116,6 +116,10 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 - Conventional branches: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/branch.md>
 - Git workflow helpers: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/git.md>
 - Agent skills: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/skill.md>
+- Project tree: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/tree.md>
+- Config health checks: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/doctor.md>
+- Runtime EOL tracking: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/eol.md>
+- Agent instructions: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/agent-instructions.md>
 
 ## License
 

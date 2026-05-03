@@ -11,6 +11,7 @@ When working in `repo-release-tools`, follow these rules:
 - Prefer low-risk, Python-only CLI/UI improvements using existing modules.
 - Do not add new runtime dependencies for command-line output or parser UX work.
 - For UI and help enhancements, focus on `src/repo_release_tools/cli.py` and `src/repo_release_tools/ui/*`.
+- Anchor-based file injection lives in `src/repo_release_tools/tools/inject.py` — import from `repo_release_tools.tools.inject`, not from `repo_release_tools.inject` (old path removed).
 - Use `fetch_webpage` and `mcp_github_search_code` when researching external examples, issue comments, or PR context before changing behavior.
 - Avoid proposing or creating PRs that lower test coverage; if a change is necessary and coverage drops, explain the coverage gap and add tests to restore it.
 - The repo currently reports low coverage in `src/repo_release_tools/ui/syntax.py`.
@@ -101,3 +102,11 @@ When in doubt which method to call, use this decision table (see `rrt-ux-philoso
 | Closing a command | `p.footer(msg)` |
 | Inline error (fatal) | `p.line(msg, ok=False, stream=sys.stderr)` |
 | **Never use** | `p.line(msg)` without `ok=False` — banned in new code |
+
+## Coverage baseline refresh policy
+
+- `.claude/hooks/refresh_coverage_baseline.py` auto-refreshes `.claude/coverage-baseline.json` after successful `pytest` tool runs.
+- Auto-refresh is intentionally non-blocking and no-op on malformed payloads, failed runs, or missing `coverage.xml`.
+- Keep `.github/hooks/check_push_coverage.py` as the policy floor guardrail (85.71%) even when baseline refresh is active.
+- `.claude/hooks/coverage_non_regression.py` remains the completion-time regression gate.
+- Operational caveat: always-on refresh can move baseline up or down as test scope changes; prefer stricter/manual mode if governance requires explicit approvals.
