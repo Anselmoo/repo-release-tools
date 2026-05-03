@@ -29,6 +29,12 @@ ANCHOR_END_TOKEN: str = "rrt:auto:end:"
 _ANCHOR_ID_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
+def _anchor_comment_pattern(token: str, anchor_id: str) -> re.Pattern[str]:
+    """Return a strict marker matcher for ``<!-- <token><anchor_id> -->``."""
+    marker = re.escape(f"{token}{anchor_id}")
+    return re.compile(rf"^\s*<!--\s*{marker}\s*-->\s*$")
+
+
 def replace_anchored_block(existing: str, *, anchor_id: str, content: str) -> str | None:
     """Replace the body between matching anchor markers in *existing*.
 
@@ -51,9 +57,11 @@ def replace_anchored_block(existing: str, *, anchor_id: str, content: str) -> st
         raise ValueError(f"Invalid anchor id: {anchor_id!r}")
 
     lines = existing.splitlines(keepends=True)
+    start_re = _anchor_comment_pattern(ANCHOR_START_TOKEN, anchor_id)
+    end_re = _anchor_comment_pattern(ANCHOR_END_TOKEN, anchor_id)
 
     start_idx = next(
-        (idx for idx, line in enumerate(lines) if f"{ANCHOR_START_TOKEN}{anchor_id}" in line),
+        (idx for idx, line in enumerate(lines) if start_re.match(line.rstrip("\r\n"))),
         None,
     )
     if start_idx is None:
@@ -63,7 +71,7 @@ def replace_anchored_block(existing: str, *, anchor_id: str, content: str) -> st
         (
             idx
             for idx in range(start_idx + 1, len(lines))
-            if f"{ANCHOR_END_TOKEN}{anchor_id}" in lines[idx]
+            if end_re.match(lines[idx].rstrip("\r\n"))
         ),
         None,
     )

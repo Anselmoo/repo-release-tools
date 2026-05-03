@@ -250,6 +250,18 @@ def test_replace_anchored_block_returns_none_when_markers_absent() -> None:
     assert updated is None
 
 
+def test_replace_anchored_block_does_not_match_prefix_anchor_ids() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = (
+        "<!-- rrt:auto:start:index-topic-links -->\nold\n<!-- rrt:auto:end:index-topic-links -->\n"
+    )
+
+    updated = replace_anchored_block(existing, anchor_id="index", content="new")
+
+    assert updated is None
+
+
 def test_replace_anchored_block_raises_for_missing_end_marker() -> None:
     from repo_release_tools.tools.inject import replace_anchored_block
 

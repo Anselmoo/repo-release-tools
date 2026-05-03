@@ -79,14 +79,30 @@ import sys
 from pathlib import Path
 from typing import Any, TypeAlias
 
-from repo_release_tools.config import _IGNORE_DIR_NAMES
 from repo_release_tools.tools.inject import (
     ANCHOR_END_TOKEN,
     ANCHOR_START_TOKEN,
     replace_anchored_block,
 )
-from repo_release_tools.ui import GLYPHS, DryRunPrinter
-from repo_release_tools.ui.glyphs import IS_LEGACY_TERMINAL
+from repo_release_tools.ui import GLYPHS, IS_LEGACY_TERMINAL, DryRunPrinter
+
+_TREE_FALLBACK_IGNORE_DIR_NAMES: frozenset[str] = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        "dist",
+        "build",
+    }
+)
 
 TREE_EPILOG = """  $ rrt tree
   $ rrt tree --format ascii
@@ -194,6 +210,35 @@ def _is_ignored_by_git(path_from_repo_root: str, *, repo_root: Path) -> bool:
     return result.returncode == 0
 
 
+def _batch_ignored_by_git(paths_from_repo_root: list[str], *, repo_root: Path) -> set[str]:
+    """Return ignored paths for *paths_from_repo_root* via one git invocation.
+
+    Uses ``git check-ignore --stdin`` to avoid one subprocess per file.
+    Returns an empty set when no paths are ignored or when git reports no
+    matches. Other non-zero return codes are treated conservatively as
+    "no ignored paths" for this pass.
+    """
+    if not paths_from_repo_root:
+        return set()
+
+    payload = "\n".join(paths_from_repo_root)
+    if payload:
+        payload += "\n"
+
+    result = subprocess.run(
+        ["git", "check-ignore", "--stdin"],
+        cwd=repo_root,
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode not in (0, 1):
+        return set()
+
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
 def _sorted_children(path: Path) -> list[Path]:
     """Return deterministic children (dirs first, then files)."""
     items = sorted(path.iterdir(), key=lambda p: p.name.lower())
@@ -252,7 +297,7 @@ def _render_rich_tree(entries: list[TreeEntry]) -> str | None:
     try:
         rich_console = importlib.import_module("rich.console")
         rich_tree = importlib.import_module("rich.tree")
-    except Exception:
+    except ImportError:
         return None
 
     Console = getattr(rich_console, "Console", None)
@@ -267,11 +312,13 @@ def _render_rich_tree(entries: list[TreeEntry]) -> str | None:
             if children:
                 build(children, node)
 
-    root = Tree(".")
-    build(entries, root)
     console = Console(record=True, no_color=True, highlight=False)
     with console.capture() as capture:
-        getattr(console, "print")(root)
+        for name, is_dir, children in entries:
+            top = Tree(f"{name}/" if is_dir else name)
+            if children:
+                build(children, top)
+            getattr(console, "print")(top)
     return capture.get().rstrip("\n")
 
 
@@ -306,12 +353,13 @@ def _build_entries(
         warnings.append(f"Cannot read {path}: {exc}")
         return result
 
+    candidates: list[tuple[Path, str, str | None]] = []
     for child in children:
         name = child.name
         if not show_hidden and name.startswith("."):
             continue
 
-        if repo_root is None and name in _IGNORE_DIR_NAMES:
+        if repo_root is None and name in _TREE_FALLBACK_IGNORE_DIR_NAMES:
             continue
 
         try:
@@ -319,19 +367,33 @@ def _build_entries(
         except ValueError:
             relative_to_root = child
 
+        rel_text: str | None = None
         if repo_root is not None:
             try:
                 relative_to_repo = child.relative_to(repo_root)
                 rel_text = relative_to_repo.as_posix()
             except ValueError:
                 rel_text = relative_to_root.as_posix()
-            if rel_text and rel_text != ".":
-                ignored = ignore_cache.get(rel_text)
-                if ignored is None:
-                    ignored = _is_ignored_by_git(rel_text, repo_root=repo_root)
-                    ignore_cache[rel_text] = ignored
-                if ignored:
-                    continue
+            if rel_text in ("", "."):
+                rel_text = None
+
+        candidates.append((child, name, rel_text))
+
+    if repo_root is not None:
+        uncached = sorted(
+            {
+                rel_text
+                for _child, _name, rel_text in candidates
+                if rel_text is not None and rel_text not in ignore_cache
+            }
+        )
+        ignored_set = _batch_ignored_by_git(uncached, repo_root=repo_root)
+        for rel_text in uncached:
+            ignore_cache[rel_text] = rel_text in ignored_set
+
+    for child, name, rel_text in candidates:
+        if rel_text is not None and ignore_cache.get(rel_text, False):
+            continue
 
         is_dir = child.is_dir()
         is_symlink = child.is_symlink()

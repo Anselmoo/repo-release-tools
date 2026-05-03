@@ -164,8 +164,10 @@ def test_cmd_tree_gitignore_filtering_uses_git_check(
     monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
     monkeypatch.setattr(
         tree,
-        "_is_ignored_by_git",
-        lambda path_from_repo_root, repo_root: path_from_repo_root == "ignored.txt",
+        "_batch_ignored_by_git",
+        lambda paths_from_repo_root, repo_root: {
+            p for p in paths_from_repo_root if p == "ignored.txt"
+        },
     )
 
     rc = tree.cmd_tree(_args())
@@ -431,6 +433,54 @@ def test_render_rich_tree_returns_string_when_rich_mocked(
     ]
     result = tree._render_rich_tree(entries)
     assert isinstance(result, str)
+
+
+def test_render_rich_tree_does_not_emit_root_dot(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: rich rendering should not include a synthetic '.' root node."""
+
+    class _FakeCapture:
+        def __init__(self, console: "_FakeConsole") -> None:
+            self._console = console
+
+        def __enter__(self) -> "_FakeCapture":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            pass
+
+        def get(self) -> str:
+            return "\n".join(self._console.lines)
+
+    class _FakeConsole:
+        def __init__(self, **kwargs: object) -> None:
+            self.lines: list[str] = []
+
+        def capture(self) -> _FakeCapture:
+            return _FakeCapture(self)
+
+        def print(self, tree_obj: object) -> None:  # noqa: A003
+            label = getattr(tree_obj, "label", "")
+            self.lines.append(str(label))
+
+    class _FakeNode:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def add(self, label: str) -> "_FakeNode":
+            return _FakeNode(label)
+
+    fake_console_mod = types.ModuleType("rich.console")
+    setattr(fake_console_mod, "Console", _FakeConsole)
+    fake_tree_mod = types.ModuleType("rich.tree")
+    setattr(fake_tree_mod, "Tree", _FakeNode)
+
+    monkeypatch.setattr(tree, "IS_LEGACY_TERMINAL", False)
+    monkeypatch.setitem(sys.modules, "rich.console", fake_console_mod)
+    monkeypatch.setitem(sys.modules, "rich.tree", fake_tree_mod)
+
+    rendered = tree._render_rich_tree([("src", True, None), ("README.md", False, None)])
+    assert rendered is not None
+    assert "." not in rendered.splitlines()
 
 
 def test_render_rich_tree_returns_none_when_import_fails(
