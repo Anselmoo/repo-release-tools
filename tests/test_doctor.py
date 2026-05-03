@@ -10,6 +10,7 @@ import pytest
 
 from repo_release_tools.commands import doctor
 from repo_release_tools.config import (
+    DocsConfig,
     EolConfig,
     EolOverride,
     PinTarget,
@@ -609,3 +610,251 @@ def test_doctor_eol_override_invalid_date(
     rc = doctor.cmd_doctor(_ARGS)
 
     assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# Docs lockfile health checks
+# ---------------------------------------------------------------------------
+
+
+def _make_docs_config(
+    tmp_path: Path,
+    *,
+    docs: DocsConfig,
+) -> RrtConfig:
+    """Build a minimal RrtConfig with a DocsConfig attached."""
+    target = VersionTarget(
+        path=tmp_path / "src" / "pkg" / "__init__.py",
+        kind="python_version",
+    )
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        pin_targets=[],
+    )
+    return RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[group],
+        default_group_name="default",
+        autodetected=False,
+        global_pin_targets=[],
+        docs=docs,
+    )
+
+
+def _write_docs_version_file(tmp_path: Path) -> None:
+    """Write the minimal version file so the main health section passes."""
+    p = tmp_path / "src" / "pkg" / "__init__.py"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text('__version__ = "0.1.0"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+
+def test_doctor_docs_section_absent_without_docs_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docs lockfile section is silent when [tool.rrt.docs] is not configured."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert "Docs lockfile" not in capsys.readouterr().out
+
+
+def test_doctor_docs_section_lockfile_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docs lockfile section reports error when lockfile does not exist."""
+    monkeypatch.chdir(tmp_path)
+    docs = DocsConfig(lock_file=".rrt/docs.lock.toml", src_dir="src")
+    conf = _make_docs_config(tmp_path, docs=docs)
+    _write_docs_version_file(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "Docs lockfile" in out
+    assert "not found" in out
+    assert "Docs lockfile checks failed" in out
+
+
+def test_doctor_docs_section_lockfile_current(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docs lockfile section reports OK when the lockfile is up to date."""
+    monkeypatch.chdir(tmp_path)
+    # Create a Python source with a sym: marker so extractor finds one entry
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    src_file = src_dir / "mod.py"
+    src_file.write_text('# sym: GREET\nGREET = """Hello."""\n', encoding="utf-8")
+
+    docs = DocsConfig(extraction_mode="explicit", languages=("python",), src_dir="src")
+    conf = _make_docs_config(tmp_path, docs=docs)
+    _write_docs_version_file(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Generate lockfile so it is current
+    from repo_release_tools.docs_extractor import extract_docs_from_dir
+    from repo_release_tools.docs_formats import render
+
+    entries = extract_docs_from_dir(tmp_path, docs)
+    render("toml", entries, docs, root=tmp_path)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Docs lockfile" in out
+    assert "is current" in out
+    assert "Docs lockfile checks passed" in out
+
+
+def test_doctor_docs_section_stale_new_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docs lockfile section reports error when a new source file has no lockfile entry."""
+    monkeypatch.chdir(tmp_path)
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    src_file = src_dir / "mod.py"
+    src_file.write_text('# sym: GREET\nGREET = """Hello."""\n', encoding="utf-8")
+
+    docs = DocsConfig(extraction_mode="explicit", languages=("python",), src_dir="src")
+    conf = _make_docs_config(tmp_path, docs=docs)
+    _write_docs_version_file(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Generate lockfile BEFORE adding a new source file
+    from repo_release_tools.docs_extractor import extract_docs_from_dir
+    from repo_release_tools.docs_formats import render
+
+    entries = extract_docs_from_dir(tmp_path, docs)
+    render("toml", entries, docs, root=tmp_path)
+
+    # Now add a new source file — lockfile is now stale
+    (src_dir / "extra.py").write_text('# sym: NEW\nNEW = """New symbol."""\n', encoding="utf-8")
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "file added, lockfile stale" in out
+    assert "Docs lockfile checks failed" in out
+
+
+def test_doctor_docs_section_stale_deleted_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docs lockfile section reports error when a file is deleted after lockfile was generated."""
+    monkeypatch.chdir(tmp_path)
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    src_file = src_dir / "mod.py"
+    src_file.write_text('# sym: GREET\nGREET = """Hello."""\n', encoding="utf-8")
+    to_delete = src_dir / "gone.py"
+    to_delete.write_text('# sym: OLD\nOLD = """Will be removed."""\n', encoding="utf-8")
+
+    docs = DocsConfig(extraction_mode="explicit", languages=("python",), src_dir="src")
+    conf = _make_docs_config(tmp_path, docs=docs)
+    _write_docs_version_file(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Generate lockfile with both files present
+    from repo_release_tools.docs_extractor import extract_docs_from_dir
+    from repo_release_tools.docs_formats import render
+
+    entries = extract_docs_from_dir(tmp_path, docs)
+    render("toml", entries, docs, root=tmp_path)
+
+    # Delete the file — lockfile now has a stale entry
+    to_delete.unlink()
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "file deleted, lockfile stale" in out
+    assert "Docs lockfile checks failed" in out
+
+
+def test_doctor_docs_section_stale_hash_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docs lockfile section reports error when a source file's content has changed."""
+    monkeypatch.chdir(tmp_path)
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    src_file = src_dir / "mod.py"
+    src_file.write_text('# sym: GREET\nGREET = """Hello."""\n', encoding="utf-8")
+
+    docs = DocsConfig(extraction_mode="explicit", languages=("python",), src_dir="src")
+    conf = _make_docs_config(tmp_path, docs=docs)
+    _write_docs_version_file(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Generate lockfile with original content
+    from repo_release_tools.docs_extractor import extract_docs_from_dir
+    from repo_release_tools.docs_formats import render
+
+    entries = extract_docs_from_dir(tmp_path, docs)
+    render("toml", entries, docs, root=tmp_path)
+
+    # Modify the source file — hash will differ
+    src_file.write_text('# sym: GREET\nGREET = """Hello, modified!"""\n', encoding="utf-8")
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "content modified, lockfile stale" in out
+    assert "Docs lockfile checks failed" in out
+
+
+def test_doctor_docs_section_unknown_drift_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docs drift message that matches no known pattern is shown as-is (line 350 else branch)."""
+    monkeypatch.chdir(tmp_path)
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    src_file = src_dir / "mod.py"
+    src_file.write_text('# sym: GREET\nGREET = """Hello."""\n', encoding="utf-8")
+
+    docs = DocsConfig(extraction_mode="explicit", languages=("python",), src_dir="src")
+    conf = _make_docs_config(tmp_path, docs=docs)
+    _write_docs_version_file(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Generate a valid lockfile so lock_path exists
+    from repo_release_tools.docs_extractor import extract_docs_from_dir
+    from repo_release_tools.docs_formats import render
+
+    entries = extract_docs_from_dir(tmp_path, docs)
+    render("toml", entries, docs, root=tmp_path)
+
+    # Mock lock_is_current to return an unrecognised drift message
+    monkeypatch.setattr(
+        doctor,
+        "lock_is_current",
+        lambda lock_path, sources: (False, ["Unexpected drift reason"]),
+    )
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "Unexpected drift reason" in out
+    assert "Docs lockfile checks failed" in out

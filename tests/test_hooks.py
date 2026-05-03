@@ -21,6 +21,7 @@ from repo_release_tools.hooks import (
     is_changelog_meta_commit,
     read_commit_subject,
     run_changelog_check,
+    run_docs_check,
     run_post_correct,
     run_pre_commit_changelog,
     run_update_unreleased,
@@ -1611,3 +1612,106 @@ def test_apply_dedup_to_changelog_collapses_consecutive_blank_lines(tmp_path: Pa
     assert changed is True
     # no triple-newline runs after cleanup
     assert "\n\n\n" not in changelog.read_text(encoding="utf-8")
+
+
+# run_docs_check
+# ---------------------------------------------------------------------------
+
+
+def _write_pyproject(tmp_path: Path) -> None:
+    """Write a minimal pyproject.toml so load_config succeeds."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.rrt]\n"
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        '[project]\nname = "example"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+
+
+def test_run_docs_check_no_lockfile_no_sources(tmp_path: Path) -> None:
+    """When no sources and no lockfile exist, lock_is_current returns True → exit 0."""
+    _write_pyproject(tmp_path)
+    # No source files, no lock file → nothing to compare, should be current
+    result = run_docs_check(tmp_path)
+    assert result == 0
+
+
+def test_run_docs_check_missing_rrt_config_falls_back_gracefully(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MissingRrtConfigError triggers the fallback path → lines 562-563 covered → exit 0."""
+    from repo_release_tools.config import MissingRrtConfigError
+
+    def _missing_load(_cwd: Path) -> None:
+        raise MissingRrtConfigError("Missing rrt configuration in supported config files: none")
+
+    monkeypatch.setattr("repo_release_tools.config.load_config", _missing_load)
+    result = run_docs_check(tmp_path)
+    assert result == 0
+
+
+def test_run_docs_check_real_config_error_returns_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A genuine config error (not MissingRrtConfig) causes emit_failure to be called."""
+
+    def _bad_load(_cwd: Path) -> None:
+        raise RuntimeError("bad config")
+
+    # run_docs_check uses a local import from repo_release_tools.config; patch the source module.
+    monkeypatch.setattr("repo_release_tools.config.load_config", _bad_load)
+    result = run_docs_check(tmp_path)
+    assert result != 0
+
+
+def test_run_docs_check_stale_lockfile_returns_failure(
+    tmp_path: Path,
+) -> None:
+    """A stale lockfile causes run_docs_check to return non-zero."""
+    _write_pyproject(tmp_path)
+    # Write a lock file that references a source file that no longer matches.
+    # The lock format uses a TOML table keyed by source file path (not array of tables).
+    rrt_dir = tmp_path / ".rrt"
+    rrt_dir.mkdir()
+    stale_lock = rrt_dir / "docs.lock.toml"
+    stale_lock.write_text(
+        '[sources]\n[sources."src/fake.py"]\nhash = "deadbeef"\n'
+        'symbols = ["fake"]\nlang = "python"\n',
+        encoding="utf-8",
+    )
+    result = run_docs_check(tmp_path)
+    assert result != 0
+
+
+def test_run_docs_check_entries_build_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When extract_docs_from_dir returns entries the sources list is built → lines 573, 577-578."""
+    from repo_release_tools.docs_extractor import DocEntry
+
+    fake_entry = DocEntry(
+        name="my_func",
+        lang="python",
+        content="def my_func(): ...",
+        source_file="src/mod.py",
+        line=1,
+        hash="sha256:abc123",
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.docs_extractor.extract_docs_from_dir",
+        lambda cwd, cfg: [fake_entry],
+    )
+    _write_pyproject(tmp_path)
+    # No lock file → the new source is "new" per lock_is_current → returns non-zero (stale).
+    # The test's purpose is to exercise the sources-building loop (lines 573, 577-578).
+    result = run_docs_check(tmp_path)
+    assert result != 0
+
+
+def test_hooks_main_check_docs_dispatches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """'check-docs' argument in hooks main dispatches to run_docs_check and returns its exit code."""
+    monkeypatch.setattr("repo_release_tools.hooks.run_docs_check", lambda cwd: 0)
+    monkeypatch.setattr(sys, "argv", ["rrt-hooks", "check-docs"])
+    monkeypatch.chdir(tmp_path)
+    result = hooks.main()
+    assert result == 0

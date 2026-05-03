@@ -205,6 +205,7 @@ HARD RULES
 
 
 def main() -> None:
+    """Main entry point for the rrt-ux-design guard."""
     payload = json.loads(sys.stdin.read())
     prompt: str = payload.get("prompt", "") or ""
 

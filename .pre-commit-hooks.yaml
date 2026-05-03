@@ -66,3 +66,15 @@
   always_run: true
   stages: [pre-push]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-docs-check
+  name: repo-release-tools docs consistency check
+  description: >-
+    Fail if source-owned docs are stale — catches source files added, modified,
+    or deleted without regenerating .rrt/docs.lock.toml
+  entry: rrt-hooks check-docs
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+  minimum_pre_commit_version: "3.2.0"

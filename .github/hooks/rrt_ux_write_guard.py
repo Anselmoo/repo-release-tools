@@ -90,6 +90,7 @@ def _extract_new_content(payload: dict) -> tuple[str, str]:
 
 
 def main() -> None:
+    """Main entry point for the rrt-ux-design write guard."""
     payload = json.loads(sys.stdin.read())
     path, content = _extract_new_content(payload)
 

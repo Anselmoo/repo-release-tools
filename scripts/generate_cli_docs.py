@@ -410,7 +410,6 @@ def iter_generated_doc_targets() -> Iterator[DocTarget]:
     yield from GENERATED_DOC_TARGETS
 
 
-
 def apply_generated_docs(
     content: str,
     *,

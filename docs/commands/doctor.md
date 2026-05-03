@@ -24,6 +24,19 @@ If `[tool.rrt.eol]` is configured, the command adds a runtime EOL section that
 checks the configured languages against the repository's host runtime and
 project minimum versions.
 
+If `[tool.rrt.docs]` is configured, the command adds a docs lockfile section
+that verifies the `.rrt/docs.lock.toml` is consistent with the current source
+tree. It detects three lifecycle events that cause drift:
+
+- **file added** — a source file exists on disk but has no entry in the lockfile
+- **file deleted** — the lockfile references a source file that no longer exists
+- **content modified** — a source file exists but its hash does not match the
+  lockfile entry
+
+All three events are reported as errors so they fail the command. Run
+`rrt docs generate --format toml` to regenerate the lockfile after any of
+these changes.
+
 ## Output and severity
 
 The command prints a grouped report for each version group and an overall
@@ -56,6 +69,8 @@ rrt doctor
 - The command reports health for the resolved configuration, not just the
   visible file in the current directory.
 - EOL checks are only shown when EOL policy is configured.
+- Docs lockfile checks are only shown when `[tool.rrt.docs]` is configured.
+- A missing or stale lockfile is an error, not a warning — it fails the command.
 - A warning does not fail the command; only error-level findings do.
 
 ## Related docs

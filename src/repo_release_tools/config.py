@@ -315,6 +315,11 @@ class DocsConfig:
     docs_dir: str = "docs"
     src_dir: str = "src/repo_release_tools"
     stubs: tuple[str, ...] = ()
+    # Multi-language doc extraction settings
+    extraction_mode: str = "explicit"  # "explicit" | "implicit" | "both"
+    languages: tuple[str, ...] = ("python",)
+    lock_file: str = ".rrt/docs.lock.toml"
+    formats: tuple[str, ...] = ("md",)
 
 
 @dataclass(frozen=True)
@@ -1132,7 +1137,68 @@ def _load_docs_config(raw: object) -> DocsConfig | None:
         docs_dir=docs_dir,
         src_dir=src_dir,
         stubs=tuple(normalized_stubs),
+        extraction_mode=_load_extraction_mode(d),
+        languages=_load_docs_languages(d),
+        lock_file=_load_docs_lock_file(d),
+        formats=_load_docs_formats(d),
     )
+
+
+_VALID_EXTRACTION_MODES = ("explicit", "implicit", "both")
+_VALID_LANGUAGES = ("python", "ts", "js", "go", "rust")
+_VALID_FORMATS = ("md", "txt", "rich", "clipboard", "json", "toml")
+
+
+def _load_extraction_mode(d: dict[str, object]) -> str:
+    raw = d.get("extraction_mode")
+    if raw is None:
+        return "explicit"
+    if raw not in _VALID_EXTRACTION_MODES:
+        raise ValueError(f"tool.rrt.docs.extraction_mode must be one of {_VALID_EXTRACTION_MODES}")
+    return str(raw)
+
+
+def _load_docs_languages(d: dict[str, object]) -> tuple[str, ...]:
+    raw = d.get("languages")
+    if raw is None:
+        return ("python",)
+    if not isinstance(raw, list) or not all(isinstance(lang, str) for lang in raw):
+        raise ValueError("tool.rrt.docs.languages must be a list of strings")
+    langs = [str(lang).strip().lower() for lang in cast(list[str], raw)]
+    invalid = [lang for lang in langs if lang not in _VALID_LANGUAGES]
+    if invalid:
+        raise ValueError(
+            f"tool.rrt.docs.languages contains unsupported entries: {invalid}. "
+            f"Supported: {list(_VALID_LANGUAGES)}"
+        )
+    return tuple(langs)
+
+
+def _load_docs_lock_file(d: dict[str, object]) -> str:
+    raw = d.get("lock_file")
+    if raw is None:
+        return ".rrt/docs.lock.toml"
+    if not isinstance(raw, str) or not raw:
+        raise ValueError("tool.rrt.docs.lock_file must be a non-empty string")
+    return raw
+
+
+def _load_docs_formats(d: dict[str, object]) -> tuple[str, ...]:
+    raw = d.get("formats")
+    if raw is None:
+        return ("md",)
+    if not isinstance(raw, list) or not all(isinstance(f, str) for f in raw):
+        raise ValueError("tool.rrt.docs.formats must be a list of strings")
+    fmts = [str(f).strip().lower() for f in cast(list[str], raw)]
+    if not fmts:
+        raise ValueError("tool.rrt.docs.formats must not be empty; at least one format is required")
+    invalid = [f for f in fmts if f not in _VALID_FORMATS]
+    if invalid:
+        raise ValueError(
+            f"tool.rrt.docs.formats contains unsupported entries: {invalid}. "
+            f"Supported: {list(_VALID_FORMATS)}"
+        )
+    return tuple(fmts)
 
 
 def _default_lock_command(config_file: Path) -> list[str] | None:

@@ -43,6 +43,7 @@ Affected entrypoints:
 -   env     Show environment variables and interpreter details that affect rrt behavior
 -   eol     Check host runtimes and project minimums against EOL dates
 -   tree    Show a project tree with gitignore-aware filtering
+-   docs    Extract and manage source-owned documentation blocks
 
 ## Git Workflow
 -   branch  Branch management helpers for conventional branch naming

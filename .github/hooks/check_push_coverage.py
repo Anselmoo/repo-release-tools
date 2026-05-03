@@ -1,6 +1,9 @@
+"""GitHub hook to check code coverage before allowing a push."""
+
 #!/usr/bin/env python3
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +12,7 @@ THRESHOLD = 85.71
 
 
 def fail(message: str, reason: str) -> None:
+    """Helper to emit a block decision with a message and reason."""
     output = {
         "continue": False,
         "systemMessage": message,
@@ -20,6 +24,7 @@ def fail(message: str, reason: str) -> None:
 
 
 def main() -> None:
+    """Main entry point for the check push coverage hook."""
     try:
         payload = json.load(sys.stdin)
     except json.JSONDecodeError:
@@ -32,7 +37,11 @@ def main() -> None:
         return
 
     repo_root = Path(__file__).resolve().parents[2]
-    pytest_cmd = ["python3", "-m", "pytest", "-q", "-m", "not runtime"]
+    # Try uv run pytest first (preferred in this project), fall back to python3 -m pytest
+    if shutil.which("uv"):
+        pytest_cmd = ["uv", "run", "pytest", "-q", "-m", "not runtime"]
+    else:
+        pytest_cmd = ["python3", "-m", "pytest", "-q", "-m", "not runtime"]
 
     try:
         subprocess.run(
@@ -68,6 +77,7 @@ def main() -> None:
             "Push blocked because coverage parsing failed.",
             str(exc),
         )
+        return  # unreachable; fail() calls sys.exit, but ty needs this
 
     if coverage_pct + 1e-9 < THRESHOLD:
         fail(
