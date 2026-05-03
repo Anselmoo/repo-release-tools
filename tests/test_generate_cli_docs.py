@@ -259,6 +259,13 @@ def test_replace_anchored_block_raises_for_missing_end_marker() -> None:
         replace_anchored_block(existing, anchor_id="broken", content="x")
 
 
+def test_replace_anchored_block_raises_for_invalid_anchor_id() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    with pytest.raises(ValueError, match="Invalid anchor id"):
+        replace_anchored_block("any content", anchor_id="!invalid", content="x")
+
+
 def test_apply_generated_docs_anchor_mode_replaces_only_block(tmp_path: Path) -> None:
     docs = _load_generator_module()
     output_path = tmp_path / "target.md"
