@@ -79,7 +79,7 @@ path = "docs/action.md"
 pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.pin_targets]]
-path = "docs/hooks.md"
+path = "docs/commands/hooks.md"
 pattern = '(rev: v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.pin_targets]]
@@ -94,6 +94,18 @@ pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
 languages = ["python"]
 warn_days = 180
 error_days = 0
+
+[tool.rrt.docs]
+mirror_src_tree = true
+docs_dir = "docs"
+src_dir = "src/repo_release_tools"
+stubs = [
+    "commands/bump",
+    "commands/ci_version",
+    "commands/config_cmd",
+    "commands/env_cmd",
+    "commands/init",
+]
 
 [[tool.rrt.eol.overrides]]
 language = "python"

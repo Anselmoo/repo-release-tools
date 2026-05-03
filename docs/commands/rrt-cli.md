@@ -801,7 +801,7 @@ Examples
 predictable for humans, hooks, and automation.
 
 This page is generated from `repo_release_tools.commands.branch.SEMANTIC_BRANCHES_DOC`.
-The canonical command reference is [docs/rrt-cli.md](rrt-cli.md). This page
+The canonical command reference is [docs/commands/rrt-cli.md](rrt-cli.md). This page
 summarizes the naming rules that the CLI and hooks enforce.
 
 #### Standard format
@@ -1011,7 +1011,7 @@ health, commit drafting, sync, and history repair.
 
 This page is generated from `repo_release_tools.git.GIT_MAGIC_DOC`.
 This page stays workflow-oriented. For the full command surface and option
-details, see [docs/rrt-cli.md](rrt-cli.md).
+details, see [docs/commands/rrt-cli.md](rrt-cli.md).
 
 #### Workflow map
 

@@ -308,6 +308,16 @@ class EolConfig:
 
 
 @dataclass(frozen=True)
+class DocsConfig:
+    """Documentation tree configuration under [tool.rrt.docs]."""
+
+    mirror_src_tree: bool = False
+    docs_dir: str = "docs"
+    src_dir: str = "src/repo_release_tools"
+    stubs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class RrtConfig:
     """Loaded rrt configuration."""
 
@@ -319,6 +329,7 @@ class RrtConfig:
     extra_branch_types: tuple[str, ...] = ()
     global_pin_targets: list[PinTarget] = field(default_factory=list)
     eol: EolConfig | None = None
+    docs: DocsConfig | None = None
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""
@@ -1010,6 +1021,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         extra_branch_types=extra_branch_types,
         global_pin_targets=_load_pin_targets(root, raw.get("pin_targets", [])),
         eol=_load_eol_config(raw.get("eol")),
+        docs=_load_docs_config(raw.get("docs")),
     )
 
 
@@ -1073,6 +1085,53 @@ def _load_eol_config(raw: object) -> EolConfig | None:
         fetch_live=fetch_live,
         allow_eol=allow_eol,
         overrides=tuple(overrides),
+    )
+
+
+def _load_docs_config(raw: object) -> DocsConfig | None:
+    """Parse an optional [tool.rrt.docs] table into a DocsConfig."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("tool.rrt.docs must be a table")
+
+    d: dict[str, object] = cast(dict[str, object], raw)
+
+    raw_mirror = d.get("mirror_src_tree")
+    mirror_src_tree = False if raw_mirror is None else raw_mirror
+    if not isinstance(mirror_src_tree, bool):
+        raise ValueError("tool.rrt.docs.mirror_src_tree must be a boolean")
+
+    raw_docs_dir = d.get("docs_dir")
+    docs_dir = "docs" if raw_docs_dir is None else raw_docs_dir
+    if not isinstance(docs_dir, str) or not docs_dir:
+        raise ValueError("tool.rrt.docs.docs_dir must be a non-empty string")
+
+    raw_src_dir = d.get("src_dir")
+    src_dir = "src/repo_release_tools" if raw_src_dir is None else raw_src_dir
+    if not isinstance(src_dir, str) or not src_dir:
+        raise ValueError("tool.rrt.docs.src_dir must be a non-empty string")
+
+    raw_stubs = d.get("stubs") or []
+    if not isinstance(raw_stubs, list) or not all(isinstance(s, str) for s in raw_stubs):
+        raise ValueError("tool.rrt.docs.stubs must be a list of strings")
+
+    # Normalize: strip whitespace, reject blanks, deduplicate preserving order.
+    seen_stubs: set[str] = set()
+    normalized_stubs: list[str] = []
+    for s in cast(list[str], raw_stubs):
+        s = s.strip()
+        if not s:
+            raise ValueError("tool.rrt.docs.stubs must not contain empty entries")
+        if s not in seen_stubs:
+            seen_stubs.add(s)
+            normalized_stubs.append(s)
+
+    return DocsConfig(
+        mirror_src_tree=mirror_src_tree,
+        docs_dir=docs_dir,
+        src_dir=src_dir,
+        stubs=tuple(normalized_stubs),
     )
 
 

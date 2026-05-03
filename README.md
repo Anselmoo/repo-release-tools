@@ -37,6 +37,9 @@ drifts from your release policy.
 See the full action guide:
 <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/action.md>
 
+See the full CLI and commands reference:
+<https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md>
+
 ### Use the Python package for local workflow automation
 
 Choose the package if you want the developer-side tools: branch helpers,
@@ -111,14 +114,14 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 
 - Docs index: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md>
 - GitHub Action: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/action.md>
-- CLI reference: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/rrt-cli.md>
-- Hook setup: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/hooks.md>
-- Conventional branches: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/branch.md>
-- Git workflow helpers: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/git.md>
-- Agent skills: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/skill.md>
-- Project tree: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/tree.md>
-- Config health checks: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/doctor.md>
-- Runtime EOL tracking: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/eol.md>
+- CLI reference: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md>
+- Hook setup: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/hooks.md>
+- Conventional branches: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/branch.md>
+- Git workflow helpers: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/git_cmd.md>
+- Agent skills: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/skill.md>
+- Project tree: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/tree.md>
+- Config health checks: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/doctor.md>
+- Runtime EOL tracking: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/eol_check.md>
 - Agent instructions: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/agent-instructions.md>
 
 ## License

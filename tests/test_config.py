@@ -7,6 +7,7 @@ import pytest
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
+    DocsConfig,
     EolConfig,
     EolOverride,
     VersionTarget,
@@ -1327,3 +1328,131 @@ def test_load_config_eol_override_missing_eol(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match=r"overrides\[\]\.eol must be a non-empty"):
         load_config(tmp_path)
+
+
+# _load_docs_config — via load_config
+# ---------------------------------------------------------------------------
+
+
+def _write_docs_cfg(tmp_path: Path, extra: str) -> None:
+    """Write a pyproject.toml with [tool.rrt.docs] appended to the base config."""
+    (tmp_path / "pyproject.toml").write_text(
+        _BASE_RRT_CONFIG + extra,
+        encoding="utf-8",
+    )
+
+
+def test_load_config_docs_section_absent(tmp_path: Path) -> None:
+    """When no [tool.rrt.docs] key is present, config.docs is None."""
+    _write_docs_cfg(tmp_path, "")
+    cfg = load_config(tmp_path)
+    assert cfg.docs is None
+
+
+def test_load_config_docs_defaults(tmp_path: Path) -> None:
+    """[tool.rrt.docs] with no fields uses all defaults."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\n")
+    cfg = load_config(tmp_path)
+    assert isinstance(cfg.docs, DocsConfig)
+    assert cfg.docs.mirror_src_tree is False
+    assert cfg.docs.docs_dir == "docs"
+    assert cfg.docs.src_dir == "src/repo_release_tools"
+    assert cfg.docs.stubs == ()
+
+
+def test_load_config_docs_full(tmp_path: Path) -> None:
+    """[tool.rrt.docs] with all fields populated."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs]\nmirror_src_tree = true\ndocs_dir = "documentation"\n'
+        'src_dir = "src/mypackage"\nstubs = ["commands/bump", "commands/init"]\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.mirror_src_tree is True
+    assert cfg.docs.docs_dir == "documentation"
+    assert cfg.docs.src_dir == "src/mypackage"
+    assert cfg.docs.stubs == ("commands/bump", "commands/init")
+
+
+def test_load_config_docs_not_a_table(tmp_path: Path) -> None:
+    """[tool.rrt.docs] must be a table, not a scalar."""
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+docs = "bad"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"tool\.rrt\.docs must be a table"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_mirror_not_bool(tmp_path: Path) -> None:
+    """mirror_src_tree must be a boolean."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nmirror_src_tree = "yes"\n')
+    with pytest.raises(ValueError, match="mirror_src_tree must be a boolean"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_docs_dir_not_string(tmp_path: Path) -> None:
+    """docs_dir must be a non-empty string."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\ndocs_dir = 123\n")
+    with pytest.raises(ValueError, match="docs_dir must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_src_dir_not_string(tmp_path: Path) -> None:
+    """src_dir must be a non-empty string."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\nsrc_dir = 123\n")
+    with pytest.raises(ValueError, match="src_dir must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_stubs_not_list(tmp_path: Path) -> None:
+    """stubs must be a list of strings."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nstubs = "commands/bump"\n')
+    with pytest.raises(ValueError, match="stubs must be a list of strings"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_stubs_empty_entry(tmp_path: Path) -> None:
+    """stubs list must not contain empty/whitespace-only entries."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nstubs = ["commands/bump", ""]\n')
+    with pytest.raises(ValueError, match="must not contain empty entries"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_stubs_whitespace_entry(tmp_path: Path) -> None:
+    """A whitespace-only stub entry is rejected after stripping."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nstubs = ["commands/bump", "   "]\n')
+    with pytest.raises(ValueError, match="must not contain empty entries"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_stubs_deduplication(tmp_path: Path) -> None:
+    """Duplicate stub entries are silently removed, preserving first occurrence."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs]\nstubs = ["commands/bump", "commands/branch", "commands/bump"]\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.stubs == ("commands/bump", "commands/branch")
+
+
+def test_load_config_docs_stubs_strip_whitespace(tmp_path: Path) -> None:
+    """Leading/trailing whitespace in stub entries is stripped."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nstubs = ["  commands/bump  "]\n')
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.stubs == ("commands/bump",)

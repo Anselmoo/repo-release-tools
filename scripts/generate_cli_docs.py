@@ -38,7 +38,7 @@ class SupportsWrite(Protocol):
         """Write text to the underlying stream-like object."""
 
 
-DEFAULT_OUTPUT = Path("docs/rrt-cli.md")
+DEFAULT_OUTPUT = Path("docs/commands/rrt-cli.md")
 PINNED_COLUMNS = "120"
 AUTOGEN_NOTE = (
     "<!-- Auto-generated from repo_release_tools.cli.build_parser(); "
@@ -366,24 +366,24 @@ def generate_git_magic_markdown() -> str:
 def generate_index_topic_links_markdown() -> str:
     """Return the generated topic-link bullets for docs/index.md."""
     links = [
-        "- [Semantic branches](branch.md) — generated branch naming model and allowed branch types",
-        "- [Git magic](git.md) — generated Git helpers and workflow shortcuts",
-        "- [Project tree](tree.md) — generated guide for `rrt tree` output modes, "
+        "- [Semantic branches](commands/branch.md) — generated branch naming model and allowed branch types",
+        "- [Git magic](commands/git_cmd.md) — generated Git helpers and workflow shortcuts",
+        "- [Project tree](commands/tree.md) — generated guide for `rrt tree` output modes, "
         "ignore behavior, and traversal controls",
     ]
     return "\n".join(links)
 
 
 TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
-    "branch": Path("docs/branch.md"),
-    "git": Path("docs/git.md"),
-    "tree": Path("docs/tree.md"),
-    "hooks": Path("docs/hooks.md"),
+    "branch": Path("docs/commands/branch.md"),
+    "git": Path("docs/commands/git_cmd.md"),
+    "tree": Path("docs/commands/tree.md"),
+    "hooks": Path("docs/commands/hooks.md"),
     "action": Path("docs/action.md"),
-    "skill": Path("docs/skill.md"),
+    "skill": Path("docs/commands/skill.md"),
     "agent-instructions": Path("docs/agent-instructions.md"),
-    "doctor": Path("docs/doctor.md"),
-    "eol": Path("docs/eol.md"),
+    "doctor": Path("docs/commands/doctor.md"),
+    "eol": Path("docs/commands/eol_check.md"),
 }
 
 
@@ -505,13 +505,13 @@ def task_check() -> int:
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the generator CLI parser."""
     parser = argparse.ArgumentParser(
-        description="Generate docs/rrt-cli.md from the live rrt parser."
+        description="Generate docs/commands/rrt-cli.md from the live rrt parser."
     )
     parser.add_argument(
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
-        help="Destination Markdown file. Defaults to docs/rrt-cli.md.",
+        help="Destination Markdown file. Defaults to docs/commands/rrt-cli.md.",
     )
     parser.add_argument(
         "--check",

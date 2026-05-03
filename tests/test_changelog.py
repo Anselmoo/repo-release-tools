@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from repo_release_tools.changelog import (
     append_to_unreleased,
     get_unreleased_entries,
@@ -650,3 +652,101 @@ def test_append_multiple_sections_no_extra_blank_lines() -> None:
     # Both subsections present.
     assert "### Added" in content
     assert "### Fixed" in content
+
+
+def test_parse_conventional_commit_skips_release_prefix() -> None:
+    from repo_release_tools.changelog import parse_conventional_commit
+
+    assert parse_conventional_commit("release: 1.2.3") is None
+
+
+def test_build_changelog_section_skips_maintenance_when_disabled() -> None:
+    from repo_release_tools.changelog import build_changelog_section
+
+    rendered = build_changelog_section(
+        "1.2.3",
+        ["chore: tidy lockfile"],
+        include_maintenance=False,
+    )
+    assert "### Maintenance" not in rendered
+
+
+def test_build_changelog_section_skips_unmapped_type_via_section_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from repo_release_tools import changelog as changelog_module
+
+    original = dict(changelog_module.SECTION_MAP)
+    monkeypatch.setitem(changelog_module.SECTION_MAP, "feat", None)
+    try:
+        rendered = changelog_module.build_changelog_section(
+            "1.2.3",
+            ["feat: brand new feature"],
+            include_maintenance=True,
+        )
+    finally:
+        changelog_module.SECTION_MAP.clear()
+        changelog_module.SECTION_MAP.update(original)
+
+    assert "brand new feature" not in rendered
+
+
+def test_append_to_unreleased_no_title_uses_separator_before_existing_content() -> None:
+    content = "## [1.0.0] - 2025-01-01\n\n### Added\n- init\n"
+    result = append_to_unreleased(content, "fix: patch edge case")
+    assert result.startswith("## [Unreleased]")
+    assert "patch edge case" in result
+
+
+def test_append_to_unreleased_returns_unchanged_when_section_mapping_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from repo_release_tools import changelog as changelog_module
+
+    original = dict(changelog_module.SECTION_MAP)
+    monkeypatch.setitem(changelog_module.SECTION_MAP, "feat", None)
+    try:
+        content = "# Changelog\n"
+        result = changelog_module.append_to_unreleased(content, "feat: x")
+    finally:
+        changelog_module.SECTION_MAP.clear()
+        changelog_module.SECTION_MAP.update(original)
+
+    assert result == content
+
+
+def test_append_to_unreleased_rst_without_title_prepends_section() -> None:
+    plain = "1.0.0 - 2025-01-01\n------------------\n"
+    result = append_to_unreleased(plain, "fix: rst body", ChangelogFormat.RST)
+    assert result.startswith("Unreleased\n")
+    assert "rst body" in result
+
+
+def test_insert_generated_section_without_title_or_unreleased_adds_header() -> None:
+    content = "## [1.0.0] - 2025-01-01\n"
+    section = "## [1.1.0] - 2025-06-01\n\n### Added\n- thing\n"
+    result = insert_generated_section(content, section)
+    assert result.startswith("## [Unreleased]\n")
+    assert "## [1.1.0]" in result
+
+
+def test_build_changelog_section_skips_non_conventional_subjects_in_loop() -> None:
+    from repo_release_tools.changelog import build_changelog_section
+
+    rendered = build_changelog_section(
+        "1.2.3",
+        ["not a commit", "fix: valid fix"],
+        include_maintenance=True,
+    )
+    assert "valid fix" in rendered
+
+
+def test_build_changelog_section_markdown_renders_subheaders() -> None:
+    from repo_release_tools.changelog import build_changelog_section
+
+    rendered = build_changelog_section(
+        "1.2.3",
+        ["fix: valid fix"],
+        include_maintenance=True,
+    )
+    assert "### Fixed" in rendered
