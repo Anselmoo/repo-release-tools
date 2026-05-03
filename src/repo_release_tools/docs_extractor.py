@@ -101,7 +101,7 @@ _PY_STRING_AFTER_MARKER = re.compile(
 
 # Python: SOURCE_OWNED_TOPIC_DOCS first-class extraction
 _PY_SOURCE_OWNED = re.compile(
-    r"SOURCE_OWNED_TOPIC_DOCS\s*[^=]*=\s*\(([\s\S]*?)\)",
+    r"SOURCE_OWNED_TOPIC_DOCS\s*[^=]*=\s*\(([\s\S]*?)^\)",
     re.MULTILINE,
 )
 _PY_TUPLE_ENTRY = re.compile(r'\(\s*"([^"]+)"\s*,\s*(?:[A-Z_][A-Z0-9_]*)\s*\)')

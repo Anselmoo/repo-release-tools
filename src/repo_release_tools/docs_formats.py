@@ -56,7 +56,7 @@ def inject_md(
     existing = target_file.read_text(encoding="utf-8") if target_file.exists() else ""
     result = existing
     for entry in entries:
-        anchor_id = f"docs:{entry.name}"
+        anchor_id = f"docs.{entry.name}"
         block = entry.content
         updated = replace_anchored_block(result, anchor_id=anchor_id, content=block)
         if updated is not None:

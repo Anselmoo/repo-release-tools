@@ -821,3 +821,40 @@ def test_doctor_docs_section_stale_hash_mismatch(
     out = capsys.readouterr().out
     assert "content modified, lockfile stale" in out
     assert "Docs lockfile checks failed" in out
+
+
+def test_doctor_docs_section_unknown_drift_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Docs drift message that matches no known pattern is shown as-is (line 350 else branch)."""
+    monkeypatch.chdir(tmp_path)
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    src_file = src_dir / "mod.py"
+    src_file.write_text('# sym: GREET\nGREET = """Hello."""\n', encoding="utf-8")
+
+    docs = DocsConfig(extraction_mode="explicit", languages=("python",), src_dir="src")
+    conf = _make_docs_config(tmp_path, docs=docs)
+    _write_docs_version_file(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Generate a valid lockfile so lock_path exists
+    from repo_release_tools.docs_extractor import extract_docs_from_dir
+    from repo_release_tools.docs_formats import render
+
+    entries = extract_docs_from_dir(tmp_path, docs)
+    render("toml", entries, docs, root=tmp_path)
+
+    # Mock lock_is_current to return an unrecognised drift message
+    monkeypatch.setattr(
+        doctor,
+        "lock_is_current",
+        lambda lock_path, sources: (False, ["Unexpected drift reason"]),
+    )
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "Unexpected drift reason" in out
+    assert "Docs lockfile checks failed" in out
