@@ -1,3 +1,5 @@
+"""GitHub hook to check code coverage before allowing a push."""
+
 #!/usr/bin/env python3
 import json
 import re
@@ -9,6 +11,7 @@ THRESHOLD = 85.71
 
 
 def fail(message: str, reason: str) -> None:
+    """Helper to emit a block decision with a message and reason."""
     output = {
         "continue": False,
         "systemMessage": message,
@@ -20,6 +23,7 @@ def fail(message: str, reason: str) -> None:
 
 
 def main() -> None:
+    """Main entry point for the check push coverage hook."""
     try:
         payload = json.load(sys.stdin)
     except json.JSONDecodeError:

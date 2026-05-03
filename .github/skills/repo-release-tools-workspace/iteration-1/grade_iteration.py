@@ -7,7 +7,6 @@ import json
 import re
 from pathlib import Path
 
-
 ITERATION_DIR = Path(__file__).resolve().parent
 
 
@@ -127,6 +126,7 @@ CHECKS = {
 
 
 def grade_run(run_dir: Path, eval_id: int, expectations: list[str]) -> None:
+    """Grade a single eval run and write the results to grading.json."""
     outputs_dir = run_dir / "outputs"
     answer = _read_text(outputs_dir / "answer.md")
     transcript = _read_text(run_dir / "transcript.md")
@@ -177,6 +177,7 @@ def grade_run(run_dir: Path, eval_id: int, expectations: list[str]) -> None:
 
 
 def main() -> None:
+    """Grade eval runs for iteration 1 and write grading.json files with results."""
     for eval_dir in sorted(
         path for path in ITERATION_DIR.iterdir() if path.is_dir() and path.name != "__pycache__"
     ):
