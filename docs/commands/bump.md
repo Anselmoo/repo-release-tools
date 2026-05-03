@@ -23,4 +23,4 @@ rrt bump patch --dry-run
 ## Related docs
 
 - [Generated CLI reference](rrt-cli.md)
-- [Config health checks](../doctor.md)
+- [Config health checks](doctor.md)

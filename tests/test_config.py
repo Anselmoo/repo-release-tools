@@ -1423,3 +1423,36 @@ def test_load_config_docs_stubs_not_list(tmp_path: Path) -> None:
     _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nstubs = "commands/bump"\n')
     with pytest.raises(ValueError, match="stubs must be a list of strings"):
         load_config(tmp_path)
+
+
+def test_load_config_docs_stubs_empty_entry(tmp_path: Path) -> None:
+    """stubs list must not contain empty/whitespace-only entries."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nstubs = ["commands/bump", ""]\n')
+    with pytest.raises(ValueError, match="must not contain empty entries"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_stubs_whitespace_entry(tmp_path: Path) -> None:
+    """A whitespace-only stub entry is rejected after stripping."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nstubs = ["commands/bump", "   "]\n')
+    with pytest.raises(ValueError, match="must not contain empty entries"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_stubs_deduplication(tmp_path: Path) -> None:
+    """Duplicate stub entries are silently removed, preserving first occurrence."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs]\nstubs = ["commands/bump", "commands/branch", "commands/bump"]\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.stubs == ("commands/bump", "commands/branch")
+
+
+def test_load_config_docs_stubs_strip_whitespace(tmp_path: Path) -> None:
+    """Leading/trailing whitespace in stub entries is stripped."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nstubs = ["  commands/bump  "]\n')
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.stubs == ("commands/bump",)

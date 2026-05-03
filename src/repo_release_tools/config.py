@@ -1116,11 +1116,22 @@ def _load_docs_config(raw: object) -> DocsConfig | None:
     if not isinstance(raw_stubs, list) or not all(isinstance(s, str) for s in raw_stubs):
         raise ValueError("tool.rrt.docs.stubs must be a list of strings")
 
+    # Normalize: strip whitespace, reject blanks, deduplicate preserving order.
+    seen_stubs: set[str] = set()
+    normalized_stubs: list[str] = []
+    for s in cast(list[str], raw_stubs):
+        s = s.strip()
+        if not s:
+            raise ValueError("tool.rrt.docs.stubs must not contain empty entries")
+        if s not in seen_stubs:
+            seen_stubs.add(s)
+            normalized_stubs.append(s)
+
     return DocsConfig(
         mirror_src_tree=mirror_src_tree,
         docs_dir=docs_dir,
         src_dir=src_dir,
-        stubs=tuple(cast(list[str], raw_stubs)),
+        stubs=tuple(normalized_stubs),
     )
 
 
