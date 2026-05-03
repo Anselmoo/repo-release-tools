@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -10,14 +11,32 @@ from repo_release_tools.config import (
     DocsConfig,
     EolConfig,
     EolOverride,
+    MissingRrtConfigError,  # noqa: F401 — tested indirectly via match patterns
+    RrtConfig,
+    VersionGroup,
     VersionTarget,
+    _autodetect_version_targets,
+    _describe_version_target,
+    _find_python_version_files,
+    _json_string_field_exists,
+    _recommended_lock_settings,
+    _target_ecosystem,
+    _toml_string_field_exists,
+    auto_detect_config,
     autodetect_config,
     find_changelog_file,
     find_config_file,
     find_explicit_config_file,
     format_autodetected_config_notice,
     load_config,
+    load_config_from_path,
     load_extra_branch_types,
+    load_or_autodetect_config,
+    recommend_init_config,
+    recommend_init_config_for_go,
+    recommend_init_section_for_cargo,
+    recommend_init_section_for_node,
+    recommend_init_section_for_pyproject,
 )
 
 _RRT_CONFIG = """\
@@ -963,7 +982,6 @@ def test_autodetect_config_picks_up_rst_changelog(tmp_path: Path) -> None:
 
 def test_load_config_parses_global_pin_targets(tmp_path: Path) -> None:
     """Global [[tool.rrt.pin_targets]] are loaded onto RrtConfig.global_pin_targets."""
-    from repo_release_tools.config import load_config_from_path
 
     doc = tmp_path / "docs.md"
     doc.write_text("rev: v0.1.0\n", encoding="utf-8")
@@ -996,7 +1014,6 @@ version = "0.1.0"
 
 def test_load_config_parses_per_group_pin_targets(tmp_path: Path) -> None:
     """Per-group [[tool.rrt.version_groups.*.pin_targets]] end up on the group."""
-    from repo_release_tools.config import load_config_from_path
 
     cfg_file = tmp_path / ".rrt.toml"
     cfg_file.write_text(
@@ -1051,7 +1068,6 @@ def test_pin_target_validate_rejects_invalid_regex(tmp_path: Path) -> None:
 
 
 def test_load_config_rejects_non_list_pin_targets(tmp_path: Path) -> None:
-    from repo_release_tools.config import load_config_from_path
 
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(
@@ -1074,7 +1090,6 @@ version = "0.1.0"
 
 
 def test_load_config_rejects_non_table_pin_target_entry(tmp_path: Path) -> None:
-    from repo_release_tools.config import load_config_from_path
 
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(
@@ -1097,7 +1112,6 @@ version = "0.1.0"
 
 
 def test_load_config_rejects_pin_target_without_path(tmp_path: Path) -> None:
-    from repo_release_tools.config import load_config_from_path
 
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(
@@ -1123,7 +1137,6 @@ version = "0.1.0"
 
 
 def test_load_config_rejects_pin_target_without_pattern(tmp_path: Path) -> None:
-    from repo_release_tools.config import load_config_from_path
 
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(
@@ -1542,3 +1555,734 @@ def test_load_config_docs_formats_invalid_entry(tmp_path: Path) -> None:
     _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nformats = ["md", "pdf"]\n')
     with pytest.raises(ValueError, match="unsupported entries"):
         load_config(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# New tests targeting uncovered lines in config.py
+# ---------------------------------------------------------------------------
+
+
+def test_version_target_validate_rejects_non_string_ci_format() -> None:
+    """ci_format that is not a string raises ValueError."""
+    target = VersionTarget.__new__(VersionTarget)
+    object.__setattr__(target, "path", Path("x.toml"))
+    object.__setattr__(target, "kind", "pep621")
+    object.__setattr__(target, "pattern", None)
+    object.__setattr__(target, "section", None)
+    object.__setattr__(target, "field", None)
+    object.__setattr__(target, "ci_format", 123)
+    with pytest.raises(ValueError, match="ci_format must be a string"):
+        target.validate()
+
+
+def test_version_target_validate_rejects_invalid_ci_format_value() -> None:
+    """ci_format with an unrecognised string value raises ValueError."""
+    target = VersionTarget(path=Path("x.toml"), kind="pep621", ci_format="invalid")
+    with pytest.raises(ValueError, match="ci_format must be 'pep440' or 'semver_pre'"):
+        target.validate()
+
+
+def test_version_group_primary_target_raises_when_version_source_unmatched(tmp_path: Path) -> None:
+    """primary_target raises when version_source does not match any target."""
+    t = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[t],
+        version_source=tmp_path / "other.toml",
+    )
+    with pytest.raises(ValueError, match="does not match any target"):
+        group.primary_target()
+
+
+def test_rrtconfig_resolve_group_raises_for_multiple_groups_no_selection(tmp_path: Path) -> None:
+    """resolve_group() raises when multiple groups exist and no selection is made."""
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    config = load_config(tmp_path)
+    with pytest.raises(ValueError, match="Multiple version groups configured"):
+        config.resolve_group()
+
+
+def test_rrtconfig_version_targets_property(tmp_path: Path) -> None:
+    """version_targets property delegates to the default group."""
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+    config: RrtConfig = load_config(tmp_path)
+    targets = config.version_targets
+    assert len(targets) == 1
+    assert targets[0].kind == "package_json"
+
+
+def test_load_or_autodetect_config_raises_file_not_found_when_nothing(tmp_path: Path) -> None:
+    """load_or_autodetect_config re-raises FileNotFoundError when autodetect also fails."""
+    with pytest.raises(FileNotFoundError):
+        load_or_autodetect_config(tmp_path)
+
+
+def test_load_or_autodetect_config_falls_back_on_missing_rrt(tmp_path: Path) -> None:
+    """Falls back to autodetect when config file exists but lacks [tool.rrt]."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    config = load_or_autodetect_config(tmp_path)
+    assert config.autodetected is True
+
+
+def test_load_or_autodetect_config_raises_missing_rrt_when_no_autodetect(tmp_path: Path) -> None:
+    """Re-raises the missing-rrt ValueError when autodetect also returns None."""
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="Missing rrt configuration"):
+        load_or_autodetect_config(tmp_path)
+
+
+def test_find_python_version_files_handles_iterdir_oserror(tmp_path: Path) -> None:
+    """OSError during iterdir is silently skipped."""
+    (tmp_path / "src").mkdir()
+    with patch("repo_release_tools.config.Path.iterdir", side_effect=OSError("perm")):
+        files = _find_python_version_files(tmp_path)
+    assert files == []
+
+
+def test_find_python_version_files_handles_read_text_oserror(tmp_path: Path) -> None:
+    """OSError during read_text is silently skipped."""
+    pkg = tmp_path / "src" / "mypkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+    with patch("repo_release_tools.config.Path.read_text", side_effect=OSError("perm")):
+        files = _find_python_version_files(tmp_path)
+    assert files == []
+
+
+def test_autodetect_version_targets_finds_cargo_workspace_package(tmp_path: Path) -> None:
+    """Cargo.toml with [workspace.package].version is auto-detected."""
+    (tmp_path / "Cargo.toml").write_text(
+        '[workspace.package]\nname = "ws"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
+    targets = _autodetect_version_targets(tmp_path)
+    assert any(t.section == "workspace.package" for t in targets)
+
+
+def test_autodetect_version_targets_detects_python_version_files(tmp_path: Path) -> None:
+    """__version__ files are discovered as secondary targets for pep621 projects."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    pkg = tmp_path / "src" / "mypkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+    targets = _autodetect_version_targets(tmp_path)
+    assert any(t.kind == "python_version" for t in targets)
+
+
+def test_toml_string_field_exists_returns_false_on_oserror(tmp_path: Path) -> None:
+    """OSError while opening TOML is caught and returns False."""
+    p = tmp_path / "test.toml"
+    p.write_text("[project]\nversion = '1.0.0'\n", encoding="utf-8")
+    with patch("repo_release_tools.config.tomllib.load", side_effect=OSError("perm")):
+        assert _toml_string_field_exists(p, section="project", field="version") is False
+
+
+def test_json_string_field_exists_returns_false_on_oserror(tmp_path: Path) -> None:
+    """OSError while reading JSON is caught and returns False."""
+    p = tmp_path / "package.json"
+    p.write_text('{"version": "1.0.0"}', encoding="utf-8")
+    with patch("repo_release_tools.config.Path.read_text", side_effect=OSError("perm")):
+        assert _json_string_field_exists(p, field="version") is False
+
+
+def test_describe_version_target_go_version(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "version.go", kind="go_version")
+    result = _describe_version_target(target, root=tmp_path)
+    assert result == "version.go (Version)"
+
+
+def test_describe_version_target_section_field(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "x.toml", section="package", field="version")
+    result = _describe_version_target(target, root=tmp_path)
+    assert result == "x.toml ([package].version)"
+
+
+def test_describe_version_target_fallback(tmp_path: Path) -> None:
+    """Target with no special fields falls back to the bare relative path."""
+    target = VersionTarget(path=tmp_path / "VERSION")
+    result = _describe_version_target(target, root=tmp_path)
+    assert result == "VERSION"
+
+
+def test_recommend_init_config_with_autodetect(tmp_path: Path) -> None:
+    """recommend_init_config returns rendered TOML when autodetect succeeds."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    result = recommend_init_config(tmp_path)
+    assert "[tool.rrt]" in result
+    assert "pep621" in result
+
+
+def test_recommend_init_config_go_mod_fallback(tmp_path: Path) -> None:
+    """recommend_init_config uses GO example when go.mod exists but no detectable version."""
+    (tmp_path / "go.mod").write_text("module example.com/x\ngo 1.21\n", encoding="utf-8")
+    result = recommend_init_config(tmp_path)
+    assert "go_version" in result
+    assert "# Edit" in result
+
+
+def test_recommend_init_config_for_go_with_autodetect(tmp_path: Path) -> None:
+    """recommend_init_config_for_go returns rendered TOML when autodetect succeeds."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    result = recommend_init_config_for_go(tmp_path)
+    assert "[tool.rrt]" in result
+
+
+def test_recommend_init_section_for_pyproject_with_autodetect(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    result = recommend_init_section_for_pyproject(tmp_path)
+    assert "[tool.rrt]" in result
+
+
+def test_recommend_init_section_for_cargo_with_autodetect(tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "Cargo.lock").write_text("", encoding="utf-8")
+    result = recommend_init_section_for_cargo(tmp_path)
+    assert "[package.metadata.rrt]" in result
+    assert "lock_command" in result
+
+
+def test_render_recommended_rrt_dict_with_lock_and_generated(tmp_path: Path) -> None:
+    """recommend_init_section_for_node includes lock_command and generated_files."""
+    (tmp_path / "package.json").write_text('{"name": "x", "version": "1.0.0"}', encoding="utf-8")
+    (tmp_path / "pnpm-lock.yaml").write_text("", encoding="utf-8")
+    result = recommend_init_section_for_node(tmp_path)
+    assert isinstance(result, dict)
+    assert "lock_command" in result
+    assert "generated_files" in result
+
+
+def test_render_recommended_rrt_dict_with_multiple_targets(tmp_path: Path) -> None:
+    """recommend_init_section_for_node encodes version_source and section/field."""
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "package.json").write_text('{"name": "x", "version": "1.0.0"}', encoding="utf-8")
+    result = recommend_init_section_for_node(tmp_path)
+    assert isinstance(result, dict)
+    assert "version_source" in result
+    rendered = str(result)
+    assert "'section'" in rendered
+    assert "'field'" in rendered
+    assert "'ci_format'" in rendered
+
+
+def test_render_recommended_rrt_toml_version_source_multiple_targets(tmp_path: Path) -> None:
+    """_render_recommended_rrt_toml emits version_source when group has >1 targets."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "package.json").write_text('{"name": "x", "version": "1.0.0"}', encoding="utf-8")
+    result = recommend_init_config(tmp_path)
+    assert "version_source" in result
+
+
+def test_recommended_lock_settings_poetry_ecosystem(tmp_path: Path) -> None:
+    """recommend_init_config returns poetry lock command for poetry projects."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
+    result = recommend_init_config(tmp_path)
+    assert "poetry" in result
+    assert "lock_command" in result
+
+
+def test_recommended_lock_settings_node_ecosystem(tmp_path: Path) -> None:
+    """recommend_init_config returns pnpm lock settings for node + pnpm-lock.yaml."""
+    (tmp_path / "package.json").write_text('{"name": "x", "version": "1.0.0"}', encoding="utf-8")
+    (tmp_path / "pnpm-lock.yaml").write_text("", encoding="utf-8")
+    result = recommend_init_config(tmp_path)
+    assert "pnpm" in result
+    assert "lock_command" in result
+
+
+def test_target_ecosystem_go_version() -> None:
+    t = VersionTarget(path=Path("version.go"), kind="go_version")
+    assert _target_ecosystem(t) == "go"
+
+
+def test_target_ecosystem_python_poetry() -> None:
+    t = VersionTarget(path=Path("pyproject.toml"), section="tool.poetry", field="version")
+    assert _target_ecosystem(t) == "python-poetry"
+
+
+def test_target_ecosystem_rust() -> None:
+    t = VersionTarget(path=Path("Cargo.toml"), section="package", field="version")
+    assert _target_ecosystem(t) == "rust"
+
+
+def test_target_ecosystem_go_mod_file() -> None:
+    t = VersionTarget(path=Path("go.mod"), section="module", field="require")
+    assert _target_ecosystem(t) == "go"
+
+
+def test_target_ecosystem_go_suffix_file() -> None:
+    t = VersionTarget(path=Path("cmd/version.go"), section=None, field=None)
+    assert _target_ecosystem(t) == "go"
+
+
+def test_target_ecosystem_returns_none_for_unknown() -> None:
+    t = VersionTarget(path=Path("some/file.txt"), section="custom", field="ver")
+    assert _target_ecosystem(t) is None
+
+
+def test_load_config_from_path_rejects_non_string_default_group(tmp_path: Path) -> None:
+    """default_group = integer raises ValueError."""
+    p = tmp_path / ".rrt.toml"
+    p.write_text(
+        '[tool.rrt]\ndefault_group = 123\n\n[[tool.rrt.version_targets]]\npath = "x.toml"\nkind = "pep621"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="default_group must be a string"):
+        load_config_from_path(tmp_path, p)
+
+
+def test_load_config_from_path_rejects_non_list_extra_branch_types(tmp_path: Path) -> None:
+    """extra_branch_types = string raises ValueError."""
+    p = tmp_path / ".rrt.toml"
+    p.write_text(
+        '[tool.rrt]\nextra_branch_types = "oops"\n\n[[tool.rrt.version_targets]]\npath = "x.toml"\nkind = "pep621"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="extra_branch_types must be a list"):
+        load_config_from_path(tmp_path, p)
+
+
+def test_load_config_rejects_version_groups_not_a_list(tmp_path: Path) -> None:
+    """version_groups = string raises ValueError."""
+    p = tmp_path / ".rrt.toml"
+    p.write_text('[tool.rrt]\nversion_groups = "invalid"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="version_groups must be an array"):
+        load_config_from_path(tmp_path, p)
+
+
+def test_load_config_rejects_version_group_entry_not_table(tmp_path: Path) -> None:
+    """version_groups containing a string entry raises ValueError."""
+    import json as _json
+
+    p = tmp_path / "package.json"
+    p.write_text(
+        _json.dumps({"rrt": {"version_groups": ["string_not_table"]}}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Each tool.rrt.version_groups entry must be a table"):
+        load_config_from_path(tmp_path, p)
+
+
+def test_load_config_rejects_version_group_missing_name(tmp_path: Path) -> None:
+    """version_group entry without a non-empty name raises ValueError."""
+    p = tmp_path / ".rrt.toml"
+    p.write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_groups]]
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="non-empty name"):
+        load_config_from_path(tmp_path, p)
+
+
+def test_load_config_rejects_duplicate_version_group_names(tmp_path: Path) -> None:
+    """Two version_groups with the same name raises ValueError."""
+    p = tmp_path / ".rrt.toml"
+    p.write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Duplicate version group name"):
+        load_config_from_path(tmp_path, p)
+
+
+def test_load_config_rejects_default_group_name_not_in_groups(tmp_path: Path) -> None:
+    """default_group pointing to a non-existent group name raises ValueError."""
+    p = tmp_path / ".rrt.toml"
+    p.write_text(
+        """\
+[tool.rrt]
+default_group = "nonexistent"
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="is not defined"):
+        load_config_from_path(tmp_path, p)
+
+
+def test_auto_detect_config_cargo_workspace_package(tmp_path: Path) -> None:
+    """auto_detect_config handles Cargo.toml with [workspace.package].version."""
+    (tmp_path / "Cargo.toml").write_text(
+        '[workspace]\nmembers = []\n\n[workspace.package]\nname = "ws"\nversion = "0.2.0"\n',
+        encoding="utf-8",
+    )
+    config = autodetect_config(tmp_path)
+    assert config is not None
+    group = config.resolve_group()
+    assert any(t.section == "workspace.package" for t in group.version_targets)
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for remaining uncovered lines
+# ---------------------------------------------------------------------------
+
+
+def test_version_target_validate_rejects_invalid_kind() -> None:
+    """kind not in VALID_TARGET_KINDS raises ValueError."""
+    target = VersionTarget(path=Path("x.toml"), kind="bogus_kind")
+    with pytest.raises(ValueError, match="kind must be one of"):
+        target.validate()
+
+
+def test_version_target_validate_rejects_no_mode() -> None:
+    """Target with no kind/pattern/section+field raises ValueError."""
+    target = VersionTarget(path=Path("x"))
+    with pytest.raises(ValueError, match="Each version target must define either"):
+        target.validate()
+
+
+def test_version_group_primary_target_returns_first_when_no_version_source(
+    tmp_path: Path,
+) -> None:
+    """primary_target returns targets[0] when version_source is None."""
+    t = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[t],
+    )
+    assert group.primary_target() == t
+
+
+def test_rrtconfig_resolve_group_raises_unknown_name(tmp_path: Path) -> None:
+    """resolve_group raises for an explicit name that does not exist."""
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+    config = load_config(tmp_path)
+    with pytest.raises(ValueError, match="Unknown version group"):
+        config.resolve_group("nonexistent")
+
+
+def test_rrtconfig_resolve_group_returns_single_group_directly() -> None:
+    """resolve_group returns the sole group when default_group_name is None."""
+    t = VersionTarget(path=Path("x.toml"), kind="pep621")
+    group = VersionGroup(
+        name="only",
+        release_branch="release/v{version}",
+        changelog_file=Path("CHANGELOG.md"),
+        lock_command=[],
+        generated_files=[],
+        version_targets=[t],
+    )
+    config = RrtConfig(
+        root=Path("."),
+        config_file=Path(".rrt.toml"),
+        version_groups=[group],
+        default_group_name=None,
+    )
+    assert config.resolve_group() is group
+
+
+def test_is_missing_tool_rrt_error_with_direct_exception() -> None:
+    """is_missing_tool_rrt_error returns True for MissingRrtConfigError instances."""
+    from repo_release_tools.config import is_missing_tool_rrt_error
+
+    exc = MissingRrtConfigError("Missing [tool.rrt]")  # noqa: F821 — imported above
+    assert is_missing_tool_rrt_error(exc) is True
+
+
+def test_format_missing_tool_rrt_guidance_with_files(tmp_path: Path) -> None:
+    """format_missing_tool_rrt_guidance generates help text when checked files given."""
+    from repo_release_tools.config import format_missing_tool_rrt_guidance
+
+    result = format_missing_tool_rrt_guidance(tmp_path, checked_files=[tmp_path / "pyproject.toml"])
+    assert "No rrt configuration was found" in result
+    assert "Zero-config mode" in result
+    assert "rrt init" in result
+
+
+def test_format_missing_tool_rrt_guidance_no_files(tmp_path: Path) -> None:
+    """format_missing_tool_rrt_guidance generates help text when no checked files."""
+    from repo_release_tools.config import format_missing_tool_rrt_guidance
+
+    result = format_missing_tool_rrt_guidance(tmp_path, checked_files=[])
+    assert "No supported config file was found" in result
+    assert "rrt init" in result
+
+
+def test_describe_version_target_pep621(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    result = _describe_version_target(target, root=tmp_path)
+    assert result == "pyproject.toml ([project].version)"
+
+
+def test_describe_version_target_package_json(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "package.json", kind="package_json")
+    result = _describe_version_target(target, root=tmp_path)
+    assert result == "package.json (version)"
+
+
+def test_describe_version_target_python_version(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "__init__.py", kind="python_version")
+    result = _describe_version_target(target, root=tmp_path)
+    assert result == "__init__.py (__version__)"
+
+
+def test_describe_version_target_pattern(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "VERSION", pattern=r'^version = "(.+)"$')
+    result = _describe_version_target(target, root=tmp_path)
+    assert result == "VERSION (pattern)"
+
+
+def test_find_explicit_config_file_returns_path(tmp_path: Path) -> None:
+    """find_explicit_config_file returns the config file that has [tool.rrt]."""
+    from repo_release_tools.config import find_explicit_config_file
+
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+    result = find_explicit_config_file(tmp_path)
+    assert result == tmp_path / ".rrt.toml"
+
+
+def test_recommend_init_config_returns_generic_fallback(tmp_path: Path) -> None:
+    """recommend_init_config falls back to GENERIC when no autodetect and no go.mod."""
+    result = recommend_init_config(tmp_path)
+    assert "rrt init" in result or "version" in result.lower()
+
+
+def test_recommend_init_section_for_pyproject_fallback(tmp_path: Path) -> None:
+    """recommend_init_section_for_pyproject falls back when no autodetect."""
+    result = recommend_init_section_for_pyproject(tmp_path)
+    assert "pep621" in result or "project" in result.lower()
+
+
+def test_recommend_init_section_for_cargo_fallback(tmp_path: Path) -> None:
+    """recommend_init_section_for_cargo falls back when no autodetect."""
+    result = recommend_init_section_for_cargo(tmp_path)
+    assert "Cargo" in result or "package" in result.lower()
+
+
+def test_recommend_init_section_for_node_fallback(tmp_path: Path) -> None:
+    """recommend_init_section_for_node falls back when no autodetect."""
+    result = recommend_init_section_for_node(tmp_path)
+    assert isinstance(result, dict)
+    assert "version_targets" in result
+
+
+def test_recommend_init_config_for_go_fallback(tmp_path: Path) -> None:
+    """recommend_init_config_for_go falls back when no autodetect."""
+    result = recommend_init_config_for_go(tmp_path)
+    assert "go_version" in result
+
+
+def test_render_rrt_dict_target_with_pattern(tmp_path: Path) -> None:
+    """_render_recommended_rrt_dict includes pattern field in output."""
+    (tmp_path / "VERSION").write_text("1.0.0\n", encoding="utf-8")
+    pat = r'^version = "(.+)"$'
+    target = VersionTarget(path=tmp_path / "VERSION", pattern=pat)
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    from repo_release_tools.config import _render_recommended_rrt_dict
+
+    result = _render_recommended_rrt_dict(tmp_path, group)
+    assert "pattern" in str(result)
+
+
+def test_render_rrt_toml_target_with_pattern(tmp_path: Path) -> None:
+    """_render_recommended_rrt_toml emits pattern line for pattern targets."""
+    pat = r'^version = "(.+)"$'
+    target = VersionTarget(path=tmp_path / "VERSION", pattern=pat)
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    from repo_release_tools.config import _render_recommended_rrt_toml
+
+    result = _render_recommended_rrt_toml(tmp_path, group)
+    assert "pattern" in result
+    assert pat in result
+
+
+def test_target_ecosystem_python_version_returns_none() -> None:
+    """_target_ecosystem returns None for python_version targets."""
+    t = VersionTarget(path=Path("src/pkg/__init__.py"), kind="python_version")
+    assert _target_ecosystem(t) is None
+
+
+def test_auto_detect_config_cargo_no_version(tmp_path: Path) -> None:
+    """auto_detect_config returns None for Cargo.toml without package.version."""
+    (tmp_path / "Cargo.toml").write_text("[workspace]\nmembers = []\n", encoding="utf-8")
+    result = autodetect_config(tmp_path)
+    assert result is None
+
+
+def test_load_or_autodetect_config_reraises_non_missing_rrt_value_error(tmp_path: Path) -> None:
+    """load_or_autodetect_config re-raises ValueError that is not a missing-rrt error (line 467)."""
+    # Using both version_targets and version_groups triggers a non-missing-rrt ValueError.
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.rrt]\nversion_targets = []\n\n[tool.rrt.version_groups]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Use either flat version_targets or version_groups"):
+        load_or_autodetect_config(tmp_path)
+
+
+def test_autodetect_version_targets_skips_duplicate_python_version_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line 662: py_file already present in targets is skipped via continue."""
+    import repo_release_tools.config as _config_mod
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8")
+    # Return the pep621 path from _find_python_version_files so it duplicates the existing target.
+    monkeypatch.setattr(_config_mod, "_find_python_version_files", lambda root: [pyproject])
+    targets = _autodetect_version_targets(tmp_path)
+    python_version_entries = [t for t in targets if t.kind == "python_version"]
+    assert len(python_version_entries) == 0
+
+
+def test_load_or_autodetect_file_not_found_with_autodetect_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line 463: load_or_autodetect_config returns autodetected when load_config raises FileNotFoundError."""
+    import repo_release_tools.config as _config_mod
+
+    fake_cfg = object()
+    monkeypatch.setattr(
+        _config_mod,
+        "load_config",
+        lambda root: (_ for _ in ()).throw(FileNotFoundError("no files")),
+    )
+    monkeypatch.setattr(_config_mod, "autodetect_config", lambda root: fake_cfg)
+    result = load_or_autodetect_config(tmp_path)
+    assert result is fake_cfg
+
+
+def test_load_or_autodetect_missing_rrt_with_autodetect_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line 470: load_or_autodetect_config returns autodetected when load_config raises missing-rrt ValueError."""
+    import repo_release_tools.config as _config_mod
+    from repo_release_tools.config import MissingRrtConfigError
+
+    fake_cfg = object()
+    monkeypatch.setattr(
+        _config_mod,
+        "load_config",
+        lambda root: (_ for _ in ()).throw(MissingRrtConfigError("Missing rrt")),
+    )
+    monkeypatch.setattr(_config_mod, "autodetect_config", lambda root: fake_cfg)
+    result = load_or_autodetect_config(tmp_path)
+    assert result is fake_cfg
+
+
+def test_recommended_lock_settings_unknown_ecosystem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line 888: _recommended_lock_settings returns ([], []) for a single unknown ecosystem."""
+    import repo_release_tools.config as _config_mod
+
+    monkeypatch.setattr(_config_mod, "_target_ecosystem", lambda t: "unknown-eco")
+    target = VersionTarget(path=tmp_path / "VERSION", kind="custom")
+    result = _recommended_lock_settings(tmp_path, [target])
+    assert result == ([], [])
+
+
+def test_load_config_from_path_rejects_non_dict_raw(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line 932: load_config_from_path raises ValueError when raw config is not a dict."""
+    import repo_release_tools.config as _config_mod
+
+    cfg_file = tmp_path / ".rrt.toml"
+    cfg_file.write_text("", encoding="utf-8")
+    monkeypatch.setattr(_config_mod, "_load_raw_config", lambda path: ["not", "a", "dict"])
+    with pytest.raises(ValueError, match="must be a table/object"):
+        load_config_from_path(tmp_path, cfg_file)
+
+
+def test_auto_detect_config_poetry_falls_back_to_default_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lines 1302-1303: auto_detect_config sets poetry lock defaults when _detect_lock_and_files returns empty."""
+    import repo_release_tools.config as _config_mod
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.poetry]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(_config_mod, "_detect_lock_and_files", lambda root, targets: ([], []))
+    config = auto_detect_config(tmp_path)
+    assert config is not None
+    assert config.version_groups[0].lock_command == ["poetry", "lock"]
