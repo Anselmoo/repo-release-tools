@@ -1377,11 +1377,24 @@ def test_load_config_docs_full(tmp_path: Path) -> None:
 
 def test_load_config_docs_not_a_table(tmp_path: Path) -> None:
     """[tool.rrt.docs] must be a table, not a scalar."""
-    _write_docs_cfg(tmp_path, '\ndocs = "bad"\n')
-    # scalar at top-level won't trigger docs parsing; must be under [tool.rrt]
-    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\nmirror_src_tree = true\n")
-    cfg = load_config(tmp_path)
-    assert cfg.docs is not None
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+docs = "bad"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"tool\.rrt\.docs must be a table"):
+        load_config(tmp_path)
 
 
 def test_load_config_docs_mirror_not_bool(tmp_path: Path) -> None:
