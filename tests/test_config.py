@@ -1456,3 +1456,89 @@ def test_load_config_docs_stubs_strip_whitespace(tmp_path: Path) -> None:
     cfg = load_config(tmp_path)
     assert cfg.docs is not None
     assert cfg.docs.stubs == ("commands/bump",)
+
+
+# _load_extraction_mode / _load_docs_languages / _load_docs_lock_file / _load_docs_formats
+# ---------------------------------------------------------------------------
+
+
+def test_load_config_docs_extraction_mode_valid(tmp_path: Path) -> None:
+    """Valid extraction_mode values are accepted."""
+    for mode in ("explicit", "implicit", "both"):
+        _write_docs_cfg(tmp_path, f'\n[tool.rrt.docs]\nextraction_mode = "{mode}"\n')
+        cfg = load_config(tmp_path)
+        assert cfg.docs is not None
+        assert cfg.docs.extraction_mode == mode
+
+
+def test_load_config_docs_extraction_mode_invalid(tmp_path: Path) -> None:
+    """An unrecognised extraction_mode raises ValueError."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nextraction_mode = "fancy"\n')
+    with pytest.raises(ValueError, match="extraction_mode must be one of"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_languages_valid(tmp_path: Path) -> None:
+    """A supported languages list is accepted."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nlanguages = ["python", "go"]\n')
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.languages == ("python", "go")
+
+
+def test_load_config_docs_languages_not_list(tmp_path: Path) -> None:
+    """languages must be a list of strings; a scalar raises ValueError."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nlanguages = "python"\n')
+    with pytest.raises(ValueError, match="languages must be a list of strings"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_languages_invalid_entry(tmp_path: Path) -> None:
+    """An unrecognised language in the list raises ValueError."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nlanguages = ["python", "cobol"]\n')
+    with pytest.raises(ValueError, match="unsupported entries"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_lock_file_custom(tmp_path: Path) -> None:
+    """A custom lock_file path is accepted and returned."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nlock_file = ".rrt/custom.lock.toml"\n')
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.lock_file == ".rrt/custom.lock.toml"
+
+
+def test_load_config_docs_lock_file_empty_string(tmp_path: Path) -> None:
+    """An empty string for lock_file raises ValueError."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nlock_file = ""\n')
+    with pytest.raises(ValueError, match="lock_file must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_formats_valid(tmp_path: Path) -> None:
+    """Valid formats list is accepted."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nformats = ["md", "json"]\n')
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.formats == ("md", "json")
+
+
+def test_load_config_docs_formats_not_list(tmp_path: Path) -> None:
+    """formats must be a list; a scalar raises ValueError."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nformats = "md"\n')
+    with pytest.raises(ValueError, match="formats must be a list of strings"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_formats_empty_list(tmp_path: Path) -> None:
+    """An empty formats list raises ValueError."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\nformats = []\n")
+    with pytest.raises(ValueError, match="must not be empty"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_formats_invalid_entry(tmp_path: Path) -> None:
+    """An unrecognised format raises ValueError."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nformats = ["md", "pdf"]\n')
+    with pytest.raises(ValueError, match="unsupported entries"):
+        load_config(tmp_path)
