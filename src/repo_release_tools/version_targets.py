@@ -223,10 +223,9 @@ def compile_pattern_variants(pattern: str) -> list[re.Pattern[str]]:
     compiled: list[re.Pattern[str]] = []
     seen: set[str] = set()
     for candidate in variants:
-        if candidate in seen:
-            continue
-        compiled.append(re.compile(candidate, re.MULTILINE))
-        seen.add(candidate)
+        if candidate not in seen:
+            compiled.append(re.compile(candidate, re.MULTILINE))
+            seen.add(candidate)
     return compiled
 
 

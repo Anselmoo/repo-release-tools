@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import runpy
+import sys
 from pathlib import Path
 
 import pytest
@@ -1487,3 +1489,125 @@ def test_main_check_eol_dispatches_to_cmd_eol_check(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(hooks, "cmd_eol_check", lambda parsed: 0)
 
     assert hooks.main(["check-eol"]) == 0
+
+
+def test_validate_branch_name_empty_returns_none() -> None:
+    assert validate_branch_name("") is None
+
+
+def test_read_commit_subject_blank_file_returns_empty(tmp_path: Path) -> None:
+    message_file = tmp_path / "COMMIT_EDITMSG"
+    message_file.write_text("\n\n\n", encoding="utf-8")
+    assert read_commit_subject(message_file) == ""
+
+
+def test_parse_subject_for_changelog_strips_fixup_prefix() -> None:
+    parsed = hooks._parse_subject_for_changelog("fixup! feat: add parser")
+    assert parsed is not None
+    assert parsed.type == "feat"
+
+
+def test_branch_requires_changelog_returns_false_for_release_and_no_slash() -> None:
+    assert branch_requires_changelog("release/v1.2.3") is False
+    assert branch_requires_changelog("feat-no-slash") is False
+
+
+def test_normalize_repo_path_handles_absolute_outside_cwd_and_dot_prefixes(tmp_path: Path) -> None:
+    outside = Path("/") / "tmp" / "outside.txt"
+    normalized = hooks._normalize_repo_path(str(outside), cwd=tmp_path)
+    assert normalized.endswith("/tmp/outside.txt") or normalized == "tmp/outside.txt"
+
+    assert hooks._normalize_repo_path("././CHANGELOG.md", cwd=tmp_path) == "CHANGELOG.md"
+
+
+def test_staged_files_and_changed_files_for_ref_parse_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hooks.git, "capture", lambda *a, **kw: "\nA.txt\n\nB.txt\n")
+    assert hooks.staged_files(Path.cwd()) == ["A.txt", "B.txt"]
+    assert hooks.changed_files_for_ref(Path.cwd(), "HEAD") == ["A.txt", "B.txt"]
+
+
+def test_collect_squash_changelog_hunks_skips_diff_metadata_lines(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    diff = (
+        "diff --git a/CHANGELOG.md b/CHANGELOG.md\n"
+        "index 123..456 100644\n"
+        "--- a/CHANGELOG.md\n"
+        "+++ b/CHANGELOG.md\n"
+        "@@ -1,1 +1,2 @@\n"
+        " # Changelog\n"
+        "+- fix: metadata path\n"
+    )
+    monkeypatch.setattr(hooks.git, "capture_checked", lambda *a, **kw: diff)
+    added, positions = collect_squash_changelog_hunks(tmp_path)
+    assert added == ["- fix: metadata path"]
+    assert positions == frozenset({2})
+
+
+def test_dedup_changelog_entries_hits_inner_cancelled_continue() -> None:
+    lines = [
+        "- add A",
+        "- remove A",
+        "- remove A",
+        "- add A",
+    ]
+    # Second pair exercises the branch where the inner-loop index was already cancelled.
+    result = dedup_changelog_entries(lines)
+    assert result == []
+
+
+def test_apply_dedup_to_changelog_returns_false_when_removal_budget_not_in_hunk(
+    tmp_path: Path,
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    original = "# Changelog\n\n- keep me\n"
+    changelog.write_text(original, encoding="utf-8")
+
+    changed = apply_dedup_to_changelog(
+        changelog,
+        added_lines=["- keep me"],
+        deduped_lines=[],
+        added_line_positions=frozenset({99}),
+    )
+
+    assert changed is False
+    assert changelog.read_text(encoding="utf-8") == original
+
+
+def test_hooks_module_main_guard_executes_system_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["repo_release_tools.hooks"])
+    with pytest.raises(SystemExit):
+        runpy.run_module("repo_release_tools.hooks", run_name="__main__")
+
+
+def test_dedup_changelog_entries_hits_inner_loop_cancelled_j_continue() -> None:
+    lines = [
+        "- add A",
+        "- foo",
+        "- bar",
+        "- remove A",
+    ]
+    result = dedup_changelog_entries(lines)
+    assert "- add A" not in result
+    assert "- remove A" not in result
+    assert "- foo" in result
+    assert "- bar" in result
+
+
+def test_apply_dedup_to_changelog_collapses_consecutive_blank_lines(tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n- remove me\n\n\n", encoding="utf-8")
+
+    changed = apply_dedup_to_changelog(
+        changelog,
+        added_lines=["- remove me"],
+        deduped_lines=[],
+    )
+
+    assert changed is True
+    # no triple-newline runs after cleanup
+    assert "\n\n\n" not in changelog.read_text(encoding="utf-8")

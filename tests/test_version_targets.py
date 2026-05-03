@@ -6,8 +6,20 @@ from pathlib import Path
 
 import pytest
 
-from repo_release_tools.config import VersionTarget
-from repo_release_tools.version_targets import read_version_string, replace_version_in_file
+from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.version_targets import (
+    _detect_json_indent,
+    check_autodetected_version_consistency,
+    read_current_version,
+    read_group_current_version,
+    read_group_version_strings,
+    read_package_json_version,
+    read_toml_field,
+    read_version_string,
+    replace_package_json_version,
+    replace_pattern_version,
+    replace_version_in_file,
+)
 
 # ---------------------------------------------------------------------------
 # python_version – read
@@ -334,3 +346,110 @@ def test_replace_pin_in_file_replaces_all_occurrences(
     updated = f.read_text(encoding="utf-8")
     assert updated.count("v2.0.0") == 3
     assert "v0.1.7" not in updated
+
+
+def test_read_current_version_helpers(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8")
+    target = VersionTarget(path=pyproject, kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    cfg = RrtConfig(root=tmp_path, config_file=pyproject, version_groups=[group])
+
+    assert str(read_current_version(cfg)) == "1.2.3"
+    assert str(read_group_current_version(group)) == "1.2.3"
+    assert read_group_version_strings(group) == [(target, "1.2.3")]
+
+
+def test_check_autodetected_version_consistency_not_autodetected(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8")
+    target = VersionTarget(path=pyproject, kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    cfg = RrtConfig(
+        root=tmp_path, config_file=pyproject, version_groups=[group], autodetected=False
+    )
+    assert check_autodetected_version_consistency(cfg) is None
+
+
+def test_read_version_string_pep621_missing_raises(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "x"\n', encoding="utf-8")
+    target = VersionTarget(path=pyproject, kind="pep621")
+    with pytest.raises(RuntimeError, match=r"Could not find \[project\]\.version"):
+        read_version_string(target)
+
+
+def test_read_version_string_pattern_no_match_raises(tmp_path: Path) -> None:
+    f = tmp_path / "file.txt"
+    f.write_text("version: 1.0.0\n", encoding="utf-8")
+    target = VersionTarget(path=f, pattern=r"^(v)(\d+\.\d+\.\d+)()$")
+    with pytest.raises(RuntimeError, match="Could not match configured pattern"):
+        read_version_string(target)
+
+
+def test_read_toml_field_missing_section_missing_field_and_non_string(tmp_path: Path) -> None:
+    f = tmp_path / "x.toml"
+    f.write_text("[project]\nname='x'\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match=r"Missing section \[tool\.rrt\]"):
+        read_toml_field(f, section="tool.rrt", field="version")
+
+    f.write_text("[project]\nname='x'\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Missing field 'version'"):
+        read_toml_field(f, section="project", field="version")
+
+    f.write_text("[project]\nversion=1\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="is not a string"):
+        read_toml_field(f, section="project", field="version")
+
+
+def test_read_package_json_version_error_paths(tmp_path: Path) -> None:
+    f = tmp_path / "package.json"
+    f.write_text("[]", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="top-level object"):
+        read_package_json_version(f)
+
+    f.write_text('{"name":"x"}', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Could not find top-level version"):
+        read_package_json_version(f)
+
+    f.write_text('{"version":1}', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="is not a string"):
+        read_package_json_version(f)
+
+
+def test_replace_package_json_version_error_paths_and_newline_behavior() -> None:
+    with pytest.raises(RuntimeError, match="top-level object"):
+        replace_package_json_version("[]", "1.2.3")
+
+    with pytest.raises(RuntimeError, match="Could not find top-level version"):
+        replace_package_json_version('{"name":"x"}', "1.2.3")
+
+    with pytest.raises(RuntimeError, match="must be a string"):
+        replace_package_json_version('{"version":1}', "1.2.3")
+
+    updated = replace_package_json_version('{"version":"1.0.0"}\n', "1.2.3")
+    assert updated.endswith("\n")
+
+
+def test_replace_pattern_version_no_match_raises() -> None:
+    with pytest.raises(RuntimeError, match="Configured pattern did not match"):
+        replace_pattern_version("x", r"^(v)(\d+\.\d+\.\d+)()$", "1.2.3")
+
+
+def test_detect_json_indent_tab() -> None:
+    text = '{\n\t"version": "1.0.0"\n}\n'
+    assert _detect_json_indent(text) == "\t"

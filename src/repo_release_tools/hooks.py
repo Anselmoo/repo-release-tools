@@ -203,10 +203,7 @@ def _normalize_repo_path(path: str, *, cwd: Path) -> str:
             candidate = candidate.relative_to(cwd)
         except ValueError:
             pass
-    normalized = candidate.as_posix()
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized
+    return candidate.as_posix()
 
 
 def staged_files(cwd: Path) -> list[str]:
