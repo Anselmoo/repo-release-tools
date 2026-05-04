@@ -9,6 +9,16 @@ local CLI, hook integration, version bumps, and release-branch automation.
 - GitHub Marketplace action: <https://github.com/marketplace/actions/repo-release-tools-policy-checks>
 - PyPI package: <https://pypi.org/project/repo-release-tools/>
 
+<!-- rrt:auto:start:readme-toc -->
+- [Choose your entry point](#choose-your-entry-point)
+  - [Use the GitHub Action for CI policy checks](#use-the-github-action-for-ci-policy-checks)
+  - [Use the Python package for local workflow automation](#use-the-python-package-for-local-workflow-automation)
+- [Changelog workflows](#changelog-workflows)
+- [What the project includes](#what-the-project-includes)
+- [Start with the doc that matches your task](#start-with-the-doc-that-matches-your-task)
+- [License](#license)
+<!-- rrt:auto:end:readme-toc -->
+
 ## Choose your entry point
 
 ### Use the GitHub Action for CI policy checks
@@ -112,6 +122,7 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 
 ## Start with the doc that matches your task
 
+<!-- rrt:auto:start:readme-links -->
 - Docs index: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md>
 - GitHub Action: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/action.md>
 - CLI reference: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md>
@@ -120,9 +131,11 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 - Git workflow helpers: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/git_cmd.md>
 - Agent skills: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/skill.md>
 - Project tree: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/tree.md>
+- Markdown TOC: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/toc.md>
 - Config health checks: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/doctor.md>
 - Runtime EOL tracking: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/eol_check.md>
 - Agent instructions: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/agent-instructions.md>
+<!-- rrt:auto:end:readme-links -->
 
 ## License
 

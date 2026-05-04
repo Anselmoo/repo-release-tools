@@ -6,6 +6,25 @@ applyTo: "src/**/*.py"
 
 This repository enforces coverage and CI policies through `.github/hooks/check_push_coverage.py` and the `uv run pytest -q -m "not runtime"` workflow.
 
+## Hook layout
+
+All hooks are activated from a single source of truth: **`.claude/settings.json`**.
+Do not create separate `*.json` activation files in `.github/hooks/` — add hook registrations directly to `.claude/settings.json` instead.
+
+Scripts are split by ownership:
+- **`.claude/hooks/`** — session-scoped policies (coverage baseline refresh, regression gate): only relevant inside a Claude agent session.
+- **`.github/hooks/`** — project-scoped policies (push coverage guard, UX enforcement): enforce contributor rules and are visible to all collaborators.
+
+Current hook registrations in `.claude/settings.json`:
+
+| Event | Matcher | Script | Purpose |
+|---|---|---|---|
+| `UserPromptSubmit` | `""` | `.github/hooks/rrt_ux_guard.py` | Advisory UX contract reminder |
+| `PreToolUse` | `Bash` | `.github/hooks/check_push_coverage.py` | Block `git push` below 85.71% coverage |
+| `PreToolUse` | `Write\|Edit\|…` | `.github/hooks/rrt_ux_write_guard.py` | Block raw ANSI writes in `src/` |
+| `PostToolUse` | `""` | `.claude/hooks/refresh_coverage_baseline.py` | Auto-refresh baseline after pytest |
+| `Stop` | `""` | `.claude/hooks/coverage_non_regression.py` | Block completion on coverage regression |
+
 When working in `repo-release-tools`, follow these rules:
 
 - Prefer low-risk, Python-only CLI/UI improvements using existing modules.

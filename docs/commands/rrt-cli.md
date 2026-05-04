@@ -1,11 +1,11 @@
 # RRT CLI
 
-<!-- Auto-generated from repo_release_tools.cli.build_parser(); run `poe docs-generate` to refresh. -->
+<!-- Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. -->
 
 This reference is generated from the live `argparse` configuration in
 `repo_release_tools.cli` and `src/repo_release_tools/commands/*.py`.
 
-Use `poe docs-generate` to rewrite this file or `poe docs-check` to
+Use `rrt docs publish` to rewrite this file or `rrt docs publish --check` to
 verify it is current.
 
 ## Global help
@@ -906,6 +906,8 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   generate     Extract docs and emit in the selected format.
   check        Exit 1 if the docs lockfile is stale.
+  publish      Write CLI-reference docs from the live rrt parser.
+  inject       Inject shared anchor blocks defined in [tool.rrt.docs.shared_blocks].
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -959,6 +961,42 @@ Options
   -h, --help        Show this message and exit.
   --lock-file PATH  Path to the lock file (default: from config or .rrt/docs.lock.toml).
   --root PATH       Project root directory (default: current directory).
+```
+
+### `rrt docs publish`
+
+```text
+Usage:  rrt docs publish [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --check           Fail if any generated file is stale; do not write.
+  --fail-on-change  Exit 1 after writing (for pre-commit hook workflows).
+  --dry-run         Print which files would be written without doing so.
+```
+
+### `rrt docs inject`
+
+```text
+Usage:  rrt docs inject [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --check      Fail if any anchor block is stale; do not write.
+  --root PATH  Project root directory (default: current directory).
+  --dry-run    Print which files would be updated without writing.
 ```
 
 ## `rrt branch`

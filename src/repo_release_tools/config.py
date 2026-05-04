@@ -308,6 +308,33 @@ class EolConfig:
 
 
 @dataclass(frozen=True)
+class SharedBlock:
+    """A single anchor-injected shared block stamped across doc target files."""
+
+    anchor_id: str
+    template: str | None = None  # path to a template file (relative to project root)
+    content: str | None = None  # inline content (alternative to template)
+    targets: tuple[str, ...] = ()  # glob patterns relative to the project root
+
+    def validate(self) -> None:
+        """Validate the shared block configuration."""
+        if not self.anchor_id or not self.anchor_id.strip():
+            raise ValueError("shared_blocks anchor_id must be a non-empty string")
+        if self.template is None and self.content is None:
+            raise ValueError(
+                f"shared_blocks entry {self.anchor_id!r} must define either 'template' or 'content'"
+            )
+        if self.template is not None and self.content is not None:
+            raise ValueError(
+                f"shared_blocks entry {self.anchor_id!r} must not define both 'template' and 'content'"
+            )
+        if not self.targets:
+            raise ValueError(
+                f"shared_blocks entry {self.anchor_id!r} must define at least one target glob"
+            )
+
+
+@dataclass(frozen=True)
 class DocsConfig:
     """Documentation tree configuration under [tool.rrt.docs]."""
 
@@ -320,6 +347,7 @@ class DocsConfig:
     languages: tuple[str, ...] = ("python",)
     lock_file: str = ".rrt/docs.lock.toml"
     formats: tuple[str, ...] = ("md",)
+    shared_blocks: tuple[SharedBlock, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1141,6 +1169,7 @@ def _load_docs_config(raw: object) -> DocsConfig | None:
         languages=_load_docs_languages(d),
         lock_file=_load_docs_lock_file(d),
         formats=_load_docs_formats(d),
+        shared_blocks=_load_shared_blocks(d),
     )
 
 
@@ -1199,6 +1228,42 @@ def _load_docs_formats(d: dict[str, object]) -> tuple[str, ...]:
             f"Supported: {list(_VALID_FORMATS)}"
         )
     return tuple(fmts)
+
+
+def _load_shared_blocks(d: dict[str, object]) -> tuple[SharedBlock, ...]:
+    raw = d.get("shared_blocks")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError("tool.rrt.docs.shared_blocks must be an array of tables")
+    blocks: list[SharedBlock] = []
+    for i, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValueError(f"tool.rrt.docs.shared_blocks[{i}] must be a table")
+        item = cast(dict[str, object], entry)
+        anchor_id = item.get("anchor_id")
+        if not isinstance(anchor_id, str) or not anchor_id.strip():
+            raise ValueError(
+                f"tool.rrt.docs.shared_blocks[{i}].anchor_id must be a non-empty string"
+            )
+        template = item.get("template")
+        if template is not None and not isinstance(template, str):
+            raise ValueError(f"tool.rrt.docs.shared_blocks[{i}].template must be a string")
+        content = item.get("content")
+        if content is not None and not isinstance(content, str):
+            raise ValueError(f"tool.rrt.docs.shared_blocks[{i}].content must be a string")
+        raw_targets = item.get("targets")
+        if not isinstance(raw_targets, list) or not all(isinstance(t, str) for t in raw_targets):
+            raise ValueError(f"tool.rrt.docs.shared_blocks[{i}].targets must be a list of strings")
+        block = SharedBlock(
+            anchor_id=anchor_id.strip(),
+            template=str(template) if template is not None else None,
+            content=str(content) if content is not None else None,
+            targets=tuple(cast(list[str], raw_targets)),
+        )
+        block.validate()
+        blocks.append(block)
+    return tuple(blocks)
 
 
 def _default_lock_command(config_file: Path) -> list[str] | None:

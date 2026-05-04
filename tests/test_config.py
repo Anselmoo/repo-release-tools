@@ -13,6 +13,7 @@ from repo_release_tools.config import (
     EolOverride,
     MissingRrtConfigError,  # noqa: F401 — tested indirectly via match patterns
     RrtConfig,
+    SharedBlock,
     VersionGroup,
     VersionTarget,
     _autodetect_version_targets,
@@ -1068,7 +1069,6 @@ def test_pin_target_validate_rejects_invalid_regex(tmp_path: Path) -> None:
 
 
 def test_load_config_rejects_non_list_pin_targets(tmp_path: Path) -> None:
-
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(
         """[tool.rrt]
@@ -1090,7 +1090,6 @@ version = "0.1.0"
 
 
 def test_load_config_rejects_non_table_pin_target_entry(tmp_path: Path) -> None:
-
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(
         """[tool.rrt]
@@ -1112,7 +1111,6 @@ version = "0.1.0"
 
 
 def test_load_config_rejects_pin_target_without_path(tmp_path: Path) -> None:
-
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(
         """[tool.rrt]
@@ -1137,7 +1135,6 @@ version = "0.1.0"
 
 
 def test_load_config_rejects_pin_target_without_pattern(tmp_path: Path) -> None:
-
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(
         """[tool.rrt]
@@ -1555,6 +1552,139 @@ def test_load_config_docs_formats_invalid_entry(tmp_path: Path) -> None:
     _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nformats = ["md", "pdf"]\n')
     with pytest.raises(ValueError, match="unsupported entries"):
         load_config(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# _load_shared_blocks
+# ---------------------------------------------------------------------------
+
+
+def test_load_config_docs_shared_blocks_absent(tmp_path: Path) -> None:
+    """No shared_blocks key → empty tuple."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\n")
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.shared_blocks == ()
+
+
+def test_load_config_docs_shared_blocks_with_template(tmp_path: Path) -> None:
+    """A valid shared_block with a template path is parsed correctly."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ntemplate = "scripts/templates/doc-footer.md"\n'
+        'targets = ["docs/**/*.md"]\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert len(cfg.docs.shared_blocks) == 1
+    block = cfg.docs.shared_blocks[0]
+    assert block.anchor_id == "doc-footer"
+    assert block.template == "scripts/templates/doc-footer.md"
+    assert block.content is None
+    assert block.targets == ("docs/**/*.md",)
+
+
+def test_load_config_docs_shared_blocks_with_inline_content(tmp_path: Path) -> None:
+    """A valid shared_block with inline content is parsed correctly."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ncontent = "Footer text"\n'
+        'targets = ["docs/**/*.md"]\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    block = cfg.docs.shared_blocks[0]
+    assert block.content == "Footer text"
+    assert block.template is None
+
+
+def test_load_config_docs_shared_blocks_not_array(tmp_path: Path) -> None:
+    """shared_blocks must be an array."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs]\nshared_blocks = "bad"\n',
+    )
+    with pytest.raises(ValueError, match="must be an array of tables"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_entry_not_table(tmp_path: Path) -> None:
+    """Each shared_blocks entry must be a table."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs]\nshared_blocks = ["bad"]\n',
+    )
+    with pytest.raises(ValueError, match=r"shared_blocks\[0\] must be a table"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_missing_anchor_id(tmp_path: Path) -> None:
+    """anchor_id must be present and non-empty."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'template = "scripts/templates/doc-footer.md"\ntargets = ["docs/**/*.md"]\n',
+    )
+    with pytest.raises(ValueError, match="anchor_id must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_both_template_and_content(tmp_path: Path) -> None:
+    """Defining both template and content raises ValueError."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ntemplate = "t.md"\ncontent = "x"\n'
+        'targets = ["docs/**/*.md"]\n',
+    )
+    with pytest.raises(ValueError, match="must not define both"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_no_template_or_content(tmp_path: Path) -> None:
+    """Neither template nor content raises ValueError."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ntargets = ["docs/**/*.md"]\n',
+    )
+    with pytest.raises(ValueError, match="must define either"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_empty_targets(tmp_path: Path) -> None:
+    """An empty targets list raises ValueError."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ncontent = "x"\ntargets = []\n',
+    )
+    with pytest.raises(ValueError, match="at least one target glob"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_targets_not_list(tmp_path: Path) -> None:
+    """targets must be a list of strings."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ncontent = "x"\ntargets = 123\n',
+    )
+    with pytest.raises(ValueError, match="targets must be a list of strings"):
+        load_config(tmp_path)
+
+
+def test_shared_block_validate_rejects_empty_anchor_id() -> None:
+    """SharedBlock.validate raises ValueError for an empty anchor_id."""
+    block = SharedBlock.__new__(SharedBlock)
+    object.__setattr__(block, "anchor_id", "")
+    object.__setattr__(block, "template", "t.md")
+    object.__setattr__(block, "content", None)
+    object.__setattr__(block, "targets", ("docs/**/*.md",))
+    with pytest.raises(ValueError, match="anchor_id must be a non-empty string"):
+        block.validate()
 
 
 # ---------------------------------------------------------------------------
