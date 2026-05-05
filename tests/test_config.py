@@ -1585,6 +1585,19 @@ def test_load_config_docs_shared_blocks_with_template(tmp_path: Path) -> None:
     assert cfg.docs.shared_blocks[0].content.startswith("---")
 
 
+def test_load_config_docs_shared_blocks_template_unreadable(tmp_path: Path) -> None:
+    """Unreadable legacy template paths raise a descriptive ValueError."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ntemplate = "scripts/templates/missing-footer.md"\n'
+        'targets = ["docs/**/*.md"]\n',
+    )
+    with pytest.warns(DeprecationWarning, match="template is deprecated"):
+        with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template unreadable:"):
+            load_config(tmp_path)
+
+
 def test_load_config_docs_shared_blocks_with_inline_content(tmp_path: Path) -> None:
     """A valid shared_block with rich inline content is parsed correctly."""
     _write_docs_cfg(
