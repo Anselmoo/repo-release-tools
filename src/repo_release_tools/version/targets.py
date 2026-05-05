@@ -9,7 +9,7 @@ from pathlib import Path
 
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.ui import GLYPHS, DryRunPrinter
-from repo_release_tools.versioning import Version
+from repo_release_tools.version.semver import Version
 
 PEP621_PATTERN = re.compile(r'(?ms)(^\[project\]\s.*?^version\s*=\s*")([^"]+)(")')
 # Allows optional leading whitespace; uses a backreference (\2) to enforce matching

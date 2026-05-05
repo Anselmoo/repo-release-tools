@@ -99,6 +99,8 @@ def _make_args(**kwargs: object) -> argparse.Namespace:
         "warn_days": None,
         "error_days": None,
         "allow_eol": False,
+        "host_only": False,
+        "project_only": False,
     }
     defaults.update(kwargs)  # type: ignore[arg-type]
     return argparse.Namespace(**defaults)
@@ -223,6 +225,82 @@ class TestCmdEol:
 
         # Only python should be checked, not go
         assert calls == ["python"]
+        assert result == 0
+
+    def test_host_only_flag_skips_project_checks(self, tmp_path: Path) -> None:
+        eol_cfg = EolConfig(languages=("python", "go"), warn_days=180, error_days=0)
+        rrt_config = MagicMock()
+        rrt_config.eol = eol_cfg
+
+        host_calls: list[str] = []
+        proj_calls: list[str] = []
+
+        def fake_host(lang: str) -> str | None:
+            host_calls.append(lang)
+            return "3.12.4" if lang == "python" else None
+
+        def fake_proj(lang: str, root: Path) -> str | None:
+            proj_calls.append(lang)
+            return None
+
+        with (
+            patch(
+                "repo_release_tools.commands.eol_check.load_or_autodetect_config",
+                return_value=rrt_config,
+            ),
+            patch(
+                "repo_release_tools.commands.eol_check.detect_host_version",
+                side_effect=fake_host,
+            ),
+            patch(
+                "repo_release_tools.commands.eol_check.detect_project_minimum",
+                side_effect=fake_proj,
+            ),
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+        ):
+            result = cmd_eol(_make_args(host_only=True))
+
+        # Project checks should not have been invoked
+        assert proj_calls == []
+        assert host_calls == ["python", "go"] or host_calls == ["python"]
+        assert result == 0
+
+    def test_project_only_flag_skips_host_checks(self, tmp_path: Path) -> None:
+        eol_cfg = EolConfig(languages=("python", "go"), warn_days=180, error_days=0)
+        rrt_config = MagicMock()
+        rrt_config.eol = eol_cfg
+
+        host_calls: list[str] = []
+        proj_calls: list[str] = []
+
+        def fake_host(lang: str) -> str | None:
+            host_calls.append(lang)
+            return "3.12.4"
+
+        def fake_proj(lang: str, root: Path) -> str | None:
+            proj_calls.append(lang)
+            return "3.12"
+
+        with (
+            patch(
+                "repo_release_tools.commands.eol_check.load_or_autodetect_config",
+                return_value=rrt_config,
+            ),
+            patch(
+                "repo_release_tools.commands.eol_check.detect_host_version",
+                side_effect=fake_host,
+            ),
+            patch(
+                "repo_release_tools.commands.eol_check.detect_project_minimum",
+                side_effect=fake_proj,
+            ),
+            patch("pathlib.Path.cwd", return_value=tmp_path),
+        ):
+            result = cmd_eol(_make_args(project_only=True))
+
+        # Host checks should not have been invoked
+        assert host_calls == []
+        assert proj_calls == ["python", "go"] or proj_calls == ["python"]
         assert result == 0
 
     def test_fetch_live_flag_respected(self, tmp_path: Path) -> None:

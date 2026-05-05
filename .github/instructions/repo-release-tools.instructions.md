@@ -42,7 +42,12 @@ When working in `repo-release-tools`, follow these rules:
 - Prefer low-risk, Python-only CLI/UI improvements using existing modules.
 - Do not add new runtime dependencies for command-line output or parser UX work.
 - For UI and help enhancements, focus on `src/repo_release_tools/cli.py` and `src/repo_release_tools/ui/*`.
+- Keep package `__init__.py` files as facades only: re-exports, tiny aliases, or package metadata. Do not place primary implementation bodies in `__init__.py`.
+- When two or more modules belong to the same domain, or one domain module mixes distinct responsibilities, group them into a semantic package (`docs/`, `config/`, `eol/`, `version/`, `workflow/`, `integrations/`) instead of leaving them flat at `src/repo_release_tools/`.
+- After moving code into a semantic package, update source imports and tests to the canonical package path and delete obsolete root modules in the same change. Do not leave permanent flat-module duplicates behind.
+- Inside a domain package, split logic by role (`core.py`, `data.py`, `detect.py`, `targets.py`, `semver.py`) rather than creating a new oversized sibling module.
 - Anchor-based file injection lives in `src/repo_release_tools/tools/inject.py` — import from `repo_release_tools.tools.inject`, not from `repo_release_tools.inject` (old path removed).
+- Author docs shared blocks inline in `[tool.rrt.docs.shared_blocks].content` under `pyproject.toml` or `.rrt.toml`; do not add new scripts or template files for doc footers, headers, or shared text fragments.
 - Use `fetch_webpage` and `mcp_github_search_code` when researching external examples, issue comments, or PR context before changing behavior.
 - Avoid proposing or creating PRs that lower test coverage; if a change is necessary and coverage drops, explain the coverage gap and add tests to restore it.
 - The repo currently reports low coverage in `src/repo_release_tools/ui/syntax.py`.

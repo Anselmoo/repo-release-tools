@@ -36,9 +36,10 @@ Affected entrypoints:
 ## Version & Release
 -   bump        Bump project version using [tool.rrt] config
 -   ci-version  Compute and apply CI pre-release versions (PEP 440 / SemVer)
+-   release     Run release-specific checks such as version-target and changelog validation
 
 ## Repository Health
--   doctor  Check the health of the rrt configuration (files, patterns, versions)
+-   doctor  Check core automation wiring for the resolved rrt configuration
 -   config  Show the resolved rrt configuration for this repository
 -   env     Show environment variables and interpreter details that affect rrt behavior
 -   eol     Check host runtimes and project minimums against EOL dates

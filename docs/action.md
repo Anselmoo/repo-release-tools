@@ -27,7 +27,8 @@ best and misleading at worst — tiny chaos gremlin, large confusion.
 - Conventional Commit subjects
 - changelog policy
 - optional clean-worktree enforcement
-- optional `rrt doctor` health checks
+- optional `rrt doctor` core automation checks
+- optional `rrt release check` release-target validation
 
 ## Important behavior
 
@@ -99,7 +100,8 @@ hooks with CI `changelog-strategy: "unreleased"`.
 | `changelog-strategy` | `"auto"` | `auto` / `per-commit` / `unreleased` / `release-only` |
 | `changelog-file` | `"CHANGELOG.md"` | Path to changelog file |
 | `check-dirty-tree` | `"false"` | Fail when generated files leave the work tree dirty |
-| `check-doctor` | `"false"` | Run `rrt doctor` health checks |
+| `check-doctor` | `"false"` | Run `rrt doctor` core automation checks |
+| `check-release-health` | `"false"` | Run `rrt release check` for version targets, pin targets, and changelog files |
 | `branch-name` | — | Override the branch name to validate |
 | `branch-ref-type` | — | Override branch ref type detection |
 | `commit-subject` | — | Override the commit subject to validate |
@@ -108,12 +110,10 @@ hooks with CI `changelog-strategy: "unreleased"`.
 normally clean already. Turn it on when a workflow generates files and you want
 the job to assert that nothing was left uncommitted.
 
-`check-doctor` runs `rrt doctor`, which verifies that version targets and pin
-targets in repo config are reachable and well-formed. It is a good release gate
-when your repository relies on config-driven version updates.
+`check-doctor` runs `rrt doctor`, which verifies core automation wiring such as
+hook and CI integration surfaces.
 
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->
+`check-release-health` runs `rrt release check`, which verifies that version
+targets, pin targets, and changelog files in repo config are reachable and
+well-formed. It is the better release gate when your repository relies on
+config-driven version updates.

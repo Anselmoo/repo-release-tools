@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -1568,36 +1569,49 @@ def test_load_config_docs_shared_blocks_absent(tmp_path: Path) -> None:
 
 
 def test_load_config_docs_shared_blocks_with_template(tmp_path: Path) -> None:
-    """A valid shared_block with a template path is parsed correctly."""
+    """Legacy template-based shared blocks are supported with deprecation warning."""
+    tpl = tmp_path / "scripts" / "templates" / "doc-footer.md"
+    tpl.parent.mkdir(parents=True)
+    tpl.write_text("---\n[Docs]({repo_url})\n", encoding="utf-8")
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = "scripts/templates/doc-footer.md"\n'
         'targets = ["docs/**/*.md"]\n',
     )
-    cfg = load_config(tmp_path)
+    with pytest.warns(DeprecationWarning, match="template is deprecated"):
+        cfg = load_config(tmp_path)
     assert cfg.docs is not None
-    assert len(cfg.docs.shared_blocks) == 1
-    block = cfg.docs.shared_blocks[0]
-    assert block.anchor_id == "doc-footer"
-    assert block.template == "scripts/templates/doc-footer.md"
-    assert block.content is None
-    assert block.targets == ("docs/**/*.md",)
+    assert cfg.docs.shared_blocks[0].content.startswith("---")
 
 
-def test_load_config_docs_shared_blocks_with_inline_content(tmp_path: Path) -> None:
-    """A valid shared_block with inline content is parsed correctly."""
+def test_load_config_docs_shared_blocks_template_unreadable(tmp_path: Path) -> None:
+    """Unreadable legacy template paths raise a descriptive ValueError."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
-        'anchor_id = "doc-footer"\ncontent = "Footer text"\n'
+        'anchor_id = "doc-footer"\ntemplate = "scripts/templates/missing-footer.md"\n'
+        'targets = ["docs/**/*.md"]\n',
+    )
+    with pytest.warns(DeprecationWarning, match="template is deprecated"):
+        with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template unreadable:"):
+            load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_with_inline_content(tmp_path: Path) -> None:
+    """A valid shared_block with rich inline content is parsed correctly."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ncontent = """---\n[Docs]({repo_url})\n<iframe src="https://example.test/embed"></iframe>\n"""\n'
         'targets = ["docs/**/*.md"]\n',
     )
     cfg = load_config(tmp_path)
     assert cfg.docs is not None
     block = cfg.docs.shared_blocks[0]
-    assert block.content == "Footer text"
-    assert block.template is None
+    assert block.content.startswith("---")
+    assert "[Docs]({repo_url})" in block.content
+    assert '<iframe src="https://example.test/embed"></iframe>' in block.content
 
 
 def test_load_config_docs_shared_blocks_not_array(tmp_path: Path) -> None:
@@ -1632,13 +1646,15 @@ def test_load_config_docs_shared_blocks_missing_anchor_id(tmp_path: Path) -> Non
 
 
 def test_load_config_docs_shared_blocks_template_not_string(tmp_path: Path) -> None:
-    """shared_blocks template values must be strings when provided."""
+    """The legacy template key must still be a non-empty string when provided."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = 123\ntargets = ["docs/**/*.md"]\n',
     )
-    with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template must be a string"):
+    with pytest.raises(
+        ValueError, match=r"shared_blocks\[0\]\.template must be a non-empty string"
+    ):
         load_config(tmp_path)
 
 
@@ -1654,25 +1670,29 @@ def test_load_config_docs_shared_blocks_content_not_string(tmp_path: Path) -> No
 
 
 def test_load_config_docs_shared_blocks_both_template_and_content(tmp_path: Path) -> None:
-    """Defining both template and content raises ValueError."""
+    """Inline content wins when both legacy template and content are set."""
+    tpl = tmp_path / "t.md"
+    tpl.write_text("legacy footer\n", encoding="utf-8")
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = "t.md"\ncontent = "x"\n'
         'targets = ["docs/**/*.md"]\n',
     )
-    with pytest.raises(ValueError, match="must not define both"):
-        load_config(tmp_path)
+    with pytest.warns(DeprecationWarning, match="template is deprecated"):
+        cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.shared_blocks[0].content == "x"
 
 
 def test_load_config_docs_shared_blocks_no_template_or_content(tmp_path: Path) -> None:
-    """Neither template nor content raises ValueError."""
+    """Shared blocks must define inline content."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntargets = ["docs/**/*.md"]\n',
     )
-    with pytest.raises(ValueError, match="must define either"):
+    with pytest.raises(ValueError, match=r"shared_blocks\[0\] must define 'content'"):
         load_config(tmp_path)
 
 
@@ -1700,12 +1720,15 @@ def test_load_config_docs_shared_blocks_targets_not_list(tmp_path: Path) -> None
 
 def test_shared_block_validate_rejects_empty_anchor_id() -> None:
     """SharedBlock.validate raises ValueError for an empty anchor_id."""
-    block = SharedBlock.__new__(SharedBlock)
-    object.__setattr__(block, "anchor_id", "")
-    object.__setattr__(block, "template", "t.md")
-    object.__setattr__(block, "content", None)
-    object.__setattr__(block, "targets", ("docs/**/*.md",))
+    block = SharedBlock(anchor_id="", content="footer", targets=("docs/**/*.md",))
     with pytest.raises(ValueError, match="anchor_id must be a non-empty string"):
+        block.validate()
+
+
+def test_shared_block_validate_rejects_missing_content() -> None:
+    """SharedBlock.validate raises ValueError when content is missing."""
+    block = SharedBlock(anchor_id="doc-footer", content=cast(str, None), targets=("docs/**/*.md",))
+    with pytest.raises(ValueError, match=r"must define 'content'"):
         block.validate()
 
 

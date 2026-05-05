@@ -7,7 +7,7 @@
 **Repo:** <https://github.com/Anselmoo/repo-release-tools> · Python ≥ 3.12 · `uv_build`
 
 **Entry points** (from `pyproject.toml`):
-- `rrt-hooks` → `repo_release_tools.hooks:main` — git hook runner (installed binary, NOT a uvx shortcut)
+- `rrt-hooks` → `repo_release_tools.workflow.hooks:main` — git hook runner (installed binary, NOT a uvx shortcut)
 - `rrt` → `repo_release_tools.cli:app` — developer CLI
 
 **Key files:**
@@ -38,7 +38,7 @@ uvx pre-commit run --all-files             # lint (ruff, line-length 100)
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
+Entry point: rrt-hooks (installed binary — repo_release_tools.workflow.hooks:main)
 Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
 Assume pre-commit is already installed.
 </context>
@@ -59,7 +59,7 @@ This installs hooks for every stage declared in `default_install_hook_types`. Co
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
+Entry point: rrt-hooks (installed binary — repo_release_tools.workflow.hooks:main)
 Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
 Assume lefthook and uv are already installed.
 </context>
@@ -81,7 +81,7 @@ DO NOT use `uvx --from repo-release-tools rrt-hooks …` in `lefthook.yml` — `
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
+Entry point: rrt-hooks (installed binary — repo_release_tools.workflow.hooks:main)
 Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
 Assume pre-commit is already installed.
 </context>
@@ -100,9 +100,3 @@ repos:
       - id: rrt-commit-subject
 ```
 ````
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->

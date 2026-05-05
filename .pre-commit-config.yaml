@@ -37,7 +37,7 @@ repos:
 
       - id: rrt-cli-docs
         name: rrt cli docs
-        entry: uv run python scripts/generate_cli_docs.py --write --fail-on-change
+        entry: uv run rrt docs publish --fail-on-change
         language: system
         files: '^src/repo_release_tools/'
         always_run: false

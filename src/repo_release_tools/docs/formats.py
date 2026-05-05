@@ -19,10 +19,74 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from repo_release_tools.config import DocsConfig
-    from repo_release_tools.docs_extractor import DocEntry
+    from repo_release_tools.config.core import DocsConfig
+    from repo_release_tools.docs.extractor import DocEntry
 
 from repo_release_tools.state import build_lock, docs_lock_path, write_lock
+
+from .markdown import has_markdown_headings, parse_markdown_lines
+
+
+def _render_structured_txt(content: str) -> str:
+    """Render heading-structured Markdown as readable plain text."""
+    parsed = parse_markdown_lines(content)
+    heading_levels = [
+        line.level for line in parsed if line.kind == "heading" and line.level is not None
+    ]
+    if not heading_levels:
+        return content
+
+    shallowest = min(heading_levels)
+    parts: list[str] = []
+    for line in parsed:
+        if line.kind == "heading" and line.level is not None:
+            level = line.level - shallowest + 1
+            if parts and parts[-1] != "":
+                parts.append("")
+            if level == 1:
+                parts.append(line.text.upper())
+                parts.append("=" * len(line.text))
+            elif level == 2:
+                parts.append(line.text)
+                parts.append("-" * len(line.text))
+            else:
+                indent = "  " * max(level - 3, 0)
+                parts.append(f"{indent}* {line.text}")
+            continue
+        parts.append(line.text)
+    return "\n".join(parts).strip()
+
+
+def _render_structured_rich(content: str) -> str:
+    """Render heading-structured Markdown using semantic terminal styling."""
+    from repo_release_tools.ui import bold, heading, info, subtle
+
+    parsed = parse_markdown_lines(content)
+    heading_levels = [
+        line.level for line in parsed if line.kind == "heading" and line.level is not None
+    ]
+    shallowest = min(heading_levels)
+    parts: list[str] = []
+    for line in parsed:
+        if line.kind == "heading" and line.level is not None:
+            level = line.level - shallowest + 1
+            indent = "  " + ("  " * max(level - 1, 0))
+            if level == 1:
+                parts.append(heading(f"{indent}{line.text}"))
+            elif level == 2:
+                parts.append(bold(f"{indent}{line.text}"))
+            else:
+                parts.append(bold(f"{indent}• {line.text}"))
+            continue
+        if line.text == "":
+            parts.append("")
+            continue
+        if line.kind == "fence":
+            parts.append(f"  {subtle(line.text)}")
+            continue
+        parts.append(f"  {info(line.text)}")
+    return "\n".join(parts).strip()
+
 
 # ---------------------------------------------------------------------------
 # Markdown
@@ -76,7 +140,7 @@ def render_txt(entries: list["DocEntry"], config: "DocsConfig") -> str:
         parts.append(f"=== {entry.name} ({entry.lang}) ===")
         parts.append(f"Source: {entry.source_file}:{entry.line}")
         parts.append("")
-        parts.append(entry.content)
+        parts.append(_render_structured_txt(entry.content))
         parts.append("")
     return "\n".join(parts)
 
@@ -95,8 +159,11 @@ def render_rich(entries: list["DocEntry"], config: "DocsConfig") -> str:
         parts.append(bold(f"  {entry.name}") + f"  [{entry.lang}]")
         parts.append(subtle(f"  {entry.source_file}:{entry.line}"))
         parts.append("")
-        for line in entry.content.splitlines():
-            parts.append(f"  {info(line)}")
+        if has_markdown_headings(entry.content):
+            parts.extend(_render_structured_rich(entry.content).splitlines())
+        else:
+            for line in entry.content.splitlines():
+                parts.append(f"  {info(line)}")
         parts.append("")
     return "\n".join(parts)
 

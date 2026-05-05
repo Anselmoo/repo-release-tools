@@ -414,7 +414,7 @@ class TestCmdPublish:
         self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Dry-run publish should report every generated target without writing."""
-        from repo_release_tools import docs_publisher
+        from repo_release_tools.docs import publisher as docs_publisher
 
         targets = [
             docs_publisher.DocTarget(temp_repo / "docs" / "rrt-cli.md", lambda: "cli\n"),
@@ -437,7 +437,7 @@ class TestCmdPublish:
         self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
     ) -> None:
         """Non-dry-run publish should call apply_generated_docs for each target."""
-        from repo_release_tools import docs_publisher
+        from repo_release_tools.docs import publisher as docs_publisher
 
         calls: list[tuple[str, Path, bool, bool, bool, str | None]] = []
         target = docs_publisher.DocTarget(
@@ -527,12 +527,19 @@ class TestCmdInject:
         assert _cmd_inject(args) == 0
         assert "README.md" in capsys.readouterr().out
 
-    def test_cmd_inject_reports_missing_template(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+    def test_cmd_inject_preserves_rich_inline_content(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
     ) -> None:
-        """Missing template files should fail fast."""
+        """Inline shared blocks should preserve Markdown and HTML fragments unchanged."""
+        readme = temp_repo / "README.md"
+        readme.write_text(
+            "before\n<!-- rrt:auto:start:shared-footer -->\nold\n<!-- rrt:auto:end:shared-footer -->\nafter\n",
+            encoding="utf-8",
+        )
         block = SharedBlock(
-            anchor_id="shared-footer", template="missing.md", targets=("README.md",)
+            anchor_id="shared-footer",
+            content='[Docs]({repo_url})\n<iframe src="https://example.test/embed"></iframe>',
+            targets=("README.md",),
         )
         monkeypatch.setattr(
             "repo_release_tools.commands.docs_cmd.load_config",
@@ -541,8 +548,10 @@ class TestCmdInject:
 
         args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
 
-        assert _cmd_inject(args) == 1
-        assert "not found" in capsys.readouterr().err
+        assert _cmd_inject(args) == 0
+        result = readme.read_text(encoding="utf-8")
+        assert "[Docs](https://github.com/Anselmoo/repo-release-tools)" in result
+        assert '<iframe src="https://example.test/embed"></iframe>' in result
 
     def test_cmd_inject_reports_when_no_targets_match(
         self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
@@ -575,7 +584,7 @@ kind = "pep621"
 
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "shared-footer"
-template = 123
+content = 123
 targets = ["README.md"]
 """,
             encoding="utf-8",
@@ -583,7 +592,7 @@ targets = ["README.md"]
 
         args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
 
-        with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template must be a string"):
+        with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.content must be a string"):
             _cmd_inject(args)
 
     def test_cmd_inject_writes_content_with_placeholders(
@@ -597,12 +606,9 @@ targets = ["README.md"]
             "before\n<!-- rrt:auto:start:shared-footer -->\nold\n<!-- rrt:auto:end:shared-footer -->\nafter\n",
             encoding="utf-8",
         )
-        template = temp_repo / "scripts" / "templates" / "shared-footer.md"
-        template.parent.mkdir(parents=True, exist_ok=True)
-        template.write_text("Release {version} at {repo_url}", encoding="utf-8")
         block = SharedBlock(
             anchor_id="shared-footer",
-            template="scripts/templates/shared-footer.md",
+            content="Release {version} at {repo_url}",
             targets=("README.md",),
         )
         monkeypatch.setattr(

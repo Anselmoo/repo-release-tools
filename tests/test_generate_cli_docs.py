@@ -11,7 +11,7 @@ import pytest
 
 def _load_generator_module() -> ModuleType:
     """Return a freshly-reloaded docs_publisher module for test isolation."""
-    import repo_release_tools.docs_publisher as pub
+    import repo_release_tools.docs.publisher as pub
 
     importlib.reload(pub)
     return pub
@@ -515,13 +515,13 @@ kind = "pep621"
 
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "test-footer"
-template = 123
+content = 123
 targets = ["docs/**/*.md"]
 """,
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template must be a string"):
+    with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.content must be a string"):
         docs.task_inject_shared_blocks()
 
 
@@ -529,7 +529,7 @@ targets = ["docs/**/*.md"]
 # _apply_shared_blocks / task_inject_shared_blocks / task_check_shared_blocks
 # ---------------------------------------------------------------------------
 
-_PYPROJECT_SHARED_BLOCK_TEMPLATE = """\
+_PYPROJECT_SHARED_BLOCK_RICH_INLINE = '''\
 [project]
 name = "example"
 version = "0.1.0"
@@ -540,9 +540,11 @@ kind = "pep621"
 
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "test-footer"
-template = "scripts/templates/test-footer.md"
+content = """---
+[Docs]({repo_url})
+<iframe src=\"https://example.test/embed\"></iframe>"""
 targets = ["docs/**/*.md"]
-"""
+'''
 
 _PYPROJECT_SHARED_BLOCK_INLINE = """\
 [project]
@@ -572,25 +574,22 @@ def _make_docs_file(tmp_path: Path, subdir: str = "docs") -> Path:
     return doc_file
 
 
-def test_apply_shared_blocks_writes_template_content(
+def test_apply_shared_blocks_writes_rich_inline_content(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Shared block with a template path is injected into matching doc files."""
+    """Rich inline shared block content is injected unchanged apart from placeholders."""
     docs = _load_generator_module()
     monkeypatch.chdir(tmp_path)
 
-    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_TEMPLATE, encoding="utf-8")
-    (tmp_path / "scripts" / "templates").mkdir(parents=True)
-    (tmp_path / "scripts" / "templates" / "test-footer.md").write_text(
-        "template footer", encoding="utf-8"
-    )
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_RICH_INLINE, encoding="utf-8")
     doc_file = _make_docs_file(tmp_path)
 
     exit_code = docs.task_inject_shared_blocks()
     assert exit_code == 0
 
     result = doc_file.read_text(encoding="utf-8")
-    assert "template footer" in result
+    assert "[Docs](https://github.com/Anselmoo/repo-release-tools)" in result
+    assert '<iframe src="https://example.test/embed"></iframe>' in result
     assert "<!-- rrt:auto:start:test-footer -->" in result
     assert "<!-- rrt:auto:end:test-footer -->" in result
 
@@ -684,17 +683,42 @@ def test_apply_shared_blocks_warns_when_no_targets_matched(
     assert "no target files matched" in capsys.readouterr().out
 
 
-def test_apply_shared_blocks_error_when_template_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+def test_apply_shared_blocks_rejects_legacy_template_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Returns exit code 1 and logs to stderr when the template file is missing."""
+    """Legacy template-backed shared blocks still work with deprecation warning."""
     docs = _load_generator_module()
     monkeypatch.chdir(tmp_path)
 
-    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_TEMPLATE, encoding="utf-8")
-    _make_docs_file(tmp_path)
-    # No scripts/templates/test-footer.md created — deliberately missing
+    (tmp_path / "scripts" / "templates").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "scripts" / "templates" / "test-footer.md").write_text(
+        "legacy footer\n", encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "guide.md").write_text(
+        "# Guide\n\n<!-- rrt:auto:start:test-footer -->\n<!-- rrt:auto:end:test-footer -->\n",
+        encoding="utf-8",
+    )
 
-    exit_code = docs.task_inject_shared_blocks()
-    assert exit_code == 1
-    assert "not found" in capsys.readouterr().err
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+name = "example"
+version = "0.1.0"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.docs.shared_blocks]]
+anchor_id = "test-footer"
+template = "scripts/templates/test-footer.md"
+targets = ["docs/**/*.md"]
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.warns(DeprecationWarning, match="template is deprecated"):
+        exit_code = docs.task_inject_shared_blocks()
+    assert exit_code == 0
+    assert "legacy footer" in (tmp_path / "docs" / "guide.md").read_text(encoding="utf-8")

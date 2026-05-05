@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
-from repo_release_tools.version_targets import (
+from repo_release_tools.version.targets import (
     _detect_json_indent,
     check_autodetected_version_consistency,
     read_current_version,
@@ -249,7 +249,7 @@ def test_validate_unknown_kind_raises() -> None:
 
 def test_replace_pin_in_file_updates_version(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     from repo_release_tools.config import PinTarget
-    from repo_release_tools.version_targets import replace_pin_in_file
+    from repo_release_tools.version.targets import replace_pin_in_file
 
     f = tmp_path / "action.md"
     f.write_text("- uses: Anselmoo/repo-release-tools@v0.1.7\n", encoding="utf-8")
@@ -268,7 +268,7 @@ def test_replace_pin_in_file_dry_run_does_not_write(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
     from repo_release_tools.config import PinTarget
-    from repo_release_tools.version_targets import replace_pin_in_file
+    from repo_release_tools.version.targets import replace_pin_in_file
 
     f = tmp_path / "action.md"
     original = "- uses: Anselmoo/repo-release-tools@v0.1.7\n"
@@ -290,7 +290,7 @@ def test_replace_pin_in_file_already_current_skips(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
     from repo_release_tools.config import PinTarget
-    from repo_release_tools.version_targets import replace_pin_in_file
+    from repo_release_tools.version.targets import replace_pin_in_file
 
     f = tmp_path / "action.md"
     f.write_text("- uses: Anselmoo/repo-release-tools@v1.0.0\n", encoding="utf-8")
@@ -307,7 +307,7 @@ def test_replace_pin_in_file_already_current_skips(
 
 def test_replace_pin_in_file_no_match_warns(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     from repo_release_tools.config import PinTarget
-    from repo_release_tools.version_targets import replace_pin_in_file
+    from repo_release_tools.version.targets import replace_pin_in_file
 
     f = tmp_path / "notes.md"
     f.write_text("# Just some notes\n", encoding="utf-8")
@@ -327,7 +327,7 @@ def test_replace_pin_in_file_replaces_all_occurrences(
 ) -> None:
     """replace_pin_in_file updates every occurrence, not just the first."""
     from repo_release_tools.config import PinTarget
-    from repo_release_tools.version_targets import replace_pin_in_file
+    from repo_release_tools.version.targets import replace_pin_in_file
 
     f = tmp_path / "action.md"
     content = (

@@ -11,9 +11,8 @@ block of generated content inside a larger document:
 
 Any text before or after the anchors is preserved unchanged.
 
-This module is used by the ``rrt docs publish`` / ``rrt docs inject`` commands,
-the ``rrt tree --inject`` command, and (via backward-compat shim) by
-``scripts/generate_cli_docs.py``.
+This module is used by the ``rrt docs publish`` / ``rrt docs inject`` commands
+and the ``rrt tree --inject`` command.
 
 ## Anchor ID rules
 

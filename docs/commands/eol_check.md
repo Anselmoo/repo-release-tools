@@ -48,55 +48,16 @@ Add to `pyproject.toml` (or `.rrt.toml`):
 ```toml
 [tool.rrt.eol]
 languages = ["python", "node"]
-warn_days   = 180   # warn N days before EOL (default: 180)
-error_days  = 0     # error on actual EOL by default
-allow_eol   = false # downgrade EOL errors to warnings (default: false)
-fetch_live  = false # refresh from endoflife.date at runtime (default: false)
+warn_days   = 180
+error_days  = 0
+allow_eol   = false
+fetch_live  = false
 
-# Per-cycle EOL date overrides (optional)
 [[tool.rrt.eol.overrides]]
 language = "python"
 cycle    = "3.9"
-eol      = "2026-06-01"   # ISO 8601
+eol      = "2026-06-01"
 ```
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `languages` | list[str] | `["python"]` | Languages to check |
-| `warn_days` | int | `180` | Days-before-EOL warning threshold |
-| `error_days` | int | `0` | Days-before-EOL error threshold |
-| `allow_eol` | bool | `false` | Downgrade EOL failures to warnings |
-| `fetch_live` | bool | `false` | Pull fresh data from endoflife.date |
-| `overrides` | list | `[]` | Per-cycle EOL date overrides |
-
-## Version detection
-
-For each language rrt tries to detect two versions:
-
-- **Host runtime** — the interpreter or toolchain installed on the current
-  machine (e.g. `python --version`)
-- **Project minimum** — the minimum version declared in the repository (e.g.
-  `requires-python` in `pyproject.toml`)
-
-| Language | Host detection | Project minimum detection |
-|---|---|---|
-| Python | `sys.version` | `requires-python` in `pyproject.toml` |
-| Go | `go version` | `go` directive in `go.mod` |
-| Node.js | `node --version` | `engines.node` in `package.json` |
-| Rust | `rustc --version` | `rust-version` in `Cargo.toml` |
-
-When a version cannot be detected, rrt reports `not detected` without failing
-that specific check.
-
-## EOL status labels
-
-| Status | Meaning |
-|---|---|
-| `ok` | Version is supported with more than `warn_days` remaining |
-| `info` | Version is supported but EOL date is unknown or far future |
-| `warn` | EOL within `warn_days` days |
-| `error` | EOL within `error_days` days or already past EOL |
-| `unknown` | Version string could not be matched to a known cycle |
 
 ## Related docs
 
@@ -104,9 +65,3 @@ that specific check.
 - [rrt doctor](doctor.md)
 - [GitHub Action](action.md)
 - [pre-commit / lefthook](hooks.md)
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->

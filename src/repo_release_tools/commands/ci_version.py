@@ -75,7 +75,7 @@ from repo_release_tools.ui import (
     subtle,
     terminal_width,
 )
-from repo_release_tools.version_targets import (
+from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
     read_group_current_version,
     replace_version_in_file,

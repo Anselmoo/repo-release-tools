@@ -353,7 +353,7 @@ def test_docs_extract_python(tmp_path: Path) -> None:
 
     sys.path.insert(0, str(SRC))
     from repo_release_tools.config import DocsConfig
-    from repo_release_tools.docs_extractor import extract_docs
+    from repo_release_tools.docs.extractor import extract_docs
 
     src = tmp_path / "example.py"
     src.write_text(
@@ -372,7 +372,7 @@ def test_docs_extract_ts(tmp_path: Path) -> None:
 
     sys.path.insert(0, str(SRC))
     from repo_release_tools.config import DocsConfig
-    from repo_release_tools.docs_extractor import extract_docs
+    from repo_release_tools.docs.extractor import extract_docs
 
     src = tmp_path / "example.ts"
     src.write_text(
@@ -391,7 +391,7 @@ def test_docs_extract_go(tmp_path: Path) -> None:
 
     sys.path.insert(0, str(SRC))
     from repo_release_tools.config import DocsConfig
-    from repo_release_tools.docs_extractor import extract_docs
+    from repo_release_tools.docs.extractor import extract_docs
 
     src = tmp_path / "example.go"
     src.write_text(
@@ -410,7 +410,7 @@ def test_docs_extract_rust(tmp_path: Path) -> None:
 
     sys.path.insert(0, str(SRC))
     from repo_release_tools.config import DocsConfig
-    from repo_release_tools.docs_extractor import extract_docs
+    from repo_release_tools.docs.extractor import extract_docs
 
     src = tmp_path / "example.rs"
     src.write_text(
@@ -429,8 +429,8 @@ def test_docs_generate_toml_lockfile(tmp_path: Path) -> None:
 
     sys.path.insert(0, str(SRC))
     from repo_release_tools.config import DocsConfig
-    from repo_release_tools.docs_extractor import extract_docs_from_dir
-    from repo_release_tools.docs_formats import render
+    from repo_release_tools.docs.extractor import extract_docs_from_dir
+    from repo_release_tools.docs.formats import render
     from repo_release_tools.state import docs_lock_path
 
     # Set up a minimal project tree

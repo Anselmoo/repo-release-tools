@@ -66,9 +66,3 @@ Structured workspace artifacts under
 `.github/skills/repo-release-tools-workspace/` may be committed as evidence of an
 evaluation run. Do **not** commit ad-hoc execution transcripts
 (`transcript.md`).
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->

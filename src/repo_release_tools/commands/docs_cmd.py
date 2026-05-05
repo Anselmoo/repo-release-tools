@@ -71,22 +71,26 @@ import argparse
 import sys
 from pathlib import Path
 
-from repo_release_tools.config import DocsConfig, is_missing_tool_rrt_error, load_config
-from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
-from repo_release_tools.docs_formats import render
+from repo_release_tools.config import (
+    DocsConfig,
+    is_missing_tool_rrt_error,
+    load_config,
+)
+from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
+from repo_release_tools.docs.formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
 from repo_release_tools.tools.inject import apply_generated_docs
 from repo_release_tools.ui import (
     DryRunPrinter,
+    error,
     success,
     warning,
 )
-from repo_release_tools.ui import (
-    error as color_error,
-)
+
+color_error = error
 
 # ---------------------------------------------------------------------------
-# Source-owned topic docs (used by scripts/generate_cli_docs.py)
+# Source-owned topic docs
 # ---------------------------------------------------------------------------
 
 DOCS_OVERVIEW = """\
@@ -252,7 +256,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 def _cmd_publish(args: argparse.Namespace) -> int:
     """Write all generated CLI-reference doc files to disk (or check for staleness)."""
-    from repo_release_tools import docs_publisher  # noqa: PLC0415
+    from repo_release_tools.docs import publisher as docs_publisher  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
     dry_run: bool = getattr(args, "dry_run", False)
@@ -320,20 +324,7 @@ def _cmd_inject(args: argparse.Namespace) -> int:
 
         exit_code = 0
         for block in cfg.docs.shared_blocks:
-            if block.template is not None:
-                template_path = root / block.template
-                if not template_path.exists():
-                    sys.stderr.write(
-                        color_error(
-                            f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
-                        )
-                    )
-                    exit_code = 1
-                    continue
-                content = template_path.read_text(encoding="utf-8").rstrip("\n")
-            else:
-                assert block.content is not None
-                content = block.content.rstrip("\n")
+            content = block.content.rstrip("\n")
 
             content = content.replace("{version}", rrt_version)
             content = content.replace("{repo_url}", repo_url)

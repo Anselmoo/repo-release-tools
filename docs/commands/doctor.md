@@ -1,54 +1,38 @@
-Validate the health of the resolved rrt configuration for the current repository.
+Validate the core automation health of the resolved rrt configuration.
 
 ## Overview
 
-`rrt doctor` is a repository health check for release automation. It inspects
-the active configuration and looks for the kinds of issues that usually cause
-release jobs to fail late: missing files, broken patterns, unreadable version
-targets, and optional runtime EOL policy problems.
+`rrt doctor` is the basics-first repository health check. It focuses on the
+shared automation wiring around the resolved configuration — local hooks, CI
+workflows, and guidance to the feature-specific checks that own deeper policy
+validation.
 
 ## What it checks
 
-For each resolved version group, the command checks:
+The command checks the automation surfaces that tell you whether repository
+basics are wired correctly:
 
-- version target files exist
-- version target values can be read
-- pin target patterns compile as regular expressions
-- pin target files contain at least one match
-- the group changelog file exists
+- `.pre-commit-config.yaml` when present
+- `lefthook.yml` when present
+- `.github/workflows/*.yml` / `.yaml` when present
 
-It also checks any global pin targets, deduplicating repeated path/pattern
-pairs so the same target is not reported twice.
-
-If `[tool.rrt.eol]` is configured, the command adds a runtime EOL section that
-checks the configured languages against the repository's host runtime and
-project minimum versions.
-
-If `[tool.rrt.docs]` is configured, the command adds a docs lockfile section
-that verifies the `.rrt/docs.lock.toml` is consistent with the current source
-tree. It detects three lifecycle events that cause drift:
-
-- **file added** — a source file exists on disk but has no entry in the lockfile
-- **file deleted** — the lockfile references a source file that no longer exists
-- **content modified** — a source file exists but its hash does not match the
-  lockfile entry
-
-All three events are reported as errors so they fail the command. Run
-`rrt docs generate --format toml` to regenerate the lockfile after any of
-these changes.
+The checks are intentionally light-touch: they verify presence, readability,
+and whether the file appears to reference repo-release-tools policy checks.
+They do **not** replace the deeper feature validators.
 
 ## Output and severity
 
-The command prints a grouped report for each version group and an overall
-status at the end.
+The command prints one grouped report for the core automation surfaces and an
+overall status at the end.
 
-- missing targets and missing changelog files are errors
-- unreadable version content is reported as a warning
-- pin patterns that compile but do not match are reported as a warning
-- valid matches and readable targets are reported as OK
+- unreadable automation files are errors
+- missing optional integration surfaces are warnings
+- surfaces that exist but do not appear to reference repo-release-tools are warnings
+- readable, recognized surfaces are reported as OK
 
-For EOL checks, the command uses the configured thresholds from `[tool.rrt.eol]`
-and reports the host runtime and project minimum for each configured language.
+At the end, `rrt doctor` also points you to the feature-specific commands that
+own deeper validation, such as `rrt release check`, `rrt docs check`, and
+`rrt eol`.
 
 ## Config discovery behavior
 
@@ -66,22 +50,16 @@ rrt doctor
 
 ## Caveats
 
-- The command reports health for the resolved configuration, not just the
-  visible file in the current directory.
-- EOL checks are only shown when EOL policy is configured.
-- Docs lockfile checks are only shown when `[tool.rrt.docs]` is configured.
-- A missing or stale lockfile is an error, not a warning — it fails the command.
+- The command reports core automation health for the resolved configuration,
+    not just the visible file in the current directory.
+- Feature-specific checks belong to their own surfaces: `rrt release check`,
+    `rrt docs check`, and `rrt eol`.
 - A warning does not fail the command; only error-level findings do.
 
 ## Related docs
 
 - [Runtime EOL tracking](eol.md)
 - [rrt eol (CLI)](rrt-cli.md)
+- [rrt release check](rrt-cli.md)
 - [pre-commit / lefthook](hooks.md)
 - [GitHub Action](action.md)
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->

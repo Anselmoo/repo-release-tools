@@ -1,54 +1,38 @@
-"""Validate the health of the resolved rrt configuration for the current repository.
+"""Validate the core automation health of the resolved rrt configuration.
 
 ## Overview
 
-`rrt doctor` is a repository health check for release automation. It inspects
-the active configuration and looks for the kinds of issues that usually cause
-release jobs to fail late: missing files, broken patterns, unreadable version
-targets, and optional runtime EOL policy problems.
+`rrt doctor` is the basics-first repository health check. It focuses on the
+shared automation wiring around the resolved configuration — local hooks, CI
+workflows, and guidance to the feature-specific checks that own deeper policy
+validation.
 
 ## What it checks
 
-For each resolved version group, the command checks:
+The command checks the automation surfaces that tell you whether repository
+basics are wired correctly:
 
-- version target files exist
-- version target values can be read
-- pin target patterns compile as regular expressions
-- pin target files contain at least one match
-- the group changelog file exists
+- `.pre-commit-config.yaml` when present
+- `lefthook.yml` when present
+- `.github/workflows/*.yml` / `.yaml` when present
 
-It also checks any global pin targets, deduplicating repeated path/pattern
-pairs so the same target is not reported twice.
-
-If `[tool.rrt.eol]` is configured, the command adds a runtime EOL section that
-checks the configured languages against the repository's host runtime and
-project minimum versions.
-
-If `[tool.rrt.docs]` is configured, the command adds a docs lockfile section
-that verifies the `.rrt/docs.lock.toml` is consistent with the current source
-tree. It detects three lifecycle events that cause drift:
-
-- **file added** — a source file exists on disk but has no entry in the lockfile
-- **file deleted** — the lockfile references a source file that no longer exists
-- **content modified** — a source file exists but its hash does not match the
-  lockfile entry
-
-All three events are reported as errors so they fail the command. Run
-`rrt docs generate --format toml` to regenerate the lockfile after any of
-these changes.
+The checks are intentionally light-touch: they verify presence, readability,
+and whether the file appears to reference repo-release-tools policy checks.
+They do **not** replace the deeper feature validators.
 
 ## Output and severity
 
-The command prints a grouped report for each version group and an overall
-status at the end.
+The command prints one grouped report for the core automation surfaces and an
+overall status at the end.
 
-- missing targets and missing changelog files are errors
-- unreadable version content is reported as a warning
-- pin patterns that compile but do not match are reported as a warning
-- valid matches and readable targets are reported as OK
+- unreadable automation files are errors
+- missing optional integration surfaces are warnings
+- surfaces that exist but do not appear to reference repo-release-tools are warnings
+- readable, recognized surfaces are reported as OK
 
-For EOL checks, the command uses the configured thresholds from `[tool.rrt.eol]`
-and reports the host runtime and project minimum for each configured language.
+At the end, `rrt doctor` also points you to the feature-specific commands that
+own deeper validation, such as `rrt release check`, `rrt docs check`, and
+`rrt eol`.
 
 ## Config discovery behavior
 
@@ -66,17 +50,17 @@ rrt doctor
 
 ## Caveats
 
-- The command reports health for the resolved configuration, not just the
-  visible file in the current directory.
-- EOL checks are only shown when EOL policy is configured.
-- Docs lockfile checks are only shown when `[tool.rrt.docs]` is configured.
-- A missing or stale lockfile is an error, not a warning — it fails the command.
+- The command reports core automation health for the resolved configuration,
+    not just the visible file in the current directory.
+- Feature-specific checks belong to their own surfaces: `rrt release check`,
+    `rrt docs check`, and `rrt eol`.
 - A warning does not fail the command; only error-level findings do.
 
 ## Related docs
 
 - [Runtime EOL tracking](eol.md)
 - [rrt eol (CLI)](rrt-cli.md)
+- [rrt release check](rrt-cli.md)
 - [pre-commit / lefthook](hooks.md)
 - [GitHub Action](action.md)
 """
@@ -84,72 +68,91 @@ rrt doctor
 from __future__ import annotations
 
 import argparse
-import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 from repo_release_tools.config import (
-    PinTarget,
-    VersionTarget,
-    _describe_version_target,
     format_autodetected_config_notice,
     format_missing_tool_rrt_guidance,
     is_missing_tool_rrt_error,
     iter_config_files,
     load_or_autodetect_config,
 )
-from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
-from repo_release_tools.eol import (
-    check_eol_status,
-    detect_host_version,
-    detect_project_minimum,
-    get_eol_records,
-    resolve_override_eol,
-)
-from repo_release_tools.state import docs_lock_path, hash_content, lock_is_current
 from repo_release_tools.ui import DryRunPrinter
-from repo_release_tools.version_targets import read_version_string
 
-DOCTOR_EPILOG = "  $ rrt doctor"
+DOCTOR_EPILOG = "  $ rrt doctor\n  $ rrt release check\n  $ rrt docs check"
 
 # Docs live in the module docstring above — consistent with bump.py / ci_version.py.
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("doctor", __doc__ or ""),)
 
 
-def _check_version_target(target: VersionTarget, root: Path) -> tuple[str, bool, str]:
-    """Return the status message, whether it is okay, and its severity."""
-    relative = str(target.path.relative_to(root))
-    kind_hint = _describe_version_target(target, root=root).split("(", 1)
-    suffix = f" ({kind_hint[1]}" if len(kind_hint) > 1 else ""
-
-    if not target.path.exists():
-        return f"{relative}{suffix} not found", False, "error"
-
-    try:
-        version = read_version_string(target)
-        return f"{relative}{suffix} {version}", True, "ok"
-    except (RuntimeError, ValueError):
-        return f"{relative}{suffix} version unreadable", True, "warning"
+def _read_text(path: Path) -> str:
+    """Return text content for a repository automation file."""
+    return path.read_text(encoding="utf-8")
 
 
-def _check_pin_target(pin: PinTarget, root: Path) -> tuple[str, bool, str]:
-    """Return the status message, whether it is okay, and its severity."""
-    relative = str(pin.path.relative_to(root))
-
-    if not pin.path.exists():
-        return f"{relative} not found", False, "error"
+def _check_text_integration(
+    root: Path,
+    relative_path: str,
+    *,
+    markers: tuple[str, ...],
+    success_message: str,
+    warning_message: str,
+) -> tuple[str, bool, str]:
+    """Check a text-based automation surface for repo-release-tools markers."""
+    path = root / relative_path
+    if not path.exists():
+        return f"{relative_path} not configured", True, "warning"
 
     try:
-        compiled = re.compile(pin.pattern)
-    except re.error as exc:
-        return f"{relative} bad pattern: {exc}", False, "error"
+        text = _read_text(path)
+    except OSError as exc:
+        return f"{relative_path} unreadable: {exc}", False, "error"
 
-    text = pin.path.read_text(encoding="utf-8")
-    if compiled.search(text) is None:
-        return f"{relative} no match", True, "warning"
+    if any(marker in text for marker in markers):
+        return success_message, True, "ok"
+    return warning_message, True, "warning"
 
-    return f"{relative} match", True, "ok"
+
+def _check_github_workflows(root: Path) -> tuple[str, bool, str]:
+    """Inspect workflow files for repo-release-tools policy usage."""
+    workflows_dir = root / ".github" / "workflows"
+    if not workflows_dir.exists():
+        return ".github/workflows not configured", True, "warning"
+
+    workflow_files = sorted({*workflows_dir.glob("*.yml"), *workflows_dir.glob("*.yaml")})
+    if not workflow_files:
+        return ".github/workflows contains no workflow files", True, "warning"
+
+    markers = (
+        "Anselmoo/repo-release-tools",
+        "repo-release-tools",
+        "rrt-hooks",
+        "check-doctor",
+        "check-release-health",
+    )
+    matching: list[str] = []
+    for workflow_file in workflow_files:
+        try:
+            text = _read_text(workflow_file)
+        except OSError as exc:
+            return f"{workflow_file.relative_to(root)} unreadable: {exc}", False, "error"
+        if any(marker in text for marker in markers):
+            matching.append(workflow_file.name)
+
+    if matching:
+        files = ", ".join(matching)
+        return (
+            f".github/workflows includes repo-release-tools policy checks ({files})",
+            True,
+            "ok",
+        )
+
+    return (
+        ".github/workflows has workflow files but no repo-release-tools policy step detected",
+        True,
+        "warning",
+    )
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
@@ -191,192 +194,69 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
     p.action(f"Version groups: {group_count} {plural}")
     p.blank_line()
 
+    statuses = [
+        _check_text_integration(
+            root,
+            ".pre-commit-config.yaml",
+            markers=("repo-release-tools", "rrt-"),
+            success_message=".pre-commit-config.yaml includes repo-release-tools hooks",
+            warning_message=(
+                ".pre-commit-config.yaml exists but no repo-release-tools hooks were detected"
+            ),
+        ),
+        _check_text_integration(
+            root,
+            "lefthook.yml",
+            markers=("rrt-hooks", "repo-release-tools"),
+            success_message="lefthook.yml includes repo-release-tools hooks",
+            warning_message="lefthook.yml exists but no repo-release-tools hooks were detected",
+        ),
+        _check_github_workflows(root),
+    ]
+
     all_ok = True
-
-    p.section("Health checks")
-
-    for group in config.version_groups:
-        group_ok = True
-        statuses: list[tuple[str, str]] = []
-
-        for target in group.version_targets:
-            message, ok, severity = _check_version_target(target, root)
-            statuses.append((message, severity))
-            if not ok:
-                group_ok = False
-
-        all_pins = group.pin_targets + config.global_pin_targets
-        if all_pins:
-            seen: set[tuple[object, str]] = set()
-            unique_pins = []
-            for pin in all_pins:
-                key = (pin.path, pin.pattern)
-                if key not in seen:
-                    seen.add(key)
-                    unique_pins.append(pin)
-
-            for pin in unique_pins:
-                message, ok, severity = _check_pin_target(pin, root)
-                statuses.append((message, severity))
-                if not ok:
-                    group_ok = False
-
-        cl = group.changelog_file
-        if cl.exists():
-            statuses.append((f"{cl.relative_to(root)} exists", "ok"))
+    p.section("Core automation checks")
+    for message, ok, severity in statuses:
+        if severity == "ok":
+            p.line(f"  {message}", ok=True)
+        elif severity == "warning":
+            p.warn(f"  {message}")
         else:
-            statuses.append((f"{cl.relative_to(root)} not found", "error"))
-            group_ok = False
-
-        if group_ok:
-            p.ok(f"[{group.name}]")
-        else:
-            p.line(f"[{group.name}]", ok=False)
-        for msg, severity in statuses:
-            if severity == "ok":
-                p.line(f"  {msg}", ok=True)
-            elif severity == "warning":
-                p.warn(f"  {msg}")
-            else:
-                p.line(f"  {msg}", ok=False)
-        p.blank_line()
-
-        if not group_ok:
+            p.line(f"  {message}", ok=False)
+        if not ok:
             all_ok = False
 
+    p.blank_line()
     if all_ok:
-        p.ok("All health checks passed.")
+        p.ok("Core automation checks passed.")
     else:
-        p.line("One or more health checks failed.", ok=False)
+        p.line("One or more core automation checks failed.", ok=False)
 
-    # EOL section — only shown when [tool.rrt.eol] is configured
-    if config.eol is not None:
-        eol_cfg = config.eol
-        p.blank_line()
-        p.section("Runtime EOL")
-        eol_all_ok = True
-        for language in eol_cfg.languages:
-            records = get_eol_records(language, fetch_live=eol_cfg.fetch_live)
-
-            for label, version in [
-                ("Host runtime", detect_host_version(language)),
-                ("Project minimum", detect_project_minimum(language, root)),
-            ]:
-                if version is None:
-                    p.warn(f"  {language} {label}: not detected")
-                    continue
-                ov = resolve_override_eol(language, version, eol_cfg.overrides)
-                status, record = check_eol_status(
-                    version,
-                    records,
-                    language=language,
-                    warn_days=eol_cfg.warn_days,
-                    error_days=eol_cfg.error_days,
-                    allow_eol=eol_cfg.allow_eol,
-                    override_eol=ov,
-                )
-                detail = ""
-                if record is not None:
-                    if record.is_eol:
-                        detail = " (EOL)"
-                    elif record.eol_date is not None:
-                        detail = f" (EOL {record.eol_date})"
-                msg = f"  {language} {label}: {version}{detail}"
-                if status in ("ok", "info"):
-                    p.line(msg, ok=True)
-                elif status in ("warn", "unknown"):
-                    p.warn(msg)
-                else:
-                    p.line(msg, ok=False)
-                    if not eol_cfg.allow_eol:
-                        eol_all_ok = False
-                        all_ok = False
-        p.blank_line()
-        if eol_all_ok:
-            p.ok("All EOL checks passed.")
-        else:
-            p.line("One or more EOL checks failed.", ok=False)
-
-    # Docs lockfile section — only shown when [tool.rrt.docs] is configured
+    p.blank_line()
+    p.warn(
+        "Compatibility note: release-target validation lives in 'rrt release check'. "
+        "Use both checks for historical doctor coverage."
+    )
+    p.blank_line()
+    p.section("Feature-specific checks")
+    p.action("Run 'rrt release check' for version targets, pin targets, and changelog files.")
     if config.docs is not None:
-        docs_cfg = config.docs
-        p.blank_line()
-        p.section("Docs lockfile")
-        docs_ok = True
+        p.action("Run 'rrt docs check' for source-owned docs lockfile and marker health.")
+    if config.eol is not None:
+        p.action("Run 'rrt eol' for runtime support and end-of-life policy checks.")
 
-        lock_path = docs_lock_path(root, docs_cfg.lock_file)
-        rel_lock = str(lock_path.relative_to(root))
-
-        if not lock_path.exists():
-            p.line(f"{rel_lock} not found — run 'rrt docs generate --format toml'", ok=False)
-            docs_ok = False
-        else:
-            entries = extract_docs_from_dir(root, docs_cfg)
-            by_file: dict[str, list[DocEntry]] = defaultdict(list)
-            for entry in entries:
-                by_file[entry.source_file].append(entry)
-
-            sources = []
-            for src_file, src_entries in by_file.items():
-                combined = "".join(e.hash for e in sorted(src_entries, key=lambda e: e.name))
-                sources.append(
-                    {
-                        "source_file": src_file,
-                        "hash": hash_content(combined),
-                        "symbols": [e.name for e in src_entries],
-                        "lang": src_entries[0].lang,
-                    }
-                )
-
-            is_current, drift_messages = lock_is_current(lock_path, sources)
-            if is_current:
-                p.ok(f"{rel_lock} is current")
-            else:
-                for msg in drift_messages:
-                    if msg.startswith("New source not in lockfile:"):
-                        label = msg.replace(
-                            "New source not in lockfile:", "file added, lockfile stale:"
-                        )
-                    elif msg.startswith("Hash mismatch for"):
-                        label = msg.replace(
-                            "Hash mismatch for", "content modified, lockfile stale:"
-                        ).replace(" (lockfile is stale)", "")
-                    elif msg.startswith("Source removed but still in lockfile:"):
-                        label = msg.replace(
-                            "Source removed but still in lockfile:",
-                            "file deleted, lockfile stale:",
-                        )
-                    else:
-                        label = msg
-                    p.line(f"  {label}", ok=False)
-                p.line(
-                    "  Run 'rrt docs generate --format toml' to update the lockfile.",
-                    ok=False,
-                )
-                docs_ok = False
-
-        p.blank_line()
-        if docs_ok:
-            p.ok("Docs lockfile checks passed.")
-        else:
-            p.line("Docs lockfile checks failed.", ok=False)
-            all_ok = False
-
-    if all_ok:
-        return 0
-    return 1
+    return 0 if all_ok else 1
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the doctor command."""
     parser = subparsers.add_parser(
         "doctor",
-        help="Check the health of the rrt configuration (files, patterns, versions).",
+        help="Check core automation wiring for the resolved rrt configuration.",
         description=(
-            "Validate the resolved rrt configuration for the current repository.\n\n"
-            "Checks configured version targets, pin patterns, changelog files, and optional "
-            "runtime EOL policy so you can catch broken release automation before a bump or "
-            "release run."
+            "Validate the core automation wiring for the current repository.\n\n"
+            "Use `rrt doctor` for repository basics, then run feature-specific checks like "
+            "`rrt release check`, `rrt docs check`, or `rrt eol` for deeper validation."
         ),
         epilog=DOCTOR_EPILOG,
     )

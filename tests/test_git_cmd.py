@@ -6,8 +6,8 @@ import pathlib
 
 import pytest
 
-from repo_release_tools import git
 from repo_release_tools.commands import git_cmd
+from repo_release_tools.workflow import git
 
 
 def test_infer_commit_type_from_branch() -> None:

@@ -32,11 +32,12 @@ Version & Release
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   bump        Bump project version using [tool.rrt] config.
   ci-version  Compute and apply CI pre-release versions (PEP 440 / SemVer).
+  release     Release-specific workflows and checks.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Repository Health
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  doctor  Validate the resolved rrt configuration for the current repository.
+  doctor  Validate the core automation wiring for the current repository.
   config  Inspect the resolved rrt configuration after discovery and auto-detection.
   env     Show environment variables and interpreter details that affect rrt behavior.
   eol     Check detected host runtimes and project minimum versions against end-of-life dates.
@@ -62,6 +63,7 @@ Examples
   $ rrt branch new feat "add parser"
   $ rrt branch rename --type fix --scope api "repair config loader"
   $ rrt bump patch --dry-run
+  $ rrt release check
   $ rrt git status
   $ rrt doctor
   $ rrt skill install --target copilot-local
@@ -340,59 +342,85 @@ Examples
   $ rrt ci-version sync --group backend --ref refs/heads/main --run-id 42 --run-attempt 1
 ```
 
+## `rrt release`
+
+```text
+Usage:  rrt release [OPTIONS] <release_command>
+
+Release-specific workflows and checks.
+
+Use `rrt release check` to validate version targets, pin targets, and changelog files without mixing in broader repository automation checks.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check       Validate version targets, pin targets, and changelog files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt release check`
+
+```text
+Usage:  rrt release check [OPTIONS]
+
+Validate the release-oriented parts of the resolved rrt configuration for the current repository.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt release check
+```
+
 ## `rrt doctor`
 
-Validate the health of the resolved rrt configuration for the current repository.
+Validate the core automation health of the resolved rrt configuration.
 
 ### Overview
 
-`rrt doctor` is a repository health check for release automation. It inspects
-the active configuration and looks for the kinds of issues that usually cause
-release jobs to fail late: missing files, broken patterns, unreadable version
-targets, and optional runtime EOL policy problems.
+`rrt doctor` is the basics-first repository health check. It focuses on the
+shared automation wiring around the resolved configuration — local hooks, CI
+workflows, and guidance to the feature-specific checks that own deeper policy
+validation.
 
 ### What it checks
 
-For each resolved version group, the command checks:
+The command checks the automation surfaces that tell you whether repository
+basics are wired correctly:
 
-- version target files exist
-- version target values can be read
-- pin target patterns compile as regular expressions
-- pin target files contain at least one match
-- the group changelog file exists
+- `.pre-commit-config.yaml` when present
+- `lefthook.yml` when present
+- `.github/workflows/*.yml` / `.yaml` when present
 
-It also checks any global pin targets, deduplicating repeated path/pattern
-pairs so the same target is not reported twice.
-
-If `[tool.rrt.eol]` is configured, the command adds a runtime EOL section that
-checks the configured languages against the repository's host runtime and
-project minimum versions.
-
-If `[tool.rrt.docs]` is configured, the command adds a docs lockfile section
-that verifies the `.rrt/docs.lock.toml` is consistent with the current source
-tree. It detects three lifecycle events that cause drift:
-
-- **file added** — a source file exists on disk but has no entry in the lockfile
-- **file deleted** — the lockfile references a source file that no longer exists
-- **content modified** — a source file exists but its hash does not match the
-  lockfile entry
-
-All three events are reported as errors so they fail the command. Run
-`rrt docs generate --format toml` to regenerate the lockfile after any of
-these changes.
+The checks are intentionally light-touch: they verify presence, readability,
+and whether the file appears to reference repo-release-tools policy checks.
+They do **not** replace the deeper feature validators.
 
 ### Output and severity
 
-The command prints a grouped report for each version group and an overall
-status at the end.
+The command prints one grouped report for the core automation surfaces and an
+overall status at the end.
 
-- missing targets and missing changelog files are errors
-- unreadable version content is reported as a warning
-- pin patterns that compile but do not match are reported as a warning
-- valid matches and readable targets are reported as OK
+- unreadable automation files are errors
+- missing optional integration surfaces are warnings
+- surfaces that exist but do not appear to reference repo-release-tools are warnings
+- readable, recognized surfaces are reported as OK
 
-For EOL checks, the command uses the configured thresholds from `[tool.rrt.eol]`
-and reports the host runtime and project minimum for each configured language.
+At the end, `rrt doctor` also points you to the feature-specific commands that
+own deeper validation, such as `rrt release check`, `rrt docs check`, and
+`rrt eol`.
 
 ### Config discovery behavior
 
@@ -410,26 +438,26 @@ rrt doctor
 
 ### Caveats
 
-- The command reports health for the resolved configuration, not just the
-  visible file in the current directory.
-- EOL checks are only shown when EOL policy is configured.
-- Docs lockfile checks are only shown when `[tool.rrt.docs]` is configured.
-- A missing or stale lockfile is an error, not a warning — it fails the command.
+- The command reports core automation health for the resolved configuration,
+    not just the visible file in the current directory.
+- Feature-specific checks belong to their own surfaces: `rrt release check`,
+    `rrt docs check`, and `rrt eol`.
 - A warning does not fail the command; only error-level findings do.
 
 ### Related docs
 
 - [Runtime EOL tracking](eol.md)
 - [rrt eol (CLI)](rrt-cli.md)
+- [rrt release check](rrt-cli.md)
 - [pre-commit / lefthook](hooks.md)
 - [GitHub Action](action.md)
 
 ```text
 Usage:  rrt doctor [OPTIONS]
 
-Validate the resolved rrt configuration for the current repository.
+Validate the core automation wiring for the current repository.
 
-Checks configured version targets, pin patterns, changelog files, and optional runtime EOL policy so you can catch broken release automation before a bump or release run.
+Use `rrt doctor` for repository basics, then run feature-specific checks like `rrt release check`, `rrt docs check`, or `rrt eol` for deeper validation.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -444,6 +472,8 @@ Options
 Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt doctor
+  $ rrt release check
+  $ rrt docs check
 ```
 
 ## `rrt config`
@@ -585,13 +615,14 @@ rrt env --json
   login environment.
 
 ```text
-Usage:  rrt env [OPTIONS]
+Usage:  rrt env [OPTIONS] <env_action>
 
 Show environment variables and interpreter details that affect rrt behavior.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check       Run environment sanity checks (duplicates in PATH/PYTHONPATH).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -604,6 +635,24 @@ Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt env
   $ rrt env --json
+```
+
+### `rrt env check`
+
+```text
+Usage:  rrt env check [OPTIONS]
+
+Run a small set of environment sanity checks and exit non-zero on failure.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --json      (Ignored) kept for interface parity with `rrt env`.
 ```
 
 ## `rrt eol`
@@ -679,11 +728,43 @@ rrt eol --warn-days 90 --error-days 30
 - `--allow-eol` changes exit-code behavior, not the underlying status labels.
 
 ```text
-Usage:  rrt eol [OPTIONS]
+Usage:  rrt eol [OPTIONS] <eol_action>
 
 Check detected host runtimes and project minimum versions against end-of-life dates.
 
 Uses bundled EOL data by default and can refresh from endoflife.date on demand. When [tool.rrt.eol] is configured, CLI flags override the configured thresholds for this invocation.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check            Exit non-zero when any EOL check fails.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --language LANG  Check one language only (go, node, nodejs, python, rust). Default: from config or python.
+  --fetch-live     Fetch fresh EOL data from endoflife.date instead of using bundled snapshot.
+  --warn-days N    Warn when EOL is within N days (default: 180 or from config).
+  --error-days N   Error when EOL is within N days (default: 0 or from config = only on actual EOL).
+  --allow-eol      Downgrade errors to warnings (useful during migration grace periods).
+  --host-only      Only check the host runtime; skip project minimum checks.
+  --project-only   Only check the project minimum version; skip host runtime checks.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt eol
+  $ rrt eol --language node --fetch-live
+  $ rrt eol --warn-days 90 --error-days 30
+```
+
+### `rrt eol check`
+
+```text
+Usage:  rrt eol check [OPTIONS]
+
+Run the configured EOL checks for the current repository and exit non-zero when any failure is detected.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -698,6 +779,8 @@ Options
   --warn-days N    Warn when EOL is within N days (default: 180 or from config).
   --error-days N   Error when EOL is within N days (default: 0 or from config = only on actual EOL).
   --allow-eol      Downgrade errors to warnings (useful during migration grace periods).
+  --host-only      Only check the host runtime; skip project minimum checks.
+  --project-only   Only check the project minimum version; skip host runtime checks.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -1215,7 +1298,7 @@ Examples
 `repo-release-tools` ships a small set of opinionated Git workflows for branch
 health, commit drafting, sync, and history repair.
 
-This page is generated from `repo_release_tools.git.GIT_MAGIC_DOC`.
+This page is generated from `repo_release_tools.workflow.git.GIT_MAGIC_DOC`.
 This page stays workflow-oriented. For the full command surface and option
 details, see [docs/commands/rrt-cli.md](rrt-cli.md).
 

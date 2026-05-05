@@ -83,10 +83,15 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools import git
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_description
 from repo_release_tools.config import load_extra_branch_types
-from repo_release_tools.hooks import (
+from repo_release_tools.ui import (
+    GLYPHS,
+    DryRunPrinter,
+    spinner_lines,
+)
+from repo_release_tools.workflow import git
+from repo_release_tools.workflow.hooks import (
     ALLOWED_BRANCH_NAMES,
     BOT_BRANCH_TYPES,
     MAGIC_BRANCH_TYPES,
@@ -94,11 +99,6 @@ from repo_release_tools.hooks import (
     commit_subject_requires_changelog,
     validate_branch_name,
     validate_commit_subject,
-)
-from repo_release_tools.ui import (
-    GLYPHS,
-    DryRunPrinter,
-    spinner_lines,
 )
 
 COMMIT_TYPES = (*CONVENTIONAL_TYPES, "deps")

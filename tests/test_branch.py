@@ -8,7 +8,7 @@ import pathlib
 import pytest
 
 from repo_release_tools.commands.branch import BranchName, cmd_new, cmd_rename, cmd_rescue, register
-from repo_release_tools.hooks import validate_branch_name
+from repo_release_tools.workflow.hooks import validate_branch_name
 
 
 def test_branch_name_without_scope() -> None:

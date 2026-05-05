@@ -8,7 +8,6 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from repo_release_tools import git
 from repo_release_tools.changelog import (
     SECTION_MAP,
     ParsedCommit,
@@ -25,6 +24,7 @@ from repo_release_tools.commands.branch import (
 )
 from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
+from repo_release_tools.commands.release_cmd import cmd_release_check
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
@@ -33,7 +33,8 @@ from repo_release_tools.config import (
     load_or_autodetect_config,
 )
 from repo_release_tools.ui import DryRunPrinter
-from repo_release_tools.versioning import Version
+from repo_release_tools.version import Version
+from repo_release_tools.workflow import git
 
 ALLOWED_BRANCH_NAMES = ("main", "master", "develop")
 MAGIC_BRANCH_TYPES = ("claude", "codex", "copilot")
@@ -548,7 +549,7 @@ def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml") -> int:
     from collections import defaultdict
 
     from repo_release_tools.config import DocsConfig
-    from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
+    from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
     from repo_release_tools.state import docs_lock_path, hash_content, lock_is_current
 
     try:
@@ -968,6 +969,10 @@ def main(argv: list[str] | None = None) -> int:
         "doctor",
         help="Health-check the rrt configuration for the current repository.",
     )
+    subparsers.add_parser(
+        "release-check",
+        help="Run release-target health checks for the current repository.",
+    )
 
     changelog_parser = subparsers.add_parser(
         "changelog",
@@ -1026,6 +1031,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_docs_check(Path.cwd())
     if parsed.command == "doctor":
         return cmd_doctor(parsed)
+    if parsed.command == "release-check":
+        return cmd_release_check(parsed)
     if parsed.command == "check-eol":
         return cmd_eol_check(parsed)
     if parsed.command == "update-unreleased":
@@ -1089,7 +1096,7 @@ workflow does this repo follow?*
 | Workflow | Recommended hooks | Best for |
 |---|---|---|
 | `incremental` *(default)* | `rrt-branch-name`, `rrt-commit-subject`, plus `rrt-update-unreleased` **or** `rrt-changelog` | teams that maintain changelog state while developing |
-| `squash` | `rrt-branch-name`, `rrt-commit-subject`, optional `rrt-dirty-tree` / `rrt-doctor` | repos that squash many commits and do changelog work at release time |
+| `squash` | `rrt-branch-name`, `rrt-commit-subject`, optional `rrt-dirty-tree` / `rrt-doctor` / `rrt-release-check` | repos that squash many commits and do changelog work at release time |
 
 With `changelog_workflow = "squash"`, the changelog-writing and changelog-check
 hooks intentionally skip changelog enforcement. You can leave them configured
@@ -1153,7 +1160,8 @@ Pair it with:
 | `rrt-changelog` | pre-commit | Require a staged changelog update for changelog-relevant work |
 | `rrt-commit-subject` | commit-msg | Validate Conventional Commit subjects |
 | `rrt-dirty-tree` | pre-push / manual | Fail on uncommitted changes |
-| `rrt-doctor` | manual | Run `rrt doctor` health checks on `rrt` config |
+| `rrt-doctor` | manual | Run `rrt doctor` core automation checks on `rrt` config |
+| `rrt-release-check` | manual | Run `rrt release check` for version targets, pin targets, and changelog files |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
 incremental workflow. You usually want one or the other, not both.
@@ -1178,14 +1186,26 @@ repos:
 
 ### Doctor check
 
-`rrt-doctor` runs `rrt doctor` health checks against every version target and
-pin target in `[tool.rrt]`. It is registered at the `manual` stage so it does
-not run on every commit — invoke it on demand before releases:
+`rrt-doctor` runs `rrt doctor` against the repository's core automation wiring
+so you can confirm hook and CI surfaces are configured before a release or
+automation rollout:
 
 ```bash
 pre-commit run rrt-doctor --hook-stage manual
 # or directly:
 rrt doctor
+```
+
+### Release check
+
+`rrt-release-check` runs `rrt release check` against version targets, pin
+targets, and changelog files in `[tool.rrt]`. It is also registered at the
+`manual` stage so you can invoke it on demand before releases:
+
+```bash
+pre-commit run rrt-release-check --hook-stage manual
+# or directly:
+rrt release check
 ```
 
 You can also run the same dirty-tree logic directly:
@@ -1409,5 +1429,5 @@ SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (
 )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())

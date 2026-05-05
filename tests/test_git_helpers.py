@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from repo_release_tools import git
+from repo_release_tools.workflow import git
 
 
 def test_run_dry_run_skips_subprocess(

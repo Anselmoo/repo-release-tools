@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from repo_release_tools.config import DocsConfig
-from repo_release_tools.docs_extractor import (
+from repo_release_tools.docs.extractor import (
     DocEntry,
     extract_docs,
     extract_docs_from_dir,
@@ -453,7 +453,7 @@ class TestExtractExplicitEdgeCases:
         # by calling lang_for_path — but the real branch is reached via extract_docs for
         # a file that IS a recognised extension but the lang is NOT in config.languages.
         # Instead, directly import and call with an unsupported lang string.
-        from repo_release_tools.docs_extractor import _extract_explicit
+        from repo_release_tools.docs.extractor import _extract_explicit
 
         result = _extract_explicit("// sym: foo\nfoo content", "file.txt", "unknown_lang")
         assert result == []
@@ -498,7 +498,7 @@ class TestExtractPythonSourceOwned:
 
     def test_source_owned_skips_missing_variable(self, tmp_path: Path) -> None:
         """Should skip entries when referenced variable has no content."""
-        from repo_release_tools.docs_extractor import _extract_python_source_owned
+        from repo_release_tools.docs.extractor import _extract_python_source_owned
 
         source = 'SOURCE_OWNED_TOPIC_DOCS = (\n    ("topic", MISSING_VAR),\n)\n'
         entries = _extract_python_source_owned(source, "mod.py", {})
@@ -506,7 +506,7 @@ class TestExtractPythonSourceOwned:
 
     def test_source_owned_direct_extracts_entries(self) -> None:
         """Direct call to _extract_python_source_owned with valid variable covers lines 319-337."""
-        from repo_release_tools.docs_extractor import _extract_python_source_owned
+        from repo_release_tools.docs.extractor import _extract_python_source_owned
 
         source = (
             'MY_DOC = """\nDetailed docs.\n"""\n\n'
@@ -524,7 +524,7 @@ class TestExtractPythonSourceOwned:
 
     def test_source_owned_no_tuple_returns_empty(self, tmp_path: Path) -> None:
         """Should return [] when SOURCE_OWNED_TOPIC_DOCS is absent."""
-        from repo_release_tools.docs_extractor import _extract_python_source_owned
+        from repo_release_tools.docs.extractor import _extract_python_source_owned
 
         source = 'MY_DOC = """some doc"""\n'
         entries = _extract_python_source_owned(source, "mod.py", {"MY_DOC": "some doc"})

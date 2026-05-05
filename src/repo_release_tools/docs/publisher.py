@@ -4,9 +4,8 @@ This module is the authoritative source for generating the full CLI reference
 Markdown (``docs/commands/rrt-cli.md``) and all source-owned topic pages from
 live argparse configuration and source-module docstrings.
 
-It is consumed by ``rrt docs publish`` (``commands/docs_cmd.py``) and
-re-exported by ``scripts/generate_cli_docs.py`` for backward compatibility
-with the ``poe docs-*`` tasks during the transition period.
+It is consumed by ``rrt docs publish`` and ``rrt docs inject`` from the
+package CLI surface.
 
 ## Import discipline
 
@@ -28,10 +27,7 @@ from pathlib import Path
 from typing import Protocol
 
 import repo_release_tools as rrt_package
-from repo_release_tools import action as action_module
 from repo_release_tools import eol as eol_module
-from repo_release_tools import git as git_helpers
-from repo_release_tools import hooks as hooks_module
 from repo_release_tools.commands import branch as branch_module
 from repo_release_tools.commands import doctor as doctor_module
 from repo_release_tools.commands import eol_check as eol_check_module
@@ -39,7 +35,11 @@ from repo_release_tools.commands import skill as skill_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
+from repo_release_tools.docs.markdown import heading_level, normalize_markdown_headings
+from repo_release_tools.integrations import action as action_module
 from repo_release_tools.tools.inject import apply_generated_docs as apply_generated_docs
+from repo_release_tools.workflow import git as git_helpers
+from repo_release_tools.workflow import hooks as hooks_module
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -177,59 +177,12 @@ COMMAND_DOC_SOURCES: dict[str, CommandDocSource] = {
 
 def _heading_level(line: str) -> int | None:
     """Return the Markdown heading level for *line*, or ``None`` if not a heading."""
-    stripped = line.lstrip()
-    if not stripped.startswith("#"):
-        return None
-    hashes = len(stripped) - len(stripped.lstrip("#"))
-    if hashes < 1 or hashes > 6:
-        return None
-    if len(stripped) <= hashes or stripped[hashes] != " ":
-        return None
-    return hashes
+    return heading_level(line)
 
 
 def _normalize_markdown_headings(text: str, *, min_level: int) -> str:
     """Shift headings in *text* so the shallowest heading nests under *min_level*."""
-    lines = text.splitlines()
-    heading_levels: list[int] = []
-    in_fence = False
-
-    for line in lines:
-        stripped = line.lstrip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        level = _heading_level(line)
-        if level is not None:
-            heading_levels.append(level)
-
-    if not heading_levels:
-        return text.strip()
-
-    offset = max(min_level - min(heading_levels), 0)
-    if offset == 0:
-        return text.strip()
-
-    normalized: list[str] = []
-    in_fence = False
-    for line in lines:
-        stripped = line.lstrip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            normalized.append(line)
-            continue
-        if in_fence:
-            normalized.append(line)
-            continue
-        level = _heading_level(line)
-        if level is None:
-            normalized.append(line)
-            continue
-        content = stripped[level + 1 :]
-        normalized.append(f"{'#' * min(level + offset, 6)} {content}")
-    return "\n".join(normalized).strip()
+    return normalize_markdown_headings(text, min_level=min_level)
 
 
 # ---------------------------------------------------------------------------
@@ -576,18 +529,7 @@ def _apply_shared_blocks(*, check: bool) -> int:
         repo_url = "https://github.com/Anselmoo/repo-release-tools"
         exit_code = 0
         for block in cfg.docs.shared_blocks:
-            if block.template is not None:
-                template_path = root / block.template
-                if not template_path.exists():
-                    sys.stderr.write(
-                        f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
-                    )
-                    exit_code = 1
-                    continue
-                content = template_path.read_text(encoding="utf-8").rstrip("\n")
-            else:
-                assert block.content is not None
-                content = block.content.rstrip("\n")
+            content = block.content.rstrip("\n")
 
             content = content.replace("{version}", rrt_package.__version__)
             content = content.replace("{repo_url}", repo_url)

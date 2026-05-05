@@ -318,6 +318,52 @@ class TestCheckEolStatus:
         )
         assert status == "ok"
 
+    def test_string_language_fetches_records_directly(self) -> None:
+        today = date(2025, 6, 1)
+        records = self._make_records([("3.12", False)])
+        with patch(
+            "repo_release_tools.eol.get_eol_records", return_value=records
+        ) as mock_get_records:
+            status, record = check_eol_status("3.12.4", "python", today=today)
+        assert status == "ok"
+        assert record is not None
+        mock_get_records.assert_called_once_with("python", fetch_live=False, today=today)
+
+    def test_explicit_records_require_language_keyword(self) -> None:
+        records = self._make_records([("3.12", False)])
+        with pytest.raises(TypeError, match="language is required when passing records explicitly"):
+            check_eol_status("3.12.4", records)
+
+    def test_override_eol_date_within_error_days_returns_error(self) -> None:
+        today = date(2025, 6, 1)
+        records = self._make_records([("3.8", "2024-10-07")])
+        override = today + timedelta(days=5)
+        status, _ = check_eol_status(
+            "3.8.18",
+            records,
+            language="python",
+            warn_days=180,
+            error_days=30,
+            override_eol=override,
+            today=today,
+        )
+        assert status == "error"
+
+    def test_override_eol_date_within_warn_days_returns_warn(self) -> None:
+        today = date(2025, 6, 1)
+        records = self._make_records([("3.8", "2024-10-07")])
+        override = today + timedelta(days=60)
+        status, _ = check_eol_status(
+            "3.8.18",
+            records,
+            language="python",
+            warn_days=180,
+            error_days=30,
+            override_eol=override,
+            today=today,
+        )
+        assert status == "warn"
+
     def test_unknown_cycle(self) -> None:
         records = self._make_records([("3.12", False)])
         status, record = check_eol_status(

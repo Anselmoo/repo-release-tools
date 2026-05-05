@@ -67,7 +67,6 @@ import contextlib
 import sys
 from pathlib import Path
 
-from repo_release_tools import git
 from repo_release_tools.changelog import (
     build_changelog_section,
     detect_changelog_format,
@@ -90,13 +89,14 @@ from repo_release_tools.ui import (
     ProgressLine,
     spinner_lines,
 )
-from repo_release_tools.version_targets import (
+from repo_release_tools.version.semver import Version
+from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
     read_group_current_version,
     replace_pin_in_file,
     replace_version_in_file,
 )
-from repo_release_tools.versioning import Version
+from repo_release_tools.workflow import git
 
 PREVIEW_LINES = 8
 

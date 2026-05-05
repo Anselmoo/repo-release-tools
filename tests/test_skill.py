@@ -13,7 +13,7 @@ from repo_release_tools.commands.skill import (
     cmd_install,
     register,
 )
-from repo_release_tools.skill_assets import INSTALLED_CLI_SKILL
+from repo_release_tools.integrations.skill_assets import INSTALLED_CLI_SKILL
 
 
 def _mock_home(monkeypatch: pytest.MonkeyPatch, home: Path) -> None:
