@@ -707,8 +707,8 @@ def test_doctor_docs_section_lockfile_current(
     monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
 
     # Generate lockfile so it is current
-    from repo_release_tools.docs_extractor import extract_docs_from_dir
-    from repo_release_tools.docs_formats import render
+    from repo_release_tools.docs.extractor import extract_docs_from_dir
+    from repo_release_tools.docs.formats import render
 
     entries = extract_docs_from_dir(tmp_path, docs)
     render("toml", entries, docs, root=tmp_path)
@@ -738,8 +738,8 @@ def test_doctor_docs_section_stale_new_file(
     monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
 
     # Generate lockfile BEFORE adding a new source file
-    from repo_release_tools.docs_extractor import extract_docs_from_dir
-    from repo_release_tools.docs_formats import render
+    from repo_release_tools.docs.extractor import extract_docs_from_dir
+    from repo_release_tools.docs.formats import render
 
     entries = extract_docs_from_dir(tmp_path, docs)
     render("toml", entries, docs, root=tmp_path)
@@ -773,8 +773,8 @@ def test_doctor_docs_section_stale_deleted_file(
     monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
 
     # Generate lockfile with both files present
-    from repo_release_tools.docs_extractor import extract_docs_from_dir
-    from repo_release_tools.docs_formats import render
+    from repo_release_tools.docs.extractor import extract_docs_from_dir
+    from repo_release_tools.docs.formats import render
 
     entries = extract_docs_from_dir(tmp_path, docs)
     render("toml", entries, docs, root=tmp_path)
@@ -806,8 +806,8 @@ def test_doctor_docs_section_stale_hash_mismatch(
     monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
 
     # Generate lockfile with original content
-    from repo_release_tools.docs_extractor import extract_docs_from_dir
-    from repo_release_tools.docs_formats import render
+    from repo_release_tools.docs.extractor import extract_docs_from_dir
+    from repo_release_tools.docs.formats import render
 
     entries = extract_docs_from_dir(tmp_path, docs)
     render("toml", entries, docs, root=tmp_path)
@@ -839,8 +839,8 @@ def test_doctor_docs_section_unknown_drift_message(
     monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
 
     # Generate a valid lockfile so lock_path exists
-    from repo_release_tools.docs_extractor import extract_docs_from_dir
-    from repo_release_tools.docs_formats import render
+    from repo_release_tools.docs.extractor import extract_docs_from_dir
+    from repo_release_tools.docs.formats import render
 
     entries = extract_docs_from_dir(tmp_path, docs)
     render("toml", entries, docs, root=tmp_path)

@@ -99,7 +99,7 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
-from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
+from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.eol import (
     check_eol_status,
     detect_host_version,
@@ -109,7 +109,7 @@ from repo_release_tools.eol import (
 )
 from repo_release_tools.state import docs_lock_path, hash_content, lock_is_current
 from repo_release_tools.ui import DryRunPrinter
-from repo_release_tools.version_targets import read_version_string
+from repo_release_tools.version.targets import read_version_string
 
 DOCTOR_EPILOG = "  $ rrt doctor"
 

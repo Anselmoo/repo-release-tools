@@ -414,7 +414,7 @@ class TestCmdPublish:
         self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Dry-run publish should report every generated target without writing."""
-        from repo_release_tools import docs_publisher
+        from repo_release_tools.docs import publisher as docs_publisher
 
         targets = [
             docs_publisher.DocTarget(temp_repo / "docs" / "rrt-cli.md", lambda: "cli\n"),
@@ -437,7 +437,7 @@ class TestCmdPublish:
         self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
     ) -> None:
         """Non-dry-run publish should call apply_generated_docs for each target."""
-        from repo_release_tools import docs_publisher
+        from repo_release_tools.docs import publisher as docs_publisher
 
         calls: list[tuple[str, Path, bool, bool, bool, str | None]] = []
         target = docs_publisher.DocTarget(

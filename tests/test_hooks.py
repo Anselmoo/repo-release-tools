@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from repo_release_tools import hooks
-from repo_release_tools.hooks import (
+from repo_release_tools.workflow import hooks
+from repo_release_tools.workflow.hooks import (
     _detect_changelog_workflow,
     _entries_cancel_out,
     _resolve_changelog_strategy,
@@ -1580,9 +1580,9 @@ def test_apply_dedup_to_changelog_returns_false_when_removal_budget_not_in_hunk(
 def test_hooks_module_main_guard_executes_system_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(sys, "argv", ["repo_release_tools.hooks"])
+    monkeypatch.setattr(sys, "argv", ["repo_release_tools.workflow.hooks"])
     with pytest.raises(SystemExit):
-        runpy.run_module("repo_release_tools.hooks", run_name="__main__")
+        runpy.run_module("repo_release_tools.workflow.hooks", run_name="__main__")
 
 
 def test_dedup_changelog_entries_hits_inner_loop_cancelled_j_continue() -> None:
@@ -1687,7 +1687,7 @@ def test_run_docs_check_entries_build_sources(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """When extract_docs_from_dir returns entries the sources list is built → lines 573, 577-578."""
-    from repo_release_tools.docs_extractor import DocEntry
+    from repo_release_tools.docs.extractor import DocEntry
 
     fake_entry = DocEntry(
         name="my_func",
@@ -1698,7 +1698,7 @@ def test_run_docs_check_entries_build_sources(
         hash="sha256:abc123",
     )
     monkeypatch.setattr(
-        "repo_release_tools.docs_extractor.extract_docs_from_dir",
+        "repo_release_tools.docs.extractor.extract_docs_from_dir",
         lambda cwd, cfg: [fake_entry],
     )
     _write_pyproject(tmp_path)
@@ -1710,7 +1710,7 @@ def test_run_docs_check_entries_build_sources(
 
 def test_hooks_main_check_docs_dispatches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """'check-docs' argument in hooks main dispatches to run_docs_check and returns its exit code."""
-    monkeypatch.setattr("repo_release_tools.hooks.run_docs_check", lambda cwd: 0)
+    monkeypatch.setattr("repo_release_tools.workflow.hooks.run_docs_check", lambda cwd: 0)
     monkeypatch.setattr(sys, "argv", ["rrt-hooks", "check-docs"])
     monkeypatch.chdir(tmp_path)
     result = hooks.main()

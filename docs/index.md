@@ -33,8 +33,12 @@ the canonical home for the current `rrt` command surface.
 
 ## Commands reference
 
-The `docs/commands/` directory mirrors `src/repo_release_tools/commands/` and
-`src/repo_release_tools/hooks.py`. Each file documents one command module.
+The `docs/commands/` directory mirrors `src/repo_release_tools/commands/` plus
+the workflow-owned hook entrypoint in `src/repo_release_tools/workflow/hooks.py`.
+The source tree now groups shared domains under `config/`, `docs/`, `eol/`,
+`version/`, `workflow/`, and `integrations/` instead of leaving those modules
+flat at `src/repo_release_tools/`. Each generated page documents one command or
+source-owned topic module.
 
 | Doc | Module | Status |
 |---|---|---|

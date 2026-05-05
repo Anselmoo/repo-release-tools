@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -1704,6 +1705,13 @@ def test_shared_block_validate_rejects_empty_anchor_id() -> None:
     """SharedBlock.validate raises ValueError for an empty anchor_id."""
     block = SharedBlock(anchor_id="", content="footer", targets=("docs/**/*.md",))
     with pytest.raises(ValueError, match="anchor_id must be a non-empty string"):
+        block.validate()
+
+
+def test_shared_block_validate_rejects_missing_content() -> None:
+    """SharedBlock.validate raises ValueError when content is missing."""
+    block = SharedBlock(anchor_id="doc-footer", content=cast(str, None), targets=("docs/**/*.md",))
+    with pytest.raises(ValueError, match=r"must define 'content'"):
         block.validate()
 
 

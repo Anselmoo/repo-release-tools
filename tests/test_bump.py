@@ -23,7 +23,7 @@ from repo_release_tools.commands.bump import (
 )
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.ui import GLYPHS, render_ok
-from repo_release_tools.versioning import Version
+from repo_release_tools.version.semver import Version
 
 # Compatibility shim — maps legacy output.X names to the canonical ui API.
 output = types.SimpleNamespace(

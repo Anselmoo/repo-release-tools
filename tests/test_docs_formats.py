@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from repo_release_tools.config import DocsConfig
-from repo_release_tools.docs_extractor import DocEntry
-from repo_release_tools.docs_formats import (
+from repo_release_tools.docs.extractor import DocEntry
+from repo_release_tools.docs.formats import (
     inject_md,
     render,
     render_json,

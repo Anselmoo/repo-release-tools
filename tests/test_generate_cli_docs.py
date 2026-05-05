@@ -11,7 +11,7 @@ import pytest
 
 def _load_generator_module() -> ModuleType:
     """Return a freshly-reloaded docs_publisher module for test isolation."""
-    import repo_release_tools.docs_publisher as pub
+    import repo_release_tools.docs.publisher as pub
 
     importlib.reload(pub)
     return pub

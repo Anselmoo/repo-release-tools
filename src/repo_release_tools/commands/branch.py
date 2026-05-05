@@ -8,8 +8,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools import git
 from repo_release_tools.ui import GLYPHS, DryRunPrinter
+from repo_release_tools.workflow import git
 
 SEMANTIC_BRANCHES_DOC = """# Conventional branches for trunk-based publishing
 

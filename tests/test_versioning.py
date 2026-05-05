@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from repo_release_tools.versioning import Version
+from repo_release_tools.version.semver import Version
 
 
 def test_parse_version() -> None:

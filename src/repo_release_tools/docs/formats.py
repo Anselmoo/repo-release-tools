@@ -19,11 +19,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from repo_release_tools.config import DocsConfig
-    from repo_release_tools.docs_extractor import DocEntry
+    from repo_release_tools.config.core import DocsConfig
+    from repo_release_tools.docs.extractor import DocEntry
 
-from repo_release_tools.markdown_utils import has_markdown_headings, parse_markdown_lines
 from repo_release_tools.state import build_lock, docs_lock_path, write_lock
+
+from .markdown import has_markdown_headings, parse_markdown_lines
 
 
 def _render_structured_txt(content: str) -> str:

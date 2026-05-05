@@ -12,7 +12,7 @@ GIT_MAGIC_DOC = """# Git magic
 `repo-release-tools` ships a small set of opinionated Git workflows for branch
 health, commit drafting, sync, and history repair.
 
-This page is generated from `repo_release_tools.git.GIT_MAGIC_DOC`.
+This page is generated from `repo_release_tools.workflow.git.GIT_MAGIC_DOC`.
 This page stays workflow-oriented. For the full command surface and option
 details, see [docs/commands/rrt-cli.md](rrt-cli.md).
 

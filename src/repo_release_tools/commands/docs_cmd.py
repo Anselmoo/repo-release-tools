@@ -76,8 +76,8 @@ from repo_release_tools.config import (
     is_missing_tool_rrt_error,
     load_config,
 )
-from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
-from repo_release_tools.docs_formats import render
+from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
+from repo_release_tools.docs.formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
 from repo_release_tools.tools.inject import apply_generated_docs
 from repo_release_tools.ui import (
@@ -256,7 +256,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 def _cmd_publish(args: argparse.Namespace) -> int:
     """Write all generated CLI-reference doc files to disk (or check for staleness)."""
-    from repo_release_tools import docs_publisher  # noqa: PLC0415
+    from repo_release_tools.docs import publisher as docs_publisher  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
     dry_run: bool = getattr(args, "dry_run", False)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from repo_release_tools.markdown_utils import (
+from repo_release_tools.docs.markdown import (
     has_markdown_headings,
     heading_level,
     normalize_markdown_headings,

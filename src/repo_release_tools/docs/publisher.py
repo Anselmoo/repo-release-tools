@@ -27,10 +27,7 @@ from pathlib import Path
 from typing import Protocol
 
 import repo_release_tools as rrt_package
-from repo_release_tools import action as action_module
 from repo_release_tools import eol as eol_module
-from repo_release_tools import git as git_helpers
-from repo_release_tools import hooks as hooks_module
 from repo_release_tools.commands import branch as branch_module
 from repo_release_tools.commands import doctor as doctor_module
 from repo_release_tools.commands import eol_check as eol_check_module
@@ -38,8 +35,11 @@ from repo_release_tools.commands import skill as skill_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
-from repo_release_tools.markdown_utils import heading_level, normalize_markdown_headings
+from repo_release_tools.docs.markdown import heading_level, normalize_markdown_headings
+from repo_release_tools.integrations import action as action_module
 from repo_release_tools.tools.inject import apply_generated_docs as apply_generated_docs
+from repo_release_tools.workflow import git as git_helpers
+from repo_release_tools.workflow import hooks as hooks_module
 
 # ---------------------------------------------------------------------------
 # Constants
