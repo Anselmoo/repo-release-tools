@@ -52,17 +52,23 @@ heading = "Documentation"
 
 [tool.poe.groups.docs.tasks.docs-generate]
 help = "Regenerate the CLI reference and topic docs from source."
-script = "generate_cli_docs:task_generate"
-env.PYTHONPATH = "scripts"
+cmd = "rrt docs publish"
+
+[tool.poe.groups.docs.tasks.docs-inject]
+help = "Inject shared anchor blocks (headers/footers) into doc files."
+cmd = "rrt docs inject"
+
+[tool.poe.groups.docs.tasks.docs-inject-check]
+help = "Verify all shared anchor blocks are up to date."
+cmd = "rrt docs inject --check"
 
 [tool.poe.groups.docs.tasks.docs-check]
 help = "Verify all generated docs match their source-owned content."
-script = "generate_cli_docs:task_check"
-env.PYTHONPATH = "scripts"
+cmd = "rrt docs publish --check"
 
 [tool.poe.groups.docs.tasks.docs]
 help = "Regenerate generated docs and confirm they are current."
-sequence = ["docs-generate", "docs-check"]
+sequence = ["docs-generate", "docs-inject", "docs-check", "docs-inject-check"]
 
 [tool.rrt]
 
@@ -106,6 +112,11 @@ stubs = [
     "commands/env_cmd",
     "commands/init",
 ]
+
+[[tool.rrt.docs.shared_blocks]]
+anchor_id = "doc-footer"
+template = "scripts/templates/doc-footer.md"
+targets = ["docs/**/*.md"]
 
 [[tool.rrt.eol.overrides]]
 language = "python"

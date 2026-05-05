@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import io
-import sys
+import os
 from pathlib import Path
 from types import ModuleType
 
@@ -10,14 +10,11 @@ import pytest
 
 
 def _load_generator_module() -> ModuleType:
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "generate_cli_docs.py"
-    spec = importlib.util.spec_from_file_location("generate_cli_docs", script_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    """Return a freshly-reloaded docs_publisher module for test isolation."""
+    import repo_release_tools.docs_publisher as pub
+
+    importlib.reload(pub)
+    return pub
 
 
 def test_iter_help_sections_covers_root_commands_and_nested_subcommands() -> None:
@@ -95,6 +92,98 @@ def test_generate_markdown_places_command_docs_before_help_block() -> None:
     assert content.index("Doc text") < content.index("```text")
 
 
+def test_heading_level_rejects_invalid_heading_variants() -> None:
+    docs = _load_generator_module()
+
+    assert docs._heading_level("####### Too many") is None
+    assert docs._heading_level("###No space") is None
+
+
+def test_normalize_markdown_headings_returns_trimmed_text_without_headings() -> None:
+    docs = _load_generator_module()
+
+    text = "plain text\n\n```python\n# fenced heading\n```\n"
+
+    assert docs._normalize_markdown_headings(text, min_level=2) == text.strip()
+
+
+def test_normalize_markdown_headings_leaves_already_nested_headings_unchanged() -> None:
+    docs = _load_generator_module()
+
+    text = "## Title\n\nBody\n"
+
+    assert docs._normalize_markdown_headings(text, min_level=2) == text.strip()
+
+
+def test_render_command_docs_returns_empty_for_blank_docstring() -> None:
+    docs = _load_generator_module()
+
+    class BlankModule:
+        __doc__ = "   "
+
+    setattr(docs, "COMMAND_DOC_SOURCES", {})
+    setattr(docs, "COMMAND_DOC_MODULES", {"branch": BlankModule})
+
+    assert docs.render_command_docs(("branch",), heading_level=2) == ""
+
+
+def test_resolve_parser_raises_for_unknown_parser_path() -> None:
+    docs = _load_generator_module()
+
+    with pytest.raises(KeyError, match="unknown parser path"):
+        docs._resolve_parser(("branch", "missing"))
+
+
+def test_iter_help_sections_without_subparsers_yields_root_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docs = _load_generator_module()
+
+    monkeypatch.setattr(
+        "repo_release_tools.cli.build_parser", lambda: __import__("argparse").ArgumentParser()
+    )
+
+    sections = list(docs.iter_help_sections())
+    assert sections == [docs.HelpSection(argv=(), heading_level=2)]
+
+
+def test_pinned_help_environment_restores_existing_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docs = _load_generator_module()
+
+    monkeypatch.setenv("COLUMNS", "99")
+    monkeypatch.setenv("NO_COLOR", "0")
+
+    with docs.pinned_help_environment():
+        assert os.environ["COLUMNS"] == docs.PINNED_COLUMNS
+        assert os.environ["NO_COLOR"] == "1"
+
+    assert os.environ["COLUMNS"] == "99"
+    assert os.environ["NO_COLOR"] == "0"
+
+
+def test_generate_index_topic_links_markdown_lists_expected_entries() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_index_topic_links_markdown()
+
+    assert "commands/branch.md" in content
+    assert "commands/git_cmd.md" in content
+    assert "commands/tree.md" in content
+
+
+def test_iter_generated_doc_targets_exposes_all_targets() -> None:
+    docs = _load_generator_module()
+
+    targets = list(docs.iter_generated_doc_targets())
+
+    assert targets
+    assert targets[0].output_path.name == "rrt-cli.md"
+    assert any(target.anchor_id == "index-topic-links" for target in targets)
+    assert any(target.anchor_id == "readme-links" for target in targets)
+
+
 def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
     docs = _load_generator_module()
 
@@ -119,6 +208,36 @@ def test_generated_doc_targets_include_anchored_index_block() -> None:
 
     assert len(index_targets) == 1
     assert index_targets[0].anchor_id == "index-topic-links"
+
+
+def test_generated_doc_targets_include_anchored_readme_links_block() -> None:
+    docs = _load_generator_module()
+
+    readme_targets = [
+        target for target in docs.GENERATED_DOC_TARGETS if str(target.output_path) == "README.md"
+    ]
+
+    assert len(readme_targets) == 1
+    assert readme_targets[0].anchor_id == "readme-links"
+
+
+def test_generate_readme_links_markdown_contains_all_doc_entries() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_readme_links_markdown()
+
+    assert "docs/index.md" in content
+    assert "docs/action.md" in content
+    assert "docs/commands/rrt-cli.md" in content
+    assert "docs/commands/hooks.md" in content
+    assert "docs/commands/branch.md" in content
+    assert "docs/commands/git_cmd.md" in content
+    assert "docs/commands/skill.md" in content
+    assert "docs/commands/tree.md" in content
+    assert "docs/commands/toc.md" in content
+    assert "docs/commands/doctor.md" in content
+    assert "docs/commands/eol_check.md" in content
+    assert "docs/agent-instructions.md" in content
 
 
 def test_task_generate_and_check_cover_all_generated_docs(
@@ -328,3 +447,254 @@ def test_apply_generated_docs_anchor_mode_fails_when_anchor_missing(tmp_path: Pa
     assert exit_code == 1
     assert "missing required anchors" in stderr.getvalue()
     assert output_path.read_text(encoding="utf-8") == "before\nafter\n"
+
+
+def test_apply_generated_docs_anchor_mode_stale_hint_uses_docs_inject(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "target.md"
+    output_path.write_text(
+        "before\n<!-- rrt:auto:start:block -->\nold\n<!-- rrt:auto:end:block -->\nafter\n",
+        encoding="utf-8",
+    )
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new\n",
+        output_path=output_path,
+        check=True,
+        write=False,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+        stale_hint="rrt docs inject --check",
+    )
+
+    assert exit_code == 1
+    assert "rrt docs inject --check" in stderr.getvalue()
+
+
+def test_apply_generated_docs_anchor_mode_fails_when_file_missing(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "missing-target.md"
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new\n",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    assert exit_code == 1
+    assert "missing required anchor block" in stderr.getvalue()
+    assert not output_path.exists()
+
+
+def test_task_inject_shared_blocks_raises_for_malformed_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+name = "example"
+version = "0.1.0"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.docs.shared_blocks]]
+anchor_id = "test-footer"
+template = 123
+targets = ["docs/**/*.md"]
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template must be a string"):
+        docs.task_inject_shared_blocks()
+
+
+# ---------------------------------------------------------------------------
+# _apply_shared_blocks / task_inject_shared_blocks / task_check_shared_blocks
+# ---------------------------------------------------------------------------
+
+_PYPROJECT_SHARED_BLOCK_TEMPLATE = """\
+[project]
+name = "example"
+version = "0.1.0"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.docs.shared_blocks]]
+anchor_id = "test-footer"
+template = "scripts/templates/test-footer.md"
+targets = ["docs/**/*.md"]
+"""
+
+_PYPROJECT_SHARED_BLOCK_INLINE = """\
+[project]
+name = "example"
+version = "0.1.0"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.docs.shared_blocks]]
+anchor_id = "test-footer"
+content = "inline footer"
+targets = ["docs/**/*.md"]
+"""
+
+
+def _make_docs_file(tmp_path: Path, subdir: str = "docs") -> Path:
+    """Create a doc file with anchor markers for test-footer."""
+    doc_dir = tmp_path / subdir
+    doc_dir.mkdir(parents=True, exist_ok=True)
+    doc_file = doc_dir / "test.md"
+    doc_file.write_text(
+        "# Hello\n\n<!-- rrt:auto:start:test-footer -->\n<!-- rrt:auto:end:test-footer -->\n",
+        encoding="utf-8",
+    )
+    return doc_file
+
+
+def test_apply_shared_blocks_writes_template_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Shared block with a template path is injected into matching doc files."""
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_TEMPLATE, encoding="utf-8")
+    (tmp_path / "scripts" / "templates").mkdir(parents=True)
+    (tmp_path / "scripts" / "templates" / "test-footer.md").write_text(
+        "template footer", encoding="utf-8"
+    )
+    doc_file = _make_docs_file(tmp_path)
+
+    exit_code = docs.task_inject_shared_blocks()
+    assert exit_code == 0
+
+    result = doc_file.read_text(encoding="utf-8")
+    assert "template footer" in result
+    assert "<!-- rrt:auto:start:test-footer -->" in result
+    assert "<!-- rrt:auto:end:test-footer -->" in result
+
+
+def test_apply_shared_blocks_writes_inline_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Shared block with inline content is injected into matching doc files."""
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_INLINE, encoding="utf-8")
+    doc_file = _make_docs_file(tmp_path)
+
+    exit_code = docs.task_inject_shared_blocks()
+    assert exit_code == 0
+    assert "inline footer" in doc_file.read_text(encoding="utf-8")
+
+
+def test_apply_shared_blocks_check_mode_fails_for_stale_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Check mode returns 1 when a block is stale (not yet injected)."""
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_INLINE, encoding="utf-8")
+    _make_docs_file(tmp_path)  # file has empty anchors — stale
+
+    exit_code = docs.task_check_shared_blocks()
+    assert exit_code == 1
+
+
+def test_apply_shared_blocks_check_mode_passes_for_current_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Check mode returns 0 when all blocks are already up to date."""
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_INLINE, encoding="utf-8")
+    _make_docs_file(tmp_path)
+
+    # Write first so the file is up to date
+    docs.task_inject_shared_blocks()
+
+    exit_code = docs.task_check_shared_blocks()
+    assert exit_code == 0
+
+
+def test_apply_shared_blocks_noop_when_no_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Returns 0 gracefully when no rrt config exists in cwd."""
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    exit_code = docs.task_inject_shared_blocks()
+    assert exit_code == 0
+
+
+def test_apply_shared_blocks_noop_when_no_shared_blocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Returns 0 gracefully when config exists but has no shared_blocks."""
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0.1.0"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n',
+        encoding="utf-8",
+    )
+
+    exit_code = docs.task_inject_shared_blocks()
+    assert exit_code == 0
+
+
+def test_apply_shared_blocks_warns_when_no_targets_matched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Logs a message when no target files match the glob patterns."""
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_INLINE, encoding="utf-8")
+    # No docs/ directory — glob matches nothing
+
+    exit_code = docs.task_inject_shared_blocks()
+    assert exit_code == 0
+    assert "no target files matched" in capsys.readouterr().out
+
+
+def test_apply_shared_blocks_error_when_template_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Returns exit code 1 and logs to stderr when the template file is missing."""
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_SHARED_BLOCK_TEMPLATE, encoding="utf-8")
+    _make_docs_file(tmp_path)
+    # No scripts/templates/test-footer.md created — deliberately missing
+
+    exit_code = docs.task_inject_shared_blocks()
+    assert exit_code == 1
+    assert "not found" in capsys.readouterr().err

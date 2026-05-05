@@ -1,6 +1,6 @@
+#!/usr/bin/env python3
 """GitHub hook to check code coverage before allowing a push."""
 
-#!/usr/bin/env python3
 import json
 import re
 import shutil

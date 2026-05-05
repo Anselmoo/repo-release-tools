@@ -1,470 +1,57 @@
 #!/usr/bin/env python3
-"""Generate the CLI reference and topic docs from live source data."""
+"""Backward-compatibility shim — all logic now lives in the rrt package.
+
+The canonical entry points are:
+  rrt docs publish          # generate and write CLI-reference docs
+  rrt docs publish --check  # verify docs are up to date
+  rrt docs inject           # inject shared anchor blocks
+  rrt docs inject --check   # verify anchor blocks are up to date
+
+This script is retained so that any external callers or poe tasks that still
+reference ``generate_cli_docs`` continue to work during the transition period.
+"""
 
 from __future__ import annotations
 
 import argparse
-import inspect
-import os
 import sys
-from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Sequence
 
-import repo_release_tools as rrt_package
-from repo_release_tools import action as action_module
-from repo_release_tools import cli
-from repo_release_tools import eol as eol_module
-from repo_release_tools import git as git_helpers
-from repo_release_tools import hooks as hooks_module
-from repo_release_tools.commands import branch as branch_module
-from repo_release_tools.commands import doctor as doctor_module
-from repo_release_tools.commands import eol_check as eol_check_module
-from repo_release_tools.commands import skill as skill_module
-from repo_release_tools.commands import tree as tree_module
-from repo_release_tools.tools.inject import (
+from repo_release_tools.docs_publisher import (  # noqa: F401 — re-export
+    GENERATED_DOC_TARGETS,
+    SOURCE_OWNED_TOPIC_DOCS,
+    TOPIC_PAGE_OUTPUTS,
+    DocTarget,
+    HelpSection,
+    generate_index_topic_links_markdown,
+    generate_markdown,
+    generate_readme_links_markdown,
+    iter_generated_doc_targets,
+    iter_help_sections,
+    render_help,
+)
+from repo_release_tools.tools.inject import (  # noqa: F401 — re-export
     ANCHOR_END_TOKEN,
     ANCHOR_START_TOKEN,
+    SupportsWrite,
+    apply_generated_docs,
     replace_anchored_block,
 )
 
-
-class SupportsWrite(Protocol):
-    """Minimal text stream protocol for stdout/stderr injection."""
-
-    def write(self, s: str, /) -> object:
-        """Write text to the underlying stream-like object."""
-
+# ---------------------------------------------------------------------------
+# Poe task entry points (backward compat)
+# ---------------------------------------------------------------------------
 
 DEFAULT_OUTPUT = Path("docs/commands/rrt-cli.md")
-PINNED_COLUMNS = "120"
-AUTOGEN_NOTE = (
-    "<!-- Auto-generated from repo_release_tools.cli.build_parser(); "
-    "run `poe docs-generate` to refresh. -->"
-)
-
-
-@dataclass(frozen=True)
-class HelpSection:
-    """One CLI help section to render in the generated Markdown."""
-
-    argv: tuple[str, ...]
-    heading_level: int
-
-    @property
-    def title(self) -> str:
-        """Return the Markdown title for this section."""
-        if not self.argv:
-            return "Global help"
-        return f"`{' '.join(('rrt', *self.argv))}`"
-
-
-@dataclass(frozen=True)
-class DocTarget:
-    """One generated docs output and the callable that renders it."""
-
-    output_path: Path
-    render: Callable[[], str]
-    anchor_id: str | None = None
-
-
-@dataclass(frozen=True)
-class CommandDocSource:
-    """A renderer for a top-level command's long-form docs."""
-
-    render: Callable[[], str]
-
-
-def _find_subparsers_action(
-    parser: argparse.ArgumentParser,
-) -> argparse._SubParsersAction | None:
-    """Return the parser's subparsers action when present."""
-    for action in parser._actions:
-        if isinstance(action, argparse._SubParsersAction):
-            return cast(argparse._SubParsersAction, action)
-    return None
-
-
-def _command_group_order() -> list[str]:
-    """Return top-level commands in the user-facing grouped help order."""
-    ordered: list[str] = []
-    seen: set[str] = set()
-    for names in cli.COMMAND_GROUPS.values():
-        for name in names:
-            if name in seen:
-                continue
-            seen.add(name)
-            ordered.append(name)
-    return ordered
-
-
-COMMAND_DOC_MODULES: dict[str, object] = {
-    "branch": cli.branch,
-    "bump": cli.bump,
-    "ci-version": cli.ci_version,
-    "config": cli.config_cmd,
-    "doctor": cli.doctor,
-    "env": cli.env_cmd,
-    "eol": cli.eol_check,
-    "git": cli.git_cmd,
-    "init": cli.init,
-    "skill": cli.skill,
-    "tree": cli.tree,
-}
-
-
-def _collect_source_owned_topic_docs(modules: Sequence[object]) -> dict[str, str]:
-    """Collect source-owned topic docs exported by modules."""
-    collected: dict[str, str] = {}
-    for module in modules:
-        for slug, markdown in getattr(module, "SOURCE_OWNED_TOPIC_DOCS", ()):
-            collected[slug] = markdown
-    return collected
-
-
-SOURCE_OWNED_TOPIC_DOCS = _collect_source_owned_topic_docs(
-    (
-        rrt_package,
-        branch_module,
-        git_helpers,
-        hooks_module,
-        action_module,
-        skill_module,
-        doctor_module,
-        eol_module,
-        tree_module,
-    )
-)
-
-
-def _render_topic_doc(slug: str) -> str:
-    """Return a source-owned topic doc by slug."""
-    return SOURCE_OWNED_TOPIC_DOCS[slug]
-
-
-COMMAND_DOC_SOURCES: dict[str, CommandDocSource] = {
-    "branch": CommandDocSource(render=lambda: _render_topic_doc("branch")),
-    "git": CommandDocSource(render=lambda: _render_topic_doc("git")),
-    "doctor": CommandDocSource(render=lambda: _render_topic_doc("doctor")),
-    "eol": CommandDocSource(render=lambda: inspect.getdoc(eol_check_module) or ""),
-    "tree": CommandDocSource(render=lambda: _render_topic_doc("tree")),
-}
-
-
-def _heading_level(line: str) -> int | None:
-    """Return the Markdown heading level for *line*, or None if it is not a heading."""
-    stripped = line.lstrip()
-    if not stripped.startswith("#"):
-        return None
-    hashes = len(stripped) - len(stripped.lstrip("#"))
-    if hashes < 1 or hashes > 6:
-        return None
-    if len(stripped) <= hashes or stripped[hashes] != " ":
-        return None
-    return hashes
-
-
-def _normalize_markdown_headings(text: str, *, min_level: int) -> str:
-    """Shift Markdown headings in *text* so the shallowest one nests under *min_level*."""
-    lines = text.splitlines()
-    heading_levels: list[int] = []
-    in_fence = False
-
-    for line in lines:
-        stripped = line.lstrip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        level = _heading_level(line)
-        if level is not None:
-            heading_levels.append(level)
-
-    if not heading_levels:
-        return text.strip()
-
-    offset = max(min_level - min(heading_levels), 0)
-    if offset == 0:
-        return text.strip()
-
-    normalized: list[str] = []
-    in_fence = False
-    for line in lines:
-        stripped = line.lstrip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            normalized.append(line)
-            continue
-        if in_fence:
-            normalized.append(line)
-            continue
-        level = _heading_level(line)
-        if level is None:
-            normalized.append(line)
-            continue
-        content = stripped[level + 1 :]
-        normalized.append(f"{'#' * min(level + offset, 6)} {content}")
-    return "\n".join(normalized).strip()
-
-
-def render_command_docs(argv: Sequence[str], *, heading_level: int) -> str:
-    """Return Markdown docs for a top-level command section, or an empty string."""
-    if len(argv) != 1:
-        return ""
-    command_name = argv[0]
-    source = COMMAND_DOC_SOURCES.get(command_name)
-    if source is not None:
-        docstring = source.render()
-    else:
-        module = COMMAND_DOC_MODULES.get(command_name)
-        if module is None:
-            return ""
-        docstring = inspect.getdoc(module) or ""
-    if not docstring.strip():
-        return ""
-    return _normalize_markdown_headings(docstring, min_level=heading_level + 1)
-
-
-def _ordered_subcommand_names(
-    action: argparse._SubParsersAction,
-    *,
-    preferred: Sequence[str] = (),
-) -> list[str]:
-    """Return subcommand names in stable display order."""
-    names = list(action.choices)
-    ordered: list[str] = []
-    seen: set[str] = set()
-    for name in preferred:
-        if name in action.choices and name not in seen:
-            seen.add(name)
-            ordered.append(name)
-    for name in names:
-        if name not in seen:
-            seen.add(name)
-            ordered.append(name)
-    return ordered
-
-
-def _resolve_parser(argv: Sequence[str]) -> argparse.ArgumentParser:
-    """Return the parser addressed by *argv*."""
-    parser = cli.build_parser()
-    current = parser
-    for part in argv:
-        action = _find_subparsers_action(current)
-        if action is None or part not in action.choices:
-            joined = " ".join(("rrt", *argv)).strip()
-            raise KeyError(f"unknown parser path: {joined}")
-        current = cast(argparse.ArgumentParser, action.choices[part])
-    return current
-
-
-def iter_help_sections() -> Iterator[HelpSection]:
-    """Yield the root and all nested command help sections."""
-    yield HelpSection(argv=(), heading_level=2)
-
-    root = cli.build_parser()
-    root_subparsers = _find_subparsers_action(root)
-    if root_subparsers is None:
-        return
-
-    def walk(
-        argv: tuple[str, ...],
-        parser: argparse.ArgumentParser,
-        *,
-        preferred: Sequence[str] = (),
-    ) -> Iterator[HelpSection]:
-        yield HelpSection(argv=argv, heading_level=min(2 + len(argv) - 1, 6))
-        subparsers = _find_subparsers_action(parser)
-        if subparsers is None:
-            return
-        for name in _ordered_subcommand_names(subparsers, preferred=preferred):
-            child = cast(argparse.ArgumentParser, subparsers.choices[name])
-            yield from walk((*argv, name), child)
-
-    for name in _ordered_subcommand_names(root_subparsers, preferred=_command_group_order()):
-        child = cast(argparse.ArgumentParser, root_subparsers.choices[name])
-        yield from walk((name,), child)
-
-
-@contextmanager
-def pinned_help_environment() -> Iterator[None]:
-    """Pin environment settings so help rendering is deterministic."""
-    original_columns = os.environ.get("COLUMNS")
-    original_no_color = os.environ.get("NO_COLOR")
-    os.environ["COLUMNS"] = PINNED_COLUMNS
-    os.environ["NO_COLOR"] = "1"
-    try:
-        yield
-    finally:
-        if original_columns is None:
-            os.environ.pop("COLUMNS", None)
-        else:
-            os.environ["COLUMNS"] = original_columns
-        if original_no_color is None:
-            os.environ.pop("NO_COLOR", None)
-        else:
-            os.environ["NO_COLOR"] = original_no_color
-
-
-def render_help(argv: Sequence[str]) -> str:
-    """Render help text for the parser addressed by *argv*."""
-    with pinned_help_environment():
-        parser = _resolve_parser(argv)
-        return cli._strip_ansi(parser.format_help()).rstrip()
-
-
-def generate_markdown() -> str:
-    """Return the generated CLI reference Markdown."""
-    parts = [
-        "# RRT CLI",
-        "",
-        AUTOGEN_NOTE,
-        "",
-        "This reference is generated from the live `argparse` configuration in",
-        "`repo_release_tools.cli` and `src/repo_release_tools/commands/*.py`.",
-        "",
-        "Use `poe docs-generate` to rewrite this file or `poe docs-check` to",
-        "verify it is current.",
-        "",
-    ]
-
-    for section in iter_help_sections():
-        prose = render_command_docs(section.argv, heading_level=section.heading_level)
-        parts.extend(
-            [
-                f"{'#' * section.heading_level} {section.title}",
-                "",
-            ]
-        )
-        if prose:
-            parts.extend([prose, ""])
-        parts.extend(
-            [
-                "```text",
-                render_help(section.argv),
-                "```",
-                "",
-            ]
-        )
-
-    return "\n".join(parts).rstrip() + "\n"
-
-
-def generate_semantic_branches_markdown() -> str:
-    """Return the generated semantic branches topic page."""
-    return _render_topic_doc("branch")
-
-
-def generate_git_magic_markdown() -> str:
-    """Return the generated Git magic topic page."""
-    return _render_topic_doc("git")
-
-
-def generate_index_topic_links_markdown() -> str:
-    """Return the generated topic-link bullets for docs/index.md."""
-    links = [
-        "- [Semantic branches](commands/branch.md) — generated branch naming model and allowed branch types",
-        "- [Git magic](commands/git_cmd.md) — generated Git helpers and workflow shortcuts",
-        "- [Project tree](commands/tree.md) — generated guide for `rrt tree` output modes, "
-        "ignore behavior, and traversal controls",
-    ]
-    return "\n".join(links)
-
-
-TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
-    "branch": Path("docs/commands/branch.md"),
-    "git": Path("docs/commands/git_cmd.md"),
-    "tree": Path("docs/commands/tree.md"),
-    "hooks": Path("docs/commands/hooks.md"),
-    "action": Path("docs/action.md"),
-    "skill": Path("docs/commands/skill.md"),
-    "agent-instructions": Path("docs/agent-instructions.md"),
-    "doctor": Path("docs/commands/doctor.md"),
-    "eol": Path("docs/commands/eol_check.md"),
-}
-
-
-def _build_generated_doc_targets() -> tuple[DocTarget, ...]:
-    """Build the registry of generated docs outputs."""
-    targets = [
-        DocTarget(DEFAULT_OUTPUT, generate_markdown),
-        DocTarget(
-            Path("docs/index.md"),
-            generate_index_topic_links_markdown,
-            anchor_id="index-topic-links",
-        ),
-    ]
-    for slug, output_path in TOPIC_PAGE_OUTPUTS.items():
-        targets.append(DocTarget(output_path, lambda slug=slug: _render_topic_doc(slug)))
-    return tuple(targets)
-
-
-GENERATED_DOC_TARGETS: tuple[DocTarget, ...] = _build_generated_doc_targets()
-
-
-def iter_generated_doc_targets() -> Iterator[DocTarget]:
-    """Yield every generated docs target and its rendered Markdown."""
-    yield from GENERATED_DOC_TARGETS
-
-
-def apply_generated_docs(
-    content: str,
-    *,
-    output_path: Path,
-    check: bool,
-    write: bool,
-    fail_on_change: bool,
-    stdout: SupportsWrite,
-    stderr: SupportsWrite,
-    anchor_id: str | None = None,
-) -> int:
-    """Check and/or write generated docs, returning the desired exit code."""
-    current = output_path.read_text(encoding="utf-8") if output_path.exists() else None
-    desired = content
-
-    if anchor_id is not None:
-        if current is None:
-            stderr.write(
-                f"{output_path} missing required anchor block ({ANCHOR_START_TOKEN}{anchor_id}).\n"
-            )
-            return 1
-        replaced = replace_anchored_block(current, anchor_id=anchor_id, content=content)
-        if replaced is None:
-            stderr.write(
-                f"{output_path} is missing required anchors "
-                f"{ANCHOR_START_TOKEN}{anchor_id} / {ANCHOR_END_TOKEN}{anchor_id}.\n"
-            )
-            return 1
-        desired = replaced
-
-    if current == desired:
-        stdout.write(f"{output_path} is up-to-date.\n")
-        return 0
-
-    if check and not write:
-        stderr.write(f"{output_path} is stale. Run: poe docs-generate\n")
-        return 1
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(desired, encoding="utf-8")
-
-    if fail_on_change:
-        stderr.write(
-            f"Updated {output_path}. Review the generated diff and re-stage the file before retrying.\n"
-        )
-        return 1
-
-    stdout.write(f"Wrote {output_path}.\n")
-    return 0
 
 
 def task_generate() -> int:
-    """Poe task entrypoint for writing all generated docs."""
+    """Poe task: generate and write CLI reference docs."""
+    from repo_release_tools import docs_publisher  # noqa: PLC0415
+
     exit_code = 0
-    for target in iter_generated_doc_targets():
+    for target in docs_publisher.iter_generated_doc_targets():
         exit_code = max(
             exit_code,
             apply_generated_docs(
@@ -482,9 +69,11 @@ def task_generate() -> int:
 
 
 def task_check() -> int:
-    """Poe task entrypoint for verifying all generated docs."""
+    """Poe task: verify all generated docs are up to date."""
+    from repo_release_tools import docs_publisher  # noqa: PLC0415
+
     exit_code = 0
-    for target in iter_generated_doc_targets():
+    for target in docs_publisher.iter_generated_doc_targets():
         exit_code = max(
             exit_code,
             apply_generated_docs(
@@ -499,6 +88,78 @@ def task_check() -> int:
             ),
         )
     return exit_code
+
+
+def task_inject_shared_blocks() -> int:
+    """Poe task: inject all shared anchor blocks."""
+    return _apply_shared_blocks(check=False)
+
+
+def task_check_shared_blocks() -> int:
+    """Poe task: verify all shared anchor blocks are up to date."""
+    return _apply_shared_blocks(check=True)
+
+
+def _apply_shared_blocks(*, check: bool) -> int:
+    """Inject or verify all shared anchor blocks defined in [tool.rrt.docs.shared_blocks]."""
+    import repo_release_tools as rrt_package  # noqa: PLC0415
+    from repo_release_tools.config import load_config  # noqa: PLC0415
+
+    root = Path.cwd()
+    try:
+        cfg = load_config(root)
+    except (FileNotFoundError, ValueError):
+        sys.stdout.write("No rrt config found; skipping shared_blocks injection.\n")
+        return 0
+
+    if cfg.docs is None or not cfg.docs.shared_blocks:
+        return 0
+
+    repo_url = "https://github.com/Anselmoo/repo-release-tools"
+    exit_code = 0
+    for block in cfg.docs.shared_blocks:
+        if block.template is not None:
+            template_path = root / block.template
+            if not template_path.exists():
+                sys.stderr.write(
+                    f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
+                )
+                exit_code = 1
+                continue
+            content = template_path.read_text(encoding="utf-8").rstrip("\n")
+        else:
+            assert block.content is not None
+            content = block.content.rstrip("\n")
+
+        content = content.replace("{version}", rrt_package.__version__)
+        content = content.replace("{repo_url}", repo_url)
+
+        matched = sorted({p for pattern in block.targets for p in root.glob(pattern)})
+        if not matched:
+            sys.stdout.write(f"SharedBlock {block.anchor_id!r}: no target files matched.\n")
+            continue
+
+        for target_path in matched:
+            exit_code = max(
+                exit_code,
+                apply_generated_docs(
+                    content,
+                    output_path=target_path,
+                    check=check,
+                    write=not check,
+                    fail_on_change=False,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                    anchor_id=block.anchor_id,
+                ),
+            )
+
+    return exit_code
+
+
+# ---------------------------------------------------------------------------
+# Direct invocation (backward compat)
+# ---------------------------------------------------------------------------
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -520,12 +181,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--write",
         action="store_true",
-        help="Write the generated content to disk. This is the default when --check is not used.",
+        help="Write the generated content to disk. Default when --check is not used.",
     )
     parser.add_argument(
         "--fail-on-change",
         action="store_true",
-        help="After writing updated content, exit non-zero so hook workflows stop for restaging.",
+        help="After writing, exit non-zero so hook workflows stop for re-staging.",
     )
     return parser
 

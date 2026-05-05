@@ -1,11 +1,11 @@
 # RRT CLI
 
-<!-- Auto-generated from repo_release_tools.cli.build_parser(); run `poe docs-generate` to refresh. -->
+<!-- Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. -->
 
 This reference is generated from the live `argparse` configuration in
 `repo_release_tools.cli` and `src/repo_release_tools/commands/*.py`.
 
-Use `poe docs-generate` to rewrite this file or `poe docs-check` to
+Use `rrt docs publish` to rewrite this file or `rrt docs publish --check` to
 verify it is current.
 
 ## Global help
@@ -40,6 +40,7 @@ Repository Health
   config  Inspect the resolved rrt configuration after discovery and auto-detection.
   env     Show environment variables and interpreter details that affect rrt behavior.
   eol     Check detected host runtimes and project minimum versions against end-of-life dates.
+  toc     Read a Markdown file and print a nested bullet-list TOC to stdout.
   tree    Render a directory tree from the selected root while respecting gitignore rules.
   docs    Scan source files and extract inline documentation blocks
 
@@ -706,6 +707,87 @@ Examples
   $ rrt eol --warn-days 90 --error-days 30
 ```
 
+## `rrt toc`
+
+``rrt toc`` — generate and inject a Markdown table of contents.
+
+### Overview
+
+``rrt toc FILE`` reads a Markdown file and prints a nested bullet list of its
+headings to stdout.  With ``--inject`` and ``--anchor``, the generated TOC is
+written in-place inside a marked anchor block in a target file.
+
+### Usage
+
+```
+rrt toc FILE [--min-level N] [--max-level N]
+rrt toc FILE --inject TARGET --anchor ID [--min-level N] [--max-level N] [--dry-run]
+```
+
+### Anchors
+
+Place a pair of HTML comments in the target file to mark where the TOC
+should live:
+
+```markdown
+<!-- rrt:auto:start:toc -->
+<!-- rrt:auto:end:toc -->
+```
+
+The content between the markers is replaced on every ``rrt toc --inject`` run.
+Everything outside the markers is preserved unchanged.
+
+### Options
+
+| Flag | Default | Description |
+|---|---|---|
+| ``FILE`` | — | Markdown file to parse for headings |
+| ``--inject FILE`` | — | Target file to update in-place |
+| ``--anchor ID`` | — | Anchor ID inside the inject target |
+| ``--min-level N`` | 1 | Shallowest heading level to include (1 = ``#``) |
+| ``--max-level N`` | 6 | Deepest heading level to include (6 = ``######``) |
+| ``--dry-run`` | — | Print result instead of writing (requires ``--inject``) |
+
+``--inject`` and ``--anchor`` must always be used together.
+
+```text
+Usage:  rrt toc [OPTIONS] FILE
+
+Read a Markdown file and print a nested bullet-list TOC to stdout.
+
+With --inject and --anchor the generated TOC is written in-place inside
+an anchor block in a target file.  Markers delimit the block:
+
+  <!-- rrt:auto:start:ID -->
+  <!-- rrt:auto:end:ID -->
+
+Everything outside the markers is preserved unchanged.
+--inject and --anchor must always be used together.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  FILE           Markdown file to parse for headings.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --inject FILE  Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
+  --anchor ID    Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
+  --min-level N  Shallowest heading level to include (default: 1 = #).
+  --max-level N  Deepest heading level to include (default: 6 = ######).
+  --dry-run      Print the result instead of writing (only effective with --inject).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt toc README.md
+  $ rrt toc README.md --min-level 2 --max-level 3
+  $ rrt toc README.md --inject README.md --anchor toc
+  $ rrt toc README.md --inject README.md --anchor toc --dry-run
+```
+
 ## `rrt tree`
 
 ### Project tree
@@ -824,6 +906,8 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   generate     Extract docs and emit in the selected format.
   check        Exit 1 if the docs lockfile is stale.
+  publish      Write CLI-reference docs from the live rrt parser.
+  inject       Inject shared anchor blocks defined in [tool.rrt.docs.shared_blocks].
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -877,6 +961,42 @@ Options
   -h, --help        Show this message and exit.
   --lock-file PATH  Path to the lock file (default: from config or .rrt/docs.lock.toml).
   --root PATH       Project root directory (default: current directory).
+```
+
+### `rrt docs publish`
+
+```text
+Usage:  rrt docs publish [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --check           Fail if any generated file is stale; do not write.
+  --fail-on-change  Exit 1 after writing (for pre-commit hook workflows).
+  --dry-run         Print which files would be written without doing so.
+```
+
+### `rrt docs inject`
+
+```text
+Usage:  rrt docs inject [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --check      Fail if any anchor block is stale; do not write.
+  --root PATH  Project root directory (default: current directory).
+  --dry-run    Print which files would be updated without writing.
 ```
 
 ## `rrt branch`
