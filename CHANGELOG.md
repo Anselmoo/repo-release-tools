@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-05
 ### Added
 - `rrt eol` command and `rrt-hooks check-eol` hook for tracking language end-of-life (Python, Go, Node.js, Rust)
 - `[tool.rrt.eol]` config block with `languages`, `warn_days`, `error_days`, `fetch_live`, `allow_eol`, and per-cycle `overrides`
