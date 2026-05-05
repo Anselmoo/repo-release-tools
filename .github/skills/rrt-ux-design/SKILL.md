@@ -47,7 +47,9 @@ output.dry_run() →  DryRunPrinter (see below)
 output.status()  →  from ui import apply_style() with glyph
 ```
 
-**Never add new functions to `output.py`.** Every new output goes in `ui/`.
+**Treat `output.py` as migration-only.** New output belongs in `ui/`, and any
+touch to `output.py` should move behavior toward the `ui/` layer instead of
+extending the legacy surface.
 
 ---
 
@@ -233,8 +235,7 @@ Instead of:
 
 Do:
 ```python
-from repo_release_tools.ui import subtle, underline, apply_style
-from repo_release_tools.ui.syntax import highlight_terminal
+from repo_release_tools.ui import apply_style, highlight_terminal, subtle, underline
 
 path_str = underline(str(path))
 ver_str  = apply_style(f'"{new_version}"', bold=True, color="success")
@@ -247,8 +248,7 @@ This produces: `⊙ [dry-run] Would update` **`/path/to/pyproject.toml`**`: vers
 
 ```python
 # Render the would-be changelog diff with syntax highlighting
-from repo_release_tools.ui.syntax import highlight_terminal
-from repo_release_tools.ui import rule, terminal_width, subtle
+from repo_release_tools.ui import highlight_terminal, rule, subtle, terminal_width
 
 W = terminal_width()
 print(rule("Updating changelog", width=W))
@@ -308,7 +308,7 @@ confirm("Overwrite config?", default=True)   # returns bool
 
 ### Syntax highlighting
 ```python
-from repo_release_tools.ui.syntax import highlight_terminal
+from repo_release_tools.ui import highlight_terminal
 highlight_terminal(toml_text, "toml")
 ```
 
@@ -319,8 +319,8 @@ Returns plain text when Pygments is not installed or terminal is non-TTY.
 ## OutputContext — The Single Source of Truth
 
 ```python
-from repo_release_tools.ui.context import OutputContext
 import sys
+from repo_release_tools.ui import OutputContext, bold, supports_color
 
 ctx = OutputContext(format="text", no_color=False, stream=sys.stdout)
 
@@ -357,12 +357,18 @@ Env var priority: `NO_COLOR` → `RRT_COLOR` → `TERM=dumb` → `COLORTERM=true
 `test_user_experience_simulator.py` docstring. Fails before tests run if diverged.
 
 ### Layer 2 — agent hook
-`.github/hooks/rrt-ux-design.json` fires on `UserPromptSubmit`. Injects system
-message when UI keywords detected. Never blocks (always exits 0).
+`.claude/settings.json` registers `.claude/hooks/rrt_ux_guard.py` on
+`UserPromptSubmit`. It injects a reminder when UI keywords are detected and never
+blocks (always exits 0).
 
 ### Layer 3 — contributor rules
+These are project guidance and review expectations. They are **not** all
+enforced by `.claude/hooks/rrt_ux_write_guard.py`; the hook currently hard-blocks
+only raw ANSI-related writes.
+
 1. **All terminal output through `ui/`** — No `print(f"\x1b[...")` in subcommand code.
-2. **No new functions in `output.py`** — It is deprecated; migrate existing callers to `ui/`.
+2. **`output.py` is migration-only** — Prefer moving callers to `ui/` instead of
+   extending the legacy layer.
 3. **New `ui/` function → new test class** — Add `TestMyFeature` to `test_user_experience_simulator.py`.
 4. **Run tests before PR** — `uv run pytest tests/test_user_experience_simulator.py -v`
 
@@ -425,8 +431,7 @@ def run(args):
 ### Config / TOML output with syntax highlighting
 
 ```python
-from repo_release_tools.ui.syntax import highlight_terminal
-from repo_release_tools.ui import rule, terminal_width
+from repo_release_tools.ui import highlight_terminal, rule, terminal_width
 
 W = terminal_width()
 print(rule("Version groups", width=W))

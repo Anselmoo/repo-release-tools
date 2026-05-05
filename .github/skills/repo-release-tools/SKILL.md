@@ -184,6 +184,10 @@ Supported targets:
 - `claude-global` → `~/.claude/skills`
 - `codex-global` → `~/.codex/skills`
 
+Repo-owned source skills for this repository live under `.github/skills/`.
+Directories such as `.claude/skills/` are installation targets produced by
+`rrt skill install`, not the canonical source files to edit in this repository.
+
 ## Troubleshooting
 
 ### "rrt doctor" fails

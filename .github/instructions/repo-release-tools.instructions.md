@@ -4,26 +4,38 @@ description: "Apply workspace-specific guidance for repo-release-tools CLI/UI im
 applyTo: "src/**/*.py"
 ---
 
-This repository enforces coverage and CI policies through `.github/hooks/check_push_coverage.py` and the `uv run pytest -q -m "not runtime"` workflow.
+This repository enforces Claude-session policy through `.claude/settings.json` and
+the hook scripts in `.claude/hooks/`, alongside the `uv run pytest -q -m "not runtime"`
+workflow.
 
 ## Hook layout
 
-All hooks are activated from a single source of truth: **`.claude/settings.json`**.
-Do not create separate `*.json` activation files in `.github/hooks/` — add hook registrations directly to `.claude/settings.json` instead.
+All active Claude hook registrations live in the single source of truth:
+**`.claude/settings.json`**.
 
-Scripts are split by ownership:
-- **`.claude/hooks/`** — session-scoped policies (coverage baseline refresh, regression gate): only relevant inside a Claude agent session.
-- **`.github/hooks/`** — project-scoped policies (push coverage guard, UX enforcement): enforce contributor rules and are visible to all collaborators.
+All active Claude hook scripts in this repository live under **`.claude/hooks/`**.
+Do not create parallel activation files in `.github/hooks/`, and do not document
+stale `.github/hooks/*.py` paths as if they were live.
 
 Current hook registrations in `.claude/settings.json`:
 
 | Event | Matcher | Script | Purpose |
 |---|---|---|---|
-| `UserPromptSubmit` | `""` | `.github/hooks/rrt_ux_guard.py` | Advisory UX contract reminder |
-| `PreToolUse` | `Bash` | `.github/hooks/check_push_coverage.py` | Block `git push` below 85.71% coverage |
-| `PreToolUse` | `Write\|Edit\|…` | `.github/hooks/rrt_ux_write_guard.py` | Block raw ANSI writes in `src/` |
+| `UserPromptSubmit` | `""` | `.claude/hooks/rrt_ux_guard.py` | Advisory UX contract reminder |
+| `PreToolUse` | `Bash` | `.claude/hooks/check_push_coverage.py` | Block `git push` below 85.71% coverage |
+| `PreToolUse` | `Write\|Edit\|…` | `.claude/hooks/rrt_ux_write_guard.py` | Block raw ANSI writes in `src/` |
 | `PostToolUse` | `""` | `.claude/hooks/refresh_coverage_baseline.py` | Auto-refresh baseline after pytest |
 | `Stop` | `""` | `.claude/hooks/coverage_non_regression.py` | Block completion on coverage regression |
+
+## Source-of-truth boundaries
+
+- **`.claude/settings.json` + `.claude/hooks/` + `.claude/agents/`** are the
+  canonical Claude automation surface for this repo.
+- **`.github/instructions/`** and **`.github/copilot-instructions.md`** must
+  mirror that Claude surface instead of describing a parallel hook layout.
+- **`.github/skills/`** remains the committed source tree for repo-owned skill
+  definitions; install targets such as **`.claude/skills/`** are generated
+  runtime locations, not the source-of-truth files to edit in this repository.
 
 When working in `repo-release-tools`, follow these rules:
 
@@ -37,19 +49,21 @@ When working in `repo-release-tools`, follow these rules:
 - Use existing hook behavior as a guardrail: coverage below 85.71% should be treated as a blocker unless the user explicitly approves a follow-on test expansion.
 - When making CLI errors friendlier, preserve argparse semantics and exit codes while improving help text, suggestions, and examples.
 - Persist preferences and follow-up context in repo-scoped memory when they are specific to this repository's workflow.
+- Keep the hook-registration table in sync with `.claude/settings.json`; if the active hook path changes, update the documented path in this file immediately so contributors are not sent to a stale location.
 
 
 ## Canonical UI import pattern
 
-All command files and modules **must** use a single consolidated import block from the public `ui` package. Do **not** import directly from submodules:
+All command files and modules **must** use a single consolidated import block from
+the public `ui` package. Do **not** import directly from submodules:
 
 ```python
 # ✅ Correct — one import block from the public surface
 from repo_release_tools.ui import (
     DryRunPrinter,
     GLYPHS,
-    error as color_error,
-    highlight_terminal,
+    bold,
+    error,
     info,
     rule,
     success,
@@ -63,6 +77,9 @@ from repo_release_tools.ui.glyphs import GLYPHS
 from repo_release_tools.ui.layout import rule, terminal_width
 from repo_release_tools.ui.syntax import highlight_terminal
 ```
+
+Add extra helpers such as `highlight_terminal`, `subtle`, `fmt_cmd`, or
+`ProgressLine` from the same public `repo_release_tools.ui` surface when needed.
 
 Additional helpers available via `from repo_release_tools.ui import (...)`:
 - `ProgressLine`, `spinner_lines` — live terminal progress
@@ -126,6 +143,6 @@ When in doubt which method to call, use this decision table (see `rrt-ux-philoso
 
 - `.claude/hooks/refresh_coverage_baseline.py` auto-refreshes `.claude/coverage-baseline.json` after successful `pytest` tool runs.
 - Auto-refresh is intentionally non-blocking and no-op on malformed payloads, failed runs, or missing `coverage.xml`.
-- Keep `.github/hooks/check_push_coverage.py` as the policy floor guardrail (85.71%) even when baseline refresh is active.
+- Keep `.claude/hooks/check_push_coverage.py` as the policy floor guardrail (85.71%) even when baseline refresh is active.
 - `.claude/hooks/coverage_non_regression.py` remains the completion-time regression gate.
 - Operational caveat: always-on refresh can move baseline up or down as test scope changes; prefer stricter/manual mode if governance requires explicit approvals.

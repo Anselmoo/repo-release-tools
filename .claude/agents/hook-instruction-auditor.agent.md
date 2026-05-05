@@ -3,10 +3,11 @@ name: hook-instruction-auditor
 description: >-
   Read-only auditor that checks all hook configs, instruction files, and skills
   for consistency gaps and stale references. Use when you want a health check on
-  whether .claude/settings.json, .github/hooks/*.json, copilot-instructions.md,
-  .github/instructions/*.md, and .github/skills/*/SKILL.md are mutually
-  consistent and up to date. Trigger keywords: hooks, instructions, audit,
-  stale, drift, consistency, out of date.
+  whether .claude/settings.json, .claude/hooks/*, .claude/agents/*.agent.md,
+  copilot-instructions.md, .github/instructions/*.md, and repo-owned skills
+  under .github/skills/*/SKILL.md are mutually consistent and up to date.
+  Trigger keywords: hooks, instructions, audit, stale, drift, consistency,
+  out of date.
 isolation: none
 color: orange
 effort: normal
@@ -27,15 +28,16 @@ Read `.claude/settings.json`. For every `command:` path listed in every hook
 registration, check whether that file actually exists in the workspace. Flag any
 path that does not resolve.
 
-Also verify that `.github/hooks/coverage-protection.json` and
-`.github/hooks/rrt-ux-design.json` do **not** exist (they were consolidated into
-`.claude/settings.json`; their presence would indicate a stale config split).
+Also verify that no stale `.github/hooks/*.json` activation files remain. At a
+minimum, `.github/hooks/coverage-protection.json` and
+`.github/hooks/rrt-ux-design.json` must **not** exist; their presence would
+indicate a stale config split.
 
 ### Area 2 — Coverage threshold consistency
 
 Search for the numeric coverage floor value in:
 - `.claude/hooks/coverage_non_regression.py`
-- `.github/hooks/check_push_coverage.py`
+- `.claude/hooks/check_push_coverage.py`
 - `.github/copilot-instructions.md`
 - every file under `.github/instructions/`
 
@@ -68,18 +70,25 @@ that every file named in the table exists on disk. List any `.md` file in
 
 ### Area 6 — Skill command staleness
 
-Read `.github/skills/repo-release-tools/SKILL.md`. Collect every
-`rrt <subcommand>` shown in code examples. For each subcommand, check whether a
-corresponding `.py` file exists in `src/repo_release_tools/commands/`. Flag
-subcommands for which no matching file can be found.
+Read the repo-owned source skill `.github/skills/repo-release-tools/SKILL.md`.
+Collect every `rrt <subcommand>` shown in code examples. For each subcommand,
+check whether a corresponding implementation module exists in
+`src/repo_release_tools/commands/`, accounting for the `_cmd` suffix used by
+some modules (for example `config` → `config_cmd.py` and `docs` →
+`docs_cmd.py`). Flag subcommands for which no matching implementation file can
+be found.
 
 ### Area 7 — Hook enforcement vs documentation
 
-Read `.github/hooks/rrt_ux_write_guard.py` and extract its `_HARD_BLOCKS`
-patterns. Read `.github/skills/rrt-ux-design/SKILL.md` and identify the
-documented forbidden UX patterns. Flag any hard-block pattern in the script that
-has no matching description in the skill. Flag any forbidden pattern described in
-the skill that has no corresponding enforcement in the script.
+Read `.claude/hooks/rrt_ux_write_guard.py` and extract its `_HARD_BLOCKS`
+patterns. Read the repo-owned source skill `.github/skills/rrt-ux-design/SKILL.md`
+and identify the documented hard-block UX patterns. Compare only patterns that
+the skill presents as write-time enforcement or hard blocks. Do not flag broader
+contributor guidance (for example migration advice, test expectations, or
+deprecation policy) unless the skill explicitly claims the write guard enforces
+it. Flag any hard-block pattern in the script that has no matching description
+in the skill. Flag any hard-block pattern described in the skill that has no
+corresponding enforcement in the script.
 
 ## Out of scope
 
