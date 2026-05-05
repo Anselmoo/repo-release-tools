@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tomllib
+from glob import has_magic
 from pathlib import Path
 from typing import cast
 
@@ -926,6 +927,19 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
             raise ValueError("Each pin_targets entry must have a non-empty 'path' string")
         if not isinstance(raw_pattern, str) or not raw_pattern:
             raise ValueError("Each pin_targets entry must have a non-empty 'pattern' string")
+
+        if has_magic(raw_path):
+            matched_paths = sorted(path for path in root.glob(raw_path) if path.is_file())
+            if not matched_paths:
+                raise ValueError(
+                    f"pin_targets path glob {raw_path!r} matched no files under {root}"
+                )
+            for matched_path in matched_paths:
+                pin = PinTarget(path=matched_path, pattern=raw_pattern)
+                pin.validate()
+                pins.append(pin)
+            continue
+
         pin = PinTarget(path=root / raw_path, pattern=raw_pattern)
         pin.validate()
         pins.append(pin)

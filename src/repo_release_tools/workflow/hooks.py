@@ -1110,7 +1110,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-update-unreleased
@@ -1137,7 +1137,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-commit-subject
@@ -1178,7 +1178,7 @@ clean repository before publishing work:
 ```yaml
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: rrt-dirty-tree
         stages: [pre-push]
@@ -1413,7 +1413,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-update-unreleased

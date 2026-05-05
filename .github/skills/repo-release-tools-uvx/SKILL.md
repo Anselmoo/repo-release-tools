@@ -296,7 +296,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v0.1.10
+    rev: v1.2.0
     hooks:
       - id: rrt-branch-name        # pre-commit: validate branch name
       - id: rrt-update-unreleased  # commit-msg: auto-write changelog bullet
@@ -386,7 +386,7 @@ Pass via CLI: `--strategy unreleased` or via Action: `changelog-strategy: "unrel
 ```yaml
 - uses: actions/checkout@v6
 
-- uses: Anselmoo/repo-release-tools@v0.1.10
+- uses: Anselmoo/repo-release-tools@v1.2.0
   with:
     check-branch-name: "true"
     check-commit-subject: "true"

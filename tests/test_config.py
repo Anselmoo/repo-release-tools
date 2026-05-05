@@ -1042,6 +1042,65 @@ pattern = '(badge/v)(\\d+\\.\\d+\\.\\d+)()'
     assert group.pin_targets[0].path == tmp_path / "README.md"
 
 
+def test_load_config_parses_global_pin_targets_with_glob_path(tmp_path: Path) -> None:
+    """Glob pin target paths expand to one PinTarget per matched file."""
+    first = tmp_path / ".github" / "skills" / "a" / "one.md"
+    second = tmp_path / ".github" / "skills" / "b" / "two.md"
+    first.parent.mkdir(parents=True)
+    second.parent.mkdir(parents=True)
+    first.write_text("rev: v0.1.0\n", encoding="utf-8")
+    second.write_text("rev: v0.1.0\n", encoding="utf-8")
+
+    cfg_file = tmp_path / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = ".github/skills/**/*.md"
+pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config_from_path(tmp_path, cfg_file)
+
+    assert len(config.global_pin_targets) == 2
+    assert {pin.path for pin in config.global_pin_targets} == {first, second}
+
+
+def test_load_config_rejects_glob_pin_target_without_matches(tmp_path: Path) -> None:
+    """Glob pin target paths must match at least one file."""
+    cfg_file = tmp_path / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = ".github/skills/**/*.md"
+pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="matched no files"):
+        load_config_from_path(tmp_path, cfg_file)
+
+
 def test_pin_target_validate_rejects_pattern_with_fewer_than_3_groups(tmp_path: Path) -> None:
     """validate() raises if the pattern has < 3 capture groups."""
     from repo_release_tools.config import PinTarget
