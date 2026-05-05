@@ -234,10 +234,6 @@ class RrtHelpFormatter(argparse.RawDescriptionHelpFormatter):
         usage_label = heading_style("Usage:")
         return f"{usage_label}  {bold(self._prog)}{options}{positional_text}\n\n"
 
-    def _decolor(self, text: str) -> str:
-        """Strip ANSI codes from *text*."""
-        return _strip_ansi(text)
-
     def start_section(self, heading: str | None) -> None:  # type: ignore[override]
         """Render a styled rule+heading section opener."""
         if not heading:

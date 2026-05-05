@@ -1429,5 +1429,5 @@ SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (
 )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
