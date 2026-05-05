@@ -116,6 +116,7 @@ def cmd_toc(args: argparse.Namespace) -> int:
             sys.stdout.write(updated)
         else:
             target.write_text(updated, encoding="utf-8")
+            p.ok(f"Updated {target.name} at anchor {anchor_id!r}.")
         p.footer(f"Done. Updated anchor {anchor_id!r} in {target.name}.")
         return 0
 
