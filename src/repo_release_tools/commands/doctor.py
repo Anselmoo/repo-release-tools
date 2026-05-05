@@ -233,6 +233,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
         p.line("One or more core automation checks failed.", ok=False)
 
     p.blank_line()
+    p.warn(
+        "Compatibility note: release-target validation lives in 'rrt release check'. "
+        "Use both checks for historical doctor coverage."
+    )
+    p.blank_line()
     p.section("Feature-specific checks")
     p.action("Run 'rrt release check' for version targets, pin targets, and changelog files.")
     if config.docs is not None:

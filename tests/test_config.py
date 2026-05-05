@@ -1569,18 +1569,20 @@ def test_load_config_docs_shared_blocks_absent(tmp_path: Path) -> None:
 
 
 def test_load_config_docs_shared_blocks_with_template(tmp_path: Path) -> None:
-    """Legacy template-based shared blocks should be rejected."""
+    """Legacy template-based shared blocks are supported with deprecation warning."""
+    tpl = tmp_path / "scripts" / "templates" / "doc-footer.md"
+    tpl.parent.mkdir(parents=True)
+    tpl.write_text("---\n[Docs]({repo_url})\n", encoding="utf-8")
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = "scripts/templates/doc-footer.md"\n'
         'targets = ["docs/**/*.md"]\n',
     )
-    with pytest.raises(
-        ValueError,
-        match=r"tool\.rrt\.docs\.shared_blocks\[0\]\.template is no longer supported; use content",
-    ):
-        load_config(tmp_path)
+    with pytest.warns(DeprecationWarning, match="template is deprecated"):
+        cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.shared_blocks[0].content.startswith("---")
 
 
 def test_load_config_docs_shared_blocks_with_inline_content(tmp_path: Path) -> None:
@@ -1631,14 +1633,14 @@ def test_load_config_docs_shared_blocks_missing_anchor_id(tmp_path: Path) -> Non
 
 
 def test_load_config_docs_shared_blocks_template_not_string(tmp_path: Path) -> None:
-    """The legacy template key should be rejected even when it is not a string."""
+    """The legacy template key must still be a non-empty string when provided."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = 123\ntargets = ["docs/**/*.md"]\n',
     )
     with pytest.raises(
-        ValueError, match=r"shared_blocks\[0\]\.template is no longer supported; use content"
+        ValueError, match=r"shared_blocks\[0\]\.template must be a non-empty string"
     ):
         load_config(tmp_path)
 
@@ -1655,17 +1657,19 @@ def test_load_config_docs_shared_blocks_content_not_string(tmp_path: Path) -> No
 
 
 def test_load_config_docs_shared_blocks_both_template_and_content(tmp_path: Path) -> None:
-    """The legacy template key is rejected even when content is also present."""
+    """Inline content wins when both legacy template and content are set."""
+    tpl = tmp_path / "t.md"
+    tpl.write_text("legacy footer\n", encoding="utf-8")
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = "t.md"\ncontent = "x"\n'
         'targets = ["docs/**/*.md"]\n',
     )
-    with pytest.raises(
-        ValueError, match=r"shared_blocks\[0\]\.template is no longer supported; use content"
-    ):
-        load_config(tmp_path)
+    with pytest.warns(DeprecationWarning, match="template is deprecated"):
+        cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.shared_blocks[0].content == "x"
 
 
 def test_load_config_docs_shared_blocks_no_template_or_content(tmp_path: Path) -> None:

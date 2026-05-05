@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+from pathlib import Path
 from typing import cast
 
 from .model import DocsConfig, EolConfig, EolOverride, SharedBlock
@@ -70,7 +72,7 @@ def _load_eol_config(raw: object) -> EolConfig | None:
     )
 
 
-def _load_docs_config(raw: object) -> DocsConfig | None:
+def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | None:
     """Parse an optional [tool.rrt.docs] table into a DocsConfig."""
     if raw is None:
         return None
@@ -118,7 +120,7 @@ def _load_docs_config(raw: object) -> DocsConfig | None:
         languages=_load_docs_languages(d),
         lock_file=_load_docs_lock_file(d),
         formats=_load_docs_formats(d),
-        shared_blocks=_load_shared_blocks(d),
+        shared_blocks=_load_shared_blocks(d, root=root),
     )
 
 
@@ -179,7 +181,9 @@ def _load_docs_formats(d: dict[str, object]) -> tuple[str, ...]:
     return tuple(fmts)
 
 
-def _load_shared_blocks(d: dict[str, object]) -> tuple[SharedBlock, ...]:
+def _load_shared_blocks(
+    d: dict[str, object], *, root: Path | None = None
+) -> tuple[SharedBlock, ...]:
     raw = d.get("shared_blocks")
     if raw is None:
         return ()
@@ -196,11 +200,36 @@ def _load_shared_blocks(d: dict[str, object]) -> tuple[SharedBlock, ...]:
                 f"tool.rrt.docs.shared_blocks[{i}].anchor_id must be a non-empty string"
             )
         template = item.get("template")
-        if template is not None:
-            raise ValueError(
-                f"tool.rrt.docs.shared_blocks[{i}].template is no longer supported; use content"
-            )
         content = item.get("content")
+
+        if template is not None:
+            if not isinstance(template, str) or not template.strip():
+                raise ValueError(
+                    f"tool.rrt.docs.shared_blocks[{i}].template must be a non-empty string"
+                )
+
+            warnings.warn(
+                (
+                    f"tool.rrt.docs.shared_blocks[{i}].template is deprecated and will be "
+                    "removed in a future major version; migrate to inline 'content'"
+                ),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+            template_path = Path(template)
+            if not template_path.is_absolute() and root is not None:
+                template_path = root / template_path
+            try:
+                template_content = template_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                raise ValueError(
+                    f"tool.rrt.docs.shared_blocks[{i}].template unreadable: {template_path} ({exc})"
+                ) from exc
+
+            if content is None:
+                content = template_content
+
         if content is None:
             raise ValueError(f"tool.rrt.docs.shared_blocks[{i}] must define 'content'")
         if not isinstance(content, str):

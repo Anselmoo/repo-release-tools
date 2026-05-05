@@ -44,7 +44,10 @@ inputs:
     description: Whether to fail when the checked-out work tree is dirty
     default: "false"
   check-doctor:
-    description: Whether to run rrt doctor core automation checks
+    description: >-
+      Whether to run rrt doctor core automation checks.
+      For historical release-target validation coverage, this also runs
+      rrt release check unless explicitly disabled.
     default: "false"
   check-release-health:
     description: Whether to run rrt release check for version targets, pin targets, and changelog files
@@ -142,7 +145,7 @@ runs:
         rrt-hooks doctor
 
     - name: Run rrt release health checks
-      if: inputs.check-release-health == 'true'
+      if: inputs.check-release-health == 'true' || inputs.check-doctor == 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |

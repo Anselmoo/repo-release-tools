@@ -669,7 +669,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         extra_branch_types=extra_branch_types,
         global_pin_targets=_load_pin_targets(root, raw.get("pin_targets", [])),
         eol=_load_eol_config(raw.get("eol")),
-        docs=_load_docs_config(raw.get("docs")),
+        docs=_load_docs_config(raw.get("docs"), root=root),
     )
 
 

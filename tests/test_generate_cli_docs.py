@@ -686,9 +686,19 @@ def test_apply_shared_blocks_warns_when_no_targets_matched(
 def test_apply_shared_blocks_rejects_legacy_template_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Legacy template-backed shared blocks fail loudly during config loading."""
+    """Legacy template-backed shared blocks still work with deprecation warning."""
     docs = _load_generator_module()
     monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "scripts" / "templates").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "scripts" / "templates" / "test-footer.md").write_text(
+        "legacy footer\n", encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs" / "guide.md").write_text(
+        "# Guide\n\n<!-- rrt:auto:start:test-footer -->\n<!-- rrt:auto:end:test-footer -->\n",
+        encoding="utf-8",
+    )
 
     (tmp_path / "pyproject.toml").write_text(
         """
@@ -708,8 +718,7 @@ targets = ["docs/**/*.md"]
         encoding="utf-8",
     )
 
-    with pytest.raises(
-        ValueError,
-        match=r"tool\.rrt\.docs\.shared_blocks\[0\]\.template is no longer supported; use content",
-    ):
-        docs.task_inject_shared_blocks()
+    with pytest.warns(DeprecationWarning, match="template is deprecated"):
+        exit_code = docs.task_inject_shared_blocks()
+    assert exit_code == 0
+    assert "legacy footer" in (tmp_path / "docs" / "guide.md").read_text(encoding="utf-8")

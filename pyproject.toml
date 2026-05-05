@@ -120,7 +120,15 @@ content = """
 
 [↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub]({repo_url})
 """
-targets = ["docs/**/*.md"]
+targets = [
+    "docs/index.md",
+    "docs/commands/bump.md",
+    "docs/commands/ci_version.md",
+    "docs/commands/config_cmd.md",
+    "docs/commands/env_cmd.md",
+    "docs/commands/init.md",
+    "docs/commands/toc.md",
+]
 
 [[tool.rrt.eol.overrides]]
 language = "python"
