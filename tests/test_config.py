@@ -1568,36 +1568,34 @@ def test_load_config_docs_shared_blocks_absent(tmp_path: Path) -> None:
 
 
 def test_load_config_docs_shared_blocks_with_template(tmp_path: Path) -> None:
-    """A valid shared_block with a template path is parsed correctly."""
+    """Legacy template-based shared blocks should be rejected."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = "scripts/templates/doc-footer.md"\n'
         'targets = ["docs/**/*.md"]\n',
     )
-    cfg = load_config(tmp_path)
-    assert cfg.docs is not None
-    assert len(cfg.docs.shared_blocks) == 1
-    block = cfg.docs.shared_blocks[0]
-    assert block.anchor_id == "doc-footer"
-    assert block.template == "scripts/templates/doc-footer.md"
-    assert block.content is None
-    assert block.targets == ("docs/**/*.md",)
+    with pytest.raises(
+        ValueError,
+        match=r"tool\.rrt\.docs\.shared_blocks\[0\]\.template is no longer supported; use content",
+    ):
+        load_config(tmp_path)
 
 
 def test_load_config_docs_shared_blocks_with_inline_content(tmp_path: Path) -> None:
-    """A valid shared_block with inline content is parsed correctly."""
+    """A valid shared_block with rich inline content is parsed correctly."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
-        'anchor_id = "doc-footer"\ncontent = "Footer text"\n'
+        'anchor_id = "doc-footer"\ncontent = """---\n[Docs]({repo_url})\n<iframe src="https://example.test/embed"></iframe>\n"""\n'
         'targets = ["docs/**/*.md"]\n',
     )
     cfg = load_config(tmp_path)
     assert cfg.docs is not None
     block = cfg.docs.shared_blocks[0]
-    assert block.content == "Footer text"
-    assert block.template is None
+    assert block.content.startswith("---")
+    assert "[Docs]({repo_url})" in block.content
+    assert '<iframe src="https://example.test/embed"></iframe>' in block.content
 
 
 def test_load_config_docs_shared_blocks_not_array(tmp_path: Path) -> None:
@@ -1632,13 +1630,15 @@ def test_load_config_docs_shared_blocks_missing_anchor_id(tmp_path: Path) -> Non
 
 
 def test_load_config_docs_shared_blocks_template_not_string(tmp_path: Path) -> None:
-    """shared_blocks template values must be strings when provided."""
+    """The legacy template key should be rejected even when it is not a string."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = 123\ntargets = ["docs/**/*.md"]\n',
     )
-    with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template must be a string"):
+    with pytest.raises(
+        ValueError, match=r"shared_blocks\[0\]\.template is no longer supported; use content"
+    ):
         load_config(tmp_path)
 
 
@@ -1654,25 +1654,27 @@ def test_load_config_docs_shared_blocks_content_not_string(tmp_path: Path) -> No
 
 
 def test_load_config_docs_shared_blocks_both_template_and_content(tmp_path: Path) -> None:
-    """Defining both template and content raises ValueError."""
+    """The legacy template key is rejected even when content is also present."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntemplate = "t.md"\ncontent = "x"\n'
         'targets = ["docs/**/*.md"]\n',
     )
-    with pytest.raises(ValueError, match="must not define both"):
+    with pytest.raises(
+        ValueError, match=r"shared_blocks\[0\]\.template is no longer supported; use content"
+    ):
         load_config(tmp_path)
 
 
 def test_load_config_docs_shared_blocks_no_template_or_content(tmp_path: Path) -> None:
-    """Neither template nor content raises ValueError."""
+    """Shared blocks must define inline content."""
     _write_docs_cfg(
         tmp_path,
         "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
         'anchor_id = "doc-footer"\ntargets = ["docs/**/*.md"]\n',
     )
-    with pytest.raises(ValueError, match="must define either"):
+    with pytest.raises(ValueError, match=r"shared_blocks\[0\] must define 'content'"):
         load_config(tmp_path)
 
 
@@ -1700,11 +1702,7 @@ def test_load_config_docs_shared_blocks_targets_not_list(tmp_path: Path) -> None
 
 def test_shared_block_validate_rejects_empty_anchor_id() -> None:
     """SharedBlock.validate raises ValueError for an empty anchor_id."""
-    block = SharedBlock.__new__(SharedBlock)
-    object.__setattr__(block, "anchor_id", "")
-    object.__setattr__(block, "template", "t.md")
-    object.__setattr__(block, "content", None)
-    object.__setattr__(block, "targets", ("docs/**/*.md",))
+    block = SharedBlock(anchor_id="", content="footer", targets=("docs/**/*.md",))
     with pytest.raises(ValueError, match="anchor_id must be a non-empty string"):
         block.validate()
 

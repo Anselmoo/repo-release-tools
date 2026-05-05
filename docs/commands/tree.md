@@ -64,9 +64,3 @@ Valid examples: `project-tree`, `src.layout`, `tree_v2`
 - Outside Git repos, fallback ignore filtering skips common transient dirs.
 - Hidden files are excluded unless `--show-hidden` is provided.
 - `--inject` and `--anchor` must always be used together.
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->

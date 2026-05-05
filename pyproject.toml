@@ -115,7 +115,11 @@ stubs = [
 
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "doc-footer"
-template = "scripts/templates/doc-footer.md"
+content = """
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub]({repo_url})
+"""
 targets = ["docs/**/*.md"]
 
 [[tool.rrt.eol.overrides]]

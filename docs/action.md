@@ -111,9 +111,3 @@ the job to assert that nothing was left uncommitted.
 `check-doctor` runs `rrt doctor`, which verifies that version targets and pin
 targets in repo config are reachable and well-formed. It is a good release gate
 when your repository relies on config-driven version updates.
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->

@@ -312,22 +312,15 @@ class SharedBlock:
     """A single anchor-injected shared block stamped across doc target files."""
 
     anchor_id: str
-    template: str | None = None  # path to a template file (relative to project root)
-    content: str | None = None  # inline content (alternative to template)
+    content: str  # inline Markdown/HTML content from pyproject.toml or .rrt.toml
     targets: tuple[str, ...] = ()  # glob patterns relative to the project root
 
     def validate(self) -> None:
         """Validate the shared block configuration."""
         if not self.anchor_id or not self.anchor_id.strip():
             raise ValueError("shared_blocks anchor_id must be a non-empty string")
-        if self.template is None and self.content is None:
-            raise ValueError(
-                f"shared_blocks entry {self.anchor_id!r} must define either 'template' or 'content'"
-            )
-        if self.template is not None and self.content is not None:
-            raise ValueError(
-                f"shared_blocks entry {self.anchor_id!r} must not define both 'template' and 'content'"
-            )
+        if self.content is None:
+            raise ValueError(f"shared_blocks entry {self.anchor_id!r} must define 'content'")
         if not self.targets:
             raise ValueError(
                 f"shared_blocks entry {self.anchor_id!r} must define at least one target glob"
@@ -1247,18 +1240,21 @@ def _load_shared_blocks(d: dict[str, object]) -> tuple[SharedBlock, ...]:
                 f"tool.rrt.docs.shared_blocks[{i}].anchor_id must be a non-empty string"
             )
         template = item.get("template")
-        if template is not None and not isinstance(template, str):
-            raise ValueError(f"tool.rrt.docs.shared_blocks[{i}].template must be a string")
+        if template is not None:
+            raise ValueError(
+                f"tool.rrt.docs.shared_blocks[{i}].template is no longer supported; use content"
+            )
         content = item.get("content")
-        if content is not None and not isinstance(content, str):
+        if content is None:
+            raise ValueError(f"tool.rrt.docs.shared_blocks[{i}] must define 'content'")
+        if not isinstance(content, str):
             raise ValueError(f"tool.rrt.docs.shared_blocks[{i}].content must be a string")
         raw_targets = item.get("targets")
         if not isinstance(raw_targets, list) or not all(isinstance(t, str) for t in raw_targets):
             raise ValueError(f"tool.rrt.docs.shared_blocks[{i}].targets must be a list of strings")
         block = SharedBlock(
             anchor_id=anchor_id.strip(),
-            template=str(template) if template is not None else None,
-            content=str(content) if content is not None else None,
+            content=content,
             targets=tuple(cast(list[str], raw_targets)),
         )
         block.validate()

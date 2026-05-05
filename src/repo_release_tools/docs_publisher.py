@@ -4,9 +4,8 @@ This module is the authoritative source for generating the full CLI reference
 Markdown (``docs/commands/rrt-cli.md``) and all source-owned topic pages from
 live argparse configuration and source-module docstrings.
 
-It is consumed by ``rrt docs publish`` (``commands/docs_cmd.py``) and
-re-exported by ``scripts/generate_cli_docs.py`` for backward compatibility
-with the ``poe docs-*`` tasks during the transition period.
+It is consumed by ``rrt docs publish`` and ``rrt docs inject`` from the
+package CLI surface.
 
 ## Import discipline
 
@@ -576,18 +575,7 @@ def _apply_shared_blocks(*, check: bool) -> int:
         repo_url = "https://github.com/Anselmoo/repo-release-tools"
         exit_code = 0
         for block in cfg.docs.shared_blocks:
-            if block.template is not None:
-                template_path = root / block.template
-                if not template_path.exists():
-                    sys.stderr.write(
-                        f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
-                    )
-                    exit_code = 1
-                    continue
-                content = template_path.read_text(encoding="utf-8").rstrip("\n")
-            else:
-                assert block.content is not None
-                content = block.content.rstrip("\n")
+            content = block.content.rstrip("\n")
 
             content = content.replace("{version}", rrt_package.__version__)
             content = content.replace("{repo_url}", repo_url)
