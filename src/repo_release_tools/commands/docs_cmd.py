@@ -71,10 +71,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from repo_release_tools.config import DocsConfig, load_config
+from repo_release_tools.config import DocsConfig, is_missing_tool_rrt_error, load_config
 from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs_formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
+from repo_release_tools.tools.inject import apply_generated_docs
 from repo_release_tools.ui import (
     DryRunPrinter,
     success,
@@ -245,6 +246,125 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Publish (generate + write CLI reference docs)
+# ---------------------------------------------------------------------------
+
+
+def _cmd_publish(args: argparse.Namespace) -> int:
+    """Write all generated CLI-reference doc files to disk (or check for staleness)."""
+    from repo_release_tools import docs_publisher  # noqa: PLC0415
+
+    check: bool = getattr(args, "check", False)
+    dry_run: bool = getattr(args, "dry_run", False)
+    fail_on_change: bool = getattr(args, "fail_on_change", False)
+
+    if dry_run:
+        p = DryRunPrinter(dry_run=True)
+        for target in docs_publisher.iter_generated_doc_targets():
+            p.would_write(str(target.output_path))
+        return 0
+
+    exit_code = 0
+    for target in docs_publisher.iter_generated_doc_targets():
+        content = target.render()
+        exit_code = max(
+            exit_code,
+            apply_generated_docs(
+                content,
+                output_path=target.output_path,
+                check=check,
+                write=not check,
+                fail_on_change=fail_on_change,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                anchor_id=target.anchor_id,
+            ),
+        )
+    return exit_code
+
+
+# ---------------------------------------------------------------------------
+# Inject (shared anchor blocks from config)
+# ---------------------------------------------------------------------------
+
+
+def _cmd_inject(args: argparse.Namespace) -> int:
+    """Inject or verify all shared anchor blocks from [tool.rrt.docs.shared_blocks]."""
+    from repo_release_tools import __version__ as rrt_version  # noqa: PLC0415
+
+    check: bool = getattr(args, "check", False)
+    dry_run: bool = getattr(args, "dry_run", False)
+    root = Path(getattr(args, "root", ".")).resolve()
+
+    cfg = None
+    try:
+        cfg = load_config(root)
+    except FileNotFoundError:
+        pass
+    except ValueError as exc:
+        if not is_missing_tool_rrt_error(exc):
+            raise
+
+    if cfg is None:
+        sys.stdout.write("No rrt config found; skipping shared_blocks injection.\n")
+        return 0
+
+    if cfg.docs is not None and cfg.docs.shared_blocks:
+        if dry_run:
+            p = DryRunPrinter(dry_run=True)
+            for block in cfg.docs.shared_blocks:
+                p.would_write(", ".join(block.targets), detail=f"anchor: {block.anchor_id!r}")
+            return 0
+
+        repo_url = "https://github.com/Anselmoo/repo-release-tools"
+
+        exit_code = 0
+        for block in cfg.docs.shared_blocks:
+            if block.template is not None:
+                template_path = root / block.template
+                if not template_path.exists():
+                    sys.stderr.write(
+                        color_error(
+                            f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
+                        )
+                    )
+                    exit_code = 1
+                    continue
+                content = template_path.read_text(encoding="utf-8").rstrip("\n")
+            else:
+                assert block.content is not None
+                content = block.content.rstrip("\n")
+
+            content = content.replace("{version}", rrt_version)
+            content = content.replace("{repo_url}", repo_url)
+
+            matched = sorted({p for pattern in block.targets for p in root.glob(pattern)})
+            if not matched:
+                sys.stdout.write(f"SharedBlock {block.anchor_id!r}: no target files matched.\n")
+                continue
+
+            for target_path in matched:
+                exit_code = max(
+                    exit_code,
+                    apply_generated_docs(
+                        content,
+                        output_path=target_path,
+                        check=check,
+                        write=not check,
+                        fail_on_change=False,
+                        stdout=sys.stdout,
+                        stderr=sys.stderr,
+                        anchor_id=block.anchor_id,
+                        stale_hint="rrt docs inject --check",
+                    ),
+                )
+
+        return exit_code
+
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 
@@ -256,6 +376,10 @@ def cmd_docs(args: argparse.Namespace) -> int:
         return _cmd_generate(args)
     if sub == "check":
         return _cmd_check(args)
+    if sub == "publish":
+        return _cmd_publish(args)
+    if sub == "inject":
+        return _cmd_inject(args)
     sys.stderr.write(color_error(f"Unknown docs action: {sub!r}\n"))
     return 1
 
@@ -354,3 +478,53 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.set_defaults(handler=cmd_docs)
     gen_p.set_defaults(handler=cmd_docs)
     chk_p.set_defaults(handler=cmd_docs)
+
+    # ── publish ───────────────────────────────────────────────────────────
+    pub_p = sub.add_parser(
+        "publish",
+        help="Write CLI-reference docs from the live rrt parser.",
+    )
+    pub_p.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Fail if any generated file is stale; do not write.",
+    )
+    pub_p.add_argument(
+        "--fail-on-change",
+        action="store_true",
+        default=False,
+        help="Exit 1 after writing (for pre-commit hook workflows).",
+    )
+    pub_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print which files would be written without doing so.",
+    )
+    pub_p.set_defaults(handler=cmd_docs)
+
+    # ── inject ────────────────────────────────────────────────────────────
+    inj_p = sub.add_parser(
+        "inject",
+        help="Inject shared anchor blocks defined in [tool.rrt.docs.shared_blocks].",
+    )
+    inj_p.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Fail if any anchor block is stale; do not write.",
+    )
+    inj_p.add_argument(
+        "--root",
+        default=".",
+        metavar="PATH",
+        help="Project root directory (default: current directory).",
+    )
+    inj_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print which files would be updated without writing.",
+    )
+    inj_p.set_defaults(handler=cmd_docs)
