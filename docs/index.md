@@ -67,3 +67,9 @@ If you are unsure where to start:
 2. Read [`commands/hooks.md`](commands/hooks.md) for the matching local hook setup
 3. Read [`action.md`](action.md) to see how
    `changelog-strategy: auto` follows that workflow in CI
+
+<!-- rrt:auto:start:doc-footer -->
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:doc-footer -->
