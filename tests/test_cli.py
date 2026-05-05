@@ -121,6 +121,16 @@ def test_build_parser_registers_doctor_command() -> None:
     assert args.handler.__name__ == "cmd_doctor"
 
 
+def test_build_parser_registers_release_check_command() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["release", "check"])
+
+    assert args.command == "release"
+    assert args.release_command == "check"
+    assert args.handler.__name__ == "cmd_release_check"
+
+
 def test_build_parser_registers_skill_install_command() -> None:
     parser = cli.build_parser()
 
@@ -906,9 +916,8 @@ def test_bump_help_column_alignment_with_color(
 
 
 def test_help_formatter_decolor_strips_ansi_sequences() -> None:
-    formatter = cli.RrtHelpFormatter("rrt")
 
-    assert cli.RrtHelpFormatter._decolor(formatter, "\x1b[31mrrt\x1b[0m") == "rrt"
+    assert cli._strip_ansi("\x1b[31mrrt\x1b[0m") == "rrt"
 
 
 def test_git_help_has_no_enum_blob(capsys: pytest.CaptureFixture[str]) -> None:
@@ -969,8 +978,8 @@ def test_skill_help_has_examples_and_no_enum_blob(capsys: pytest.CaptureFixture[
         (
             ["doctor", "--help"],
             [
-                "Validate the resolved rrt configuration for the current repository.",
-                "Checks configured version targets, pin patterns, changelog files, and optional runtime EOL policy",
+                "Validate the core automation wiring for the current repository.",
+                "Use `rrt doctor` for repository basics, then run feature-specific checks",
                 "Examples",
                 "  $ rrt doctor",
             ],

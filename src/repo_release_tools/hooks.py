@@ -33,7 +33,7 @@ from repo_release_tools.config import (
     load_or_autodetect_config,
 )
 from repo_release_tools.ui import DryRunPrinter
-from repo_release_tools.version.semver import Version
+from repo_release_tools.version import Version
 from repo_release_tools.workflow import git
 
 ALLOWED_BRANCH_NAMES = ("main", "master", "develop")
@@ -850,7 +850,7 @@ def run_post_correct(
 
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint for git hook execution."""
-    parser = argparse.ArgumentParser(prog="python -m repo_release_tools.workflow.hooks")
+    parser = argparse.ArgumentParser(prog="python -m repo_release_tools.hooks")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     pre_commit_parser = subparsers.add_parser("pre-commit", help="Validate the active branch.")
@@ -1327,7 +1327,7 @@ AGENT_INSTRUCTIONS_DOC = """# repo-release-tools — Hook & Action Reference
 **Repo:** <https://github.com/Anselmoo/repo-release-tools> · Python ≥ 3.12 · `uv_build`
 
 **Entry points** (from `pyproject.toml`):
-- `rrt-hooks` → `repo_release_tools.workflow.hooks:main` — git hook runner (installed binary, NOT a uvx shortcut)
+- `rrt-hooks` → `repo_release_tools.hooks:main` — git hook runner (installed binary, NOT a uvx shortcut)
 - `rrt` → `repo_release_tools.cli:app` — developer CLI
 
 **Key files:**
@@ -1358,7 +1358,7 @@ uvx pre-commit run --all-files             # lint (ruff, line-length 100)
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Entry point: rrt-hooks (installed binary — repo_release_tools.workflow.hooks:main)
+Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
 Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
 Assume pre-commit is already installed.
 </context>
@@ -1379,7 +1379,7 @@ This installs hooks for every stage declared in `default_install_hook_types`. Co
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Entry point: rrt-hooks (installed binary — repo_release_tools.workflow.hooks:main)
+Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
 Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
 Assume lefthook and uv are already installed.
 </context>
@@ -1401,7 +1401,7 @@ DO NOT use `uvx --from repo-release-tools rrt-hooks …` in `lefthook.yml` — `
 ````prompt
 <context>
 Repo: https://github.com/Anselmoo/repo-release-tools
-Entry point: rrt-hooks (installed binary — repo_release_tools.workflow.hooks:main)
+Entry point: rrt-hooks (installed binary — repo_release_tools.hooks:main)
 Python ≥ 3.12 | uv_build | Conventional Commits | Keep-a-Changelog
 Assume pre-commit is already installed.
 </context>

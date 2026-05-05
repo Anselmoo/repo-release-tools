@@ -78,8 +78,13 @@ these rules whenever an agent session touches this repo:
 - **Create branches via `rrt branch new <slug>`** — never `git checkout -b` directly.
   This enforces the `<type>/<kebab-slug>` naming convention and validates the type.
 - **Preview bumps with `rrt bump --dry-run`** before applying any version change.
-- **Run `rrt doctor`** at the start of any session that modifies config, version
-  targets, or lock settings to catch misconfiguration early.
+- **Run `rrt doctor`** at the start of any session that modifies hook wiring,
+  GitHub Action policy, or other core automation surfaces to catch repository
+  health issues early.
+- **Run `rrt release check`** at the start of any session that modifies version
+  targets, pin targets, or changelog release plumbing.
+- **Run `rrt docs check`** when a session modifies docs extraction settings,
+  source-owned docs, or docs lockfile behavior.
 - **Use `rrt-hooks` subcommands** (`rrt-hooks check-branch`, `rrt-hooks check-commit`,
   `rrt-hooks update-unreleased`) in CI steps and pre-commit — do not reimplement
   their logic inline.

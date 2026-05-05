@@ -358,6 +358,7 @@ def test_pre_commit_hooks_use_console_script_entrypoints() -> None:
     assert "entry: rrt-hooks pre-commit-changelog" in manifest
     assert "entry: rrt-hooks commit-msg" in manifest
     assert "entry: rrt-hooks check-dirty-tree" in manifest
+    assert "entry: rrt-hooks release-check" in manifest
     assert "entry: rrt-hooks update-unreleased" in manifest
 
 
@@ -376,6 +377,8 @@ def test_action_installs_from_action_path_and_runs_hooks() -> None:
     assert "rrt-hooks check-changelog" in action_text
     assert "check-dirty-tree:" in action_text
     assert "rrt-hooks check-dirty-tree" in action_text
+    assert "check-release-health:" in action_text
+    assert "rrt release check" in action_text
     assert '--changelog-file "$INPUT_CHANGELOG_FILE"' in action_text
     assert "--ref HEAD" in action_text
     assert '--strategy "${INPUT_CHANGELOG_STRATEGY' in action_text
@@ -1484,6 +1487,14 @@ def test_main_doctor_dispatches_to_cmd_doctor(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(hooks, "cmd_doctor", lambda parsed: 7)
 
     assert hooks.main(["doctor"]) == 7
+
+
+def test_main_release_check_dispatches_to_cmd_release_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(hooks, "cmd_release_check", lambda parsed: 6)
+
+    assert hooks.main(["release-check"]) == 6
 
 
 def test_main_check_eol_dispatches_to_cmd_eol_check(monkeypatch: pytest.MonkeyPatch) -> None:

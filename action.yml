@@ -44,7 +44,10 @@ inputs:
     description: Whether to fail when the checked-out work tree is dirty
     default: "false"
   check-doctor:
-    description: Whether to run rrt doctor health checks (version targets, pin targets, changelog)
+    description: Whether to run rrt doctor core automation checks
+    default: "false"
+  check-release-health:
+    description: Whether to run rrt release check for version targets, pin targets, and changelog files
     default: "false"
   check-eol:
     description: Whether to check host runtimes and project minimums against end-of-life dates
@@ -137,6 +140,14 @@ runs:
       run: |
         set -euo pipefail
         rrt-hooks doctor
+
+    - name: Run rrt release health checks
+      if: inputs.check-release-health == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        rrt release check
 
     - name: Check runtime EOL status
       if: inputs.check-eol == 'true'

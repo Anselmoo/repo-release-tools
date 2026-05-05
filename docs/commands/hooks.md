@@ -10,7 +10,7 @@ workflow does this repo follow?*
 | Workflow | Recommended hooks | Best for |
 |---|---|---|
 | `incremental` *(default)* | `rrt-branch-name`, `rrt-commit-subject`, plus `rrt-update-unreleased` **or** `rrt-changelog` | teams that maintain changelog state while developing |
-| `squash` | `rrt-branch-name`, `rrt-commit-subject`, optional `rrt-dirty-tree` / `rrt-doctor` | repos that squash many commits and do changelog work at release time |
+| `squash` | `rrt-branch-name`, `rrt-commit-subject`, optional `rrt-dirty-tree` / `rrt-doctor` / `rrt-release-check` | repos that squash many commits and do changelog work at release time |
 
 With `changelog_workflow = "squash"`, the changelog-writing and changelog-check
 hooks intentionally skip changelog enforcement. You can leave them configured
@@ -74,7 +74,8 @@ Pair it with:
 | `rrt-changelog` | pre-commit | Require a staged changelog update for changelog-relevant work |
 | `rrt-commit-subject` | commit-msg | Validate Conventional Commit subjects |
 | `rrt-dirty-tree` | pre-push / manual | Fail on uncommitted changes |
-| `rrt-doctor` | manual | Run `rrt doctor` health checks on `rrt` config |
+| `rrt-doctor` | manual | Run `rrt doctor` core automation checks on `rrt` config |
+| `rrt-release-check` | manual | Run `rrt release check` for version targets, pin targets, and changelog files |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
 incremental workflow. You usually want one or the other, not both.
@@ -99,14 +100,26 @@ repos:
 
 ### Doctor check
 
-`rrt-doctor` runs `rrt doctor` health checks against every version target and
-pin target in `[tool.rrt]`. It is registered at the `manual` stage so it does
-not run on every commit — invoke it on demand before releases:
+`rrt-doctor` runs `rrt doctor` against the repository's core automation wiring
+so you can confirm hook and CI surfaces are configured before a release or
+automation rollout:
 
 ```bash
 pre-commit run rrt-doctor --hook-stage manual
 # or directly:
 rrt doctor
+```
+
+### Release check
+
+`rrt-release-check` runs `rrt release check` against version targets, pin
+targets, and changelog files in `[tool.rrt]`. It is also registered at the
+`manual` stage so you can invoke it on demand before releases:
+
+```bash
+pre-commit run rrt-release-check --hook-stage manual
+# or directly:
+rrt release check
 ```
 
 You can also run the same dirty-tree logic directly:

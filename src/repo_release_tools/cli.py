@@ -22,6 +22,7 @@ from repo_release_tools.commands import (
     eol_check,
     git_cmd,
     init,
+    release_cmd,
     skill,
     toc,
     tree,
@@ -94,7 +95,7 @@ def _compute_col_width(actions: list[argparse.Action], width: int | None = None)
 
 
 COMMAND_GROUPS: dict[str, list[str]] = {
-    "Version & Release": ["bump", "ci-version"],
+    "Version & Release": ["bump", "ci-version", "release"],
     "Repository Health": ["doctor", "config", "env", "eol", "toc", "tree", "docs"],
     "Git Workflow": ["branch", "git"],
     "Setup & Tooling": ["init", "skill"],
@@ -105,6 +106,7 @@ READ_COMMANDS = {
     "diff",
     "log",
     "doctor",
+    "release",
     "sync-status",
     "check-dirty-tree",
     "config",
@@ -134,6 +136,7 @@ _ROOT_EXAMPLES = (
     '  $ rrt branch new feat "add parser"\n'
     '  $ rrt branch rename --type fix --scope api "repair config loader"\n'
     "  $ rrt bump patch --dry-run\n"
+    "  $ rrt release check\n"
     "  $ rrt git status\n"
     "  $ rrt doctor\n"
     "  $ rrt skill install --target copilot-local\n"
@@ -531,6 +534,7 @@ def build_parser() -> argparse.ArgumentParser:
     eol_check.register(cast(argparse._SubParsersAction, subparsers))
     git_cmd.register(cast(argparse._SubParsersAction, subparsers))
     init.register(cast(argparse._SubParsersAction, subparsers))
+    release_cmd.register(cast(argparse._SubParsersAction, subparsers))
     skill.register(cast(argparse._SubParsersAction, subparsers))
     toc.register(cast(argparse._SubParsersAction, subparsers))
     tree.register(cast(argparse._SubParsersAction, subparsers))
