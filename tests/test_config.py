@@ -5,6 +5,7 @@ from typing import cast
 from unittest.mock import patch
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
@@ -1099,6 +1100,191 @@ version = "0.1.0"
 
     with pytest.raises(ValueError, match="matched no files"):
         load_config_from_path(tmp_path, cfg_file)
+
+
+def test_load_config_rejects_glob_matching_outside_root(tmp_path: Path) -> None:
+    """Glob pin target matches that resolve outside the repo root are rejected."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_file = outside / "bad.md"
+    outside_file.write_text("rev: v0.1.0\n", encoding="utf-8")
+
+    inside_dir = repo / ".github" / "skills" / "a"
+    inside_dir.mkdir(parents=True)
+    link = inside_dir / "link.md"
+    # Create a symlink inside the repo that points to a file outside the repo.
+    link.symlink_to(outside_file)
+
+    cfg_file = repo / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = ".github/skills/**/*.md"
+pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="outside repository root"):
+        load_config_from_path(repo, cfg_file)
+
+
+def test_load_config_rejects_absolute_pin_path(tmp_path: Path) -> None:
+    """Absolute pin target paths are rejected as they may write outside repo."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    abs_target = outside / "file.md"
+    abs_target.write_text("rev: v0.1.0\n", encoding="utf-8")
+
+    cfg_file = tmp_path / "pyproject.toml"
+    cfg_file.write_text(
+        f"""[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = "{str(abs_target.resolve())}"
+pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="must be a relative path"):
+        load_config_from_path(tmp_path, cfg_file)
+
+
+def test_load_config_handles_resolve_oserror(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """If Path.resolve() raises OSError, loader falls back to the original paths.
+
+    This exercises the except branches that guard against resolve() raising on
+    unusual filesystems or permission errors.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    readme = repo / "README.md"
+    readme.write_text("rev: v0.1.0\n", encoding="utf-8")
+
+    cfg_file = repo / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = "README.md"
+pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    def _raise_oserror(self: Path) -> Path:
+        raise OSError("boom")
+
+    # Monkeypatch Path.resolve to raise OSError so the except branches run.
+    monkeypatch.setattr("pathlib.Path.resolve", _raise_oserror, raising=True)
+
+    config = load_config_from_path(repo, cfg_file)
+    assert len(config.global_pin_targets) == 1
+    assert config.global_pin_targets[0].path == readme
+
+
+def test_load_config_rejects_relative_path_escaping_root(tmp_path: Path) -> None:
+    """A relative pin_targets.path that escapes the repository root is rejected."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_file = outside / "bad.md"
+    outside_file.write_text("rev: v0.1.0\n", encoding="utf-8")
+
+    cfg_file = repo / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = "../outside/bad.md"
+pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="outside repository root"):
+        load_config_from_path(repo, cfg_file)
+
+
+def test_load_config_glob_resolve_oserror(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """When resolving matched glob paths raises OSError, loader falls back.
+
+    This specifically exercises the except block that assigns
+    ``matched_resolved = matched_path`` when ``matched_path.resolve()`` fails.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    first = repo / ".github" / "skills" / "a" / "one.md"
+    second = repo / ".github" / "skills" / "b" / "two.md"
+    first.parent.mkdir(parents=True)
+    second.parent.mkdir(parents=True)
+    first.write_text("rev: v0.1.0\n", encoding="utf-8")
+    second.write_text("rev: v0.1.0\n", encoding="utf-8")
+
+    cfg_file = repo / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.pin_targets]]
+path = ".github/skills/**/*.md"
+pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+
+    def _raise_oserror(self: Path) -> Path:
+        raise OSError("boom")
+
+    monkeypatch.setattr("pathlib.Path.resolve", _raise_oserror, raising=True)
+
+    config = load_config_from_path(repo, cfg_file)
+    assert {pin.path for pin in config.global_pin_targets} == {first, second}
 
 
 def test_pin_target_validate_rejects_pattern_with_fewer_than_3_groups(tmp_path: Path) -> None:
