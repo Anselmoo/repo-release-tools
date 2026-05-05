@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import io
+import os
 from pathlib import Path
 from types import ModuleType
 
@@ -89,6 +90,98 @@ def test_generate_markdown_places_command_docs_before_help_block() -> None:
 
     assert "## `rrt branch`\n\n### Overview\n\nDoc text\n\n```text" in content
     assert content.index("Doc text") < content.index("```text")
+
+
+def test_heading_level_rejects_invalid_heading_variants() -> None:
+    docs = _load_generator_module()
+
+    assert docs._heading_level("####### Too many") is None
+    assert docs._heading_level("###No space") is None
+
+
+def test_normalize_markdown_headings_returns_trimmed_text_without_headings() -> None:
+    docs = _load_generator_module()
+
+    text = "plain text\n\n```python\n# fenced heading\n```\n"
+
+    assert docs._normalize_markdown_headings(text, min_level=2) == text.strip()
+
+
+def test_normalize_markdown_headings_leaves_already_nested_headings_unchanged() -> None:
+    docs = _load_generator_module()
+
+    text = "## Title\n\nBody\n"
+
+    assert docs._normalize_markdown_headings(text, min_level=2) == text.strip()
+
+
+def test_render_command_docs_returns_empty_for_blank_docstring() -> None:
+    docs = _load_generator_module()
+
+    class BlankModule:
+        __doc__ = "   "
+
+    setattr(docs, "COMMAND_DOC_SOURCES", {})
+    setattr(docs, "COMMAND_DOC_MODULES", {"branch": BlankModule})
+
+    assert docs.render_command_docs(("branch",), heading_level=2) == ""
+
+
+def test_resolve_parser_raises_for_unknown_parser_path() -> None:
+    docs = _load_generator_module()
+
+    with pytest.raises(KeyError, match="unknown parser path"):
+        docs._resolve_parser(("branch", "missing"))
+
+
+def test_iter_help_sections_without_subparsers_yields_root_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docs = _load_generator_module()
+
+    monkeypatch.setattr(
+        "repo_release_tools.cli.build_parser", lambda: __import__("argparse").ArgumentParser()
+    )
+
+    sections = list(docs.iter_help_sections())
+    assert sections == [docs.HelpSection(argv=(), heading_level=2)]
+
+
+def test_pinned_help_environment_restores_existing_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docs = _load_generator_module()
+
+    monkeypatch.setenv("COLUMNS", "99")
+    monkeypatch.setenv("NO_COLOR", "0")
+
+    with docs.pinned_help_environment():
+        assert os.environ["COLUMNS"] == docs.PINNED_COLUMNS
+        assert os.environ["NO_COLOR"] == "1"
+
+    assert os.environ["COLUMNS"] == "99"
+    assert os.environ["NO_COLOR"] == "0"
+
+
+def test_generate_index_topic_links_markdown_lists_expected_entries() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_index_topic_links_markdown()
+
+    assert "commands/branch.md" in content
+    assert "commands/git_cmd.md" in content
+    assert "commands/tree.md" in content
+
+
+def test_iter_generated_doc_targets_exposes_all_targets() -> None:
+    docs = _load_generator_module()
+
+    targets = list(docs.iter_generated_doc_targets())
+
+    assert targets
+    assert targets[0].output_path.name == "rrt-cli.md"
+    assert any(target.anchor_id == "index-topic-links" for target in targets)
+    assert any(target.anchor_id == "readme-links" for target in targets)
 
 
 def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
@@ -354,6 +447,28 @@ def test_apply_generated_docs_anchor_mode_fails_when_anchor_missing(tmp_path: Pa
     assert exit_code == 1
     assert "missing required anchors" in stderr.getvalue()
     assert output_path.read_text(encoding="utf-8") == "before\nafter\n"
+
+
+def test_apply_generated_docs_anchor_mode_fails_when_file_missing(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "missing-target.md"
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new\n",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    assert exit_code == 1
+    assert "missing required anchor block" in stderr.getvalue()
+    assert not output_path.exists()
 
 
 # ---------------------------------------------------------------------------

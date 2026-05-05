@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,9 +12,12 @@ from repo_release_tools.commands.docs_cmd import (
     SOURCE_OWNED_TOPIC_DOCS,
     _cmd_check,
     _cmd_generate,
+    _cmd_inject,
+    _cmd_publish,
     _config_for_cwd,
     cmd_docs,
 )
+from repo_release_tools.config import DocsConfig, SharedBlock
 
 
 @pytest.fixture
@@ -381,6 +385,212 @@ class TestCmdDocs:
         # Don't set docs_action, should default to "generate"
         result = cmd_docs(args)
         assert result == 0
+
+    def test_cmd_docs_dispatches_publish(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+    ) -> None:
+        """Should dispatch publish to the publish helper."""
+        monkeypatch.setattr("repo_release_tools.commands.docs_cmd._cmd_publish", lambda args: 7)
+
+        args = argparse.Namespace(root=str(temp_repo), docs_action="publish")
+
+        assert cmd_docs(args) == 7
+
+    def test_cmd_docs_dispatches_inject(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+    ) -> None:
+        """Should dispatch inject to the inject helper."""
+        monkeypatch.setattr("repo_release_tools.commands.docs_cmd._cmd_inject", lambda args: 8)
+
+        args = argparse.Namespace(root=str(temp_repo), docs_action="inject")
+
+        assert cmd_docs(args) == 8
+
+
+class TestCmdPublish:
+    """Test _cmd_publish sub-action."""
+
+    def test_cmd_publish_dry_run_lists_targets(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Dry-run publish should report every generated target without writing."""
+        from repo_release_tools import docs_publisher
+
+        targets = [
+            docs_publisher.DocTarget(temp_repo / "docs" / "rrt-cli.md", lambda: "cli\n"),
+            docs_publisher.DocTarget(
+                temp_repo / "README.md",
+                lambda: "readme\n",
+                anchor_id="readme-links",
+            ),
+        ]
+        monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter(targets))
+
+        args = argparse.Namespace(check=False, dry_run=True, fail_on_change=False)
+
+        assert _cmd_publish(args) == 0
+        out = capsys.readouterr().out
+        assert "rrt-cli.md" in out
+        assert "README.md" in out
+
+    def test_cmd_publish_forwards_all_arguments(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+    ) -> None:
+        """Non-dry-run publish should call apply_generated_docs for each target."""
+        from repo_release_tools import docs_publisher
+
+        calls: list[tuple[str, Path, bool, bool, bool, str | None]] = []
+        target = docs_publisher.DocTarget(
+            temp_repo / "docs" / "index.md",
+            lambda: "generated text\n",
+            anchor_id="index-topic-links",
+        )
+        monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter([target]))
+
+        def fake_apply_generated_docs(
+            content: str,
+            *,
+            output_path: Path,
+            check: bool,
+            write: bool,
+            fail_on_change: bool,
+            stdout: object,
+            stderr: object,
+            anchor_id: str | None = None,
+        ) -> int:
+            calls.append((content, output_path, check, write, fail_on_change, anchor_id))
+            return 0
+
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.apply_generated_docs",
+            fake_apply_generated_docs,
+        )
+
+        args = argparse.Namespace(check=True, dry_run=False, fail_on_change=True)
+
+        assert _cmd_publish(args) == 0
+        assert calls == [
+            (
+                "generated text\n",
+                temp_repo / "docs" / "index.md",
+                True,
+                False,
+                True,
+                "index-topic-links",
+            )
+        ]
+
+
+class TestCmdInject:
+    """Test _cmd_inject sub-action."""
+
+    def test_cmd_inject_returns_zero_when_no_config_exists(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Missing config should be treated as a no-op."""
+
+        def raise_missing(root: Path) -> object:
+            raise FileNotFoundError
+
+        monkeypatch.setattr("repo_release_tools.commands.docs_cmd.load_config", raise_missing)
+
+        args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
+
+        assert _cmd_inject(args) == 0
+        assert "skipping shared_blocks injection" in capsys.readouterr().out
+
+    def test_cmd_inject_returns_zero_when_no_shared_blocks(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+    ) -> None:
+        """A config without shared blocks should be a no-op."""
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=())),
+        )
+
+        args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
+
+        assert _cmd_inject(args) == 0
+
+    def test_cmd_inject_dry_run_reports_targets(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Dry-run injection should only report intended target files."""
+        block = SharedBlock(anchor_id="shared-footer", content="footer", targets=("README.md",))
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=(block,))),
+        )
+
+        args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=True)
+
+        assert _cmd_inject(args) == 0
+        assert "README.md" in capsys.readouterr().out
+
+    def test_cmd_inject_reports_missing_template(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Missing template files should fail fast."""
+        block = SharedBlock(
+            anchor_id="shared-footer", template="missing.md", targets=("README.md",)
+        )
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=(block,))),
+        )
+
+        args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
+
+        assert _cmd_inject(args) == 1
+        assert "not found" in capsys.readouterr().err
+
+    def test_cmd_inject_reports_when_no_targets_match(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Shared blocks with unmatched glob patterns should warn and continue."""
+        block = SharedBlock(anchor_id="shared-footer", content="footer", targets=("docs/**/*.md",))
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=(block,))),
+        )
+
+        args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
+
+        assert _cmd_inject(args) == 0
+        assert "no target files matched" in capsys.readouterr().out
+
+    def test_cmd_inject_writes_content_with_placeholders(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+    ) -> None:
+        """Shared blocks should replace version and repo URL placeholders before writing."""
+        from repo_release_tools import __version__ as rrt_version
+
+        readme = temp_repo / "README.md"
+        readme.write_text(
+            "before\n<!-- rrt:auto:start:shared-footer -->\nold\n<!-- rrt:auto:end:shared-footer -->\nafter\n",
+            encoding="utf-8",
+        )
+        template = temp_repo / "scripts" / "templates" / "shared-footer.md"
+        template.parent.mkdir(parents=True, exist_ok=True)
+        template.write_text("Release {version} at {repo_url}", encoding="utf-8")
+        block = SharedBlock(
+            anchor_id="shared-footer",
+            template="scripts/templates/shared-footer.md",
+            targets=("README.md",),
+        )
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=(block,))),
+        )
+
+        args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
+
+        assert _cmd_inject(args) == 0
+        result = readme.read_text(encoding="utf-8")
+        assert rrt_version in result
+        assert "https://github.com/Anselmoo/repo-release-tools" in result
+        assert "{version}" not in result
+        assert "{repo_url}" not in result
 
 
 class TestSourceOwnedTopicDocs:

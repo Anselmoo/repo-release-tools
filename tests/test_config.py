@@ -1631,6 +1631,28 @@ def test_load_config_docs_shared_blocks_missing_anchor_id(tmp_path: Path) -> Non
         load_config(tmp_path)
 
 
+def test_load_config_docs_shared_blocks_template_not_string(tmp_path: Path) -> None:
+    """shared_blocks template values must be strings when provided."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ntemplate = 123\ntargets = ["docs/**/*.md"]\n',
+    )
+    with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template must be a string"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_content_not_string(tmp_path: Path) -> None:
+    """shared_blocks content values must be strings when provided."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\ncontent = 123\ntargets = ["docs/**/*.md"]\n',
+    )
+    with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.content must be a string"):
+        load_config(tmp_path)
+
+
 def test_load_config_docs_shared_blocks_both_template_and_content(tmp_path: Path) -> None:
     """Defining both template and content raises ValueError."""
     _write_docs_cfg(
@@ -2339,7 +2361,7 @@ def test_autodetect_version_targets_skips_duplicate_python_version_file(
     monkeypatch.setattr(_config_mod, "_find_python_version_files", lambda root: [pyproject])
     targets = _autodetect_version_targets(tmp_path)
     python_version_entries = [t for t in targets if t.kind == "python_version"]
-    assert len(python_version_entries) == 0
+    assert not python_version_entries
 
 
 def test_load_or_autodetect_file_not_found_with_autodetect_success(
@@ -2349,10 +2371,14 @@ def test_load_or_autodetect_file_not_found_with_autodetect_success(
     import repo_release_tools.config as _config_mod
 
     fake_cfg = object()
+
+    def raise_file_not_found(root: Path) -> object:
+        raise FileNotFoundError("no files")
+
     monkeypatch.setattr(
         _config_mod,
         "load_config",
-        lambda root: (_ for _ in ()).throw(FileNotFoundError("no files")),
+        raise_file_not_found,
     )
     monkeypatch.setattr(_config_mod, "autodetect_config", lambda root: fake_cfg)
     result = load_or_autodetect_config(tmp_path)
@@ -2367,10 +2393,14 @@ def test_load_or_autodetect_missing_rrt_with_autodetect_success(
     from repo_release_tools.config import MissingRrtConfigError
 
     fake_cfg = object()
+
+    def raise_missing_rrt(root: Path) -> object:
+        raise MissingRrtConfigError("Missing rrt")
+
     monkeypatch.setattr(
         _config_mod,
         "load_config",
-        lambda root: (_ for _ in ()).throw(MissingRrtConfigError("Missing rrt")),
+        raise_missing_rrt,
     )
     monkeypatch.setattr(_config_mod, "autodetect_config", lambda root: fake_cfg)
     result = load_or_autodetect_config(tmp_path)
