@@ -4,7 +4,7 @@ description: "Apply workspace-specific guidance for repo-release-tools CLI/UI im
 applyTo: "src/**/*.py"
 ---
 
-This repository enforces coverage and CI policies through `.github/hooks/check_push_coverage.py` and the `uv run pytest -q -m "not runtime"` workflow.
+This repository enforces coverage and CI policies through `.claude/hooks/check_push_coverage.py` and the `uv run pytest -q -m "not runtime"` workflow.
 
 When working in `repo-release-tools`, follow these rules:
 
@@ -18,6 +18,7 @@ When working in `repo-release-tools`, follow these rules:
 - Use existing hook behavior as a guardrail: coverage below 85.71% should be treated as a blocker unless the user explicitly approves a follow-on test expansion.
 - When making CLI errors friendlier, preserve argparse semantics and exit codes while improving help text, suggestions, and examples.
 - Persist preferences and follow-up context in repo-scoped memory when they are specific to this repository's workflow.
+- Keep the hook-registration table in sync with `.claude/settings.json`; if the active hook path changes, update the documented path in this file immediately so contributors are not sent to a stale location.
 
 
 ## Canonical UI import pattern
@@ -107,6 +108,6 @@ When in doubt which method to call, use this decision table (see `rrt-ux-philoso
 
 - `.claude/hooks/refresh_coverage_baseline.py` auto-refreshes `.claude/coverage-baseline.json` after successful `pytest` tool runs.
 - Auto-refresh is intentionally non-blocking and no-op on malformed payloads, failed runs, or missing `coverage.xml`.
-- Keep `.github/hooks/check_push_coverage.py` as the policy floor guardrail (85.71%) even when baseline refresh is active.
+- Keep `.claude/hooks/check_push_coverage.py` as the policy floor guardrail (85.71%) even when baseline refresh is active.
 - `.claude/hooks/coverage_non_regression.py` remains the completion-time regression gate.
 - Operational caveat: always-on refresh can move baseline up or down as test scope changes; prefer stricter/manual mode if governance requires explicit approvals.
