@@ -77,6 +77,52 @@ def cmd_env(args: argparse.Namespace) -> int:
     return 0
 
 
+def _find_duplicates(path_value: str) -> list[str]:
+    """Return a list of duplicate path entries in a PATH-like string.
+
+    Normalizes entries with os.path.normpath and ignores empty entries.
+    """
+    entries = [os.path.normpath(p) for p in path_value.split(os.pathsep) if p]
+    seen: set[str] = set()
+    dups: list[str] = []
+    for e in entries:
+        if e in seen and e not in dups:
+            dups.append(e)
+        seen.add(e)
+    return dups
+
+
+def cmd_env_check(args: argparse.Namespace) -> int:
+    """Run a small set of environment sanity checks.
+
+    Currently checks for duplicate entries in PATH and PYTHONPATH. Returns
+    exit code 0 when no issues are found and 1 when any duplicate is detected.
+    """
+    p = DryRunPrinter(dry_run=False)
+
+    path = os.environ.get("PATH", "")
+    pythonpath = os.environ.get("PYTHONPATH", "")
+
+    path_dups = _find_duplicates(path)
+    pypath_dups = _find_duplicates(pythonpath)
+
+    if not path_dups and not pypath_dups:
+        p.ok("Environment check: no duplicate PATH/PYTHONPATH entries detected.")
+        return 0
+
+    p.warn("Environment check found duplicate entries:")
+    if path_dups:
+        p.warn("  PATH duplicates:")
+        for d in path_dups:
+            p.warn(f"    {d}")
+    if pypath_dups:
+        p.warn("  PYTHONPATH duplicates:")
+        for d in pypath_dups:
+            p.warn(f"    {d}")
+
+    return 1
+
+
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the env command."""
     parser = subparsers.add_parser(
@@ -90,4 +136,18 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         help="Output the environment as JSON.",
     )
+    # Provide a `rrt env check` sub-action for automated sanity checks.
+    sub = parser.add_subparsers(dest="env_action")
+    chk = sub.add_parser(
+        "check",
+        help="Run environment sanity checks (duplicates in PATH/PYTHONPATH).",
+        description="Run a small set of environment sanity checks and exit non-zero on failure.",
+    )
+    chk.add_argument(
+        "--json",
+        action="store_true",
+        help="(Ignored) kept for interface parity with `rrt env`.",
+    )
+    chk.set_defaults(handler=cmd_env_check)
+
     parser.set_defaults(handler=cmd_env)

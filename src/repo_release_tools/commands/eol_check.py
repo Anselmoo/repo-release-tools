@@ -95,6 +95,69 @@ EOL_EPILOG = (
 )
 
 
+def _attach_eol_args(parser: argparse.ArgumentParser) -> None:
+    """Attach the common eol CLI flags to *parser*.
+
+    This is used so both `rrt eol` and `rrt eol check` accept the same options.
+    """
+    parser.add_argument(
+        "--language",
+        metavar="LANG",
+        default=None,
+        help=(
+            "Check one language only "
+            f"({', '.join(sorted(SUPPORTED_LANGUAGES))}). Default: from config or python."
+        ),
+    )
+    parser.add_argument(
+        "--fetch-live",
+        action="store_true",
+        default=False,
+        dest="fetch_live",
+        help="Fetch fresh EOL data from endoflife.date instead of using bundled snapshot.",
+    )
+    parser.add_argument(
+        "--warn-days",
+        type=int,
+        default=None,
+        dest="warn_days",
+        metavar="N",
+        help="Warn when EOL is within N days (default: 180 or from config).",
+    )
+    parser.add_argument(
+        "--error-days",
+        type=int,
+        default=None,
+        dest="error_days",
+        metavar="N",
+        help=("Error when EOL is within N days (default: 0 or from config = only on actual EOL)."),
+    )
+    parser.add_argument(
+        "--allow-eol",
+        action="store_true",
+        default=False,
+        dest="allow_eol",
+        help="Downgrade errors to warnings (useful during migration grace periods).",
+    )
+
+    # More specific checks: allow running only host or only project checks.
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--host-only",
+        action="store_true",
+        default=False,
+        dest="host_only",
+        help="Only check the host runtime; skip project minimum checks.",
+    )
+    group.add_argument(
+        "--project-only",
+        action="store_true",
+        default=False,
+        dest="project_only",
+        help="Only check the project minimum version; skip host runtime checks.",
+    )
+
+
 def _override_for(
     language: str,
     version: str,
@@ -161,6 +224,8 @@ def run_eol_checks(
     overrides: tuple[EolOverride, ...],
     p: DryRunPrinter,
     today: date | None = None,
+    host_only: bool = False,
+    project_only: bool = False,
 ) -> bool:
     """Run EOL checks for all requested languages.
 
@@ -172,45 +237,53 @@ def run_eol_checks(
         p.section(f"EOL check: {language}")
         records = get_eol_records(language, fetch_live=fetch_live, today=today)
 
-        # Host runtime
-        host_ver = detect_host_version(language)
-        if host_ver is not None:
-            override = _override_for(language, host_ver, overrides)
-            host_status, host_record = check_eol_status(
-                host_ver,
-                records,
-                language=language,
-                warn_days=warn_days,
-                error_days=error_days,
-                allow_eol=allow_eol,
-                override_eol=override,
-                today=today,
-            )
-        else:
-            host_status, host_record = "unknown", None
-        _emit_check(p, "Host runtime", host_ver, host_status, host_record)
-        if host_status == "error":
-            all_ok = False
+        # Host runtime (skip when project-only requested)
+        host_ver: str | None = None
+        host_status: EolStatus = "unknown"
+        host_record: EolRecord | None = None
+        if not project_only:
+            host_ver = detect_host_version(language)
+            if host_ver is not None:
+                override = _override_for(language, host_ver, overrides)
+                host_status, host_record = check_eol_status(
+                    host_ver,
+                    records,
+                    language=language,
+                    warn_days=warn_days,
+                    error_days=error_days,
+                    allow_eol=allow_eol,
+                    override_eol=override,
+                    today=today,
+                )
+            else:
+                host_status, host_record = "unknown", None
+            _emit_check(p, "Host runtime", host_ver, host_status, host_record)
+            if host_status == "error":
+                all_ok = False
 
-        # Project minimum
-        proj_ver = detect_project_minimum(language, root)
-        if proj_ver is not None:
-            override = _override_for(language, proj_ver, overrides)
-            proj_status, proj_record = check_eol_status(
-                proj_ver,
-                records,
-                language=language,
-                warn_days=warn_days,
-                error_days=error_days,
-                allow_eol=allow_eol,
-                override_eol=override,
-                today=today,
-            )
-        else:
-            proj_status, proj_record = "unknown", None
-        _emit_check(p, "Project minimum", proj_ver, proj_status, proj_record)
-        if proj_status == "error":
-            all_ok = False
+        # Project minimum (skip when host-only requested)
+        proj_ver: str | None = None
+        proj_status: EolStatus = "unknown"
+        proj_record: EolRecord | None = None
+        if not host_only:
+            proj_ver = detect_project_minimum(language, root)
+            if proj_ver is not None:
+                override = _override_for(language, proj_ver, overrides)
+                proj_status, proj_record = check_eol_status(
+                    proj_ver,
+                    records,
+                    language=language,
+                    warn_days=warn_days,
+                    error_days=error_days,
+                    allow_eol=allow_eol,
+                    override_eol=override,
+                    today=today,
+                )
+            else:
+                proj_status, proj_record = "unknown", None
+            _emit_check(p, "Project minimum", proj_ver, proj_status, proj_record)
+            if proj_status == "error":
+                all_ok = False
 
         p.blank_line()
 
@@ -255,6 +328,9 @@ def cmd_eol(args: argparse.Namespace) -> int:
         p.action("Fetching live data from endoflife.date …")
     p.blank_line()
 
+    host_only = getattr(args, "host_only", False)
+    project_only = getattr(args, "project_only", False)
+
     all_ok = run_eol_checks(
         languages=languages,
         root=root,
@@ -264,6 +340,8 @@ def cmd_eol(args: argparse.Namespace) -> int:
         allow_eol=allow_eol,
         overrides=overrides,
         p=p,
+        host_only=host_only,
+        project_only=project_only,
     )
 
     if all_ok:
@@ -292,43 +370,21 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         ),
         epilog=EOL_EPILOG,
     )
-    parser.add_argument(
-        "--language",
-        metavar="LANG",
-        default=None,
-        help=(
-            "Check one language only "
-            f"({', '.join(sorted(SUPPORTED_LANGUAGES))}). Default: from config or python."
+    # Attach common args to the top-level `rrt eol` and also provide a
+    # `rrt eol check` sub-action for parity with other commands.
+    _attach_eol_args(parser)
+
+    sub = parser.add_subparsers(dest="eol_action")
+    chk_p = sub.add_parser(
+        "check",
+        help="Exit non-zero when any EOL check fails.",
+        description=(
+            "Run the configured EOL checks for the current repository and exit "
+            "non-zero when any failure is detected."
         ),
+        epilog=EOL_EPILOG,
     )
-    parser.add_argument(
-        "--fetch-live",
-        action="store_true",
-        default=False,
-        dest="fetch_live",
-        help="Fetch fresh EOL data from endoflife.date instead of using bundled snapshot.",
-    )
-    parser.add_argument(
-        "--warn-days",
-        type=int,
-        default=None,
-        dest="warn_days",
-        metavar="N",
-        help="Warn when EOL is within N days (default: 180 or from config).",
-    )
-    parser.add_argument(
-        "--error-days",
-        type=int,
-        default=None,
-        dest="error_days",
-        metavar="N",
-        help="Error when EOL is within N days (default: 0 or from config = only on actual EOL).",
-    )
-    parser.add_argument(
-        "--allow-eol",
-        action="store_true",
-        default=False,
-        dest="allow_eol",
-        help="Downgrade errors to warnings (useful during migration grace periods).",
-    )
+    _attach_eol_args(chk_p)
+    chk_p.set_defaults(handler=cmd_eol)
+
     parser.set_defaults(handler=cmd_eol)

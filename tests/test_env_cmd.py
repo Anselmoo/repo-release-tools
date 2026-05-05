@@ -49,3 +49,27 @@ def test_cmd_env_prints_panel_when_json_disabled(
 
     captured = capsys.readouterr()
     assert "Environment" in captured.out
+
+
+def test_cmd_env_check_detects_no_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PATH", "/usr/bin:/bin:/usr/local/bin")
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+
+    args = argparse.Namespace(json=False)
+    rc = env_cmd.cmd_env_check(args)
+    assert rc == 0
+
+
+def test_cmd_env_check_detects_duplicates(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # PATH contains duplicate /usr/bin entries
+    monkeypatch.setenv("PATH", "/usr/bin:/bin:/usr/bin")
+    monkeypatch.setenv("PYTHONPATH", "/src:/lib:/src")
+
+    args = argparse.Namespace(json=False)
+    rc = env_cmd.cmd_env_check(args)
+    captured = capsys.readouterr()
+
+    assert rc == 1
+    assert "PATH duplicates" in captured.out or "PYTHONPATH duplicates" in captured.out

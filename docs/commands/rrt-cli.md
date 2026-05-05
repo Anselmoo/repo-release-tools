@@ -615,13 +615,14 @@ rrt env --json
   login environment.
 
 ```text
-Usage:  rrt env [OPTIONS]
+Usage:  rrt env [OPTIONS] <env_action>
 
 Show environment variables and interpreter details that affect rrt behavior.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check       Run environment sanity checks (duplicates in PATH/PYTHONPATH).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -634,6 +635,24 @@ Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt env
   $ rrt env --json
+```
+
+### `rrt env check`
+
+```text
+Usage:  rrt env check [OPTIONS]
+
+Run a small set of environment sanity checks and exit non-zero on failure.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --json      (Ignored) kept for interface parity with `rrt env`.
 ```
 
 ## `rrt eol`
@@ -709,11 +728,43 @@ rrt eol --warn-days 90 --error-days 30
 - `--allow-eol` changes exit-code behavior, not the underlying status labels.
 
 ```text
-Usage:  rrt eol [OPTIONS]
+Usage:  rrt eol [OPTIONS] <eol_action>
 
 Check detected host runtimes and project minimum versions against end-of-life dates.
 
 Uses bundled EOL data by default and can refresh from endoflife.date on demand. When [tool.rrt.eol] is configured, CLI flags override the configured thresholds for this invocation.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check            Exit non-zero when any EOL check fails.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --language LANG  Check one language only (go, node, nodejs, python, rust). Default: from config or python.
+  --fetch-live     Fetch fresh EOL data from endoflife.date instead of using bundled snapshot.
+  --warn-days N    Warn when EOL is within N days (default: 180 or from config).
+  --error-days N   Error when EOL is within N days (default: 0 or from config = only on actual EOL).
+  --allow-eol      Downgrade errors to warnings (useful during migration grace periods).
+  --host-only      Only check the host runtime; skip project minimum checks.
+  --project-only   Only check the project minimum version; skip host runtime checks.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt eol
+  $ rrt eol --language node --fetch-live
+  $ rrt eol --warn-days 90 --error-days 30
+```
+
+### `rrt eol check`
+
+```text
+Usage:  rrt eol check [OPTIONS]
+
+Run the configured EOL checks for the current repository and exit non-zero when any failure is detected.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -728,6 +779,8 @@ Options
   --warn-days N    Warn when EOL is within N days (default: 180 or from config).
   --error-days N   Error when EOL is within N days (default: 0 or from config = only on actual EOL).
   --allow-eol      Downgrade errors to warnings (useful during migration grace periods).
+  --host-only      Only check the host runtime; skip project minimum checks.
+  --project-only   Only check the project minimum version; skip host runtime checks.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
