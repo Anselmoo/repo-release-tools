@@ -38,6 +38,7 @@ from repo_release_tools.commands import skill as skill_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
+from repo_release_tools.markdown_utils import heading_level, normalize_markdown_headings
 from repo_release_tools.tools.inject import apply_generated_docs as apply_generated_docs
 
 # ---------------------------------------------------------------------------
@@ -176,59 +177,12 @@ COMMAND_DOC_SOURCES: dict[str, CommandDocSource] = {
 
 def _heading_level(line: str) -> int | None:
     """Return the Markdown heading level for *line*, or ``None`` if not a heading."""
-    stripped = line.lstrip()
-    if not stripped.startswith("#"):
-        return None
-    hashes = len(stripped) - len(stripped.lstrip("#"))
-    if hashes < 1 or hashes > 6:
-        return None
-    if len(stripped) <= hashes or stripped[hashes] != " ":
-        return None
-    return hashes
+    return heading_level(line)
 
 
 def _normalize_markdown_headings(text: str, *, min_level: int) -> str:
     """Shift headings in *text* so the shallowest heading nests under *min_level*."""
-    lines = text.splitlines()
-    heading_levels: list[int] = []
-    in_fence = False
-
-    for line in lines:
-        stripped = line.lstrip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        level = _heading_level(line)
-        if level is not None:
-            heading_levels.append(level)
-
-    if not heading_levels:
-        return text.strip()
-
-    offset = max(min_level - min(heading_levels), 0)
-    if offset == 0:
-        return text.strip()
-
-    normalized: list[str] = []
-    in_fence = False
-    for line in lines:
-        stripped = line.lstrip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-            normalized.append(line)
-            continue
-        if in_fence:
-            normalized.append(line)
-            continue
-        level = _heading_level(line)
-        if level is None:
-            normalized.append(line)
-            continue
-        content = stripped[level + 1 :]
-        normalized.append(f"{'#' * min(level + offset, 6)} {content}")
-    return "\n".join(normalized).strip()
+    return normalize_markdown_headings(text, min_level=min_level)
 
 
 # ---------------------------------------------------------------------------

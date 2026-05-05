@@ -8,7 +8,14 @@ import pytest
 
 from repo_release_tools.config import DocsConfig
 from repo_release_tools.docs_extractor import DocEntry
-from repo_release_tools.docs_formats import inject_md, render, render_json, render_md, render_txt
+from repo_release_tools.docs_formats import (
+    inject_md,
+    render,
+    render_json,
+    render_md,
+    render_rich,
+    render_txt,
+)
 from repo_release_tools.state import hash_content
 
 
@@ -106,6 +113,67 @@ class TestRenderTxt:
         result = render_txt(entries, _config())
         assert "hello" in result
         assert "Hello docs." in result
+
+    def test_render_txt_flattens_markdown_headings(self) -> None:
+        entries = [_entry("hello", "# Overview\n\nBody text\n\n## Details\nMore text")]
+
+        result = render_txt(entries, _config())
+
+        assert "OVERVIEW\n========" in result
+        assert "Details\n-------" in result
+        assert "# Overview" not in result
+
+    def test_render_txt_formats_deeper_heading_levels_as_bullets(self) -> None:
+        entries = [_entry("hello", "# Overview\nLead-in\n### Deep dive")]
+
+        result = render_txt(entries, _config())
+
+        assert "Lead-in\n\n* Deep dive" in result
+
+    def test_render_txt_ignores_headings_inside_fenced_code(self) -> None:
+        entries = [_entry("hello", "```python\n# not a heading\n```\nplain text")]
+
+        result = render_txt(entries, _config())
+
+        assert "# not a heading" in result
+
+
+class TestRenderRich:
+    """Tests for render_rich."""
+
+    def test_render_rich_strips_markdown_heading_markers(self) -> None:
+        entries = [_entry("hello", "# Overview\n\nBody text\n\n### Deep dive")]
+
+        result = render_rich(entries, _config())
+
+        assert "Overview" in result
+        assert "Deep dive" in result
+        assert "# Overview" not in result
+        assert "### Deep dive" not in result
+
+    def test_render_rich_handles_nested_headings_and_fences(self) -> None:
+        entries = [
+            _entry(
+                "hello",
+                "# Overview\n\n## Details\n```python\nprint('x')\n```\nBody text",
+            )
+        ]
+
+        result = render_rich(entries, _config())
+
+        assert "Overview" in result
+        assert "Details" in result
+        assert "```python" in result
+        assert "print('x')" in result
+        assert "## Details" not in result
+
+    def test_render_rich_plain_prose_uses_legacy_line_rendering(self) -> None:
+        entries = [_entry("hello", "Plain prose\nSecond line")]
+
+        result = render_rich(entries, _config())
+
+        assert "Plain prose" in result
+        assert "Second line" in result
 
 
 class TestRenderJson:
