@@ -559,6 +559,33 @@ class TestCmdInject:
         assert _cmd_inject(args) == 0
         assert "no target files matched" in capsys.readouterr().out
 
+    def test_cmd_inject_raises_for_malformed_shared_blocks_config(self, temp_repo: Path) -> None:
+        """Malformed shared_blocks config should not be swallowed as missing config."""
+        (temp_repo / "pyproject.toml").write_text(
+            """
+[project]
+name = "test-project"
+version = "1.0.0"
+
+[tool.rrt.docs]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.docs.shared_blocks]]
+anchor_id = "shared-footer"
+template = 123
+targets = ["README.md"]
+""",
+            encoding="utf-8",
+        )
+
+        args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
+
+        with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template must be a string"):
+            _cmd_inject(args)
+
     def test_cmd_inject_writes_content_with_placeholders(
         self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
     ) -> None:

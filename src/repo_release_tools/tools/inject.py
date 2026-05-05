@@ -104,6 +104,7 @@ def apply_generated_docs(
     stdout: SupportsWrite,
     stderr: SupportsWrite,
     anchor_id: str | None = None,
+    stale_hint: str = "rrt docs publish",
 ) -> int:
     """Check and/or write generated docs, returning the desired exit code.
 
@@ -119,6 +120,7 @@ def apply_generated_docs(
         stderr: Stream for error/warning messages.
         anchor_id: When set, the content is injected *inside* anchor markers
             rather than replacing the whole file.
+        stale_hint: Human-facing hint shown when the file is stale in check mode.
 
     Returns:
         0 when up-to-date or successfully written; 1 on errors or when
@@ -147,7 +149,7 @@ def apply_generated_docs(
         return 0
 
     if check and not write:
-        stderr.write(f"{output_path} is stale. Run: rrt docs publish\n")
+        stderr.write(f"{output_path} is stale. Run: {stale_hint}\n")
         return 1
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

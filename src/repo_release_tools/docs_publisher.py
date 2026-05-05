@@ -38,6 +38,7 @@ from repo_release_tools.commands import eol_check as eol_check_module
 from repo_release_tools.commands import skill as skill_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
+from repo_release_tools.config import is_missing_tool_rrt_error
 from repo_release_tools.tools.inject import apply_generated_docs as apply_generated_docs
 
 # ---------------------------------------------------------------------------
@@ -558,55 +559,63 @@ def _apply_shared_blocks(*, check: bool) -> int:
     from repo_release_tools.config import load_config  # noqa: PLC0415
 
     root = Path.cwd()
+    cfg = None
     try:
         cfg = load_config(root)
-    except (FileNotFoundError, ValueError):
+    except FileNotFoundError:
+        pass
+    except ValueError as exc:
+        if not is_missing_tool_rrt_error(exc):
+            raise
+
+    if cfg is None:
         sys.stdout.write("No rrt config found; skipping shared_blocks injection.\n")
         return 0
 
-    if cfg.docs is None or not cfg.docs.shared_blocks:
-        return 0
+    if cfg.docs is not None and cfg.docs.shared_blocks:
+        repo_url = "https://github.com/Anselmoo/repo-release-tools"
+        exit_code = 0
+        for block in cfg.docs.shared_blocks:
+            if block.template is not None:
+                template_path = root / block.template
+                if not template_path.exists():
+                    sys.stderr.write(
+                        f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
+                    )
+                    exit_code = 1
+                    continue
+                content = template_path.read_text(encoding="utf-8").rstrip("\n")
+            else:
+                assert block.content is not None
+                content = block.content.rstrip("\n")
 
-    repo_url = "https://github.com/Anselmoo/repo-release-tools"
-    exit_code = 0
-    for block in cfg.docs.shared_blocks:
-        if block.template is not None:
-            template_path = root / block.template
-            if not template_path.exists():
-                sys.stderr.write(
-                    f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
-                )
-                exit_code = 1
+            content = content.replace("{version}", rrt_package.__version__)
+            content = content.replace("{repo_url}", repo_url)
+
+            matched = sorted({p for pattern in block.targets for p in root.glob(pattern)})
+            if not matched:
+                sys.stdout.write(f"SharedBlock {block.anchor_id!r}: no target files matched.\n")
                 continue
-            content = template_path.read_text(encoding="utf-8").rstrip("\n")
-        else:
-            assert block.content is not None
-            content = block.content.rstrip("\n")
 
-        content = content.replace("{version}", rrt_package.__version__)
-        content = content.replace("{repo_url}", repo_url)
+            for target_path in matched:
+                exit_code = max(
+                    exit_code,
+                    apply_generated_docs(
+                        content,
+                        output_path=target_path,
+                        check=check,
+                        write=not check,
+                        fail_on_change=False,
+                        stdout=sys.stdout,
+                        stderr=sys.stderr,
+                        anchor_id=block.anchor_id,
+                        stale_hint="rrt docs inject --check",
+                    ),
+                )
 
-        matched = sorted({p for pattern in block.targets for p in root.glob(pattern)})
-        if not matched:
-            sys.stdout.write(f"SharedBlock {block.anchor_id!r}: no target files matched.\n")
-            continue
+        return exit_code
 
-        for target_path in matched:
-            exit_code = max(
-                exit_code,
-                apply_generated_docs(
-                    content,
-                    output_path=target_path,
-                    check=check,
-                    write=not check,
-                    fail_on_change=False,
-                    stdout=sys.stdout,
-                    stderr=sys.stderr,
-                    anchor_id=block.anchor_id,
-                ),
-            )
-
-    return exit_code
+    return 0
 
 
 def task_inject_shared_blocks() -> int:

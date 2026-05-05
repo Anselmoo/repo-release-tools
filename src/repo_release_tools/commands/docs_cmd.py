@@ -71,7 +71,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from repo_release_tools.config import DocsConfig, load_config
+from repo_release_tools.config import DocsConfig, is_missing_tool_rrt_error, load_config
 from repo_release_tools.docs_extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs_formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
@@ -296,64 +296,72 @@ def _cmd_inject(args: argparse.Namespace) -> int:
     dry_run: bool = getattr(args, "dry_run", False)
     root = Path(getattr(args, "root", ".")).resolve()
 
+    cfg = None
     try:
         cfg = load_config(root)
-    except (FileNotFoundError, ValueError):
+    except FileNotFoundError:
+        pass
+    except ValueError as exc:
+        if not is_missing_tool_rrt_error(exc):
+            raise
+
+    if cfg is None:
         sys.stdout.write("No rrt config found; skipping shared_blocks injection.\n")
         return 0
 
-    if cfg.docs is None or not cfg.docs.shared_blocks:
-        return 0
+    if cfg.docs is not None and cfg.docs.shared_blocks:
+        if dry_run:
+            p = DryRunPrinter(dry_run=True)
+            for block in cfg.docs.shared_blocks:
+                p.would_write(", ".join(block.targets), detail=f"anchor: {block.anchor_id!r}")
+            return 0
 
-    if dry_run:
-        p = DryRunPrinter(dry_run=True)
+        repo_url = "https://github.com/Anselmoo/repo-release-tools"
+
+        exit_code = 0
         for block in cfg.docs.shared_blocks:
-            p.would_write(", ".join(block.targets), detail=f"anchor: {block.anchor_id!r}")
-        return 0
-
-    repo_url = "https://github.com/Anselmoo/repo-release-tools"
-
-    exit_code = 0
-    for block in cfg.docs.shared_blocks:
-        if block.template is not None:
-            template_path = root / block.template
-            if not template_path.exists():
-                sys.stderr.write(
-                    color_error(
-                        f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
+            if block.template is not None:
+                template_path = root / block.template
+                if not template_path.exists():
+                    sys.stderr.write(
+                        color_error(
+                            f"SharedBlock {block.anchor_id!r}: template {block.template!r} not found.\n"
+                        )
                     )
-                )
-                exit_code = 1
+                    exit_code = 1
+                    continue
+                content = template_path.read_text(encoding="utf-8").rstrip("\n")
+            else:
+                assert block.content is not None
+                content = block.content.rstrip("\n")
+
+            content = content.replace("{version}", rrt_version)
+            content = content.replace("{repo_url}", repo_url)
+
+            matched = sorted({p for pattern in block.targets for p in root.glob(pattern)})
+            if not matched:
+                sys.stdout.write(f"SharedBlock {block.anchor_id!r}: no target files matched.\n")
                 continue
-            content = template_path.read_text(encoding="utf-8").rstrip("\n")
-        else:
-            assert block.content is not None
-            content = block.content.rstrip("\n")
 
-        content = content.replace("{version}", rrt_version)
-        content = content.replace("{repo_url}", repo_url)
+            for target_path in matched:
+                exit_code = max(
+                    exit_code,
+                    apply_generated_docs(
+                        content,
+                        output_path=target_path,
+                        check=check,
+                        write=not check,
+                        fail_on_change=False,
+                        stdout=sys.stdout,
+                        stderr=sys.stderr,
+                        anchor_id=block.anchor_id,
+                        stale_hint="rrt docs inject --check",
+                    ),
+                )
 
-        matched = sorted({p for pattern in block.targets for p in root.glob(pattern)})
-        if not matched:
-            sys.stdout.write(f"SharedBlock {block.anchor_id!r}: no target files matched.\n")
-            continue
+        return exit_code
 
-        for target_path in matched:
-            exit_code = max(
-                exit_code,
-                apply_generated_docs(
-                    content,
-                    output_path=target_path,
-                    check=check,
-                    write=not check,
-                    fail_on_change=False,
-                    stdout=sys.stdout,
-                    stderr=sys.stderr,
-                    anchor_id=block.anchor_id,
-                ),
-            )
-
-    return exit_code
+    return 0
 
 
 # ---------------------------------------------------------------------------

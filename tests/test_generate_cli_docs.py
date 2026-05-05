@@ -449,6 +449,32 @@ def test_apply_generated_docs_anchor_mode_fails_when_anchor_missing(tmp_path: Pa
     assert output_path.read_text(encoding="utf-8") == "before\nafter\n"
 
 
+def test_apply_generated_docs_anchor_mode_stale_hint_uses_docs_inject(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "target.md"
+    output_path.write_text(
+        "before\n<!-- rrt:auto:start:block -->\nold\n<!-- rrt:auto:end:block -->\nafter\n",
+        encoding="utf-8",
+    )
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new\n",
+        output_path=output_path,
+        check=True,
+        write=False,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+        stale_hint="rrt docs inject --check",
+    )
+
+    assert exit_code == 1
+    assert "rrt docs inject --check" in stderr.getvalue()
+
+
 def test_apply_generated_docs_anchor_mode_fails_when_file_missing(tmp_path: Path) -> None:
     docs = _load_generator_module()
     output_path = tmp_path / "missing-target.md"
@@ -469,6 +495,34 @@ def test_apply_generated_docs_anchor_mode_fails_when_file_missing(tmp_path: Path
     assert exit_code == 1
     assert "missing required anchor block" in stderr.getvalue()
     assert not output_path.exists()
+
+
+def test_task_inject_shared_blocks_raises_for_malformed_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+name = "example"
+version = "0.1.0"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.docs.shared_blocks]]
+anchor_id = "test-footer"
+template = 123
+targets = ["docs/**/*.md"]
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"shared_blocks\[0\]\.template must be a string"):
+        docs.task_inject_shared_blocks()
 
 
 # ---------------------------------------------------------------------------
