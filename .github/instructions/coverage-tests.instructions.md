@@ -23,6 +23,7 @@ reached before declaring work done. The coverage summary in
   `monkeypatch.setattr(_module, "_private_fn", lambda ...: <trigger_value>)`.
 - To make a monkeypatched function raise an exception, use the generator throw pattern:
   `lambda *a, **kw: (_ for _ in ()).throw(SomeError("msg"))`.
+- When asserting exception messages with `pytest.raises(..., match=...)`, escape regex metacharacters in literal text (especially `[` and `]`) or use `re.escape(...)`.
 - Add module-level imports for private symbols used in two or more tests; otherwise
   import inside the single test function that needs the symbol.
 - After two failed attempts to cover a line, determine whether it is structurally

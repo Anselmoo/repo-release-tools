@@ -201,6 +201,7 @@ addopts = [
     "--cov=src/repo_release_tools",
     "--cov-report=xml",
     "--cov-report=term-missing",
+    "--cov-fail-under=100",
 ]
 markers = ["runtime: end-to-end runtime/toolchain integration tests"]
 
