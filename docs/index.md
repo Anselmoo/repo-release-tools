@@ -49,6 +49,7 @@ source-owned topic module.
 | [doctor](commands/doctor.md) | `commands/doctor.py` | full |
 | [env_cmd](commands/env_cmd.md) | `commands/env_cmd.py` | stub |
 | [eol_check](commands/eol_check.md) | `commands/eol_check.py` | full |
+| [folder](commands/folder.md) | `commands/folder.py` | stub |
 | [git_cmd](commands/git_cmd.md) | `commands/git_cmd.py` | full |
 | [hooks](commands/hooks.md) | `hooks.py` | full |
 | [init](commands/init.md) | `commands/init.py` | stub |

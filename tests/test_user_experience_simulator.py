@@ -43,6 +43,7 @@ Affected entrypoints:
 -   config  Show the resolved rrt configuration for this repository
 -   env     Show environment variables and interpreter details that affect rrt behavior
 -   eol     Check host runtimes and project minimums against EOL dates
+-   folder  Supervise and scaffold repository folder structures from reusable templates
 -   toc     Generate a Markdown table of contents from headings
 -   tree    Show a project tree with gitignore-aware filtering
 -   docs    Extract and manage source-owned documentation blocks

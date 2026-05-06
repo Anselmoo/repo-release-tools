@@ -44,6 +44,7 @@ Repository Health
   toc     Read a Markdown file and print a nested bullet-list TOC to stdout.
   tree    Render a directory tree from the selected root while respecting gitignore rules.
   docs    Scan source files and extract inline documentation blocks
+  folder  Supervise folder structures against config-defined rules or built-in templates, scaffold missing structure, and infer new templates from existing trees.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Git Workflow
@@ -1080,6 +1081,89 @@ Options
   --check      Fail if any anchor block is stale; do not write.
   --root PATH  Project root directory (default: current directory).
   --dry-run    Print which files would be updated without writing.
+```
+
+## `rrt folder`
+
+```text
+Usage:  rrt folder [OPTIONS] <folder_command>
+
+Supervise folder structures against config-defined rules or built-in templates, scaffold missing structure, and infer new templates from existing trees.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check       Validate folder structure against templates or configured rules.
+  scaffold    Create missing files and folders from templates or configured rules.
+  design      Infer a custom template from an existing directory.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt folder check --template python-package
+  $ rrt folder scaffold --template cargo-inspired --dry-run
+  $ rrt folder design --name captured-template --root src
+```
+
+### `rrt folder check`
+
+```text
+Usage:  rrt folder check [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --root PATH    Root to validate.
+  --template     Built-in or custom template name to apply at the root. Available built-ins: bash-powershell-project, cargo-inspired, cli-tool, docs-only, go-module, javascript-package, library-module, loose-starter, loose-validate, monorepo-workspace, plugin-extension, python-package.
+  --report-only  Downgrade violations to warnings for this invocation.
+```
+
+### `rrt folder scaffold`
+
+```text
+Usage:  rrt folder scaffold [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --root PATH  Root to scaffold.
+  --template   Built-in or custom template name to apply at the root.
+  --force      Overwrite existing scaffold-managed files.
+  --dry-run    Preview scaffold actions without writing files.
+```
+
+### `rrt folder design`
+
+```text
+Usage:  rrt folder design [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --root PATH      Directory to inspect.
+  --name NAME      Template name to emit.
+  --selector GLOB  Selector to pair with the emitted rule snippet.
+  --loose          Emit a permissive loose template instead of an exact one.
 ```
 
 ## `rrt branch`

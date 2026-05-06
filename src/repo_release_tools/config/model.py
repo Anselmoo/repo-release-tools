@@ -90,6 +90,8 @@ _RESERVED_BRANCH_TYPES = frozenset(
 _BRANCH_TYPE_IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_-]*")
 
 VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
+VALID_FOLDER_MODES = frozenset({"strict", "warn", "off"})
+VALID_TEMPLATE_STRICTNESS = frozenset({"strict", "loose"})
 
 AUTODETECTED_CONFIG_BASENAME = ".rrt.autodetected.toml"
 DEFAULT_INIT_CONFIG = ".rrt.toml"
@@ -340,6 +342,147 @@ class DocsConfig:
     shared_blocks: tuple[SharedBlock, ...] = ()
 
 
+def _validate_relative_folder_path(path: str, *, label: str) -> None:
+    """Validate that *path* is a repository-relative folder contract path."""
+    if not path or not path.strip():
+        raise ValueError(f"{label} must be a non-empty string")
+
+    normalized = Path(path)
+    if normalized.is_absolute():
+        raise ValueError(f"{label} must be a relative path, got {path!r}")
+    if any(part == ".." for part in normalized.parts):
+        raise ValueError(f"{label} must not escape the repository root, got {path!r}")
+
+
+@dataclass(frozen=True)
+class FolderScaffoldFile:
+    """A file emitted by a folder scaffold template."""
+
+    path: str
+    content: str = ""
+    executable: bool = False
+
+    def validate(self) -> None:
+        """Validate the scaffold file entry."""
+        _validate_relative_folder_path(self.path, label="folder scaffold file path")
+        if not isinstance(self.content, str):
+            raise ValueError(f"folder scaffold file {self.path!r} content must be a string")
+
+
+@dataclass(frozen=True)
+class FolderTemplate:
+    """A reusable folder supervision and scaffold template."""
+
+    name: str
+    description: str = ""
+    strictness: str = "strict"
+    exact: bool = False
+    required_files: tuple[str, ...] = ()
+    required_dirs: tuple[str, ...] = ()
+    allowed_files: tuple[str, ...] = ()
+    allowed_dirs: tuple[str, ...] = ()
+    allow_patterns: tuple[str, ...] = ()
+    scaffold_dirs: tuple[str, ...] = ()
+    scaffold_files: tuple[FolderScaffoldFile, ...] = ()
+
+    def validate(self) -> None:
+        """Validate the folder template."""
+        if not self.name or not self.name.strip():
+            raise ValueError("folder template name must be a non-empty string")
+        if self.strictness not in VALID_TEMPLATE_STRICTNESS:
+            allowed = ", ".join(sorted(VALID_TEMPLATE_STRICTNESS))
+            raise ValueError(
+                f"folder template {self.name!r} strictness must be one of {allowed}, got {self.strictness!r}"
+            )
+
+        for label, entries in (
+            ("required_files", self.required_files),
+            ("required_dirs", self.required_dirs),
+            ("allowed_files", self.allowed_files),
+            ("allowed_dirs", self.allowed_dirs),
+            ("scaffold_dirs", self.scaffold_dirs),
+        ):
+            for entry in entries:
+                _validate_relative_folder_path(
+                    entry, label=f"folder template {self.name!r} {label}"
+                )
+
+        for scaffold_file in self.scaffold_files:
+            scaffold_file.validate()
+
+
+@dataclass(frozen=True)
+class FolderRule:
+    """A path-scoped folder supervision rule."""
+
+    name: str
+    selector: str = "."
+    mode: str | None = None
+    templates: tuple[str, ...] = ()
+    exact: bool | None = None
+    required_files: tuple[str, ...] = ()
+    required_dirs: tuple[str, ...] = ()
+    allowed_files: tuple[str, ...] = ()
+    allowed_dirs: tuple[str, ...] = ()
+    allow_patterns: tuple[str, ...] = ()
+    scaffold_dirs: tuple[str, ...] = ()
+    scaffold_files: tuple[FolderScaffoldFile, ...] = ()
+
+    def validate(self) -> None:
+        """Validate the rule shape."""
+        if not self.name or not self.name.strip():
+            raise ValueError("folder rule name must be a non-empty string")
+        if not self.selector or not self.selector.strip():
+            raise ValueError(f"folder rule {self.name!r} selector must be a non-empty string")
+        if self.mode is not None and self.mode not in VALID_FOLDER_MODES:
+            allowed = ", ".join(sorted(VALID_FOLDER_MODES))
+            raise ValueError(
+                f"folder rule {self.name!r} mode must be one of {allowed}, got {self.mode!r}"
+            )
+
+        for label, entries in (
+            ("required_files", self.required_files),
+            ("required_dirs", self.required_dirs),
+            ("allowed_files", self.allowed_files),
+            ("allowed_dirs", self.allowed_dirs),
+            ("scaffold_dirs", self.scaffold_dirs),
+        ):
+            for entry in entries:
+                _validate_relative_folder_path(entry, label=f"folder rule {self.name!r} {label}")
+
+        for scaffold_file in self.scaffold_files:
+            scaffold_file.validate()
+
+
+@dataclass(frozen=True)
+class FolderPolicyConfig:
+    """Folder supervision policy under ``[tool.rrt.folders]``."""
+
+    mode: str = "strict"
+    templates: tuple[FolderTemplate, ...] = ()
+    rules: tuple[FolderRule, ...] = ()
+
+    def validate(self) -> None:
+        """Validate the folder policy."""
+        if self.mode not in VALID_FOLDER_MODES:
+            allowed = ", ".join(sorted(VALID_FOLDER_MODES))
+            raise ValueError(f"tool.rrt.folders.mode must be one of {allowed}, got {self.mode!r}")
+
+        seen_template_names: set[str] = set()
+        for template in self.templates:
+            template.validate()
+            if template.name in seen_template_names:
+                raise ValueError(f"Duplicate folder template name {template.name!r}")
+            seen_template_names.add(template.name)
+
+        seen_rule_names: set[str] = set()
+        for rule in self.rules:
+            rule.validate()
+            if rule.name in seen_rule_names:
+                raise ValueError(f"Duplicate folder rule name {rule.name!r}")
+            seen_rule_names.add(rule.name)
+
+
 @dataclass(frozen=True)
 class RrtConfig:
     """Loaded rrt configuration."""
@@ -353,6 +496,7 @@ class RrtConfig:
     global_pin_targets: list[PinTarget] = field(default_factory=list)
     eol: EolConfig | None = None
     docs: DocsConfig | None = None
+    folders: FolderPolicyConfig | None = None
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""
