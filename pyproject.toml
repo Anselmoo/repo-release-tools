@@ -1,6 +1,6 @@
 [project]
 name = "repo-release-tools"
-version = "1.1.0"
+version = "1.2.0"
 description = "Config-driven branch and release helpers for Git repositories"
 readme = "README.md"
 license = "MIT"
@@ -95,6 +95,30 @@ pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 [[tool.rrt.pin_targets]]
 path = "README.md"
 pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = "src/repo_release_tools/hooks.py"
+pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = "src/repo_release_tools/workflow/hooks.py"
+pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = "src/repo_release_tools/integrations/action.py"
+pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = "src/repo_release_tools/integrations/skill_assets.py"
+pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = ".github/skills/**/SKILL.md"
+pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+
+[[tool.rrt.pin_targets]]
+path = ".github/skills/**/outputs/answer.md"
+pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 
 [tool.rrt.eol]
 languages = ["python"]

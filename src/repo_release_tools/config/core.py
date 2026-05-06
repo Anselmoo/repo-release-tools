@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tomllib
+from glob import has_magic
 from pathlib import Path
 from typing import cast
 
@@ -916,6 +917,13 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
     if not isinstance(raw_pins, list):
         raise ValueError("pin_targets must be an array of tables")
     pins: list[PinTarget] = []
+    # Resolve the repository root once for path containment checks. We use
+    # resolved paths to protect against symlink traversal and '..' escape
+    # segments in configured patterns.
+    try:
+        root_resolved = root.resolve()
+    except OSError:
+        root_resolved = root
     for item in raw_pins:
         if not isinstance(item, dict):
             raise ValueError("Each pin_targets entry must be a table")
@@ -926,7 +934,45 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
             raise ValueError("Each pin_targets entry must have a non-empty 'path' string")
         if not isinstance(raw_pattern, str) or not raw_pattern:
             raise ValueError("Each pin_targets entry must have a non-empty 'pattern' string")
-        pin = PinTarget(path=root / raw_path, pattern=raw_pattern)
+
+        # Reject absolute paths early — pin targets must be repository-local
+        # relative paths so downstream code can safely call ``relative_to(root)``.
+        if Path(raw_path).is_absolute():
+            raise ValueError(
+                f"pin_targets.path {raw_path!r} must be a relative path inside the repository"
+            )
+
+        if has_magic(raw_path):
+            matched_paths = sorted(path for path in root.glob(raw_path) if path.is_file())
+            if not matched_paths:
+                raise ValueError(
+                    f"pin_targets path glob {raw_path!r} matched no files under {root}"
+                )
+            for matched_path in matched_paths:
+                # Resolve matched path and verify it is contained by the repo root.
+                try:
+                    matched_resolved = matched_path.resolve()
+                except OSError:
+                    matched_resolved = matched_path
+                if not matched_resolved.is_relative_to(root_resolved):
+                    raise ValueError(
+                        f"pin_targets path glob {raw_path!r} resolved to {matched_resolved} which is outside repository root {root_resolved}"
+                    )
+                pin = PinTarget(path=matched_resolved, pattern=raw_pattern)
+                pin.validate()
+                pins.append(pin)
+            continue
+
+        candidate = root / raw_path
+        try:
+            candidate_resolved = candidate.resolve()
+        except OSError:
+            candidate_resolved = candidate
+        if not candidate_resolved.is_relative_to(root_resolved):
+            raise ValueError(
+                f"pin_targets path {raw_path!r} resolves to {candidate_resolved} which is outside repository root {root_resolved}"
+            )
+        pin = PinTarget(path=candidate_resolved, pattern=raw_pattern)
         pin.validate()
         pins.append(pin)
     return pins

@@ -112,7 +112,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.0.0
+    rev: v1.2.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-update-unreleased
@@ -153,7 +153,7 @@ Use the action when the user wants CI policy checks instead of local workflow au
 ```yaml
 - uses: actions/checkout@v6
 
-- uses: Anselmoo/repo-release-tools@v1.0.0
+- uses: Anselmoo/repo-release-tools@v1.2.0
   with:
     check-branch-name: "true"
     check-commit-subject: "true"
