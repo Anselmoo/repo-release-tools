@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -335,6 +336,18 @@ def _scaffold_one_target(
         if not dry_run:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(scaffold.content, encoding="utf-8")
+            # Honor the scaffold file `executable` flag by setting the
+            # executable bit after writing. This enables templates to emit
+            # executable scripts. Use a best-effort approach and ignore
+            # platform-specific failures.
+            if getattr(scaffold, "executable", False):
+                try:
+                    current_mode = file_path.stat().st_mode
+                    # Set owner/group/other execute bits where supported.
+                    file_path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                except Exception:
+                    # If chmod fails (rare on some platforms), continue silently.
+                    pass
         actions.append(
             FolderScaffoldAction(
                 kind="write",

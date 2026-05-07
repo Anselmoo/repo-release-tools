@@ -1,9 +1,12 @@
 import argparse
+import stat
 from typing import Any, Dict, List, Optional
 
 import pytest
 
 from repo_release_tools.commands import folder as folder_mod
+from repo_release_tools.config import FolderScaffoldFile
+from repo_release_tools.folders import core as folder_core
 
 
 class DummyReport:
@@ -151,3 +154,33 @@ def test__load_folder_policy_config_raises_on_other_valueerror(monkeypatch: Any)
     monkeypatch.setattr(folder_mod, "is_missing_tool_rrt_error", lambda exc: False)
     with pytest.raises(ValueError):
         folder_mod._load_folder_policy_config()
+
+
+def test_scaffold_sets_executable(tmp_path: Any) -> None:
+    """Scaffold should set the executable bit for files marked executable."""
+    rule = folder_core._EffectiveRule(
+        name="exec-test",
+        selector=".",
+        mode="strict",
+        exact=False,
+        required_files=(),
+        required_dirs=(),
+        allowed_files=(),
+        allowed_dirs=(),
+        allow_patterns=(),
+        scaffold_dirs=(),
+        scaffold_files=(
+            FolderScaffoldFile(path="bin/script.sh", content="#/bin/sh\necho hi", executable=True),
+        ),
+    )
+
+    base = tmp_path / "repo"
+    base.mkdir()
+    # Call internal scaffold implementation directly for focused testing.
+    folder_core._scaffold_one_target(
+        base_path=base, root=tmp_path, rule=rule, force=False, dry_run=False
+    )
+    created = base / "bin" / "script.sh"
+    assert created.exists()
+    mode = created.stat().st_mode
+    assert mode & stat.S_IXUSR != 0
