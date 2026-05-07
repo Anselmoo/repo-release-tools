@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import stat
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -341,13 +342,10 @@ def _scaffold_one_target(
             # executable scripts. Use a best-effort approach and ignore
             # platform-specific failures.
             if getattr(scaffold, "executable", False):
-                try:
+                # Best-effort: set execute bits and ignore OS-level errors.
+                with suppress(OSError):
                     current_mode = file_path.stat().st_mode
-                    # Set owner/group/other execute bits where supported.
                     file_path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-                except Exception:
-                    # If chmod fails (rare on some platforms), continue silently.
-                    pass
         actions.append(
             FolderScaffoldAction(
                 kind="write",
