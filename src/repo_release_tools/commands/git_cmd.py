@@ -183,12 +183,6 @@ def require_explicit_confirmation(args: argparse.Namespace) -> bool:
     return bool(args.yes_i_know_this_destroys_history)
 
 
-def _print_summary(title: str, entries: list[tuple[str, str]]) -> None:
-    """Print a compact colored command summary without boxed tables."""
-    p = DryRunPrinter(False)
-    p.header(title, **{label: value for label, value in entries})
-
-
 def conflict_status_lines(status_lines: list[str]) -> list[str]:
     """Return unresolved-conflict entries from porcelain status lines."""
     return [line for line in status_lines if git.classify_status_line(line)[0] == "conflict"]
@@ -268,21 +262,19 @@ def cmd_status(args: argparse.Namespace) -> int:
         return 1
     summary = summarize_status(branch_name, status_lines, upstream=upstream)
 
-    _print_summary(
+    p = DryRunPrinter(False)
+    p.blank_line()
+    p.header(
         "Git status",
-        [
-            ("Branch", branch_name),
-            ("Upstream", upstream or "<none>"),
-            ("Status", summary),
-        ],
+        Branch=branch_name,
+        Upstream=upstream or "<none>",
+        Status=summary,
     )
 
     if not status_lines:
-        p = DryRunPrinter(False)
         p.ok("Working tree is clean.")
         return 0
 
-    p = DryRunPrinter(False)
     p.section("Changes")
     shown = status_lines[:STATUS_MAX]
     for line in shown:
@@ -306,17 +298,14 @@ def cmd_log(args: argparse.Namespace) -> int:
     )
     lines = [line for line in raw.splitlines() if line.strip()]
 
-    _print_summary(
-        "Git log",
-        [("Count", str(len(lines))), ("Limit", str(args.limit))],
-    )
+    p = DryRunPrinter(False)
+    p.blank_line()
+    p.header("Git log", Count=str(len(lines)), Limit=str(args.limit))
 
     if not lines:
-        p = DryRunPrinter(False)
         p.warn("No commits found.")
         return 0
 
-    p = DryRunPrinter(False)
     p.section("Commits")
     for line in lines:
         sha, subject, *rest = line.split("\t", 2)
@@ -375,17 +364,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 "is not part of HEAD."
             )
 
-    p = DryRunPrinter(False)
     summary = summarize_status(branch_name, status_lines, upstream=upstream)
-    _print_summary(
+    p = DryRunPrinter(False)
+    p.blank_line()
+    p.header(
         "Git doctor",
-        [
-            ("Branch", branch_name),
-            ("Upstream", upstream or "<none>"),
-            ("Sync", describe_sync_relation(ahead=ahead, behind=behind, base_ref=upstream)),
-            ("Status", summary),
-            ("Commit", latest_subject or "<none>"),
-        ],
+        Branch=branch_name,
+        Upstream=upstream or "<none>",
+        Sync=describe_sync_relation(ahead=ahead, behind=behind, base_ref=upstream),
+        Status=summary,
+        Commit=latest_subject or "<none>",
     )
 
     p.section("Checks")
@@ -511,18 +499,17 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
     ahead, behind = (0, 0) if base_ref is None else git.ahead_behind(root, base_ref)
     relation = describe_sync_relation(ahead=ahead, behind=behind, base_ref=base_ref)
 
-    _print_summary(
+    p = DryRunPrinter(False)
+    p.blank_line()
+    p.header(
         "Sync status",
-        [
-            ("Branch", branch_name),
-            ("Base", base_ref or "<none>"),
-            ("Relation", relation),
-            ("Operation", operation or "idle"),
-            ("Status", summarize_status(branch_name, status_lines, upstream=base_ref)),
-        ],
+        Branch=branch_name,
+        Base=base_ref or "<none>",
+        Relation=relation,
+        Operation=operation or "idle",
+        Status=summarize_status(branch_name, status_lines, upstream=base_ref),
     )
 
-    p = DryRunPrinter(False)
     p.section("Analysis")
     failures = 0
 
@@ -580,17 +567,14 @@ def run_commit(args: argparse.Namespace, *, stage_all: bool) -> int:
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
-    title = "[DRY RUN] Commit" if args.dry_run else "Commit"
-    _print_summary(
-        title,
-        [
-            ("Branch", branch_name),
-            ("Mode", "stage all" if stage_all else "commit only"),
-            ("Subject", subject),
-        ],
-    )
-
     p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Commit",
+        Branch=branch_name,
+        Mode="stage all" if stage_all else "commit only",
+        Subject=subject,
+    )
     p.section("Git")
     if stage_all:
         git.run(["git", "add", "."], root, dry_run=args.dry_run, label="git add")
@@ -655,20 +639,19 @@ def cmd_sync(args: argparse.Namespace) -> int:
         if len(conflicts) > STATUS_MAX:
             p.action(f"…and {len(conflicts) - STATUS_MAX} more", stream=sys.stderr)
         return 1
-    strategy = "merge" if args.merge else "rebase"
-    title = "[DRY RUN] Sync" if args.dry_run else "Sync"
-    _print_summary(
-        title,
-        [
-            ("Branch", branch_name),
-            ("Upstream", upstream),
-            ("Strategy", strategy),
-            ("Working tree", "dirty" if dirty else "clean"),
-            ("Status", summarize_status(branch_name, status_lines, upstream=upstream)),
-        ],
-    )
-
     p = DryRunPrinter(args.dry_run)
+    strategy = "merge" if args.merge else "rebase"
+    p.blank_line()
+    p.header(
+        "Sync",
+        Branch=branch_name,
+        Upstream=upstream,
+        Strategy=strategy,
+        **{
+            "Working tree": "dirty" if dirty else "clean",
+            "Status": summarize_status(branch_name, status_lines, upstream=upstream),
+        },
+    )
     p.section("Syncing")
     with spinner_lines("Fetching…"):
         git.run(["git", "fetch", "--prune"], root, dry_run=args.dry_run, label="git fetch")
@@ -710,20 +693,17 @@ def cmd_move(args: argparse.Namespace) -> int:
         p = DryRunPrinter(False)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
+    p = DryRunPrinter(args.dry_run)
     current = git.current_branch(root) or "<detached>"
     dirty = not git.working_tree_clean(root)
     target_label = f"new branch {args.target}" if args.create else args.target
-    title = "[DRY RUN] Move" if args.dry_run else "Move"
-    _print_summary(
-        title,
-        [
-            ("From", current),
-            ("To", target_label),
-            ("Working tree", "dirty" if dirty else "clean"),
-        ],
+    p.blank_line()
+    p.header(
+        "Move",
+        From=current,
+        To=target_label,
+        **{"Working tree": "dirty" if dirty else "clean"},
     )
-
-    p = DryRunPrinter(args.dry_run)
     p.section("Switching")
     if dirty:
         git.run(
@@ -804,18 +784,15 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
         )
         return 1
 
-    title = "[DRY RUN] Squash local" if args.dry_run else "Squash local"
-    _print_summary(
-        title,
-        [
-            ("Branch", branch_name),
-            ("Base", base_ref),
-            ("Commits", str(len(commits))),
-            ("Subject", subject),
-        ],
-    )
-
     p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Squash local",
+        Branch=branch_name,
+        Base=base_ref,
+        Commits=str(len(commits)),
+        Subject=subject,
+    )
     p.section("Commits to squash")
     for line in commits:
         p.list_item(line)
@@ -837,13 +814,12 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
 def cmd_undo_safe(args: argparse.Namespace) -> int:
     """Undo the last commit while keeping work in the index or working tree."""
     mode = "--soft" if args.keep_staged else "--mixed"
-    title = "[DRY RUN] Undo safe" if args.dry_run else "Undo safe"
-    _print_summary(
-        title,
-        [
-            ("Target", args.target),
-            ("Mode", "keep staged" if args.keep_staged else "keep files"),
-        ],
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Undo safe",
+        Target=args.target,
+        Mode="keep staged" if args.keep_staged else "keep files",
     )
 
     git.run(
@@ -852,7 +828,6 @@ def cmd_undo_safe(args: argparse.Namespace) -> int:
         dry_run=args.dry_run,
         label="git reset",
     )
-    p = DryRunPrinter(args.dry_run)
     p.blank_line()
     p.footer(f"Done. Reset to {args.target!r} using {mode}.")
     return 0
@@ -897,19 +872,18 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
         commit_message = (
             DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE if args.hard_init else DEFAULT_REBOOTSTRAP_MESSAGE
         )
-    title = "[DRY RUN] Rebootstrap history" if args.dry_run else "Rebootstrap history"
-    _print_summary(
-        title,
-        [
-            ("Branch", branch_name),
-            ("Mode", "empty hard-init" if args.hard_init else "snapshot current files"),
-            ("Backup", str(backup_path)),
-            ("Remote guard", "ignored" if args.allow_remote else "enabled"),
-            ("Commit", commit_message),
-        ],
-    )
-
     p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Rebootstrap history",
+        Branch=branch_name,
+        Mode="empty hard-init" if args.hard_init else "snapshot current files",
+        Backup=str(backup_path),
+        **{
+            "Remote guard": "ignored" if args.allow_remote else "enabled",
+            "Commit": commit_message,
+        },
+    )
     p.section("Reinitializing")
     if args.dry_run:
         p.would_run(f"mv {git_dir} {backup_path}")

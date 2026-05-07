@@ -53,6 +53,7 @@ When working in `repo-release-tools`, follow these rules:
 - The repo currently reports low coverage in `src/repo_release_tools/ui/syntax.py`.
 - Use existing hook behavior as a guardrail: coverage below 85.71% should be treated as a blocker unless the user explicitly approves a follow-on test expansion.
 - When making CLI errors friendlier, preserve argparse semantics and exit codes while improving help text, suggestions, and examples.
+- When you add or rename a top-level `rrt` subcommand, update the `Affected entrypoints` docstring block in `tests/test_user_experience_simulator.py` in the same change so the UX contract stays aligned with the live CLI surface.
 - Persist preferences and follow-up context in repo-scoped memory when they are specific to this repository's workflow.
 - Keep the hook-registration table in sync with `.claude/settings.json`; if the active hook path changes, update the documented path in this file immediately so contributors are not sent to a stale location.
 

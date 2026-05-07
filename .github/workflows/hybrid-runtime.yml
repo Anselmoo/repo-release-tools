@@ -61,4 +61,8 @@ jobs:
         run: uv sync --all-groups
 
       - name: Run hybrid runtime pytest suite
-        run: uv run pytest -q -m runtime tests/test_runtime_hybrid.py
+        # Explicitly override the coverage fail threshold for the hybrid runtime
+        # job because it runs a focused runtime-only test which doesn't exercise
+        # the full codebase. Pass a lower fail-under so the workflow doesn't
+        # fail due to the global `--cov-fail-under=100` in pyproject.toml.
+        run: uv run pytest -q -m runtime tests/test_runtime_hybrid.py --cov-fail-under=0

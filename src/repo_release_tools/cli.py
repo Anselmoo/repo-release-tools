@@ -20,6 +20,7 @@ from repo_release_tools.commands import (
     doctor,
     env_cmd,
     eol_check,
+    folder,
     git_cmd,
     init,
     release_cmd,
@@ -96,7 +97,16 @@ def _compute_col_width(actions: list[argparse.Action], width: int | None = None)
 
 COMMAND_GROUPS: dict[str, list[str]] = {
     "Version & Release": ["bump", "ci-version", "release"],
-    "Repository Health": ["doctor", "config", "env", "eol", "toc", "tree", "docs"],
+    "Repository Health": [
+        "doctor",
+        "config",
+        "env",
+        "eol",
+        "toc",
+        "tree",
+        "docs",
+        "folder",
+    ],
     "Git Workflow": ["branch", "git"],
     "Setup & Tooling": ["init", "skill"],
 }
@@ -382,7 +392,7 @@ class RrtArgumentParser(argparse.ArgumentParser):
         """Write help text to *file* (defaults to stdout)."""
         if file is None:
             file = sys.stdout
-        file.write(self.format_help())
+        cast(IO[str], file).write(self.format_help())
 
     def convert_arg_line_to_args(self, arg_line: str) -> list[str]:  # type: ignore[override]
         """Strip inline comments and split response-file lines."""
@@ -528,6 +538,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.register(cast(argparse._SubParsersAction, subparsers))
     env_cmd.register(cast(argparse._SubParsersAction, subparsers))
     eol_check.register(cast(argparse._SubParsersAction, subparsers))
+    folder.register(cast(argparse._SubParsersAction, subparsers))
     git_cmd.register(cast(argparse._SubParsersAction, subparsers))
     init.register(cast(argparse._SubParsersAction, subparsers))
     release_cmd.register(cast(argparse._SubParsersAction, subparsers))

@@ -57,7 +57,7 @@ def main() -> int:
         os.getenv("COVERAGE_BASELINE_FILE", str(repo_root / ".claude" / "coverage-baseline.json"))
     )
 
-    target_pct = _env_float("TARGET_COVERAGE_PCT", 85.71)
+    target_pct = _env_float("TARGET_COVERAGE_PCT", 100.0)
     max_abs_drop_pct = _env_float("MAX_ABSOLUTE_DROP_PCT", 0.0)
     max_rel_drop_pct = _env_float("MAX_RELATIVE_DROP_PCT", 0.0)
 

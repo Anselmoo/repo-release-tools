@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import cast
 
 from .docs_config import _VALID_LANGUAGES, _load_docs_config, _load_eol_config
+from .folders_config import _load_folders_config
 from .model import (
     _AUTO,
     _BRANCH_TYPE_IDENTIFIER_RE,
@@ -34,6 +35,10 @@ from .model import (
     DocsConfig,
     EolConfig,
     EolOverride,
+    FolderPolicyConfig,
+    FolderRule,
+    FolderScaffoldFile,
+    FolderTemplate,
     MissingRrtConfigError,
     PinTarget,
     RrtConfig,
@@ -671,6 +676,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         global_pin_targets=_load_pin_targets(root, raw.get("pin_targets", [])),
         eol=_load_eol_config(raw.get("eol")),
         docs=_load_docs_config(raw.get("docs"), root=root),
+        folders=_load_folders_config(raw.get("folders")),
     )
 
 
@@ -1098,6 +1104,10 @@ __all__ = [
     "DocsConfig",
     "EolConfig",
     "EolOverride",
+    "FolderPolicyConfig",
+    "FolderRule",
+    "FolderScaffoldFile",
+    "FolderTemplate",
     "GENERIC_TOOL_RRT_EXAMPLE",
     "GO_TOOL_RRT_EXAMPLE",
     "MissingRrtConfigError",

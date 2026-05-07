@@ -80,14 +80,7 @@ from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs.formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
 from repo_release_tools.tools.inject import apply_generated_docs
-from repo_release_tools.ui import (
-    DryRunPrinter,
-    error,
-    success,
-    warning,
-)
-
-color_error = error
+from repo_release_tools.ui import DryRunPrinter
 
 # ---------------------------------------------------------------------------
 # Source-owned topic docs
@@ -134,10 +127,10 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
         invalid = [ln for ln in raw_langs if ln not in _VALID_LANGUAGES]
         if invalid:
-            sys.stderr.write(
-                color_error(
-                    f"Unsupported languages: {invalid}. Supported: {list(_VALID_LANGUAGES)}\n"
-                )
+            p.line(
+                f"Unsupported languages: {invalid}. Supported: {list(_VALID_LANGUAGES)}",
+                ok=False,
+                stream=sys.stderr,
             )
             return 1
         from dataclasses import replace as dc_replace
@@ -208,6 +201,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
 def _cmd_check(args: argparse.Namespace) -> int:
     cwd = Path(args.root)
+    p = DryRunPrinter(False)
     config = _config_for_cwd(cwd)
 
     lock_file = getattr(args, "lock_file", None) or config.lock_file
@@ -237,14 +231,16 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
     is_current, messages = lock_is_current(lock_path, sources)
     if is_current:
-        sys.stdout.write(success("docs lockfile is current\n"))
+        p.ok("docs lockfile is current")
         return 0
 
-    sys.stderr.write(color_error("docs lockfile is stale:\n"))
+    p.line("docs lockfile is stale:", ok=False, stream=sys.stderr)
     for msg in messages:
-        sys.stderr.write(f"  {warning(msg)}\n")
-    sys.stderr.write(
-        color_error("Run 'rrt docs generate --format toml' to regenerate the lockfile.\n")
+        p.warn(msg, stream=sys.stderr)
+    p.line(
+        "Run 'rrt docs generate --format toml' to regenerate the lockfile.",
+        ok=False,
+        stream=sys.stderr,
     )
     return 1
 
@@ -310,7 +306,8 @@ def _cmd_inject(args: argparse.Namespace) -> int:
             raise
 
     if cfg is None:
-        sys.stdout.write("No rrt config found; skipping shared_blocks injection.\n")
+        p = DryRunPrinter(False)
+        p.action("No rrt config found; skipping shared_blocks injection.")
         return 0
 
     if cfg.docs is not None and cfg.docs.shared_blocks:
@@ -321,6 +318,7 @@ def _cmd_inject(args: argparse.Namespace) -> int:
             return 0
 
         repo_url = "https://github.com/Anselmoo/repo-release-tools"
+        p = DryRunPrinter(False)
 
         exit_code = 0
         for block in cfg.docs.shared_blocks:
@@ -331,7 +329,7 @@ def _cmd_inject(args: argparse.Namespace) -> int:
 
             matched = sorted({p for pattern in block.targets for p in root.glob(pattern)})
             if not matched:
-                sys.stdout.write(f"SharedBlock {block.anchor_id!r}: no target files matched.\n")
+                p.warn(f"SharedBlock {block.anchor_id!r}: no target files matched.")
                 continue
 
             for target_path in matched:
@@ -371,7 +369,8 @@ def cmd_docs(args: argparse.Namespace) -> int:
         return _cmd_publish(args)
     if sub == "inject":
         return _cmd_inject(args)
-    sys.stderr.write(color_error(f"Unknown docs action: {sub!r}\n"))
+    p = DryRunPrinter(False)
+    p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
 
 

@@ -31,6 +31,7 @@ def test_module_help_smoke() -> None:
     assert "branch" in result.stdout
     assert "bump" in result.stdout
     assert "git" in result.stdout
+    assert "folder" in result.stdout
     assert "init" in result.stdout
     assert "skill" in result.stdout
     assert "tree" in result.stdout
@@ -148,6 +149,16 @@ def test_build_parser_registers_env_command() -> None:
 
     assert args.command == "env"
     assert args.handler.__name__ == "cmd_env"
+
+
+def test_build_parser_registers_folder_check_command() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["folder", "check", "--template", "python-package"])
+
+    assert args.command == "folder"
+    assert args.folder_command == "check"
+    assert args.handler.__name__ == "cmd_folder_check"
 
 
 def test_styled_help_applies_to_subcommands(
