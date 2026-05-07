@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-THRESHOLD = 85.71
+THRESHOLD = 100.0  # minimum acceptable coverage percentage
 
 
 def fail(message: str, reason: str) -> None:
