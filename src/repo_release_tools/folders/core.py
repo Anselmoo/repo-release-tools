@@ -69,7 +69,7 @@ def check_folders(
                 FolderTargetReport(
                     rule_name=rule.name,
                     selector=rule.selector,
-                    base_path=str(root),
+                    base_path=_relative_text(root, root),
                     violations=(
                         FolderViolation(
                             code="selector-no-match",
