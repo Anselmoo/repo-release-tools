@@ -5,9 +5,9 @@ from __future__ import annotations
 from repo_release_tools.config import FolderScaffoldFile, FolderTemplate
 
 
-def _file(path: str, content: str = "") -> FolderScaffoldFile:
+def _file(path: str, content: str = "", executable: bool = False) -> FolderScaffoldFile:
     """Create a scaffold file entry."""
-    return FolderScaffoldFile(path=path, content=content)
+    return FolderScaffoldFile(path=path, content=content, executable=executable)
 
 
 BUILTIN_FOLDER_TEMPLATES: dict[str, FolderTemplate] = {
@@ -113,8 +113,8 @@ BUILTIN_FOLDER_TEMPLATES: dict[str, FolderTemplate] = {
         scaffold_dirs=("scripts",),
         scaffold_files=(
             _file("README.md", "# Script Project\n"),
-            _file("scripts/main.sh", "#!/usr/bin/env bash\n"),
-            _file("scripts/main.ps1", 'Write-Output "placeholder"\n'),
+            _file("scripts/main.sh", "#!/usr/bin/env bash\n", executable=True),
+            _file("scripts/main.ps1", 'Write-Output "placeholder"\n', executable=True),
         ),
     ),
     "monorepo-workspace": FolderTemplate(
