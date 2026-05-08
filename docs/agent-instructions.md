@@ -1,4 +1,9 @@
-# repo-release-tools — Hook & Action Reference
+---
+title: "Hook & Action Reference"
+permalink: "/agent-instructions/"
+---
+
+# Hook & Action Reference
 
 <!-- Static context for agents: read this before using any prompt block below. -->
 

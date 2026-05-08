@@ -2,7 +2,7 @@
 
 __version__ = "1.2.0"
 
-INDEX_DOC = """# repo-release-tools docs
+INDEX_DOC = """# repo-release-tools
 
 `repo-release-tools` has three main surfaces:
 
@@ -11,7 +11,7 @@ INDEX_DOC = """# repo-release-tools docs
 - **[GitHub Action](action.md)** for CI policy checks that mirror the
   local workflow
 - **Generated topic docs**:
-  [Semantic branches](branch.md) and [Git magic](git.md) for
+  [Semantic branches](branch.md) and [rrt git](git_cmd.md) for
   the branch naming model and Git workflow guidance
 
 If you need command syntax, start with the generated CLI reference first. It is
@@ -31,7 +31,7 @@ the canonical home for the current `rrt` command surface.
 
 - [Semantic branches](branch.md) — generated branch naming model
   and allowed branch types
-- [Git magic](git.md) — generated Git helpers and workflow shortcuts
+- [rrt git](git_cmd.md) — generated Git helpers and workflow shortcuts
 
 ## Changelog workflow
 

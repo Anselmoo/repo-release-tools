@@ -21,6 +21,12 @@ reached before declaring work done. The coverage summary in
   `isinstance`, exhaustive `if/elif` above it, etc.) before writing the test.
 - Reach dead-code-by-construction branches by patching the dependency, not the SUT:
   `monkeypatch.setattr(_module, "_private_fn", lambda ...: <trigger_value>)`.
+- When the SUT imports a dependency directly into its module namespace, patch the
+  symbol where it is used — not the provider module — so the test actually intercepts
+  the call.
+- When overriding a module-level registry or tuple for a regression test, prefer
+  `monkeypatch.setattr(..., raising=False)` over direct assignment so the override is
+  both temporary and type-checker friendly.
 - To make a monkeypatched function raise an exception, use the generator throw pattern:
   `lambda *a, **kw: (_ for _ in ()).throw(SomeError("msg"))`.
 - When asserting exception messages with `pytest.raises(..., match=...)`, escape regex metacharacters in literal text (especially `[` and `]`) or use `re.escape(...)`.

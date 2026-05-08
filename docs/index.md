@@ -1,4 +1,9 @@
-# repo-release-tools docs
+---
+title: "repo-release-tools"
+permalink: "/"
+---
+
+# repo-release-tools
 
 `repo-release-tools` has three main surfaces:
 
@@ -7,7 +12,7 @@
 - **[GitHub Action](action.md)** for CI policy checks that mirror the
   local workflow
 - **Generated topic docs**:
-  [Semantic branches](commands/branch.md) and [Git magic](commands/git_cmd.md) for
+  [Semantic branches](commands/branch.md) and [rrt git](commands/git_cmd.md) for
   the branch naming model and Git workflow guidance
 
 If you need command syntax, start with the generated CLI reference first. It is
@@ -26,9 +31,9 @@ the canonical home for the current `rrt` command surface.
 ## Then follow the workflow
 
 <!-- rrt:auto:start:index-topic-links -->
-- [Semantic branches](commands/branch.md) — generated branch naming model and allowed branch types
-- [Git magic](commands/git_cmd.md) — generated Git helpers and workflow shortcuts
-- [Project tree](commands/tree.md) — generated guide for `rrt tree` output modes, ignore behavior, and traversal controls
+- [rrt branch](commands/branch.md) — generated branch naming model and allowed branch types
+- [rrt git](commands/git_cmd.md) — generated Git helpers and workflow shortcuts
+- [rrt tree](commands/tree.md) — generated guide for `rrt tree` output modes, ignore behavior, and traversal controls
 <!-- rrt:auto:end:index-topic-links -->
 
 ## Commands reference

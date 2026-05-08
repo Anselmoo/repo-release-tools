@@ -1,4 +1,9 @@
-# RRT CLI
+---
+title: "rrt CLI"
+permalink: "/commands/rrt-cli/"
+---
+
+# rrt CLI
 
 <!-- Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. -->
 
@@ -874,7 +879,7 @@ Examples
 
 ## `rrt tree`
 
-### Project tree
+### rrt tree
 
 `rrt tree` renders a deterministic project tree with Git-aware filtering and
 multiple output modes for terminal use, docs, and copy/paste workflows.
@@ -1168,7 +1173,7 @@ Options
 
 ## `rrt branch`
 
-### Conventional branches for trunk-based publishing
+### rrt branch
 
 `repo-release-tools` uses conventional branches to keep trunk-based publishing
 predictable for humans, hooks, and automation.
@@ -1377,12 +1382,12 @@ Examples
 
 ## `rrt git`
 
-### Git magic
+### rrt git
 
 `repo-release-tools` ships a small set of opinionated Git workflows for branch
 health, commit drafting, sync, and history repair.
 
-This page is generated from `repo_release_tools.workflow.git.GIT_MAGIC_DOC`.
+This page is generated from `repo_release_tools.workflow.git.GIT_DOC`.
 This page stays workflow-oriented. For the full command surface and option
 details, see [docs/commands/rrt-cli.md](rrt-cli.md).
 

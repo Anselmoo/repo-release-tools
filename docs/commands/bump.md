@@ -1,3 +1,8 @@
+---
+title: "rrt bump"
+permalink: "/commands/bump/"
+---
+
 # rrt bump
 
 Bump the version of the repository according to the configured version targets.

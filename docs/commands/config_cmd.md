@@ -1,3 +1,8 @@
+---
+title: "rrt config"
+permalink: "/commands/config_cmd/"
+---
+
 # rrt config
 
 Inspect and validate the resolved rrt configuration.

@@ -1,4 +1,9 @@
-# Skills
+---
+title: "rrt skill"
+permalink: "/commands/skill/"
+---
+
+# rrt skill
 
 This repository bundles two agent skills:
 
@@ -6,7 +11,7 @@ This repository bundles two agent skills:
 - `/.github/skills/repo-release-tools/SKILL.md` — guidance for an installed `rrt`
 
 If you need the exact CLI syntax for branch, Git, or skill commands, use the
-[RRT CLI reference](rrt-cli.md) first.
+[rrt CLI reference](rrt-cli.md) first.
 
 ## Which skill to use
 
@@ -53,10 +58,10 @@ Use `--dry-run` to preview the destination paths first.
 
 ## Related docs
 
-- [RRT CLI](rrt-cli.md)
+- [rrt CLI](rrt-cli.md)
 - [pre-commit / lefthook](hooks.md)
 - [GitHub Action](action.md)
-- [Git magic](git.md)
+- [rrt git](git_cmd.md)
 
 ## Skill eval fixtures
 

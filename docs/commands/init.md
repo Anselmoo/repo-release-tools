@@ -1,3 +1,8 @@
+---
+title: "rrt init"
+permalink: "/commands/init/"
+---
+
 # rrt init
 
 Bootstrap rrt configuration in a new or existing repository.

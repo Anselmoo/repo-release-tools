@@ -11,7 +11,7 @@ from pathlib import Path
 from repo_release_tools.ui import GLYPHS, DryRunPrinter
 from repo_release_tools.workflow import git
 
-SEMANTIC_BRANCHES_DOC = """# Conventional branches for trunk-based publishing
+SEMANTIC_BRANCHES_DOC = """# rrt branch
 
 `repo-release-tools` uses conventional branches to keep trunk-based publishing
 predictable for humans, hooks, and automation.

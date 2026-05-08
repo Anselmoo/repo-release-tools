@@ -1,4 +1,9 @@
-# Project tree
+---
+title: "rrt tree"
+permalink: "/commands/tree/"
+---
+
+# rrt tree
 
 `rrt tree` renders a deterministic project tree with Git-aware filtering and
 multiple output modes for terminal use, docs, and copy/paste workflows.
