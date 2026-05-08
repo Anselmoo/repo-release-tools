@@ -56,6 +56,8 @@ def _init_git_repo(repo: Path) -> None:
     _run(["git", "config", "user.name", "Repo Release Tools"], cwd=repo)
     _run(["git", "config", "user.email", "rrt@example.invalid"], cwd=repo)
     _run(["git", "config", "commit.gpgsign", "false"], cwd=repo)
+    # Disable hooks so pre-commit and other hook runners don't interfere with tests
+    _run(["git", "config", "core.hooksPath", "/dev/null"], cwd=repo)
     _run(["git", "add", "."], cwd=repo)
     _run(["git", "commit", "-m", "feat: initial hello world"], cwd=repo)
 
@@ -456,3 +458,141 @@ def test_docs_generate_toml_lockfile(tmp_path: Path) -> None:
     assert lock_path.exists(), f"Expected lockfile at {lock_path}"
     text = lock_path.read_text(encoding="utf-8")
     assert "GREET" in text
+
+
+# ---------------------------------------------------------------------------
+# Git commit integration tests
+# ---------------------------------------------------------------------------
+
+
+def _setup_minimal_python_repo(repo: Path) -> None:
+    """Write a minimal rrt-configured Python project (no lock command)."""
+    (repo / "pyproject.toml").write_text(
+        """\
+[tool.rrt]
+changelog_file = "CHANGELOG.md"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "hello-minimal"
+version = "0.1.0"
+requires-python = ">=3.12"
+""",
+        encoding="utf-8",
+    )
+    (repo / "CHANGELOG.md").write_text("# Changelog\n\n", encoding="utf-8")
+
+
+@pytest.mark.runtime
+def test_bump_full_commit_cycle(tmp_path: Path) -> None:
+    """rrt bump without --no-commit creates a real git commit on a release branch."""
+    repo = tmp_path / "commit-cycle"
+    repo.mkdir()
+    _setup_minimal_python_repo(repo)
+    _init_git_repo(repo)
+
+    env = _rrt_env()
+    _run(
+        [sys.executable, "-m", "repo_release_tools", "bump", "patch"],
+        cwd=repo,
+        env=env,
+    )
+
+    log = _run(["git", "log", "--oneline", "-1"], cwd=repo).stdout.strip()
+    assert "chore: bump version to v0.1.1" in log
+
+    branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo).stdout.strip()
+    assert branch == "release/v0.1.1"
+
+    version_text = (repo / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'version = "0.1.1"' in version_text
+
+
+@pytest.mark.runtime
+def test_bump_commit_failure_precommit_hook(tmp_path: Path) -> None:
+    """rrt bump with a failing pre-commit hook raises RuntimeError with stderr detail."""
+    import stat
+
+    repo = tmp_path / "hook-fail"
+    repo.mkdir()
+    _setup_minimal_python_repo(repo)
+
+    # Override _init_git_repo: init normally but use a real failing hook
+    _run(["git", "init", "-b", "main"], cwd=repo)
+    _run(["git", "config", "user.name", "Repo Release Tools"], cwd=repo)
+    _run(["git", "config", "user.email", "rrt@example.invalid"], cwd=repo)
+    _run(["git", "config", "commit.gpgsign", "false"], cwd=repo)
+    _run(["git", "add", "."], cwd=repo)
+    _run(["git", "commit", "-m", "feat: initial hello world"], cwd=repo)
+
+    # Install a failing pre-commit hook
+    hooks_dir = repo / ".git" / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+    hook_script = hooks_dir / "pre-commit"
+    hook_script.write_text("#!/bin/sh\necho 'pre-commit hook blocked commit' >&2\nexit 1\n")
+    hook_script.chmod(hook_script.stat().st_mode | stat.S_IEXEC)
+
+    env = _rrt_env()
+    result = subprocess.run(
+        [sys.executable, "-m", "repo_release_tools", "bump", "patch"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    # The git stderr (hook output) should be visible somewhere in combined output
+    combined = result.stdout + result.stderr
+    assert "pre-commit hook blocked commit" in combined
+
+
+@pytest.mark.runtime
+def test_bump_no_verify_bypasses_precommit_hook(tmp_path: Path) -> None:
+    """rrt bump --no-verify succeeds even when a pre-commit hook would otherwise fail."""
+    import stat
+
+    repo = tmp_path / "no-verify"
+    repo.mkdir()
+    _setup_minimal_python_repo(repo)
+    _init_git_repo(repo)
+
+    # Re-enable real hooks by clearing the /dev/null override, then install a failing hook
+    _run(["git", "config", "--unset", "core.hooksPath"], cwd=repo)
+    hooks_dir = repo / ".git" / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+    hook_script = hooks_dir / "pre-commit"
+    hook_script.write_text("#!/bin/sh\necho 'would block' >&2\nexit 1\n")
+    hook_script.chmod(hook_script.stat().st_mode | stat.S_IEXEC)
+
+    env = _rrt_env()
+    _run(
+        [sys.executable, "-m", "repo_release_tools", "bump", "patch", "--no-verify"],
+        cwd=repo,
+        env=env,
+    )
+
+    log = _run(["git", "log", "--oneline", "-1"], cwd=repo).stdout.strip()
+    assert "chore: bump version to v0.1.1" in log
+
+
+@pytest.mark.runtime
+def test_branch_create_and_checkout(tmp_path: Path) -> None:
+    """rrt branch new creates and checks out a conventional branch in a real git repo."""
+    repo = tmp_path / "branch-test"
+    repo.mkdir()
+    _setup_minimal_python_repo(repo)
+    _init_git_repo(repo)
+
+    env = _rrt_env()
+    _run(
+        [sys.executable, "-m", "repo_release_tools", "branch", "new", "feat", "my-feature"],
+        cwd=repo,
+        env=env,
+    )
+
+    branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo).stdout.strip()
+    assert branch == "feat/my-feature"

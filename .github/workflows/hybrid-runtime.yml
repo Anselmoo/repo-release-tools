@@ -65,4 +65,4 @@ jobs:
         # job because it runs a focused runtime-only test which doesn't exercise
         # the full codebase. Pass a lower fail-under so the workflow doesn't
         # fail due to the global `--cov-fail-under=100` in pyproject.toml.
-        run: uv run pytest -q -m runtime tests/test_runtime_hybrid.py --cov-fail-under=0
+        run: uv run pytest -q -m runtime tests/integration/test_runtime_hybrid.py --cov-fail-under=0

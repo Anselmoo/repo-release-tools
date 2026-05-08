@@ -364,7 +364,8 @@ def test_validate_generated_pages_reports_each_invalid_render_shape() -> None:
                 lambda: "---\nname: x\n# heading\n",
             ),
             docs.DocTarget(
-                Path("docs/commands/no-h1.md"), lambda: "---\nname: x\n---\nplain body\n"
+                Path("docs/commands/no-h1.md"),
+                lambda: "---\nname: x\n---\nplain body\n",
             ),
         ),
         raising=False,
