@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import importlib
 import io
 import os
@@ -15,6 +16,12 @@ def _load_generator_module() -> ModuleType:
 
     importlib.reload(pub)
     return pub
+
+
+def _assert_frontmatter_and_h1(rendered: str, *, title: str) -> None:
+    assert rendered.startswith("---\n")
+    assert f'title: "{title}"' in rendered
+    assert f"\n# {title}\n" in rendered
 
 
 def test_iter_help_sections_covers_root_commands_and_nested_subcommands() -> None:
@@ -232,17 +239,9 @@ def test_generated_command_topics_have_frontmatter_and_command_h1() -> None:
     eol = by_name["eol_check.md"].render()
     git_doc = by_name["git_cmd.md"].render()
 
-    assert doctor.startswith("---\n")
-    assert 'title: "rrt doctor"' in doctor
-    assert "\n# rrt doctor\n" in doctor
-
-    assert eol.startswith("---\n")
-    assert 'title: "rrt eol"' in eol
-    assert "\n# rrt eol\n" in eol
-
-    assert git_doc.startswith("---\n")
-    assert 'title: "rrt git"' in git_doc
-    assert "\n# rrt git\n" in git_doc
+    _assert_frontmatter_and_h1(doctor, title="rrt doctor")
+    _assert_frontmatter_and_h1(eol, title="rrt eol")
+    _assert_frontmatter_and_h1(git_doc, title="rrt git")
 
 
 def test_validate_generated_pages_returns_no_issues_for_current_registry() -> None:
@@ -258,6 +257,54 @@ def test_extract_first_h1_and_compute_permalink_helpers() -> None:
     assert docs._extract_first_h1("No heading here\n") is None
 
     assert docs._compute_permalink_for_output(Path("docs/index.md")) == "/"
+
+
+def test_compute_permalink_only_swallows_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    docs = _load_generator_module()
+
+    def boom(self: Path, other: object) -> Path:
+        raise RuntimeError("unexpected path error")
+
+    monkeypatch.setattr(Path, "relative_to", boom)
+
+    with pytest.raises(RuntimeError, match="unexpected path error"):
+        docs._compute_permalink_for_output(Path("docs/example.md"))
+
+
+def test_cmd_publish_renders_each_target_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    docs = _load_generator_module()
+    from repo_release_tools.commands import docs_cmd
+
+    calls: list[str] = []
+
+    class FakeTarget:
+        def __init__(self, name: str) -> None:
+            self.output_path = Path(f"docs/commands/{name}.md")
+            self.anchor_id = None
+            self.name = name
+            self.render_calls = 0
+
+        def render(self) -> str:
+            self.render_calls += 1
+            return f'---\ntitle: "{self.name}"\n---\n\n# {self.name}\n'
+
+    targets = [FakeTarget("alpha"), FakeTarget("beta")]
+
+    monkeypatch.setattr(docs, "iter_generated_doc_targets", lambda: iter(targets))
+    monkeypatch.setattr(docs, "validate_generated_page", lambda target, rendered: [])
+    monkeypatch.setattr(
+        docs_cmd,
+        "apply_generated_docs",
+        lambda content, **kwargs: calls.append(content) or 0,
+    )
+
+    exit_code = docs_cmd._cmd_publish(
+        argparse.Namespace(check=False, dry_run=False, fail_on_change=False)
+    )
+
+    assert exit_code == 0
+    assert [target.render_calls for target in targets] == [1, 1]
+    assert len(calls) == 2
     assert (
         docs._compute_permalink_for_output(Path("docs/commands/rrt-cli.md")) == "/commands/rrt-cli/"
     )
@@ -305,20 +352,27 @@ def test_wrap_with_frontmatter_uses_title_override_registry_when_slug_known() ->
 
 def test_validate_generated_pages_reports_each_invalid_render_shape() -> None:
     docs = _load_generator_module()
-    original_targets = docs.GENERATED_DOC_TARGETS  # ty: ignore[unresolved-attribute]
-    try:
-        docs.GENERATED_DOC_TARGETS = (  # ty: ignore[unresolved-attribute]
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        docs,
+        "GENERATED_DOC_TARGETS",
+        (
             docs.DocTarget(Path("docs/commands/no-frontmatter.md"), lambda: "# heading\n"),
             docs.DocTarget(
-                Path("docs/commands/malformed-frontmatter.md"), lambda: "---\nname: x\n# heading\n"
+                Path("docs/commands/malformed-frontmatter.md"),
+                lambda: "---\nname: x\n# heading\n",
             ),
             docs.DocTarget(
                 Path("docs/commands/no-h1.md"), lambda: "---\nname: x\n---\nplain body\n"
             ),
-        )
+        ),
+        raising=False,
+    )
+    try:
         issues = docs.validate_generated_pages()
     finally:
-        docs.GENERATED_DOC_TARGETS = original_targets  # ty: ignore[unresolved-attribute]
+        monkeypatch.undo()
 
     assert any("missing YAML frontmatter" in issue for issue in issues)
     assert any("malformed YAML frontmatter" in issue for issue in issues)

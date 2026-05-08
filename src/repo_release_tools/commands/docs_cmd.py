@@ -258,20 +258,26 @@ def _cmd_publish(args: argparse.Namespace) -> int:
     dry_run: bool = getattr(args, "dry_run", False)
     fail_on_change: bool = getattr(args, "fail_on_change", False)
 
-    if consistency_issues := docs_publisher.validate_generated_pages():
+    rendered_targets: list[tuple[docs_publisher.DocTarget, str]] = []
+    consistency_issues: list[str] = []
+    for target in docs_publisher.iter_generated_doc_targets():
+        rendered = target.render()
+        rendered_targets.append((target, rendered))
+        consistency_issues.extend(docs_publisher.validate_generated_page(target, rendered))
+
+    if consistency_issues:
         for issue in consistency_issues:
             sys.stderr.write(f"{issue}\n")
         return 1
 
     if dry_run:
         p = DryRunPrinter(dry_run=True)
-        for target in docs_publisher.iter_generated_doc_targets():
+        for target, _rendered in rendered_targets:
             p.would_write(str(target.output_path))
         return 0
 
     exit_code = 0
-    for target in docs_publisher.iter_generated_doc_targets():
-        content = target.render()
+    for target, content in rendered_targets:
         exit_code = max(
             exit_code,
             apply_generated_docs(

@@ -462,7 +462,7 @@ def _compute_permalink_for_output(output_path: Path) -> str:
     """
     try:
         rel = output_path.relative_to("docs")
-    except Exception:
+    except ValueError:
         return ""
     if rel.name == "index.md":
         return "/"
@@ -570,24 +570,31 @@ def validate_generated_pages() -> list[str]:
     """
     issues: list[str] = []
     for target in GENERATED_DOC_TARGETS:
-        if target.anchor_id is not None:
-            continue
-        if target.output_path.parts[:2] != ("docs", "commands"):
-            continue
+        issues.extend(validate_generated_page(target, target.render()))
 
-        rendered = target.render()
-        if not rendered.startswith("---\n"):
-            issues.append(f"{target.output_path}: missing YAML frontmatter")
-            continue
+    return issues
 
-        fm_close = rendered.find("\n---\n")
-        if fm_close == -1:
-            issues.append(f"{target.output_path}: malformed YAML frontmatter")
-            continue
 
-        body = rendered[fm_close + len("\n---\n") :].lstrip("\n")
-        if not body.startswith("# "):
-            issues.append(f"{target.output_path}: missing top-level H1")
+def validate_generated_page(target: DocTarget, rendered: str) -> list[str]:
+    """Return consistency issues for one generated command page rendering."""
+    if target.anchor_id is not None:
+        return []
+    if target.output_path.parts[:2] != ("docs", "commands"):
+        return []
+
+    issues: list[str] = []
+    if not rendered.startswith("---\n"):
+        issues.append(f"{target.output_path}: missing YAML frontmatter")
+        return issues
+
+    fm_close = rendered.find("\n---\n")
+    if fm_close == -1:
+        issues.append(f"{target.output_path}: malformed YAML frontmatter")
+        return issues
+
+    body = rendered[fm_close + len("\n---\n") :].lstrip("\n")
+    if not body.startswith("# "):
+        issues.append(f"{target.output_path}: missing top-level H1")
 
     return issues
 
