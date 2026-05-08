@@ -1,3 +1,8 @@
+---
+title: "rrt ci-version"
+permalink: "/commands/ci_version/"
+---
+
 # rrt ci-version
 
 Emit the current project version for use in CI pipelines.

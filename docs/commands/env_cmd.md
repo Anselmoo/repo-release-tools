@@ -1,3 +1,8 @@
+---
+title: "rrt env"
+permalink: "/commands/env_cmd/"
+---
+
 # rrt env
 
 Display the resolved runtime environment information.

@@ -36,15 +36,16 @@ def test_generate_markdown_has_stable_sections_without_ansi_sequences() -> None:
 
     content = docs.generate_markdown()
 
-    assert content.startswith("# RRT CLI\n")
+    assert content.startswith("# rrt CLI\n")
     assert "## Global help" in content
     assert "## `rrt branch`" in content
-    assert "Conventional branches for trunk-based publishing" in content
-    assert "Git magic" in content
+    assert "conventional branches" in content
+    assert "rrt git" in content
     assert "### `rrt branch new`" in content
     assert "### `rrt git diff`" in content
     assert "### `rrt ci-version compute`" in content
     assert "### `rrt skill install`" in content
+    assert "RRT CLI" not in content
     assert "\x1b[" not in content
 
 
@@ -70,8 +71,8 @@ def test_render_command_docs_prefers_source_owned_topic_docs_for_branch_and_git(
     branch_rendered = docs.render_command_docs(("branch",), heading_level=2)
     git_rendered = docs.render_command_docs(("git",), heading_level=2)
 
-    assert "Conventional branches for trunk-based publishing" in branch_rendered
-    assert "Git magic" in git_rendered
+    assert "conventional branches" in branch_rendered
+    assert "rrt git" in git_rendered
     assert "branch helpers for repo-release-tools" not in branch_rendered
     assert "Git helpers for repo-release-tools" not in git_rendered
 
@@ -188,9 +189,9 @@ def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
     docs = _load_generator_module()
 
     assert docs.generate_semantic_branches_markdown() == docs.branch_module.SEMANTIC_BRANCHES_DOC
-    assert docs.generate_git_magic_markdown() == docs.git_helpers.GIT_MAGIC_DOC
-    assert docs.generate_semantic_branches_markdown().startswith("# Conventional branches")
-    assert docs.generate_git_magic_markdown().startswith("# Git magic")
+    assert docs.generate_git_markdown() == docs.git_helpers.GIT_DOC
+    assert docs.generate_semantic_branches_markdown().startswith("# rrt branch")
+    assert docs.generate_git_markdown().startswith("# rrt git")
     assert docs.GENERATED_DOC_TARGETS[0].output_path.name == "rrt-cli.md"
     assert len(docs.GENERATED_DOC_TARGETS) >= 3
     assert "branch" in docs.TOPIC_PAGE_OUTPUTS
@@ -208,6 +209,7 @@ def test_generated_doc_targets_include_anchored_index_block() -> None:
 
     assert len(index_targets) == 1
     assert index_targets[0].anchor_id == "index-topic-links"
+    assert not index_targets[0].render().startswith("---\n")
 
 
 def test_generated_doc_targets_include_anchored_readme_links_block() -> None:
@@ -219,6 +221,108 @@ def test_generated_doc_targets_include_anchored_readme_links_block() -> None:
 
     assert len(readme_targets) == 1
     assert readme_targets[0].anchor_id == "readme-links"
+
+
+def test_generated_command_topics_have_frontmatter_and_command_h1() -> None:
+    docs = _load_generator_module()
+
+    by_name = {target.output_path.name: target for target in docs.GENERATED_DOC_TARGETS}
+
+    doctor = by_name["doctor.md"].render()
+    eol = by_name["eol_check.md"].render()
+    git_doc = by_name["git_cmd.md"].render()
+
+    assert doctor.startswith("---\n")
+    assert 'title: "rrt doctor"' in doctor
+    assert "\n# rrt doctor\n" in doctor
+
+    assert eol.startswith("---\n")
+    assert 'title: "rrt eol"' in eol
+    assert "\n# rrt eol\n" in eol
+
+    assert git_doc.startswith("---\n")
+    assert 'title: "rrt git"' in git_doc
+    assert "\n# rrt git\n" in git_doc
+
+
+def test_validate_generated_pages_returns_no_issues_for_current_registry() -> None:
+    docs = _load_generator_module()
+
+    assert docs.validate_generated_pages() == []
+
+
+def test_extract_first_h1_and_compute_permalink_helpers() -> None:
+    docs = _load_generator_module()
+
+    assert docs._extract_first_h1("# Title\n\nBody\n") == "Title"
+    assert docs._extract_first_h1("No heading here\n") is None
+
+    assert docs._compute_permalink_for_output(Path("docs/index.md")) == "/"
+    assert (
+        docs._compute_permalink_for_output(Path("docs/commands/rrt-cli.md")) == "/commands/rrt-cli/"
+    )
+    assert docs._compute_permalink_for_output(Path("README.md")) == ""
+
+
+def test_wrap_with_frontmatter_falls_back_to_h1_or_stem_for_unknown_slug() -> None:
+    docs = _load_generator_module()
+
+    wrapped_h1 = docs._wrap_with_frontmatter(
+        Path("docs/commands/custom-topic.md"),
+        lambda: "# Custom Topic\n\nBody\n",
+        title_override=None,
+        slug="custom-topic",
+    )
+    rendered_h1 = wrapped_h1()
+    assert 'title: "Custom Topic"' in rendered_h1
+    assert "\n# Custom Topic\n" in rendered_h1
+
+    wrapped_stem = docs._wrap_with_frontmatter(
+        Path("docs/commands/no-heading.md"),
+        lambda: "Body without heading\n",
+        title_override=None,
+        slug="not-registered",
+    )
+    rendered_stem = wrapped_stem()
+    assert 'title: "no-heading"' in rendered_stem
+    assert "\n# no-heading\n" in rendered_stem
+
+
+def test_wrap_with_frontmatter_uses_title_override_registry_when_slug_known() -> None:
+    docs = _load_generator_module()
+
+    wrapped = docs._wrap_with_frontmatter(
+        Path("docs/commands/doctor.md"),
+        lambda: "# Something else\n\nBody\n",
+        title_override=None,
+        slug="doctor",
+    )
+    rendered = wrapped()
+
+    assert 'title: "rrt doctor"' in rendered
+    assert "\n# rrt doctor\n" in rendered
+
+
+def test_validate_generated_pages_reports_each_invalid_render_shape() -> None:
+    docs = _load_generator_module()
+    original_targets = docs.GENERATED_DOC_TARGETS  # ty: ignore[unresolved-attribute]
+    try:
+        docs.GENERATED_DOC_TARGETS = (  # ty: ignore[unresolved-attribute]
+            docs.DocTarget(Path("docs/commands/no-frontmatter.md"), lambda: "# heading\n"),
+            docs.DocTarget(
+                Path("docs/commands/malformed-frontmatter.md"), lambda: "---\nname: x\n# heading\n"
+            ),
+            docs.DocTarget(
+                Path("docs/commands/no-h1.md"), lambda: "---\nname: x\n---\nplain body\n"
+            ),
+        )
+        issues = docs.validate_generated_pages()
+    finally:
+        docs.GENERATED_DOC_TARGETS = original_targets  # ty: ignore[unresolved-attribute]
+
+    assert any("missing YAML frontmatter" in issue for issue in issues)
+    assert any("malformed YAML frontmatter" in issue for issue in issues)
+    assert any("missing top-level H1" in issue for issue in issues)
 
 
 def test_generate_readme_links_markdown_contains_all_doc_entries() -> None:

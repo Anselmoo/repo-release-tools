@@ -1,4 +1,9 @@
-# pre-commit
+---
+title: "rrt hooks"
+permalink: "/commands/hooks/"
+---
+
+# rrt hooks
 
 `repo-release-tools` publishes reusable hooks in `.pre-commit-hooks.yaml`.
 

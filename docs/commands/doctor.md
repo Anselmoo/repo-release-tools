@@ -1,3 +1,10 @@
+---
+title: "rrt doctor"
+permalink: "/commands/doctor/"
+---
+
+# rrt doctor
+
 Validate the core automation health of the resolved rrt configuration.
 
 ## Overview

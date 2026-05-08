@@ -258,6 +258,11 @@ def _cmd_publish(args: argparse.Namespace) -> int:
     dry_run: bool = getattr(args, "dry_run", False)
     fail_on_change: bool = getattr(args, "fail_on_change", False)
 
+    if consistency_issues := docs_publisher.validate_generated_pages():
+        for issue in consistency_issues:
+            sys.stderr.write(f"{issue}\n")
+        return 1
+
     if dry_run:
         p = DryRunPrinter(dry_run=True)
         for target in docs_publisher.iter_generated_doc_targets():

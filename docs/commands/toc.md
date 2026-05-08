@@ -1,4 +1,9 @@
-# Table of Contents — `rrt toc`
+---
+title: "rrt toc"
+permalink: "/commands/toc/"
+---
+
+# rrt toc
 
 Generate a Markdown table of contents from the ATX headings in a file.
 The TOC can be printed to stdout or injected in-place into a target file via

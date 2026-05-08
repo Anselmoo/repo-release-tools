@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import inspect
 import os
+import re
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -337,7 +338,7 @@ def render_help(argv: Sequence[str]) -> str:
 def generate_markdown() -> str:
     """Return the generated CLI reference Markdown."""
     parts = [
-        "# RRT CLI",
+        "# rrt CLI",
         "",
         AUTOGEN_NOTE,
         "",
@@ -376,17 +377,17 @@ def generate_semantic_branches_markdown() -> str:
     return _render_topic_doc("branch")
 
 
-def generate_git_magic_markdown() -> str:
-    """Return the generated Git magic topic page."""
+def generate_git_markdown() -> str:
+    """Return the generated rrt git topic page."""
     return _render_topic_doc("git")
 
 
 def generate_index_topic_links_markdown() -> str:
     """Return the generated topic-link bullets for docs/index.md."""
     links = [
-        "- [Semantic branches](commands/branch.md) — generated branch naming model and allowed branch types",
-        "- [Git magic](commands/git_cmd.md) — generated Git helpers and workflow shortcuts",
-        "- [Project tree](commands/tree.md) — generated guide for `rrt tree` output modes, "
+        "- [rrt branch](commands/branch.md) — generated branch naming model and allowed branch types",
+        "- [rrt git](commands/git_cmd.md) — generated Git helpers and workflow shortcuts",
+        "- [rrt tree](commands/tree.md) — generated guide for `rrt tree` output modes, "
         "ignore behavior, and traversal controls",
     ]
     return "\n".join(links)
@@ -428,10 +429,100 @@ TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Title / permalink helpers for generated pages
+# ---------------------------------------------------------------------------
+
+TITLE_OVERRIDES: dict[str, str] = {
+    "rrt-cli": "rrt CLI",
+    "branch": "rrt branch",
+    "git": "rrt git",
+    "tree": "rrt tree",
+    "hooks": "rrt hooks",
+    "action": "GitHub Action",
+    "skill": "rrt skill",
+    "agent-instructions": "Hook & Action Reference",
+    "doctor": "rrt doctor",
+    "eol": "rrt eol",
+}
+
+
+def _extract_first_h1(text: str) -> str | None:
+    """Return the first top-level heading text from *text*, or ``None``."""
+    m = re.search(r"(?m)^\s*#\s+(.+)$", text)
+    return m.group(1).strip() if m else None
+
+
+def _compute_permalink_for_output(output_path: Path) -> str:
+    """Compute a reasonable permalink for *output_path* when under `docs/`.
+
+    Examples:
+    - `docs/index.md` -> `/`
+    - `docs/commands/rrt-cli.md` -> `/commands/rrt-cli/`
+    """
+    try:
+        rel = output_path.relative_to("docs")
+    except Exception:
+        return ""
+    if rel.name == "index.md":
+        return "/"
+    # drop the suffix and produce a posix path with trailing slash
+    return "/" + str(rel.with_suffix("")).replace(os.sep, "/") + "/"
+
+
+def _wrap_with_frontmatter(
+    output_path: Path,
+    render_func: Callable[[], str],
+    *,
+    title_override: str | None = None,
+    slug: str | None = None,
+) -> Callable[[], str]:
+    """Return a render callable that prefixes generated content with YAML frontmatter.
+
+    The frontmatter contains at least a `title:` and, when applicable, a
+    `permalink:` so Jekyll/minima uses a stable label and URL for the page.
+    """
+
+    def _wrapped() -> str:
+        content = render_func()
+        # Determine title: overrides > TITLE_OVERRIDES > first H1 > fallback to filename
+        if title_override:
+            title = title_override
+        elif slug and slug in TITLE_OVERRIDES:
+            title = TITLE_OVERRIDES[slug]
+        else:
+            title = _extract_first_h1(content) or output_path.stem
+
+        # Ensure quotes in title are escaped
+        title = title.replace('"', '\\"')
+
+        if output_path.suffix.lower() == ".md" and output_path.parts[:2] == ("docs", "commands"):
+            content = _ensure_primary_h1(content, title)
+
+        permalink = _compute_permalink_for_output(output_path)
+
+        fm_lines = [f'title: "{title}"']
+        if permalink:
+            fm_lines.append(f'permalink: "{permalink}"')
+
+        frontmatter = "---\n" + "\n".join(fm_lines) + "\n---\n\n"
+        return frontmatter + content
+
+    return _wrapped
+
+
 def _build_generated_doc_targets() -> tuple[DocTarget, ...]:
     """Build the registry of generated doc outputs."""
     targets: list[DocTarget] = [
-        DocTarget(DEFAULT_OUTPUT, generate_markdown),
+        DocTarget(
+            DEFAULT_OUTPUT,
+            _wrap_with_frontmatter(
+                DEFAULT_OUTPUT,
+                generate_markdown,
+                title_override=TITLE_OVERRIDES.get("rrt-cli"),
+                slug="rrt-cli",
+            ),
+        ),
         DocTarget(
             Path("docs/index.md"),
             generate_index_topic_links_markdown,
@@ -443,9 +534,62 @@ def _build_generated_doc_targets() -> tuple[DocTarget, ...]:
             anchor_id="readme-links",
         ),
     ]
+
     for slug, output_path in TOPIC_PAGE_OUTPUTS.items():
-        targets.append(DocTarget(output_path, lambda slug=slug: _render_topic_doc(slug)))
+        render_fn = _wrap_with_frontmatter(
+            output_path,
+            lambda slug=slug: _render_topic_doc(slug),
+            title_override=TITLE_OVERRIDES.get(slug),
+            slug=slug,
+        )
+        targets.append(DocTarget(output_path, render_fn))
     return tuple(targets)
+
+
+def _ensure_primary_h1(content: str, title: str) -> str:
+    """Ensure *content* has a top-level H1 matching *title*.
+
+    If a top-level H1 exists, it is replaced with ``# <title>``.
+    If no top-level H1 exists, one is prepended.
+    """
+    lines = content.splitlines()
+    for idx, line in enumerate(lines):
+        if re.match(r"^\s*#\s+.+$", line):
+            lines[idx] = f"# {title}"
+            return "\n".join(lines).rstrip() + "\n"
+    body = content.lstrip("\n")
+    return f"# {title}\n\n{body}".rstrip() + "\n"
+
+
+def validate_generated_pages() -> list[str]:
+    """Return consistency issues for generated command pages.
+
+    Rules:
+    - top-level generated command pages must include frontmatter
+    - top-level generated command pages must include a top-level H1
+    """
+    issues: list[str] = []
+    for target in GENERATED_DOC_TARGETS:
+        if target.anchor_id is not None:
+            continue
+        if target.output_path.parts[:2] != ("docs", "commands"):
+            continue
+
+        rendered = target.render()
+        if not rendered.startswith("---\n"):
+            issues.append(f"{target.output_path}: missing YAML frontmatter")
+            continue
+
+        fm_close = rendered.find("\n---\n")
+        if fm_close == -1:
+            issues.append(f"{target.output_path}: malformed YAML frontmatter")
+            continue
+
+        body = rendered[fm_close + len("\n---\n") :].lstrip("\n")
+        if not body.startswith("# "):
+            issues.append(f"{target.output_path}: missing top-level H1")
+
+    return issues
 
 
 GENERATED_DOC_TARGETS: tuple[DocTarget, ...] = _build_generated_doc_targets()

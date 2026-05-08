@@ -7,12 +7,12 @@ from pathlib import Path
 
 from repo_release_tools.ui import DryRunPrinter
 
-GIT_MAGIC_DOC = """# Git magic
+GIT_DOC = """# rrt git
 
 `repo-release-tools` ships a small set of opinionated Git workflows for branch
 health, commit drafting, sync, and history repair.
 
-This page is generated from `repo_release_tools.workflow.git.GIT_MAGIC_DOC`.
+This page is generated from `repo_release_tools.workflow.git.GIT_DOC`.
 This page stays workflow-oriented. For the full command surface and option
 details, see [docs/commands/rrt-cli.md](rrt-cli.md).
 
@@ -70,7 +70,7 @@ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
 """
 
 # Ordered source-owned topic docs for future generic docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", GIT_MAGIC_DOC),)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", GIT_DOC),)
 
 
 def run(

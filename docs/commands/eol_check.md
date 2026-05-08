@@ -1,3 +1,10 @@
+---
+title: "rrt eol"
+permalink: "/commands/eol_check/"
+---
+
+# rrt eol
+
 Runtime end-of-life (EOL) tracking for repo-release-tools.
 
 Supports Python, Go, Node.js, and Rust. Bundled data provides offline

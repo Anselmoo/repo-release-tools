@@ -1084,7 +1084,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
 
-PRE_COMMIT_DOC = """# pre-commit
+PRE_COMMIT_DOC = """# rrt hooks
 
 `repo-release-tools` publishes reusable hooks in `.pre-commit-hooks.yaml`.
 
@@ -1318,7 +1318,7 @@ pre-commit:
 | Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --strategy unreleased` |
 """
 
-AGENT_INSTRUCTIONS_DOC = """# repo-release-tools — Hook & Action Reference
+AGENT_INSTRUCTIONS_DOC = """# Hook & Action Reference
 
 <!-- Static context for agents: read this before using any prompt block below. -->
 

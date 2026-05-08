@@ -425,6 +425,7 @@ class TestCmdPublish:
             ),
         ]
         monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter(targets))
+        monkeypatch.setattr(docs_publisher, "validate_generated_pages", lambda: [])
 
         args = argparse.Namespace(check=False, dry_run=True, fail_on_change=False)
 
@@ -446,6 +447,7 @@ class TestCmdPublish:
             anchor_id="index-topic-links",
         )
         monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter([target]))
+        monkeypatch.setattr(docs_publisher, "validate_generated_pages", lambda: [])
 
         def fake_apply_generated_docs(
             content: str,
@@ -479,6 +481,23 @@ class TestCmdPublish:
                 "index-topic-links",
             )
         ]
+
+    def test_cmd_publish_fails_when_generated_pages_are_inconsistent(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Publish should fail fast when generated-page consistency checks report issues."""
+        from repo_release_tools.docs import publisher as docs_publisher
+
+        monkeypatch.setattr(
+            docs_publisher,
+            "validate_generated_pages",
+            lambda: ["docs/commands/doctor.md: missing top-level H1"],
+        )
+
+        args = argparse.Namespace(check=False, dry_run=False, fail_on_change=False)
+
+        assert _cmd_publish(args) == 1
+        assert "missing top-level H1" in capsys.readouterr().err
 
 
 class TestCmdInject:

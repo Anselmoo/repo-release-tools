@@ -67,7 +67,7 @@ rrt tree --format markdown --inject README.md --anchor project-tree --dry-run
 ## Related docs
 
 - [Generated CLI reference](rrt-cli.md)
-- [Git magic](git.md)
+- [rrt git](git_cmd.md)
 """
 
 from __future__ import annotations
@@ -110,7 +110,7 @@ TREE_EPILOG = """  $ rrt tree
   $ rrt tree --root src/repo_release_tools --dirs-only
   $ rrt tree --format markdown --inject README.md --anchor project-tree"""
 
-TREE_DOC = """# Project tree
+TREE_DOC = """# rrt tree
 
 `rrt tree` renders a deterministic project tree with Git-aware filtering and
 multiple output modes for terminal use, docs, and copy/paste workflows.

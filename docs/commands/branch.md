@@ -1,4 +1,9 @@
-# Conventional branches for trunk-based publishing
+---
+title: "rrt branch"
+permalink: "/commands/branch/"
+---
+
+# rrt branch
 
 `repo-release-tools` uses conventional branches to keep trunk-based publishing
 predictable for humans, hooks, and automation.

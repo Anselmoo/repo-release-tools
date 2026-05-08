@@ -1,3 +1,8 @@
+---
+title: "GitHub Action"
+permalink: "/action/"
+---
+
 # GitHub Action
 
 Use the GitHub Action when you want CI to enforce the same policy that
