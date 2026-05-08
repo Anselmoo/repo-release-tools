@@ -1,6 +1,6 @@
 [project]
 name = "repo-release-tools"
-version = "1.2.0"
+version = "1.3.0"
 description = "Config-driven branch and release helpers for Git repositories"
 readme = "README.md"
 license = "MIT"
@@ -119,6 +119,192 @@ pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 [[tool.rrt.pin_targets]]
 path = ".github/skills/**/outputs/answer.md"
 pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+
+[tool.rrt.folders]
+
+[[tool.rrt.folders.templates]]
+name = "tests-root"
+description = "tests/ root: only conftest.py plus the nine logical subdirs"
+strictness = "strict"
+exact = false
+required_files = ["conftest.py"]
+required_dirs = [
+    "commands",
+    "core",
+    "docs",
+    "eol",
+    "folders",
+    "hooks",
+    "integration",
+    "ui",
+    "version",
+    "workflow",
+]
+
+[[tool.rrt.folders.templates]]
+name = "tests-commands"
+description = "One test file per rrt subcommand"
+strictness = "loose"
+exact = false
+required_files = [
+    "test_branch.py",
+    "test_bump.py",
+    "test_ci_version.py",
+    "test_config_cmd.py",
+    "test_docs_cmd.py",
+    "test_doctor.py",
+    "test_env_cmd.py",
+    "test_eol_check.py",
+    "test_folder_cmd.py",
+    "test_folder_cmd_extra.py",
+    "test_git_cmd.py",
+    "test_init.py",
+    "test_release_cmd.py",
+    "test_skill.py",
+    "test_toc.py",
+    "test_tree.py",
+]
+
+[[tool.rrt.folders.templates]]
+name = "tests-core"
+description = "Root-level module tests: changelog, cli, config loading, state"
+strictness = "strict"
+exact = true
+required_files = [
+    "test_changelog.py",
+    "test_cli.py",
+    "test_config.py",
+    "test_state.py",
+]
+
+[[tool.rrt.folders.templates]]
+name = "tests-docs"
+description = "Docs subsystem tests"
+strictness = "strict"
+exact = true
+required_files = [
+    "test_docs_extractor.py",
+    "test_docs_formats.py",
+    "test_generate_cli_docs.py",
+    "test_markdown_utils.py",
+]
+
+[[tool.rrt.folders.templates]]
+name = "tests-eol"
+description = "End-of-life module tests"
+strictness = "loose"
+exact = false
+required_files = ["test_eol.py"]
+
+[[tool.rrt.folders.templates]]
+name = "tests-folders"
+description = "Folders module tests"
+strictness = "strict"
+exact = true
+required_files = ["test_folders_config_extra.py", "test_folders_core_extra.py"]
+
+[[tool.rrt.folders.templates]]
+name = "tests-hooks"
+description = "Hook runner tests"
+strictness = "strict"
+exact = true
+required_files = ["test_hooks.py", "test_hooks_top.py"]
+
+[[tool.rrt.folders.templates]]
+name = "tests-integration"
+description = "Real-subprocess e2e tests (@pytest.mark.runtime)"
+strictness = "loose"
+exact = false
+required_files = ["test_runtime_hybrid.py"]
+
+[[tool.rrt.folders.templates]]
+name = "tests-ui"
+description = "UI rendering layer tests"
+strictness = "strict"
+exact = true
+required_files = [
+    "test_glyphs.py",
+    "test_output.py",
+    "test_syntax_extra.py",
+    "test_ui_color.py",
+    "test_ui_font.py",
+    "test_ui_init.py",
+    "test_ui_layout.py",
+    "test_ui_messaging.py",
+    "test_ui_progress.py",
+    "test_ui_prompt.py",
+    "test_ui_syntax.py",
+    "test_user_experience_simulator.py",
+]
+
+[[tool.rrt.folders.templates]]
+name = "tests-version"
+description = "Versioning module tests"
+strictness = "strict"
+exact = true
+required_files = ["test_version_targets.py", "test_versioning.py"]
+
+[[tool.rrt.folders.templates]]
+name = "tests-workflow"
+description = "Workflow / low-level git helper tests"
+strictness = "loose"
+exact = false
+required_files = ["test_git_helpers.py"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-root-rule"
+selector = "tests"
+templates = ["tests-root"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-commands-rule"
+selector = "tests/commands"
+templates = ["tests-commands"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-core-rule"
+selector = "tests/core"
+templates = ["tests-core"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-docs-rule"
+selector = "tests/docs"
+templates = ["tests-docs"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-eol-rule"
+selector = "tests/eol"
+templates = ["tests-eol"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-folders-rule"
+selector = "tests/folders"
+templates = ["tests-folders"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-hooks-rule"
+selector = "tests/hooks"
+templates = ["tests-hooks"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-integration-rule"
+selector = "tests/integration"
+templates = ["tests-integration"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-ui-rule"
+selector = "tests/ui"
+templates = ["tests-ui"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-version-rule"
+selector = "tests/version"
+templates = ["tests-version"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-workflow-rule"
+selector = "tests/workflow"
+templates = ["tests-workflow"]
 
 [tool.rrt.eol]
 languages = ["python"]

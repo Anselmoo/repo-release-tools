@@ -414,7 +414,10 @@ def cmd_bump(args: argparse.Namespace) -> int:
     if not args.no_commit:
         git.run(["git", "add", "-u"], root, dry_run=args.dry_run, label="git add -u")
         commit_msg = f"chore: bump version to v{new}"
-        git.run(["git", "commit", "-m", commit_msg], root, dry_run=args.dry_run, label="git commit")
+        commit_cmd = ["git", "commit", "-m", commit_msg]
+        if getattr(args, "no_verify", False):
+            commit_cmd.append("--no-verify")
+        git.run(commit_cmd, root, dry_run=args.dry_run, label="git commit")
         done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
         p.footer(done_msg)
     else:
@@ -459,6 +462,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Reset the release branch if it already exists.",
     )
     release_grp.add_argument("--no-commit", action="store_true", help="Skip the git commit step.")
+    release_grp.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="Pass --no-verify to git commit (bypass pre-commit hooks).",
+    )
 
     content_grp = parser.add_argument_group("Content")
     content_grp.add_argument(

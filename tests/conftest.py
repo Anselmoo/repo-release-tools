@@ -23,7 +23,7 @@ if str(SRC) not in sys.path:
 # fails before a single test runs, making the docstring a machine-checked
 # contract rather than just documentation.
 
-_UX_SIMULATOR = ROOT / "tests" / "test_user_experience_simulator.py"
+_UX_SIMULATOR = ROOT / "tests" / "ui" / "test_user_experience_simulator.py"
 _ENTRYPOINT_LINE_RE = re.compile(r"^\s*-\s+([\w][\w-]*)")
 
 

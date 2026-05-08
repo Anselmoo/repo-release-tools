@@ -35,6 +35,33 @@ reached before declaring work done. The coverage summary in
 - After two failed attempts to cover a line, determine whether it is structurally
   unreachable (contradictory state, type already proven above, exhaustive enum). If so,
   add a comment in the test file noting the line is dead code and stop.
+- Any `Path(__file__).resolve().parents[N]` used to anchor repo-root paths must count
+  from the test file's actual location in the subdirectory tree — after moving a test
+  from `tests/` to `tests/<subdir>/`, increment the `parents` index by 1.
+- Always add `@pytest.mark.runtime` tests to `tests/integration/` for subprocess/git
+  e2e coverage; do not use `--no-commit` as a substitute for testing the real git commit
+  path.
+
+## Test folder structure
+
+Tests are organized in subdirectories that mirror the source tree. New test files belong
+in the matching subdirectory:
+
+| Subdirectory | Source modules covered |
+|---|---|
+| `tests/commands/` | `src/repo_release_tools/commands/` |
+| `tests/core/` | `changelog.py`, `cli.py`, `config/`, `state.py` |
+| `tests/docs/` | `src/repo_release_tools/docs/` |
+| `tests/eol/` | `src/repo_release_tools/eol/` |
+| `tests/folders/` | `src/repo_release_tools/folders/` |
+| `tests/hooks/` | `src/repo_release_tools/workflow/hooks.py` |
+| `tests/integration/` | Real-subprocess e2e tests (`@pytest.mark.runtime`) |
+| `tests/ui/` | `src/repo_release_tools/ui/` |
+| `tests/version/` | `src/repo_release_tools/version/` |
+| `tests/workflow/` | `src/repo_release_tools/workflow/git.py` |
+
+The structure is enforced by `rrt folder check` rules in `pyproject.toml` under
+`[tool.rrt.folders]`.
 
 ## Do not
 

@@ -105,7 +105,9 @@ def run(
         if result.stderr.strip():
             for line in result.stderr.strip().splitlines():
                 p.warn(line, stream=None)
-        raise RuntimeError(f"{label} failed (exit {result.returncode})")
+        first_err = result.stderr.strip().splitlines()[0] if result.stderr.strip() else ""
+        detail = f": {first_err}" if first_err else ""
+        raise RuntimeError(f"{label} failed (exit {result.returncode}){detail}")
     if result.stdout.strip():
         p = DryRunPrinter(dry_run=False)
         for line in result.stdout.strip().splitlines():

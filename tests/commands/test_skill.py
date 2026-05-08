@@ -21,7 +21,7 @@ def _mock_home(monkeypatch: pytest.MonkeyPatch, home: Path) -> None:
 
 
 def test_bundled_skill_matches_checked_in_skill_file() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]
     checked_in = repo_root / ".github" / "skills" / "repo-release-tools" / "SKILL.md"
 
     assert checked_in.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"

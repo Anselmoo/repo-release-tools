@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-08
+
+### Added
+- Enhance coverage instructions and add folder configuration tests (#52)
+
+### Documentation
+- fix all legacy H1 headers and add Jekyll frontmatter for consistent naming (#53)
+
 ## [1.2.0] - 2026-05-05
 ### Added
 - `rrt eol` command and `rrt-hooks check-eol` hook for tracking language end-of-life (Python, Go, Node.js, Rust)
