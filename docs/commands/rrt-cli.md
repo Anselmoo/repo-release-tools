@@ -160,6 +160,7 @@ Release control
   --dry-run              Preview changes without writing to disk.
   --force                Reset the release branch if it already exists.
   --no-commit            Skip the git commit step.
+  --no-verify            Pass --no-verify to git commit (bypass pre-commit hooks).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Content
