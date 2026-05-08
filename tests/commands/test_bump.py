@@ -310,9 +310,7 @@ kind = "package_json"
     assert ["git", "commit", "-m", "chore: bump version to v0.2.0"] in calls
 
 
-def test_cmd_bump_no_verify_appends_flag(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_cmd_bump_no_verify_appends_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
 [tool.rrt]
