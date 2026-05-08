@@ -488,10 +488,15 @@ class TestCmdPublish:
         """Publish should fail fast when generated-page consistency checks report issues."""
         from repo_release_tools.docs import publisher as docs_publisher
 
+        target = docs_publisher.DocTarget(
+            Path("docs/commands/doctor.md"),
+            lambda: '---\ntitle: "rrt doctor"\n---\n\n# rrt doctor\n',
+        )
+        monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter([target]))
         monkeypatch.setattr(
             docs_publisher,
-            "validate_generated_pages",
-            lambda: ["docs/commands/doctor.md: missing top-level H1"],
+            "validate_generated_page",
+            lambda target, rendered: ["docs/commands/doctor.md: missing top-level H1"],
         )
 
         args = argparse.Namespace(check=False, dry_run=False, fail_on_change=False)
