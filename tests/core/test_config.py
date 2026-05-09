@@ -1621,7 +1621,10 @@ def test_load_config_docs_full(tmp_path: Path) -> None:
     _write_docs_cfg(
         tmp_path,
         '\n[tool.rrt.docs]\nmirror_src_tree = true\ndocs_dir = "documentation"\n'
-        'src_dir = "src/mypackage"\nstubs = ["commands/bump", "commands/init"]\n',
+        'src_dir = "src/mypackage"\nstubs = ["commands/bump", "commands/init"]\n'
+        'source_repo_url = "https://github.com/Anselmoo/repo-release-tools"\n'
+        'source_ref = "main"\n'
+        'source_url_template = "{repo_url}/blob/{ref}/{path}#L{line}"\n',
     )
     cfg = load_config(tmp_path)
     assert cfg.docs is not None
@@ -1629,6 +1632,9 @@ def test_load_config_docs_full(tmp_path: Path) -> None:
     assert cfg.docs.docs_dir == "documentation"
     assert cfg.docs.src_dir == "src/mypackage"
     assert cfg.docs.stubs == ("commands/bump", "commands/init")
+    assert cfg.docs.source_repo_url == "https://github.com/Anselmoo/repo-release-tools"
+    assert cfg.docs.source_ref == "main"
+    assert cfg.docs.source_url_template == "{repo_url}/blob/{ref}/{path}#L{line}"
 
 
 def test_load_config_docs_not_a_table(tmp_path: Path) -> None:

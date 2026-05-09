@@ -406,6 +406,16 @@ class TestCmdDocs:
 
         assert cmd_docs(args) == 8
 
+    def test_cmd_docs_dispatches_suggest(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+    ) -> None:
+        """Should dispatch suggest to the suggest helper."""
+        monkeypatch.setattr("repo_release_tools.commands.docs_cmd._cmd_suggest", lambda args: 9)
+
+        args = argparse.Namespace(root=str(temp_repo), docs_action="suggest")
+
+        assert cmd_docs(args) == 9
+
 
 class TestCmdPublish:
     """Test _cmd_publish sub-action."""

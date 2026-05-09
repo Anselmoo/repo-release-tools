@@ -315,6 +315,11 @@ error_days = 0
 mirror_src_tree = true
 docs_dir = "docs"
 src_dir = "src/repo_release_tools"
+
+# Source-link settings used by docs exporters to build file/line URLs.
+source_repo_url = "https://github.com/Anselmoo/repo-release-tools"
+source_ref = "main"
+source_url_template = "{repo_url}/blob/{ref}/{path}#L{line}"
 stubs = [
     "commands/bump",
     "commands/ci_version",
@@ -323,6 +328,7 @@ stubs = [
     "commands/init",
 ]
 
+# Shared-block anchor id used by injected doc footer content.
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "doc-footer"
 content = """

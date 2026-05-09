@@ -1,4 +1,27 @@
-"""Branch helpers for repo-release-tools."""
+"""Branch command helpers and utilities.
+
+Overview
+
+The `rrt branch` command family provides helpers for creating and validating
+semantic branch names that align with the repository's conventional-commit
+policy. It assists in creating feature/fix branches using the configured
+types (for example `feat/`, `fix/`, `chore/`), enforcing naming rules, and
+emitting helpful guidance to contributors and automation.
+
+Primary behaviors:
+
+- Validate branch names against the project's allowed prefixes and slug rules.
+- Create new branches with the canonical `<type>/<kebab-slug>` form.
+- Provide suggestions and error messages when a branch name does not conform.
+
+Examples:
+    rrt branch new feat/add-widget
+    rrt branch validate fix/my-bugfix
+
+This module implements the command handlers and helpers used by the
+top-level CLI surface; maintain a clear, multi-line module docstring so that
+automated checks and documentation generators can rely on it.
+"""
 
 from __future__ import annotations
 

@@ -1,53 +1,49 @@
 """Compute and apply CI release versions from ``[tool.rrt]`` config.
 
+# file: ci_version.py
+
 ## Overview
 
-This command mirrors the behavior of the repository's CI version helper, but
-uses the active ``[tool.rrt]`` configuration to discover version targets and
-group defaults.
+The ``rrt ci-version`` command family centralizes deterministic version
+computation and safe application for CI and release automation. It reads the
+repository's ``[tool.rrt]`` configuration, discovers version targets and group
+defaults, and uses the current CI environment (or explicit CLI overrides) to
+produce machine-friendly version identifiers suitable for downstream CI
+targets and release workflows.
 
-It is organized into three subcommands:
+Subcommands:
 
-* ``compute`` - print the published version for the current GitHub Actions run
-* ``apply`` - write an explicit version string to all configured CI targets
-* ``sync`` - compute the published version and immediately apply it
+- ``compute`` — deterministically compute the version for this run and emit a
+    single raw line for scripting and capture.
+- ``apply`` — update configured targets that declare a ``ci_format``,
+    transforming values when needed (for example converting PEP 440 dev
+    releases into Cargo-compatible prerelease identifiers).
+- ``sync`` — compute then apply the published version in one operation; both
+    ``apply`` and ``sync`` support ``--dry-run`` for safe previews.
 
-## Version rules
+Version rules (summary):
 
-The computed CI version depends on the Git ref:
+- Tag builds (``refs/tags/v*``) yield the tag name with the leading ``v``
+    removed.
+- Mainline (`refs/heads/main`) builds produce a PEP 440 dev release using
+    ``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``.
+- Other refs return the configured base version unchanged. CLI flags such as
+    ``--ref``, ``--run-id``, or ``--base`` override environment-derived values.
 
-* ``refs/tags/v*`` - return the tag name with the leading ``v`` removed
-* ``refs/heads/main`` - build a PEP 440 dev release using
-  ``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``
-* any other ref - return the base version unchanged
+Output formats & safety:
 
-CLI flags such as ``--ref``, ``--ref-name``, ``--run-id``, ``--run-attempt``,
-``--base``, and ``--group`` override the corresponding environment variables
-and config defaults when present.
+- Supported target formats: ``pep440`` and ``semver_pre`` (the latter maps
+    PEP 440 dev suffixes to SemVer prerelease tokens).
+- The command validates conversions and fails fast on incompatible inputs to
+    avoid writing invalid CI data.
+- ``compute`` is machine-friendly (single-line stdout); ``apply``/``sync`` are
+    human-friendly with progress, dry-run previews, and explicit error messages.
 
-## Output formats
+Examples::
 
-When applying a version, each target uses its configured ``ci_format``:
+        rrt ci-version compute
+        rrt ci-version apply 1.2.3.dev42 --group backend --dry-run
 
-* ``pep440`` - write the version string unchanged
-* ``semver_pre`` - convert a PEP 440 dev release into a Cargo-compatible
-  prerelease string via ``to_semver()``
-
-Only targets with a valid ``ci_format`` are updated.
-
-## Safety notes
-
-* ``compute`` writes a single machine-readable version line to stdout.
-* ``apply`` and ``sync`` validate the selected config and fail fast on missing
-  or incompatible targets.
-* ``sync`` is equivalent to ``compute`` followed by ``apply`` using the result.
-* ``--dry-run`` previews file updates without modifying the repository.
-
-## Examples
-
-* ``rrt ci-version compute``
-* ``rrt ci-version apply 1.2.3.dev4``
-* ``rrt ci-version sync``
 """
 
 from __future__ import annotations

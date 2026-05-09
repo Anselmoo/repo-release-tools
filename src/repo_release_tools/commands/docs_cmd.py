@@ -17,6 +17,7 @@ rrt docs generate
 rrt docs generate --format md
 rrt docs generate --format json
 rrt docs generate --format toml   # writes .rrt/docs.lock.toml
+rrt docs suggest
 rrt docs generate --lang python,go
 rrt docs generate --dry-run
 ```
@@ -71,6 +72,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.config import (
     DocsConfig,
     is_missing_tool_rrt_error,
@@ -108,6 +110,30 @@ def _config_for_cwd(cwd: Path) -> DocsConfig:
     return cfg.docs if cfg.docs is not None else DocsConfig()
 
 
+def _build_docs_lock_sources(entries: list[DocEntry]) -> list[dict[str, object]]:
+    """Group extracted doc entries into the lockfile source schema."""
+    from collections import defaultdict
+
+    from repo_release_tools.state import hash_content
+
+    by_file: dict[str, list[DocEntry]] = defaultdict(list)
+    for entry in entries:
+        by_file[entry.source_file].append(entry)
+
+    sources: list[dict[str, object]] = []
+    for src_file, src_entries in by_file.items():
+        combined = "".join(e.hash for e in sorted(src_entries, key=lambda e: e.name))
+        sources.append(
+            {
+                "source_file": src_file,
+                "hash": hash_content(combined),
+                "symbols": [e.name for e in src_entries],
+                "lang": src_entries[0].lang,
+            }
+        )
+    return sources
+
+
 # ---------------------------------------------------------------------------
 # generate sub-action
 # ---------------------------------------------------------------------------
@@ -125,8 +151,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         raw_langs = [l.strip().lower() for l in args.lang.split(",") if l.strip()]  # noqa: E741
         from repo_release_tools.config import _VALID_LANGUAGES
 
-        invalid = [ln for ln in raw_langs if ln not in _VALID_LANGUAGES]
-        if invalid:
+        if invalid := [ln for ln in raw_langs if ln not in _VALID_LANGUAGES]:
             p.line(
                 f"Unsupported languages: {invalid}. Supported: {list(_VALID_LANGUAGES)}",
                 ok=False,
@@ -151,25 +176,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
     if args.dry_run and fmt == "toml":
         # In dry-run mode: build lock but don't write
-        from collections import defaultdict
-
-        from repo_release_tools.state import hash_content
-
-        by_file: dict[str, list[DocEntry]] = defaultdict(list)
-        for entry in entries:
-            by_file[entry.source_file].append(entry)
-
-        sources = []
-        for src_file, src_entries in by_file.items():
-            combined = "".join(e.hash for e in sorted(src_entries, key=lambda e: e.name))
-            sources.append(
-                {
-                    "source_file": src_file,
-                    "hash": hash_content(combined),
-                    "symbols": [e.name for e in src_entries],
-                    "lang": src_entries[0].lang,
-                }
-            )
+        sources = _build_docs_lock_sources(entries)
         build_lock(sources)  # validate structure; don't write
         lock_path = docs_lock_path(cwd, config.lock_file)
         p.would_write(str(lock_path), "docs lockfile (dry-run, not written)")
@@ -209,25 +216,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
     entries = extract_docs_from_dir(cwd, config)
 
-    from collections import defaultdict
-
-    from repo_release_tools.state import hash_content
-
-    by_file: dict[str, list[DocEntry]] = defaultdict(list)
-    for entry in entries:
-        by_file[entry.source_file].append(entry)
-
-    sources = []
-    for src_file, src_entries in by_file.items():
-        combined = "".join(e.hash for e in sorted(src_entries, key=lambda e: e.name))
-        sources.append(
-            {
-                "source_file": src_file,
-                "hash": hash_content(combined),
-                "symbols": [e.name for e in src_entries],
-                "lang": src_entries[0].lang,
-            }
-        )
+    sources = _build_docs_lock_sources(entries)
 
     is_current, messages = lock_is_current(lock_path, sources)
     if is_current:
@@ -365,6 +354,16 @@ def _cmd_inject(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Suggest docstrings (scaffold + lint)
+# ---------------------------------------------------------------------------
+
+
+def _cmd_suggest(args: argparse.Namespace) -> int:
+    """Suggest or apply rich module docstrings for command modules."""
+    return cmd_docs_suggest(args)
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 
@@ -380,6 +379,8 @@ def cmd_docs(args: argparse.Namespace) -> int:
         return _cmd_publish(args)
     if sub == "inject":
         return _cmd_inject(args)
+    if sub == "suggest":
+        return _cmd_suggest(args)
     p = DryRunPrinter(False)
     p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
@@ -396,7 +397,8 @@ Examples:
   rrt docs generate                         # explicit mode, md output to stdout
   rrt docs generate --format toml           # write .rrt/docs.lock.toml
   rrt docs generate --format rich           # colourised terminal preview
-  rrt docs check                            # exits 1 if lockfile is stale
+    rrt docs check                            # exits 1 if lockfile is stale
+    rrt docs suggest                          # suggest rich module docstrings
   rrt docs generate --lang python,go        # multi-language extraction
 """
 
@@ -409,7 +411,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         description=(
             "Scan source files and extract inline documentation blocks\n"
             "across Python, TypeScript/JavaScript, Go, and Rust.\n\n"
-            "Sub-actions: generate (default), check"
+            "Sub-actions: generate (default), check, publish, inject, suggest"
         ),
         epilog=DOCS_EPILOG,
     )
@@ -529,3 +531,35 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Print which files would be updated without writing.",
     )
     inj_p.set_defaults(handler=cmd_docs)
+
+    # ── suggest ───────────────────────────────────────────────────────────
+    sug_p = sub.add_parser(
+        "suggest",
+        help="Suggest or scaffold rich module docstrings for Python files.",
+    )
+    sug_p.add_argument(
+        "paths",
+        nargs="*",
+        default=(),
+        help="Optional files or directories to scan; defaults to the command modules.",
+    )
+    sug_p.add_argument(
+        "--root",
+        default=".",
+        metavar="PATH",
+        help="Project root directory (default: current directory).",
+    )
+    sug_p.add_argument(
+        "--min-chars",
+        type=int,
+        default=150,
+        metavar="N",
+        help="Minimum docstring length to accept (default: 150).",
+    )
+    sug_p.add_argument(
+        "--apply",
+        action="store_true",
+        default=False,
+        help="Write scaffold docstrings back into the target files.",
+    )
+    sug_p.set_defaults(handler=cmd_docs)

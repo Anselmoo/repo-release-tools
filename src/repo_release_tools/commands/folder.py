@@ -1,4 +1,27 @@
-"""Folder supervision and scaffolding command family."""
+"""Folder supervision and scaffolding command family.
+
+Overview
+
+`rrt folder` validates, scaffolds, and infers folder structures for a
+project. It supports three primary flows:
+
+- `check` — validate an existing tree against configured folder policies or
+    built-in templates and report violations.
+- `scaffold` — create missing files and directories from named templates,
+    optionally running in `--dry-run` mode to preview changes.
+- `design` — capture an existing directory tree and emit a reusable
+    template description (TOML) that can be applied elsewhere.
+
+Usage examples:
+
+    rrt folder check --template python-package
+    rrt folder scaffold --template cargo-inspired --dry-run
+    rrt folder design --name captured-template --root src
+
+This module implements the command handlers exposed via the top-level
+`rrt folder` command and is intentionally documented so contributors and
+automation can rely on a clear, multi-line module-level docstring.
+"""
 
 from __future__ import annotations
 

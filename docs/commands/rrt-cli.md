@@ -190,54 +190,49 @@ Examples
 
 Compute and apply CI release versions from ``[tool.rrt]`` config.
 
-### Overview
+### file: ci_version.py
 
-This command mirrors the behavior of the repository's CI version helper, but
-uses the active ``[tool.rrt]`` configuration to discover version targets and
-group defaults.
+#### Overview
 
-It is organized into three subcommands:
+The ``rrt ci-version`` command family centralizes deterministic version
+computation and safe application for CI and release automation. It reads the
+repository's ``[tool.rrt]`` configuration, discovers version targets and group
+defaults, and uses the current CI environment (or explicit CLI overrides) to
+produce machine-friendly version identifiers suitable for downstream CI
+targets and release workflows.
 
-* ``compute`` - print the published version for the current GitHub Actions run
-* ``apply`` - write an explicit version string to all configured CI targets
-* ``sync`` - compute the published version and immediately apply it
+Subcommands:
 
-### Version rules
+- ``compute`` — deterministically compute the version for this run and emit a
+    single raw line for scripting and capture.
+- ``apply`` — update configured targets that declare a ``ci_format``,
+    transforming values when needed (for example converting PEP 440 dev
+    releases into Cargo-compatible prerelease identifiers).
+- ``sync`` — compute then apply the published version in one operation; both
+    ``apply`` and ``sync`` support ``--dry-run`` for safe previews.
 
-The computed CI version depends on the Git ref:
+Version rules (summary):
 
-* ``refs/tags/v*`` - return the tag name with the leading ``v`` removed
-* ``refs/heads/main`` - build a PEP 440 dev release using
-  ``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``
-* any other ref - return the base version unchanged
+- Tag builds (``refs/tags/v*``) yield the tag name with the leading ``v``
+    removed.
+- Mainline (`refs/heads/main`) builds produce a PEP 440 dev release using
+    ``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``.
+- Other refs return the configured base version unchanged. CLI flags such as
+    ``--ref``, ``--run-id``, or ``--base`` override environment-derived values.
 
-CLI flags such as ``--ref``, ``--ref-name``, ``--run-id``, ``--run-attempt``,
-``--base``, and ``--group`` override the corresponding environment variables
-and config defaults when present.
+Output formats & safety:
 
-### Output formats
+- Supported target formats: ``pep440`` and ``semver_pre`` (the latter maps
+    PEP 440 dev suffixes to SemVer prerelease tokens).
+- The command validates conversions and fails fast on incompatible inputs to
+    avoid writing invalid CI data.
+- ``compute`` is machine-friendly (single-line stdout); ``apply``/``sync`` are
+    human-friendly with progress, dry-run previews, and explicit error messages.
 
-When applying a version, each target uses its configured ``ci_format``:
+Examples::
 
-* ``pep440`` - write the version string unchanged
-* ``semver_pre`` - convert a PEP 440 dev release into a Cargo-compatible
-  prerelease string via ``to_semver()``
-
-Only targets with a valid ``ci_format`` are updated.
-
-### Safety notes
-
-* ``compute`` writes a single machine-readable version line to stdout.
-* ``apply`` and ``sync`` validate the selected config and fail fast on missing
-  or incompatible targets.
-* ``sync`` is equivalent to ``compute`` followed by ``apply`` using the result.
-* ``--dry-run`` previews file updates without modifying the repository.
-
-### Examples
-
-* ``rrt ci-version compute``
-* ``rrt ci-version apply 1.2.3.dev4``
-* ``rrt ci-version sync``
+        rrt ci-version compute
+        rrt ci-version apply 1.2.3.dev42 --group backend --dry-run
 
 ```text
 Usage:  rrt ci-version [OPTIONS] <ci_version_cmd>
@@ -989,7 +984,7 @@ Usage:  rrt docs [OPTIONS] <docs_action>
 Scan source files and extract inline documentation blocks
 across Python, TypeScript/JavaScript, Go, and Rust.
 
-Sub-actions: generate (default), check
+Sub-actions: generate (default), check, publish, inject, suggest
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -998,6 +993,7 @@ Arguments
   check        Exit 1 if the docs lockfile is stale.
   publish      Write CLI-reference docs from the live rrt parser.
   inject       Inject shared anchor blocks defined in [tool.rrt.docs.shared_blocks].
+  suggest      Suggest or scaffold rich module docstrings for Python files.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -1013,7 +1009,8 @@ Examples:
   rrt docs generate                         # explicit mode, md output to stdout
   rrt docs generate --format toml           # write .rrt/docs.lock.toml
   rrt docs generate --format rich           # colourised terminal preview
-  rrt docs check                            # exits 1 if lockfile is stale
+    rrt docs check                            # exits 1 if lockfile is stale
+    rrt docs suggest                          # suggest rich module docstrings
   rrt docs generate --lang python,go        # multi-language extraction
 ```
 
@@ -1087,6 +1084,25 @@ Options
   --check      Fail if any anchor block is stale; do not write.
   --root PATH  Project root directory (default: current directory).
   --dry-run    Print which files would be updated without writing.
+```
+
+### `rrt docs suggest`
+
+```text
+Usage:  rrt docs suggest [OPTIONS] <paths>
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <paths>        Optional files or directories to scan; defaults to the command modules.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --root PATH    Project root directory (default: current directory).
+  --min-chars N  Minimum docstring length to accept (default: 150).
+  --apply        Write scaffold docstrings back into the target files.
 ```
 
 ## `rrt folder`
