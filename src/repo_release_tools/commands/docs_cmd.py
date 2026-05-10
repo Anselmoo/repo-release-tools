@@ -122,12 +122,13 @@ def _build_docs_lock_sources(entries: list[DocEntry]) -> list[dict[str, object]]
 
     sources: list[dict[str, object]] = []
     for src_file, src_entries in by_file.items():
-        combined = "".join(e.hash for e in sorted(src_entries, key=lambda e: e.name))
+        sorted_entries = sorted(src_entries, key=lambda e: e.name)
+        combined = "".join(e.hash for e in sorted_entries)
         sources.append(
             {
                 "source_file": src_file,
                 "hash": hash_content(combined),
-                "symbols": [e.name for e in src_entries],
+                "symbols": [e.name for e in sorted_entries],
                 "lang": src_entries[0].lang,
             }
         )

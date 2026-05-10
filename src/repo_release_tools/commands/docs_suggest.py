@@ -59,6 +59,13 @@ def _iter_targets(paths: Iterable[Path]) -> list[Path]:
     return targets
 
 
+def _resolve_target_path(path: Path, root: Path) -> Path:
+    """Resolve a caller-supplied target path against *root* when needed."""
+    if path.is_absolute():
+        return path.resolve()
+    return (root / path).resolve()
+
+
 def _command_slug(path: Path) -> str:
     """Convert a module path into a command slug."""
     stem = path.stem
@@ -109,10 +116,17 @@ def build_scaffold(path: Path) -> str:
     return f'"""{body}\n"""\n'
 
 
-def _insert_or_replace_docstring(path: Path, scaffold: str) -> None:
+def _insert_or_replace_docstring(path: Path, scaffold: str) -> bool:
     """Insert or replace the top-level module docstring in *path*."""
     source = path.read_text(encoding="utf-8")
-    module = ast.parse(source)
+    try:
+        module = ast.parse(source)
+    except SyntaxError as exc:
+        sys.stderr.write(
+            f"Skipping {path}: could not apply docstring scaffold because the file "
+            f"failed to parse ({exc.msg}).\n"
+        )
+        return False
     lines = source.splitlines(keepends=True)
 
     if module.body and isinstance(module.body[0], ast.Expr):
@@ -122,7 +136,7 @@ def _insert_or_replace_docstring(path: Path, scaffold: str) -> None:
             end = node.end_lineno or node.lineno
             lines[start:end] = [scaffold]
             path.write_text("".join(lines), encoding="utf-8")
-            return
+            return True
 
     insert_at = 1 if lines and lines[0].startswith("#!") else 0
     while (
@@ -131,6 +145,7 @@ def _insert_or_replace_docstring(path: Path, scaffold: str) -> None:
         insert_at += 1
     lines[insert_at:insert_at] = [scaffold, "\n"]
     path.write_text("".join(lines), encoding="utf-8")
+    return True
 
 
 def scan(paths: Iterable[Path], *, min_chars: int = DEFAULT_MIN_CHARS) -> list[_DocstringFinding]:
@@ -155,7 +170,11 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
     """Suggest or apply rich module docstrings for command modules."""
     root = Path(getattr(args, "root", ".")).resolve()
     raw_paths = list(getattr(args, "paths", ()) or ())
-    paths = [Path(p).resolve() for p in raw_paths] if raw_paths else [root / DEFAULT_ROOT]
+    paths = (
+        [_resolve_target_path(Path(p), root) for p in raw_paths]
+        if raw_paths
+        else [root / DEFAULT_ROOT]
+    )
     min_chars = int(getattr(args, "min_chars", DEFAULT_MIN_CHARS))
     apply = bool(getattr(args, "apply", False))
 
@@ -174,8 +193,7 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
         p.section(str(label))
         p.line(finding.reason, ok=False)
         sys.stdout.write(f"{finding.scaffold}\n")
-        if apply:
-            _insert_or_replace_docstring(finding.path, finding.scaffold)
+        if apply and _insert_or_replace_docstring(finding.path, finding.scaffold):
             p.ok(f"Applied scaffold to {finding.path}")
 
     return 0

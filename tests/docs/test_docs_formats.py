@@ -75,6 +75,55 @@ class TestRenderMd:
             in result
         )
 
+    def test_render_md_uses_fallback_source_url_when_no_template_is_set(self) -> None:
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("python",),
+            src_dir="src",
+            formats=("json",),
+            source_repo_url="https://github.com/Anselmoo/repo-release-tools",
+            source_ref="main",
+        )
+
+        result = render_md([_entry("hello", "Hello docs.")], config)
+
+        assert (
+            "[src/mod.py:1](https://github.com/Anselmoo/repo-release-tools/blob/main/src/mod.py#L1)"
+            in result
+        )
+
+    def test_render_md_normalizes_windows_source_path(self) -> None:
+        entry = _entry("hello", "Hello docs.")
+        entry = DocEntry(
+            name=entry.name,
+            lang=entry.lang,
+            content=entry.content,
+            source_file="src\\mod.py",
+            line=entry.line,
+            hash=entry.hash,
+        )
+
+        result = render_md([entry], _config_with_source_links())
+
+        assert (
+            "[src/mod.py:1](https://github.com/Anselmoo/repo-release-tools/blob/main/src/mod.py#L1)"
+            in result
+        )
+
+    def test_render_md_rejects_invalid_source_url_template(self) -> None:
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("python",),
+            src_dir="src",
+            formats=("json",),
+            source_repo_url="https://github.com/Anselmoo/repo-release-tools",
+            source_ref="main",
+            source_url_template="{repo_url}/blob/{missing}/{path}#L{line}",
+        )
+
+        with pytest.raises(ValueError, match="Supported placeholders"):
+            render_md([_entry()], config)
+
 
 class TestInjectMd:
     """Tests for inject_md — lines 54-64."""

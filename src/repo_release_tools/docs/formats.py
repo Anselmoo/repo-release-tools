@@ -92,7 +92,7 @@ def _source_path(entry: "DocEntry") -> str:
 
 
 def _source_reference(entry: "DocEntry") -> str:
-    return f"{entry.source_file}:{entry.line}"
+    return f"{_source_path(entry)}:{entry.line}"
 
 
 def _source_url(entry: "DocEntry", config: "DocsConfig") -> str | None:
@@ -113,7 +113,14 @@ def _source_url(entry: "DocEntry", config: "DocsConfig") -> str | None:
         "lang": entry.lang,
     }
     if template:
-        return template.format(**mapping)
+        placeholders = ", ".join(sorted(mapping))
+        try:
+            return template.format(**mapping)
+        except (KeyError, ValueError) as exc:
+            raise ValueError(
+                "Invalid source_url_template "
+                f"{template!r}: {exc}. Supported placeholders: {placeholders}."
+            ) from exc
     repo_base = repo_url.rstrip("/") if repo_url else ""
     return f"{repo_base}/blob/{ref}/{path}#L{entry.line}"
 

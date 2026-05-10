@@ -63,6 +63,10 @@ in the matching subdirectory:
 The structure is enforced by `rrt folder check` rules in `pyproject.toml` under
 `[tool.rrt.folders]`.
 
+When adding command-focused support tests (for example, docstring checks or CLI wiring
+helpers), place them under `tests/commands/` instead of the `tests/` root so the
+`tests-root` folder rule stays valid.
+
 ## Do not
 
 - Declare coverage done based on a passing test alone — coverage and correctness

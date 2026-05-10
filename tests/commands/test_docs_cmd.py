@@ -10,14 +10,18 @@ import pytest
 
 from repo_release_tools.commands.docs_cmd import (
     SOURCE_OWNED_TOPIC_DOCS,
+    _build_docs_lock_sources,
     _cmd_check,
     _cmd_generate,
     _cmd_inject,
     _cmd_publish,
+    _cmd_suggest,
     _config_for_cwd,
     cmd_docs,
 )
 from repo_release_tools.config import DocsConfig, SharedBlock
+from repo_release_tools.docs.extractor import DocEntry
+from repo_release_tools.state import hash_content
 
 
 @pytest.fixture
@@ -210,6 +214,34 @@ class TestCmdGenerate:
         )
         result = _cmd_generate(args)
         assert result == 0
+
+
+class TestDocsLockSources:
+    """Tests for _build_docs_lock_sources."""
+
+    def test_build_docs_lock_sources_sorts_symbols(self) -> None:
+        entries = [
+            DocEntry(
+                name="zeta",
+                lang="python",
+                content="z",
+                source_file="src/module.py",
+                line=10,
+                hash=hash_content("z"),
+            ),
+            DocEntry(
+                name="alpha",
+                lang="python",
+                content="a",
+                source_file="src/module.py",
+                line=1,
+                hash=hash_content("a"),
+            ),
+        ]
+
+        sources = _build_docs_lock_sources(entries)
+
+        assert sources[0]["symbols"] == ["alpha", "zeta"]
 
 
 class TestCmdCheck:
@@ -415,6 +447,21 @@ class TestCmdDocs:
         args = argparse.Namespace(root=str(temp_repo), docs_action="suggest")
 
         assert cmd_docs(args) == 9
+
+
+class TestCmdSuggest:
+    """Test _cmd_suggest wrapper."""
+
+    def test_cmd_suggest_forwards_to_docs_suggest(
+        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.cmd_docs_suggest", lambda args: 12
+        )
+
+        args = argparse.Namespace(root=str(temp_repo))
+
+        assert _cmd_suggest(args) == 12
 
 
 class TestCmdPublish:

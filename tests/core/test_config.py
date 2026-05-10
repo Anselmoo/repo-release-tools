@@ -1637,6 +1637,28 @@ def test_load_config_docs_full(tmp_path: Path) -> None:
     assert cfg.docs.source_url_template == "{repo_url}/blob/{ref}/{path}#L{line}"
 
 
+def test_load_config_docs_optional_string_rejects_non_string(tmp_path: Path) -> None:
+    """Optional docs strings must be actual strings."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\nsource_repo_url = 123\n",
+    )
+
+    with pytest.raises(ValueError, match="must be a string"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_optional_string_rejects_empty_string(tmp_path: Path) -> None:
+    """Optional docs strings must not be empty."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs]\nsource_ref = ""\n',
+    )
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        load_config(tmp_path)
+
+
 def test_load_config_docs_not_a_table(tmp_path: Path) -> None:
     """[tool.rrt.docs] must be a table, not a scalar."""
     (tmp_path / "pyproject.toml").write_text(

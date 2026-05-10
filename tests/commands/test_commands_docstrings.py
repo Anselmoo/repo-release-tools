@@ -20,18 +20,23 @@ from pathlib import Path
 import pytest
 
 MIN_DEFAULT = 150
-MIN_CHARS = int(os.getenv("RRT_DOCSTRING_MIN_CHARS", str(MIN_DEFAULT)))
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = ROOT / "src" / "repo_release_tools" / "commands"
 
 
+def _load_min_chars() -> int:
+    raw = os.getenv("RRT_DOCSTRING_MIN_CHARS")
+    if raw is None:
+        return MIN_DEFAULT
+    try:
+        return int(raw)
+    except ValueError:
+        pytest.fail(f"RRT_DOCSTRING_MIN_CHARS must be an integer; got {raw!r}")
+
+
 def _should_exempt(path: Path, text: str) -> bool:
-    if path.name in ("__init__.py", "__main__.py"):
-        return True
-    if "rrt:docs-exempt" in text:
-        return True
-    return False
+    return path.name in ("__init__.py", "__main__.py") or "rrt:docs-exempt" in text
 
 
 def test_command_modules_have_rich_module_docstrings() -> None:
@@ -39,6 +44,7 @@ def test_command_modules_have_rich_module_docstrings() -> None:
     if not COMMANDS_DIR.exists():
         pytest.skip("commands directory not present")
 
+    min_chars = _load_min_chars()
     offenses: list[str] = []
     for py in sorted(COMMANDS_DIR.glob("*.py")):
         text = py.read_text(encoding="utf-8")
@@ -61,8 +67,8 @@ def test_command_modules_have_rich_module_docstrings() -> None:
             offenses.append(f"{py}: module docstring is single-line")
             continue
 
-        if len(doc_stripped) < MIN_CHARS:
-            offenses.append(f"{py}: module docstring too short ({len(doc_stripped)} < {MIN_CHARS})")
+        if len(doc_stripped) < min_chars:
+            offenses.append(f"{py}: module docstring too short ({len(doc_stripped)} < {min_chars})")
 
     if offenses:
         errors = "\n".join(offenses)
