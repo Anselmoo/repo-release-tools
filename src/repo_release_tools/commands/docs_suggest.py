@@ -61,9 +61,12 @@ def _iter_targets(paths: Iterable[Path]) -> list[Path]:
 
 def _resolve_target_path(path: Path, root: Path) -> Path:
     """Resolve a caller-supplied target path against *root* when needed."""
-    if path.is_absolute():
-        return path.resolve()
-    return (root / path).resolve()
+    return path.resolve() if path.is_absolute() else (root / path).resolve()
+
+
+def _should_exempt(path: Path, text: str) -> bool:
+    """Return whether *path* should be skipped by the scanner."""
+    return path.name in EXEMPT_FILES or "rrt:docs-exempt" in text
 
 
 def _command_slug(path: Path) -> str:
@@ -152,7 +155,8 @@ def scan(paths: Iterable[Path], *, min_chars: int = DEFAULT_MIN_CHARS) -> list[_
     """Find files whose module docstrings should be expanded."""
     findings: list[_DocstringFinding] = []
     for path in _iter_targets(paths):
-        if path.name in EXEMPT_FILES:
+        text = path.read_text(encoding="utf-8")
+        if _should_exempt(path, text):
             continue
 
         docstring = _read_module_docstring(path)
