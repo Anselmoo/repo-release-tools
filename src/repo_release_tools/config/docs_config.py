@@ -120,6 +120,9 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
         languages=_load_docs_languages(d),
         lock_file=_load_docs_lock_file(d),
         formats=_load_docs_formats(d),
+        source_repo_url=_load_optional_docs_string(d, "source_repo_url"),
+        source_ref=_load_optional_docs_string(d, "source_ref"),
+        source_url_template=_load_optional_docs_string(d, "source_url_template"),
         shared_blocks=_load_shared_blocks(d, root=root),
     )
 
@@ -179,6 +182,17 @@ def _load_docs_formats(d: dict[str, object]) -> tuple[str, ...]:
             f"Supported: {list(_VALID_FORMATS)}"
         )
     return tuple(fmts)
+
+
+def _load_optional_docs_string(d: dict[str, object], key: str) -> str | None:
+    raw = d.get(key)
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise ValueError(f"tool.rrt.docs.{key} must be a string when provided")
+    if not (value := raw.strip()):
+        raise ValueError(f"tool.rrt.docs.{key} must not be empty when provided")
+    return value
 
 
 def _load_shared_blocks(

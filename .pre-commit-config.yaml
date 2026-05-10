@@ -44,6 +44,16 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: rrt-docstring-check
+        name: rrt docstring check
+        # Run only the focused test and override pytest addopts to avoid the repo-wide coverage gate.
+        entry: uv run pytest -q -o addopts= tests/commands/test_commands_docstrings.py
+        language: system
+        files: '^src/repo_release_tools/commands/'
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: rrt-ci-lint-gate
         name: rrt ci lint gate
         entry: uvx pre-commit run --all-files --show-diff-on-failure

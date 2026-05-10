@@ -41,6 +41,18 @@ def _config() -> DocsConfig:
     )
 
 
+def _config_with_source_links() -> DocsConfig:
+    return DocsConfig(
+        extraction_mode="explicit",
+        languages=("python",),
+        src_dir="src",
+        formats=("json",),
+        source_repo_url="https://github.com/Anselmoo/repo-release-tools",
+        source_ref="main",
+        source_url_template="{repo_url}/blob/{ref}/{path}#L{line}",
+    )
+
+
 class TestRenderMd:
     """Tests for render_md."""
 
@@ -54,6 +66,63 @@ class TestRenderMd:
     def test_render_md_empty(self) -> None:
         result = render_md([], _config())
         assert "# Documentation" in result
+
+    def test_render_md_includes_source_link(self) -> None:
+        entries = [_entry("hello", "Hello docs.")]
+        result = render_md(entries, _config_with_source_links())
+        assert (
+            "[src/mod.py:1](https://github.com/Anselmoo/repo-release-tools/blob/main/src/mod.py#L1)"
+            in result
+        )
+
+    def test_render_md_uses_fallback_source_url_when_no_template_is_set(self) -> None:
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("python",),
+            src_dir="src",
+            formats=("json",),
+            source_repo_url="https://github.com/Anselmoo/repo-release-tools",
+            source_ref="main",
+        )
+
+        result = render_md([_entry("hello", "Hello docs.")], config)
+
+        assert (
+            "[src/mod.py:1](https://github.com/Anselmoo/repo-release-tools/blob/main/src/mod.py#L1)"
+            in result
+        )
+
+    def test_render_md_normalizes_windows_source_path(self) -> None:
+        entry = _entry("hello", "Hello docs.")
+        entry = DocEntry(
+            name=entry.name,
+            lang=entry.lang,
+            content=entry.content,
+            source_file="src\\mod.py",
+            line=entry.line,
+            hash=entry.hash,
+        )
+
+        result = render_md([entry], _config_with_source_links())
+
+        assert (
+            "[src/mod.py:1](https://github.com/Anselmoo/repo-release-tools/blob/main/src/mod.py#L1)"
+            in result
+        )
+
+    def test_render_md_rejects_invalid_source_url_template(self) -> None:
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("python",),
+            src_dir="src",
+            formats=("json",),
+            source_repo_url="https://github.com/Anselmoo/repo-release-tools",
+            source_ref="main",
+            source_url_template="{repo_url}/blob/{missing}/{path}#L{line}",
+        )
+
+        with pytest.raises(ValueError, match="Supported placeholders"):
+            render_md([_entry()], config)
 
 
 class TestInjectMd:
@@ -113,6 +182,12 @@ class TestRenderTxt:
         result = render_txt(entries, _config())
         assert "hello" in result
         assert "Hello docs." in result
+
+    def test_render_txt_includes_source_url(self) -> None:
+        entries = [_entry("hello", "Hello docs.")]
+        result = render_txt(entries, _config_with_source_links())
+        assert "Source: src/mod.py:1" in result
+        assert "https://github.com/Anselmoo/repo-release-tools/blob/main/src/mod.py#L1" in result
 
     def test_render_txt_flattens_markdown_headings(self) -> None:
         entries = [_entry("hello", "# Overview\n\nBody text\n\n## Details\nMore text")]
@@ -175,6 +250,11 @@ class TestRenderRich:
         assert "Plain prose" in result
         assert "Second line" in result
 
+    def test_render_rich_includes_source_url(self) -> None:
+        entries = [_entry("hello", "Plain prose")]
+        result = render_rich(entries, _config_with_source_links())
+        assert "https://github.com/Anselmoo/repo-release-tools/blob/main/src/mod.py#L1" in result
+
 
 class TestRenderJson:
     """Tests for render_json."""
@@ -187,6 +267,14 @@ class TestRenderJson:
         parsed = json.loads(result)
         assert len(parsed) == 1
         assert parsed[0]["name"] == "hello"
+
+    def test_render_json_includes_source_url(self) -> None:
+        import json
+
+        entries = [_entry("hello", "Hello docs.")]
+        result = render_json(entries, _config_with_source_links())
+        parsed = json.loads(result)
+        assert parsed[0]["source_url"].endswith("/blob/main/src/mod.py#L1")
 
 
 class TestRender:

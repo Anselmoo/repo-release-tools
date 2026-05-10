@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 if TYPE_CHECKING:
     from repo_release_tools.config.core import DocsConfig
@@ -44,11 +45,9 @@ def _render_structured_txt(content: str) -> str:
             if parts and parts[-1] != "":
                 parts.append("")
             if level == 1:
-                parts.append(line.text.upper())
-                parts.append("=" * len(line.text))
+                parts.extend([line.text.upper(), "=" * len(line.text)])
             elif level == 2:
-                parts.append(line.text)
-                parts.append("-" * len(line.text))
+                parts.extend([line.text, "-" * len(line.text)])
             else:
                 indent = "  " * max(level - 3, 0)
                 parts.append(f"{indent}* {line.text}")
@@ -88,6 +87,44 @@ def _render_structured_rich(content: str) -> str:
     return "\n".join(parts).strip()
 
 
+def _source_path(entry: "DocEntry") -> str:
+    return entry.source_file.replace("\\", "/")
+
+
+def _source_reference(entry: "DocEntry") -> str:
+    return f"{_source_path(entry)}:{entry.line}"
+
+
+def _source_url(entry: "DocEntry", config: "DocsConfig") -> str | None:
+    repo_url = getattr(config, "source_repo_url", None)
+    template = getattr(config, "source_url_template", None)
+    ref = getattr(config, "source_ref", None) or "main"
+    if not repo_url and not template:
+        return None
+
+    path = quote(_source_path(entry), safe="/-._~")
+    mapping = {
+        "repo_url": repo_url or "",
+        "ref": ref,
+        "path": path,
+        "source_file": path,
+        "line": entry.line,
+        "name": entry.name,
+        "lang": entry.lang,
+    }
+    if template:
+        placeholders = ", ".join(sorted(mapping))
+        try:
+            return template.format(**mapping)
+        except (KeyError, ValueError) as exc:
+            raise ValueError(
+                "Invalid source_url_template "
+                f"{template!r}: {exc}. Supported placeholders: {placeholders}."
+            ) from exc
+    repo_base = repo_url.rstrip("/") if repo_url else ""
+    return f"{repo_base}/blob/{ref}/{path}#L{entry.line}"
+
+
 # ---------------------------------------------------------------------------
 # Markdown
 # ---------------------------------------------------------------------------
@@ -98,9 +135,13 @@ def render_md(entries: list["DocEntry"], config: "DocsConfig") -> str:
     parts: list[str] = ["# Documentation\n"]
     for entry in entries:
         anchor = entry.name.lower().replace(" ", "-")
-        parts.append(f"\n## {entry.name} {{#{anchor}}}\n")
-        parts.append(f"*Source: `{entry.source_file}` line {entry.line} · lang: {entry.lang}*\n")
-        parts.append(f"\n{entry.content}\n")
+        source_url = _source_url(entry, config)
+        source_reference = _source_reference(entry)
+        if source_url:
+            source_line = f"*Source: [{source_reference}]({source_url}) · lang: {entry.lang}*\n"
+        else:
+            source_line = f"*Source: `{source_reference}` · lang: {entry.lang}*\n"
+        parts.extend([f"\n## {entry.name} {{#{anchor}}}\n", source_line, f"\n{entry.content}\n"])
     return "\n".join(parts)
 
 
@@ -137,11 +178,18 @@ def render_txt(entries: list["DocEntry"], config: "DocsConfig") -> str:
     """Render entries as plain text."""
     parts: list[str] = []
     for entry in entries:
-        parts.append(f"=== {entry.name} ({entry.lang}) ===")
-        parts.append(f"Source: {entry.source_file}:{entry.line}")
-        parts.append("")
-        parts.append(_render_structured_txt(entry.content))
-        parts.append("")
+        source_url = _source_url(entry, config)
+        source_reference = _source_reference(entry)
+        source_line = f"Source: {source_reference}" + (f" — {source_url}" if source_url else "")
+        parts.extend(
+            [
+                f"=== {entry.name} ({entry.lang}) ===",
+                source_line,
+                "",
+                _render_structured_txt(entry.content),
+                "",
+            ]
+        )
     return "\n".join(parts)
 
 
@@ -156,14 +204,14 @@ def render_rich(entries: list["DocEntry"], config: "DocsConfig") -> str:
 
     parts: list[str] = []
     for entry in entries:
-        parts.append(bold(f"  {entry.name}") + f"  [{entry.lang}]")
-        parts.append(subtle(f"  {entry.source_file}:{entry.line}"))
-        parts.append("")
+        source_url = _source_url(entry, config)
+        source_reference = _source_reference(entry)
+        source_line = subtle(f"  {source_reference}" + (f" — {source_url}" if source_url else ""))
+        parts.extend([f"{bold(f'  {entry.name}')}  [{entry.lang}]", source_line, ""])
         if has_markdown_headings(entry.content):
             parts.extend(_render_structured_rich(entry.content).splitlines())
         else:
-            for line in entry.content.splitlines():
-                parts.append(f"  {info(line)}")
+            parts.extend(f"  {info(line)}" for line in entry.content.splitlines())
         parts.append("")
     return "\n".join(parts)
 
@@ -175,7 +223,13 @@ def render_rich(entries: list["DocEntry"], config: "DocsConfig") -> str:
 
 def render_json(entries: list["DocEntry"], config: "DocsConfig") -> str:
     """Render entries as a JSON array."""
-    return json.dumps([e.to_dict() for e in entries], indent=2)
+    payload = []
+    for entry in entries:
+        item = entry.to_dict()
+        if source_url := _source_url(entry, config):
+            item["source_url"] = source_url
+        payload.append(item)
+    return json.dumps(payload, indent=2)
 
 
 # ---------------------------------------------------------------------------

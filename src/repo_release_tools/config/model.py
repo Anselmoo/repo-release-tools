@@ -339,6 +339,9 @@ class DocsConfig:
     languages: tuple[str, ...] = ("python",)
     lock_file: str = ".rrt/docs.lock.toml"
     formats: tuple[str, ...] = ("md",)
+    source_repo_url: str | None = None
+    source_ref: str | None = None
+    source_url_template: str | None = None
     shared_blocks: tuple[SharedBlock, ...] = ()
 
 
