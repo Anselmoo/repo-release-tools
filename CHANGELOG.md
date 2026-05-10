@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-10
+
+### Added
+- enhance documentation and add docstring checks (#55)
+
+### Fixed
+- docs minimum length (#56)
+
 ## [1.3.0] - 2026-05-08
 
 ### Added
