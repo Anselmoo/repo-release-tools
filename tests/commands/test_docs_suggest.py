@@ -8,13 +8,22 @@ from pathlib import Path
 
 import pytest
 
-from repo_release_tools.commands.docs_suggest import build_scaffold, cmd_docs_suggest, scan
+from repo_release_tools.commands.docs_suggest import (
+    DEFAULT_MIN_CHARS,
+    build_scaffold,
+    cmd_docs_suggest,
+    scan,
+)
+
+MIN_DEFAULT = DEFAULT_MIN_CHARS
+STRICT_MIN_CHARS = 200
+SHORT_MIN_CHARS = 10
 
 
 def _load_min_chars() -> int:
     raw = os.getenv("RRT_DOCSTRING_MIN_CHARS")
     if raw is None:
-        return 150
+        return MIN_DEFAULT
     try:
         return int(raw)
     except ValueError:
@@ -55,7 +64,19 @@ def test_scan_skips_healthy_docstring(tmp_path: Path) -> None:
     target = tmp_path / "example.py"
     target.write_text('"""Long enough docstring.\n\nBody text.\n"""\n', encoding="utf-8")
 
-    findings = scan([tmp_path], min_chars=10)
+    findings = scan([tmp_path], min_chars=SHORT_MIN_CHARS)
+
+    assert findings == []
+
+
+def test_scan_ignores_rrt_docs_exempt_marker(tmp_path: Path) -> None:
+    target = tmp_path / "example.py"
+    target.write_text(
+        '# rrt:docs-exempt\n"""Short docstring."""\nVALUE = 1\n',
+        encoding="utf-8",
+    )
+
+    findings = scan([tmp_path], min_chars=STRICT_MIN_CHARS)
 
     assert findings == []
 
@@ -64,7 +85,9 @@ def test_cmd_docs_suggest_applies_scaffold(tmp_path: Path) -> None:
     target = tmp_path / "example.py"
     target.write_text("from __future__ import annotations\n\nVALUE = 1\n", encoding="utf-8")
 
-    args = argparse.Namespace(root=str(tmp_path), paths=[str(target)], min_chars=150, apply=True)
+    args = argparse.Namespace(
+        root=str(tmp_path), paths=[str(target)], min_chars=MIN_DEFAULT, apply=True
+    )
 
     result = cmd_docs_suggest(args)
 
@@ -76,7 +99,9 @@ def test_cmd_docs_suggest_replaces_existing_docstring(tmp_path: Path) -> None:
     target = tmp_path / "example.py"
     target.write_text('"""Short docstring.\n\nBody.\n"""\nVALUE = 1\n', encoding="utf-8")
 
-    args = argparse.Namespace(root=str(tmp_path), paths=[str(target)], min_chars=200, apply=True)
+    args = argparse.Namespace(
+        root=str(tmp_path), paths=[str(target)], min_chars=STRICT_MIN_CHARS, apply=True
+    )
 
     result = cmd_docs_suggest(args)
 
@@ -93,7 +118,9 @@ def test_cmd_docs_suggest_inserts_after_shebang_and_encoding_comment(tmp_path: P
         encoding="utf-8",
     )
 
-    args = argparse.Namespace(root=str(tmp_path), paths=[str(target)], min_chars=200, apply=True)
+    args = argparse.Namespace(
+        root=str(tmp_path), paths=[str(target)], min_chars=STRICT_MIN_CHARS, apply=True
+    )
 
     result = cmd_docs_suggest(args)
 
@@ -114,7 +141,9 @@ def test_cmd_docs_suggest_resolves_relative_paths_against_root(
     target.write_text("VALUE = 1\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    args = argparse.Namespace(root=str(repo), paths=["src/example.py"], min_chars=150, apply=True)
+    args = argparse.Namespace(
+        root=str(repo), paths=["src/example.py"], min_chars=MIN_DEFAULT, apply=True
+    )
 
     result = cmd_docs_suggest(args)
 
@@ -128,7 +157,9 @@ def test_cmd_docs_suggest_skips_unparseable_apply_targets(
     target = tmp_path / "broken.py"
     target.write_text("def broken(\n", encoding="utf-8")
 
-    args = argparse.Namespace(root=str(tmp_path), paths=[str(target)], min_chars=150, apply=True)
+    args = argparse.Namespace(
+        root=str(tmp_path), paths=[str(target)], min_chars=MIN_DEFAULT, apply=True
+    )
 
     result = cmd_docs_suggest(args)
     captured = capsys.readouterr()
@@ -146,7 +177,9 @@ def test_cmd_docs_suggest_handles_paths_outside_root(
     target = tmp_path / "outside.py"
     target.write_text("VALUE = 1\n", encoding="utf-8")
 
-    args = argparse.Namespace(root=str(root), paths=[str(target)], min_chars=200, apply=False)
+    args = argparse.Namespace(
+        root=str(root), paths=[str(target)], min_chars=STRICT_MIN_CHARS, apply=False
+    )
 
     result = cmd_docs_suggest(args)
     captured = capsys.readouterr()
@@ -159,7 +192,9 @@ def test_cmd_docs_suggest_no_findings(tmp_path: Path) -> None:
     target = tmp_path / "example.py"
     target.write_text('"""Long enough docstring.\n\nBody text.\n"""\n', encoding="utf-8")
 
-    args = argparse.Namespace(root=str(tmp_path), paths=[str(target)], min_chars=10, apply=False)
+    args = argparse.Namespace(
+        root=str(tmp_path), paths=[str(target)], min_chars=SHORT_MIN_CHARS, apply=False
+    )
 
     result = cmd_docs_suggest(args)
 
