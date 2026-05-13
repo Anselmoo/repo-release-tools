@@ -96,7 +96,7 @@ def test_register_wires_ci_version_subcommands() -> None:
             "4",
             "--run-attempt",
             "2",
-        ]
+        ],
     )
     assert compute_args.command == "ci-version"
     assert compute_args.ci_version_cmd == "compute"
@@ -113,7 +113,7 @@ def test_register_wires_ci_version_subcommands() -> None:
             "--dry-run",
             "--run-id",
             "4",
-        ]
+        ],
     )
     assert sync_args.ci_version_cmd == "sync"
     assert sync_args.handler is cmd_ci_version_sync
@@ -213,7 +213,7 @@ def _ns(**kwargs: object) -> argparse.Namespace:
     return argparse.Namespace(**defaults)
 
 
-@pytest.fixture()
+@pytest.fixture
 def mixed_project(tmp_path: Path) -> Path:
     """A minimal project with one pep440 and one semver_pre version target."""
     (tmp_path / "pyproject.toml").write_text(_PYPROJECT_MIXED, encoding="utf-8")
@@ -257,7 +257,7 @@ def test_cmd_compute_explicit_base(
 ) -> None:
     monkeypatch.chdir(mixed_project)
     result = cmd_ci_version_compute(
-        _ns(base="1.3.0", ref="refs/heads/main", run_id="7", run_attempt="1")
+        _ns(base="1.3.0", ref="refs/heads/main", run_id="7", run_attempt="1"),
     )
     captured = capsys.readouterr()
     assert result == 0
@@ -320,10 +320,12 @@ def test_cmd_compute_autodetect_mismatch_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "0.2.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "Cargo.toml").write_text(
-        '[package]\nname = "example"\nversion = "0.3.0"\n', encoding="utf-8"
+        '[package]\nname = "example"\nversion = "0.3.0"\n',
+        encoding="utf-8",
     )
 
     monkeypatch.chdir(tmp_path)
@@ -391,7 +393,8 @@ def test_cmd_compute_and_apply_error_paths(
         raise exc_type(*exc_args)
 
     monkeypatch.setattr(
-        "repo_release_tools.commands.ci_version.load_or_autodetect_config", raise_exc
+        "repo_release_tools.commands.ci_version.load_or_autodetect_config",
+        raise_exc,
     )
 
     compute_result = cmd_ci_version_compute(_ns())
@@ -503,10 +506,12 @@ def test_cmd_apply_autodetects_python_and_rust_without_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "0.2.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "Cargo.toml").write_text(
-        '[package]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+        '[package]\nname = "example"\nversion = "0.2.0"\n',
+        encoding="utf-8",
     )
 
     monkeypatch.chdir(tmp_path)
@@ -531,7 +536,7 @@ def test_cmd_sync_dry_run(
 ) -> None:
     monkeypatch.chdir(mixed_project)
     result = cmd_ci_version_sync(
-        _ns(ref="refs/heads/main", run_id="77", run_attempt="1", dry_run=True)
+        _ns(ref="refs/heads/main", run_id="77", run_attempt="1", dry_run=True),
     )
     captured = capsys.readouterr()
     assert result == 0
@@ -549,7 +554,7 @@ def test_cmd_sync_writes_files(
 ) -> None:
     monkeypatch.chdir(mixed_project)
     result = cmd_ci_version_sync(
-        _ns(ref="refs/heads/main", run_id="99", run_attempt="1", dry_run=False)
+        _ns(ref="refs/heads/main", run_id="99", run_attempt="1", dry_run=False),
     )
     assert result == 0
     assert "0.2.0.dev9901" in (mixed_project / "pyproject.toml").read_text(encoding="utf-8")
@@ -606,7 +611,7 @@ def test_cmd_compute_invalid_run_attempt_returns_error(
 ) -> None:
     monkeypatch.chdir(mixed_project)
     result = cmd_ci_version_compute(
-        _ns(base="0.2.0", ref="refs/heads/main", run_id="1", run_attempt="bad")
+        _ns(base="0.2.0", ref="refs/heads/main", run_id="1", run_attempt="bad"),
     )
     captured = capsys.readouterr()
     assert result == 1
@@ -620,7 +625,7 @@ def test_cmd_sync_invalid_run_attempt_returns_error(
 ) -> None:
     monkeypatch.chdir(mixed_project)
     result = cmd_ci_version_sync(
-        _ns(ref="refs/heads/main", run_id="1", run_attempt="bad", dry_run=False)
+        _ns(ref="refs/heads/main", run_id="1", run_attempt="bad", dry_run=False),
     )
     captured = capsys.readouterr()
     assert result == 1
@@ -633,7 +638,7 @@ def test_version_target_non_string_ci_format_raises() -> None:
     t = VersionTarget(
         path=Path("x.toml"),
         kind="pep621",
-        ci_format=cast(str | None, ["pep440"]),
+        ci_format=cast("str | None", ["pep440"]),
     )
     with pytest.raises(ValueError, match="must be a string"):
         t.validate()
@@ -723,7 +728,7 @@ ci_format = "pep440"
     assert result == 1
     assert "version replacement had no effect" in captured.err
     assert (tmp_path / "package.json").read_text(
-        encoding="utf-8"
+        encoding="utf-8",
     ) == '{"name":"example","version":"1.0.0"}'
 
 
@@ -757,13 +762,14 @@ version = "0.2.0"
         encoding="utf-8",
     )
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "0.2.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "package.json").write_text('{"name":"example","version":"0.2.0"}', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
     result = cmd_ci_version_compute(
-        _ns(ref="refs/heads/main", run_id="12", run_attempt="1", group=None)
+        _ns(ref="refs/heads/main", run_id="12", run_attempt="1", group=None),
     )
     captured = capsys.readouterr()
 
@@ -799,13 +805,14 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "0.2.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "package.json").write_text('{"name":"example","version":"1.5.0"}', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
     result = cmd_ci_version_compute(
-        _ns(ref="refs/heads/main", run_id="12", run_attempt="1", group="web")
+        _ns(ref="refs/heads/main", run_id="12", run_attempt="1", group="web"),
     )
     captured = capsys.readouterr()
 
@@ -840,13 +847,14 @@ ci_format = "pep440"
         encoding="utf-8",
     )
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "0.2.0"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "0.2.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "package.json").write_text('{"name":"example","version":"1.5.0"}', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
     result = cmd_ci_version_apply(
-        argparse.Namespace(version="1.6.0.dev1201", dry_run=False, group="web")
+        argparse.Namespace(version="1.6.0.dev1201", dry_run=False, group="web"),
     )
 
     assert result == 0
@@ -860,7 +868,8 @@ ci_format = "pep440"
 
 
 def test_cmd_ci_version_apply_no_ci_format_targets(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """apply should fail when no version targets have ci_format configured."""
     (tmp_path / "pyproject.toml").write_text(
@@ -880,14 +889,16 @@ version = "1.0.0"
     monkeypatch.chdir(tmp_path)
 
     result = cmd_ci_version_apply(
-        argparse.Namespace(version="1.0.0.dev100", dry_run=False, group=None)
+        argparse.Namespace(version="1.0.0.dev100", dry_run=False, group=None),
     )
 
     assert result == 1
 
 
 def test_cmd_ci_version_apply_semver_pre_non_dev_version_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     """apply should fail when semver_pre conversion cannot handle the version."""
     (tmp_path / "Cargo.toml").write_text('[package]\nname = "eg"\nversion = "0.1.0"\n')
@@ -910,7 +921,7 @@ version = "1.0.0"
 
     # ".dev" in version but to_semver() leaves it unchanged → should fail
     result = cmd_ci_version_apply(
-        argparse.Namespace(version="1.0.0.devABC", dry_run=False, group=None)
+        argparse.Namespace(version="1.0.0.devABC", dry_run=False, group=None),
     )
 
     assert result == 1
@@ -931,7 +942,9 @@ def test_cmd_ci_version_compute_no_config(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 
 def test_cmd_ci_version_compute_with_base(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     """compute --base should print the computed version."""
     monkeypatch.chdir(tmp_path)
@@ -957,7 +970,9 @@ def test_cmd_ci_version_compute_with_base(
 
 
 def test_cmd_ci_version_sync_with_base_tag(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     """sync should compute the version and call apply."""
     (tmp_path / "pyproject.toml").write_text(
@@ -994,7 +1009,8 @@ version = "0.9.0"
 
 
 def test_cmd_ci_version_sync_invalid_run_attempt(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """sync should return 1 when run_attempt is not an integer on main."""
     monkeypatch.chdir(tmp_path)
@@ -1034,7 +1050,7 @@ def test_cmd_apply_uses_shared_progress_line(
     monkeypatch.setattr("repo_release_tools.commands.ci_version.ProgressLine", _FakeProgressLine)
 
     result = cmd_ci_version_apply(
-        argparse.Namespace(version="0.2.0.dev12345601", dry_run=False, group=None)
+        argparse.Namespace(version="0.2.0.dev12345601", dry_run=False, group=None),
     )
 
     assert result == 0
@@ -1066,7 +1082,7 @@ def test_cmd_apply_clears_progress_on_semver_error(
 
     # An un-convertible '.dev' version triggers the semver_pre early-return path.
     result = cmd_ci_version_apply(
-        argparse.Namespace(version="0.2.0.devABC", dry_run=False, group=None)
+        argparse.Namespace(version="0.2.0.devABC", dry_run=False, group=None),
     )
 
     assert result == 1

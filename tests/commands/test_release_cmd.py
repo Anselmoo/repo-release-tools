@@ -51,7 +51,9 @@ def _write_version_file(path: Path, version: str = "1.2.3") -> None:
 
 
 def test_release_check_no_config_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 1 and prints guidance when no config file is found."""
     monkeypatch.chdir(tmp_path)
@@ -63,7 +65,9 @@ def test_release_check_no_config_file(
 
 
 def test_release_check_generic_value_error_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Unexpected ValueError is surfaced to stderr."""
     monkeypatch.chdir(tmp_path)
@@ -80,7 +84,9 @@ def test_release_check_generic_value_error_returns_1(
 
 
 def test_release_check_no_rrt_section(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 1 when config exists but has no [tool.rrt] section."""
     monkeypatch.chdir(tmp_path)
@@ -93,7 +99,9 @@ def test_release_check_no_rrt_section(
 
 
 def test_release_check_runtime_error_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Runtime errors while loading config are surfaced to stderr."""
     monkeypatch.chdir(tmp_path)
@@ -110,7 +118,9 @@ def test_release_check_runtime_error_returns_1(
 
 
 def test_release_check_all_healthy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 0 and shows healthy release targets."""
     monkeypatch.chdir(tmp_path)
@@ -129,7 +139,9 @@ def test_release_check_all_healthy(
 
 
 def test_release_check_autodetected_warns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Autodetected config prints a warning to stderr."""
     monkeypatch.chdir(tmp_path)
@@ -144,7 +156,9 @@ def test_release_check_autodetected_warns(
 
 
 def test_release_check_missing_version_file_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 1 when a version target file is missing."""
     monkeypatch.chdir(tmp_path)
@@ -160,7 +174,9 @@ def test_release_check_missing_version_file_returns_1(
 
 
 def test_release_check_unreadable_version_returns_0(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Unreadable version content is a warning, not a failure."""
     monkeypatch.chdir(tmp_path)
@@ -178,7 +194,9 @@ def test_release_check_unreadable_version_returns_0(
 
 
 def test_release_check_missing_pin_file_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 1 when a pin target file is missing."""
     monkeypatch.chdir(tmp_path)
@@ -195,7 +213,9 @@ def test_release_check_missing_pin_file_returns_1(
 
 
 def test_release_check_pin_bad_pattern_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 1 when a pin target has an invalid regex pattern."""
     monkeypatch.chdir(tmp_path)
@@ -215,7 +235,9 @@ def test_release_check_pin_bad_pattern_returns_1(
 
 
 def test_release_check_pin_no_match_warns_not_errors(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Pin with no match in file shows warning but returns 0."""
     monkeypatch.chdir(tmp_path)
@@ -235,7 +257,9 @@ def test_release_check_pin_no_match_warns_not_errors(
 
 
 def test_release_check_global_pins_deduplicated(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Same pin in group_pins + global_pins is checked only once."""
     monkeypatch.chdir(tmp_path)

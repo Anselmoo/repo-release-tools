@@ -46,7 +46,7 @@ src_dir = "src"
 [[tool.rrt.version_targets]]
 path = "pyproject.toml"
 kind = "pep621"
-"""
+""",
     )
     return repo
 
@@ -58,7 +58,7 @@ def python_file_with_docs(temp_repo: Path) -> Path:
     # Use the correct format: marker on own line, then variable assignment with triple-quoted string
     py_file.write_text(
         '# sym: hello\nHELLO_DOC = """\nThis is a hello function documentation.\n"""\n\n'
-        '# sym: world\nWORLD_DOC = """\nThis is a world function documentation.\n"""\n'
+        '# sym: world\nWORLD_DOC = """\nThis is a world function documentation.\n"""\n',
     )
     return py_file
 
@@ -118,7 +118,9 @@ class TestCmdGenerate:
         assert result == 1
 
     def test_generate_format_override_from_cli(
-        self, temp_repo: Path, python_file_with_docs: Path
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
     ) -> None:
         """Should override config format with CLI --format."""
         args = argparse.Namespace(
@@ -131,7 +133,9 @@ class TestCmdGenerate:
         assert result == 0
 
     def test_generate_language_override_from_cli(
-        self, temp_repo: Path, python_file_with_docs: Path
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
     ) -> None:
         """Should override config languages with CLI --lang."""
         args = argparse.Namespace(
@@ -144,7 +148,9 @@ class TestCmdGenerate:
         assert result == 0
 
     def test_generate_dry_run_toml_format(
-        self, temp_repo: Path, python_file_with_docs: Path
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
     ) -> None:
         """Should dry-run TOML format without writing."""
         args = argparse.Namespace(
@@ -160,7 +166,9 @@ class TestCmdGenerate:
         assert not lock_path.exists()
 
     def test_generate_toml_format_writes_lockfile(
-        self, temp_repo: Path, python_file_with_docs: Path
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
     ) -> None:
         """Should write lockfile when format is toml."""
         args = argparse.Namespace(
@@ -177,7 +185,10 @@ class TestCmdGenerate:
         )  # Docs extraction might be implicit only
 
     def test_generate_txt_format_to_stdout(
-        self, temp_repo: Path, python_file_with_docs: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Should output txt format to stdout."""
         args = argparse.Namespace(
@@ -190,7 +201,10 @@ class TestCmdGenerate:
         assert result == 0
 
     def test_generate_rich_format_to_stdout(
-        self, temp_repo: Path, python_file_with_docs: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Should output rich format to stdout."""
         args = argparse.Namespace(
@@ -203,7 +217,10 @@ class TestCmdGenerate:
         assert result == 0
 
     def test_generate_clipboard_format_to_stdout(
-        self, temp_repo: Path, python_file_with_docs: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Should output clipboard format to stdout."""
         args = argparse.Namespace(
@@ -267,7 +284,9 @@ class TestCmdCheck:
         assert result == 0
 
     def test_check_lockfile_stale_file_added(
-        self, temp_repo: Path, python_file_with_docs: Path
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
     ) -> None:
         """Should return 1 when source file was added after lockfile creation."""
         # First generate lockfile
@@ -285,7 +304,7 @@ class TestCmdCheck:
             """
 # sym: new
 NEW_DOC = \"\"\"New doc\"\"\"
-"""
+""",
         )
 
         # Check should fail
@@ -297,7 +316,9 @@ NEW_DOC = \"\"\"New doc\"\"\"
         assert result == 1
 
     def test_check_lockfile_stale_file_modified(
-        self, temp_repo: Path, python_file_with_docs: Path
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
     ) -> None:
         """Should return 1 when source file was modified after lockfile creation."""
         # First generate lockfile
@@ -317,7 +338,7 @@ NEW_DOC = \"\"\"New doc\"\"\"
 HELLO_DOC = """
 Modified documentation.
 """
-'''
+''',
         )
 
         # Check should fail
@@ -339,7 +360,9 @@ Modified documentation.
         assert result in (0, 1)
 
     def test_check_custom_lock_file_path(
-        self, temp_repo: Path, python_file_with_docs: Path
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
     ) -> None:
         """Should accept custom lock_file path."""
         # Generate to custom location
@@ -405,7 +428,9 @@ class TestCmdDocs:
         assert result == 1
 
     def test_cmd_docs_default_action_is_generate(
-        self, temp_repo: Path, python_file_with_docs: Path
+        self,
+        temp_repo: Path,
+        python_file_with_docs: Path,
     ) -> None:
         """Should default to generate action."""
         args = argparse.Namespace(
@@ -419,7 +444,9 @@ class TestCmdDocs:
         assert result == 0
 
     def test_cmd_docs_dispatches_publish(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
     ) -> None:
         """Should dispatch publish to the publish helper."""
         monkeypatch.setattr("repo_release_tools.commands.docs_cmd._cmd_publish", lambda args: 7)
@@ -429,7 +456,9 @@ class TestCmdDocs:
         assert cmd_docs(args) == 7
 
     def test_cmd_docs_dispatches_inject(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
     ) -> None:
         """Should dispatch inject to the inject helper."""
         monkeypatch.setattr("repo_release_tools.commands.docs_cmd._cmd_inject", lambda args: 8)
@@ -439,7 +468,9 @@ class TestCmdDocs:
         assert cmd_docs(args) == 8
 
     def test_cmd_docs_dispatches_suggest(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
     ) -> None:
         """Should dispatch suggest to the suggest helper."""
         monkeypatch.setattr("repo_release_tools.commands.docs_cmd._cmd_suggest", lambda args: 9)
@@ -453,10 +484,13 @@ class TestCmdSuggest:
     """Test _cmd_suggest wrapper."""
 
     def test_cmd_suggest_forwards_to_docs_suggest(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
     ) -> None:
         monkeypatch.setattr(
-            "repo_release_tools.commands.docs_cmd.cmd_docs_suggest", lambda args: 12
+            "repo_release_tools.commands.docs_cmd.cmd_docs_suggest",
+            lambda args: 12,
         )
 
         args = argparse.Namespace(root=str(temp_repo))
@@ -468,7 +502,10 @@ class TestCmdPublish:
     """Test _cmd_publish sub-action."""
 
     def test_cmd_publish_dry_run_lists_targets(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Dry-run publish should report every generated target without writing."""
         from repo_release_tools.docs import publisher as docs_publisher
@@ -482,7 +519,7 @@ class TestCmdPublish:
             ),
         ]
         monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter(targets))
-        monkeypatch.setattr(docs_publisher, "validate_generated_pages", lambda: [])
+        monkeypatch.setattr(docs_publisher, "validate_generated_pages", list)
 
         args = argparse.Namespace(check=False, dry_run=True, fail_on_change=False)
 
@@ -492,7 +529,9 @@ class TestCmdPublish:
         assert "README.md" in out
 
     def test_cmd_publish_forwards_all_arguments(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
     ) -> None:
         """Non-dry-run publish should call apply_generated_docs for each target."""
         from repo_release_tools.docs import publisher as docs_publisher
@@ -504,7 +543,7 @@ class TestCmdPublish:
             anchor_id="index-topic-links",
         )
         monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter([target]))
-        monkeypatch.setattr(docs_publisher, "validate_generated_pages", lambda: [])
+        monkeypatch.setattr(docs_publisher, "validate_generated_pages", list)
 
         def fake_apply_generated_docs(
             content: str,
@@ -536,11 +575,13 @@ class TestCmdPublish:
                 False,
                 True,
                 "index-topic-links",
-            )
+            ),
         ]
 
     def test_cmd_publish_fails_when_generated_pages_are_inconsistent(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Publish should fail fast when generated-page consistency checks report issues."""
         from repo_release_tools.docs import publisher as docs_publisher
@@ -566,7 +607,10 @@ class TestCmdInject:
     """Test _cmd_inject sub-action."""
 
     def test_cmd_inject_returns_zero_when_no_config_exists(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Missing config should be treated as a no-op."""
 
@@ -581,7 +625,9 @@ class TestCmdInject:
         assert "skipping shared_blocks injection" in capsys.readouterr().out
 
     def test_cmd_inject_returns_zero_when_no_shared_blocks(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
     ) -> None:
         """A config without shared blocks should be a no-op."""
         monkeypatch.setattr(
@@ -594,7 +640,10 @@ class TestCmdInject:
         assert _cmd_inject(args) == 0
 
     def test_cmd_inject_dry_run_reports_targets(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Dry-run injection should only report intended target files."""
         block = SharedBlock(anchor_id="shared-footer", content="footer", targets=("README.md",))
@@ -609,7 +658,9 @@ class TestCmdInject:
         assert "README.md" in capsys.readouterr().out
 
     def test_cmd_inject_preserves_rich_inline_content(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
     ) -> None:
         """Inline shared blocks should preserve Markdown and HTML fragments unchanged."""
         readme = temp_repo / "README.md"
@@ -635,7 +686,10 @@ class TestCmdInject:
         assert '<iframe src="https://example.test/embed"></iframe>' in result
 
     def test_cmd_inject_reports_when_no_targets_match(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Shared blocks with unmatched glob patterns should warn and continue."""
         block = SharedBlock(anchor_id="shared-footer", content="footer", targets=("docs/**/*.md",))
@@ -677,7 +731,9 @@ targets = ["README.md"]
             _cmd_inject(args)
 
     def test_cmd_inject_writes_content_with_placeholders(
-        self, monkeypatch: pytest.MonkeyPatch, temp_repo: Path
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_repo: Path,
     ) -> None:
         """Shared blocks should replace version and repo URL placeholders before writing."""
         from repo_release_tools import __version__ as rrt_version

@@ -30,7 +30,7 @@ path that does not resolve.
 
 Also verify that no stale `.github/hooks/*.json` activation files remain. At a
 minimum, `.github/hooks/coverage-protection.json` and
-`.github/hooks/rrt-ux-design.json` must **not** exist; their presence would
+`.github/hooks/rrt-user-bootstrap.json` must **not** exist; their presence would
 indicate a stale config split.
 
 ### Area 2 — Coverage threshold consistency
@@ -70,7 +70,7 @@ that every file named in the table exists on disk. List any `.md` file in
 
 ### Area 6 — Skill command staleness
 
-Read the repo-owned source skill `.github/skills/repo-release-tools/SKILL.md`.
+Read the repo-owned source skill `.github/skills/rrt-user-bootstrap/SKILL.md`.
 Collect every `rrt <subcommand>` shown in code examples. For each subcommand,
 check whether a corresponding implementation module exists in
 `src/repo_release_tools/commands/`, accounting for the `_cmd` suffix used by
@@ -81,14 +81,14 @@ be found.
 ### Area 7 — Hook enforcement vs documentation
 
 Read `.claude/hooks/rrt_ux_write_guard.py` and extract its `_HARD_BLOCKS`
-patterns. Read the repo-owned source skill `.github/skills/rrt-ux-design/SKILL.md`
-and identify the documented hard-block UX patterns. Compare only patterns that
-the skill presents as write-time enforcement or hard blocks. Do not flag broader
-contributor guidance (for example migration advice, test expectations, or
-deprecation policy) unless the skill explicitly claims the write guard enforces
-it. Flag any hard-block pattern in the script that has no matching description
-in the skill. Flag any hard-block pattern described in the skill that has no
-corresponding enforcement in the script.
+patterns. Read `.github/instructions/repo-release-tools.instructions.md` and
+identify the documented write-time UI hard blocks. Compare only patterns that
+the instructions present as enforced or prohibited in source writes. Do not flag
+broader contributor guidance (for example migration advice, test expectations,
+or deprecation policy) unless the instructions explicitly claim the write guard
+enforces it. Flag any hard-block pattern in the script that has no matching
+description in the instructions. Flag any hard-block pattern described in the
+instructions that has no corresponding enforcement in the script.
 
 ## Out of scope
 

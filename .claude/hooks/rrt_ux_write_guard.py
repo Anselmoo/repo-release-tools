@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rrt-ux-design write guard — PreToolUse hook.
+"""rrt UX write guard — PreToolUse hook.
 
 Intercepts every Write/Edit/MultiEdit tool call.  When the target file is
 inside the rrt source or test tree, scans the *new content* for hard
@@ -43,7 +43,7 @@ _SCOPE = re.compile(
     r"src/repo_release_tools/"
     r"|tests/"
     r"|src\\repo_release_tools\\"  # Windows paths
-    r"|tests\\"
+    r"|tests\\",
 )
 
 # Test files may assert on raw ANSI sequences — hard blocks are demoted to
@@ -90,7 +90,7 @@ def _extract_new_content(payload: dict) -> tuple[str, str]:
 
 
 def main() -> None:
-    """Main entry point for the rrt-ux-design write guard."""
+    """Main entry point for the rrt UX write guard."""
     payload = json.loads(sys.stdin.read())
     path, content = _extract_new_content(payload)
 
@@ -112,7 +112,7 @@ def main() -> None:
             "[rrt-ux-contract] BLOCKED: hard violation(s) in new content for "
             f"{path}:\n\n" + "\n\n".join(hard_hits) + "\n\n"
             "Fix: replace raw escapes with the appropriate repo_release_tools.ui function.\n"
-            "See the rrt-ux-design skill for the full migration map."
+            "See the workspace UI instructions for the full migration map."
         )
         print(msg, file=sys.stderr)
         sys.exit(2)
@@ -145,9 +145,9 @@ def main() -> None:
                     "hookSpecificOutput": {
                         "hookEventName": "PreToolUse",
                         "additionalContext": warn_text,
-                    }
-                }
-            )
+                    },
+                },
+            ),
         )
 
     sys.exit(0)

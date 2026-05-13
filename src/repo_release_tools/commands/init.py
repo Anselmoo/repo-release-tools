@@ -152,7 +152,7 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     if explicit_config is not None and explicit_config != target:
         relative = explicit_config.relative_to(root)
         p.warn(
-            f"{relative} still takes precedence over {DEFAULT_INIT_CONFIG} during config discovery."
+            f"{relative} still takes precedence over {DEFAULT_INIT_CONFIG} during config discovery.",
         )
     return 0
 

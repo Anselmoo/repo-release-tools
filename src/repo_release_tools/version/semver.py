@@ -16,14 +16,14 @@ class Version:
     patch: int
 
     @classmethod
-    def parse(cls, raw: str) -> "Version":
+    def parse(cls, raw: str) -> Version:
         """Parse a ``MAJOR.MINOR.PATCH`` string into a :class:`Version`."""
         parts = raw.strip().split(".")
         if len(parts) != SEMVER_PARTS or not all(part.isdigit() for part in parts):
             raise ValueError(f"Invalid semver: {raw!r}")
         return cls(int(parts[0]), int(parts[1]), int(parts[2]))
 
-    def bump(self, kind: str) -> "Version":
+    def bump(self, kind: str) -> Version:
         """Return a new :class:`Version` bumped by *kind* (``major``, ``minor``, or ``patch``)."""
         if kind == "major":
             return Version(self.major + 1, 0, 0)

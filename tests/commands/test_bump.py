@@ -99,7 +99,8 @@ def test_resolve_changelog_mode_defaults_to_generate_for_squash(tmp_path: Path) 
 
 
 def test_git_log_since_latest_tag_uses_latest_tag_range(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     calls: list[list[str]] = []
 
@@ -116,7 +117,8 @@ def test_git_log_since_latest_tag_uses_latest_tag_range(
 
 
 def test_git_log_since_latest_tag_uses_head_when_no_tags(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     calls: list[list[str]] = []
 
@@ -133,7 +135,8 @@ def test_git_log_since_latest_tag_uses_head_when_no_tags(
 
 
 def test_update_changelog_skips_missing_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
@@ -157,7 +160,8 @@ def test_update_changelog_skips_missing_file(
 
 
 def test_update_changelog_promote_dry_run_shows_preview(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
@@ -167,7 +171,11 @@ def test_update_changelog_promote_dry_run_shows_preview(
     config = _make_config(tmp_path, changelog)
 
     update_changelog(
-        config, "1.1.0", include_maintenance=False, dry_run=True, changelog_mode="promote"
+        config,
+        "1.1.0",
+        include_maintenance=False,
+        dry_run=True,
+        changelog_mode="promote",
     )
 
     output = capsys.readouterr().out
@@ -177,7 +185,9 @@ def test_update_changelog_promote_dry_run_shows_preview(
 
 
 def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
@@ -188,7 +198,11 @@ def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
     config = _make_config(tmp_path, changelog)
 
     update_changelog(
-        config, "1.1.0", include_maintenance=True, dry_run=True, changelog_mode="generate"
+        config,
+        "1.1.0",
+        include_maintenance=True,
+        dry_run=True,
+        changelog_mode="generate",
     )
 
     output = capsys.readouterr().out
@@ -213,7 +227,9 @@ def test_cmd_bump_reports_loaded_config_error(
 
 
 def test_cmd_bump_rejects_autodetected_version_mismatch(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
@@ -232,7 +248,8 @@ def test_cmd_bump_rejects_autodetected_version_mismatch(
         autodetected=True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: config,
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.check_autodetected_version_consistency",
@@ -248,7 +265,8 @@ def test_cmd_bump_rejects_autodetected_version_mismatch(
 
 
 def test_cmd_bump_stages_changelog_and_commits(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -263,7 +281,8 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
     )
     (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
@@ -271,19 +290,27 @@ kind = "package_json"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file", lambda *a, **k: None
+        "repo_release_tools.commands.bump.replace_version_in_file",
+        lambda *a, **k: None,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
 
     def fake_run(
-        cmd: list[str], root: Path, *, dry_run: bool, label: str, suppress_announce: bool = False
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
     ) -> str:
         calls.append(cmd)
         return ""
@@ -300,7 +327,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -324,7 +351,8 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
     )
     (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
@@ -332,19 +360,27 @@ kind = "package_json"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file", lambda *a, **k: None
+        "repo_release_tools.commands.bump.replace_version_in_file",
+        lambda *a, **k: None,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
 
     def fake_run(
-        cmd: list[str], root: Path, *, dry_run: bool, label: str, suppress_announce: bool = False
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
     ) -> str:
         calls.append(cmd)
         return ""
@@ -362,7 +398,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -464,7 +500,7 @@ kind = "package_json"
                 include_maintenance=False,
                 base_branch=None,
                 group=None,
-            )
+            ),
         )
     finally:
         os.chdir(cwd)
@@ -476,7 +512,8 @@ kind = "package_json"
 
 
 def test_cmd_bump_stages_generated_files_from_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -505,10 +542,12 @@ kind = "package_json"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
 
@@ -528,7 +567,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     add_calls = [cmd for cmd in calls if cmd[:2] == ["git", "add"]]
@@ -555,15 +594,18 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
     )
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: True
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: True,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
 
@@ -578,7 +620,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     captured = capsys.readouterr()
@@ -603,17 +645,20 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n', encoding="utf-8"
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
     )
 
     calls: list[list[str]] = []
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: True
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: True,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
 
@@ -634,7 +679,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     captured = capsys.readouterr()
@@ -676,7 +721,7 @@ pattern = '^(\\\\s*__version__\\\\s*=\\\\s*")([^"]+)(")'
                 include_maintenance=False,
                 base_branch=None,
                 group=None,
-            )
+            ),
         )
     finally:
         os.chdir(cwd)
@@ -716,7 +761,8 @@ version = "0.1.0"
         encoding="utf-8",
     )
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "0.1.0"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "0.1.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "package.json").write_text('{"name":"example","version":"0.1.0"}', encoding="utf-8")
 
@@ -733,7 +779,7 @@ version = "0.1.0"
                 include_maintenance=False,
                 base_branch=None,
                 group=None,
-            )
+            ),
         )
     finally:
         os.chdir(cwd)
@@ -744,7 +790,9 @@ version = "0.1.0"
 
 
 def test_cmd_bump_reports_missing_config_file(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
@@ -763,7 +811,7 @@ def test_cmd_bump_reports_missing_config_file(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 1
@@ -771,13 +819,15 @@ def test_cmd_bump_reports_missing_config_file(
 
 
 def test_cmd_bump_reports_missing_tool_rrt_guidance(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.load_or_autodetect_config",
         lambda root: (_ for _ in ()).throw(
-            ValueError("Missing rrt configuration in supported config files: pyproject.toml")
+            ValueError("Missing rrt configuration in supported config files: pyproject.toml"),
         ),
     )
     monkeypatch.setattr(
@@ -796,7 +846,7 @@ def test_cmd_bump_reports_missing_tool_rrt_guidance(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 1
@@ -804,7 +854,9 @@ def test_cmd_bump_reports_missing_tool_rrt_guidance(
 
 
 def test_cmd_bump_reports_runtime_error_loading_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
@@ -823,7 +875,7 @@ def test_cmd_bump_reports_runtime_error_loading_config(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 1
@@ -831,7 +883,9 @@ def test_cmd_bump_reports_runtime_error_loading_config(
 
 
 def test_cmd_bump_rejects_invalid_explicit_version(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -845,7 +899,8 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "1.0.0"}',
+        encoding="utf-8",
     )
 
     monkeypatch.chdir(tmp_path)
@@ -861,7 +916,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 1
@@ -869,7 +924,9 @@ kind = "package_json"
 
 
 def test_cmd_bump_refuses_dirty_working_tree(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -883,12 +940,14 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "1.0.0"}',
+        encoding="utf-8",
     )
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: False
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: False,
     )
 
     result = cmd_bump(
@@ -902,7 +961,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 1
@@ -910,7 +969,8 @@ kind = "package_json"
 
 
 def test_cmd_bump_checks_out_base_branch_before_release_branch(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
@@ -924,20 +984,24 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "1.0.0"}',
+        encoding="utf-8",
     )
 
     calls: list[list[str]] = []
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.current_branch", lambda root: "feature/current"
+        "repo_release_tools.commands.bump.git.current_branch",
+        lambda root: "feature/current",
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git.run",
@@ -956,7 +1020,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch="main",
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -991,7 +1055,8 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "0.1.0"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "0.1.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "package.json").write_text('{"name":"example","version":"2.3.4"}', encoding="utf-8")
 
@@ -1008,7 +1073,7 @@ kind = "package_json"
                 include_maintenance=False,
                 base_branch=None,
                 group="web",
-            )
+            ),
         )
     finally:
         os.chdir(cwd)
@@ -1020,7 +1085,8 @@ kind = "package_json"
 
 
 def test_cmd_bump_no_update_skips_lock_command(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """--no-update must prevent the lock command from running."""
     (tmp_path / ".rrt.toml").write_text(
@@ -1035,17 +1101,20 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{\n  "name": "example",\n  "version": "1.0.0"\n}\n', encoding="utf-8"
+        '{\n  "name": "example",\n  "version": "1.0.0"\n}\n',
+        encoding="utf-8",
     )
 
     calls: list[list[str]] = []
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
 
@@ -1065,7 +1134,7 @@ kind = "package_json"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1081,14 +1150,17 @@ def test_cmd_bump_native_pep621_no_config(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
 
     result = cmd_bump(
@@ -1101,7 +1173,7 @@ def test_cmd_bump_native_pep621_no_config(monkeypatch: pytest.MonkeyPatch, tmp_p
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1110,23 +1182,28 @@ def test_cmd_bump_native_pep621_no_config(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 
 def test_cmd_bump_native_package_json_no_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Bump works on a plain JS project (package.json only) without [tool.rrt] config."""
     (tmp_path / "package.json").write_text(
-        '{\n  "name": "example",\n  "version": "2.0.0"\n}\n', encoding="utf-8"
+        '{\n  "name": "example",\n  "version": "2.0.0"\n}\n',
+        encoding="utf-8",
     )
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
 
     result = cmd_bump(
@@ -1139,7 +1216,7 @@ def test_cmd_bump_native_package_json_no_config(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1162,14 +1239,17 @@ version = "0.3.0"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
 
     result = cmd_bump(
@@ -1182,7 +1262,7 @@ version = "0.3.0"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1215,14 +1295,17 @@ kind = "python_version"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
     result = cmd_bump(
         Namespace(
@@ -1234,7 +1317,7 @@ kind = "python_version"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     captured = capsys.readouterr()
@@ -1244,7 +1327,8 @@ kind = "python_version"
 
 
 def test_cmd_bump_python_version_kind_writes_file(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """bump actually writes the new __version__ when not in dry-run mode."""
     init_file = tmp_path / "src" / "mypkg" / "__init__.py"
@@ -1266,14 +1350,17 @@ kind = "python_version"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
 
     result = cmd_bump(
@@ -1286,7 +1373,7 @@ kind = "python_version"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1294,7 +1381,8 @@ kind = "python_version"
 
 
 def test_cmd_bump_autodetects_python_version_file(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Zero-config bump auto-detects __version__ in src/<pkg>/__init__.py."""
     (tmp_path / "pyproject.toml").write_text(
@@ -1307,14 +1395,17 @@ def test_cmd_bump_autodetects_python_version_file(
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
 
     result = cmd_bump(
@@ -1327,7 +1418,7 @@ def test_cmd_bump_autodetects_python_version_file(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1356,14 +1447,17 @@ kind = "go_version"
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
 
     result = cmd_bump(
@@ -1376,7 +1470,7 @@ kind = "go_version"
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1389,7 +1483,8 @@ kind = "go_version"
 
 
 def test_update_changelog_inserts_after_empty_unreleased(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """When [Unreleased] exists but is empty, the generated section goes after it."""
     from repo_release_tools.commands.bump import update_changelog
@@ -1433,7 +1528,8 @@ def test_update_changelog_inserts_after_empty_unreleased(
 
 
 def test_update_changelog_adds_unreleased_placeholder_when_absent(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """When no [Unreleased] section exists the bump adds a health-mode placeholder."""
     from repo_release_tools.changelog import has_unreleased_section
@@ -1502,7 +1598,8 @@ def _make_config(tmp_path: Path, changelog: Path) -> RrtConfig:
 
 
 def test_update_changelog_mode_promote_with_entries(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """promote mode promotes [Unreleased] when entries are present."""
     from repo_release_tools.commands.bump import update_changelog
@@ -1515,7 +1612,11 @@ def test_update_changelog_mode_promote_with_entries(
     config = _make_config(tmp_path, changelog)
 
     update_changelog(
-        config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote"
+        config,
+        "1.1.0",
+        include_maintenance=False,
+        dry_run=False,
+        changelog_mode="promote",
     )
 
     content = changelog.read_text(encoding="utf-8")
@@ -1525,7 +1626,9 @@ def test_update_changelog_mode_promote_with_entries(
 
 
 def test_update_changelog_mode_promote_empty_section_warns(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """promote mode with empty [Unreleased] prints a warning and skips writing."""
     from repo_release_tools.commands.bump import update_changelog
@@ -1536,14 +1639,19 @@ def test_update_changelog_mode_promote_empty_section_warns(
     config = _make_config(tmp_path, changelog)
 
     update_changelog(
-        config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote"
+        config,
+        "1.1.0",
+        include_maintenance=False,
+        dry_run=False,
+        changelog_mode="promote",
     )
 
     assert changelog.read_text(encoding="utf-8") == original  # unchanged
 
 
 def test_update_changelog_mode_promote_no_section_warns(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """promote mode with no [Unreleased] section prints a warning and skips writing."""
     from repo_release_tools.commands.bump import update_changelog
@@ -1554,14 +1662,19 @@ def test_update_changelog_mode_promote_no_section_warns(
     config = _make_config(tmp_path, changelog)
 
     update_changelog(
-        config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="promote"
+        config,
+        "1.1.0",
+        include_maintenance=False,
+        dry_run=False,
+        changelog_mode="promote",
     )
 
     assert changelog.read_text(encoding="utf-8") == original  # unchanged
 
 
 def test_update_changelog_mode_generate_ignores_unreleased(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """generate mode always writes from git log, even with a non-empty [Unreleased]."""
     from repo_release_tools.commands.bump import update_changelog
@@ -1578,7 +1691,11 @@ def test_update_changelog_mode_generate_ignores_unreleased(
     config = _make_config(tmp_path, changelog)
 
     update_changelog(
-        config, "1.1.0", include_maintenance=False, dry_run=False, changelog_mode="generate"
+        config,
+        "1.1.0",
+        include_maintenance=False,
+        dry_run=False,
+        changelog_mode="generate",
     )
 
     content = changelog.read_text(encoding="utf-8")
@@ -1587,7 +1704,8 @@ def test_update_changelog_mode_generate_ignores_unreleased(
 
 
 def test_cmd_bump_defaults_to_generate_for_squash_workflow(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
     group = VersionGroup(
@@ -1609,7 +1727,8 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: config,
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.read_group_current_version",
@@ -1626,14 +1745,17 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
         ),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
 
     result = cmd_bump(
@@ -1648,7 +1770,7 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1661,7 +1783,8 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
 
 
 def test_update_changelog_generates_rst_section(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """For a .rst changelog the generated section must use RST underline notation."""
     from repo_release_tools.changelog import ChangelogFormat, has_unreleased_section
@@ -1689,7 +1812,8 @@ def test_update_changelog_generates_rst_section(
 
 
 def test_update_changelog_generates_txt_section(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """For a .txt changelog the generated section must use RST underline notation."""
     from repo_release_tools.commands.bump import update_changelog
@@ -1751,24 +1875,30 @@ def _setup_pin_bump(tmp_path: Path) -> Path:
 
 
 def test_cmd_bump_updates_pin_targets(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     """cmd_bump should update pin_targets files to the new version."""
     doc = _setup_pin_bump(tmp_path)
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git_log_since_latest_tag", lambda root: []
+        "repo_release_tools.commands.bump.git_log_since_latest_tag",
+        lambda root: [],
     )
 
     args = Namespace(
@@ -1789,7 +1919,9 @@ def test_cmd_bump_updates_pin_targets(
 
 
 def test_cmd_bump_dry_run_does_not_write_pin_targets(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     """In dry-run mode, pin_targets files must not be modified."""
     doc = _setup_pin_bump(tmp_path)
@@ -1797,17 +1929,21 @@ def test_cmd_bump_dry_run_does_not_write_pin_targets(
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git_log_since_latest_tag", lambda root: []
+        "repo_release_tools.commands.bump.git_log_since_latest_tag",
+        lambda root: [],
     )
 
     args = Namespace(
@@ -1830,7 +1966,8 @@ def test_cmd_bump_dry_run_does_not_write_pin_targets(
 
 
 def test_cmd_bump_no_pin_sync_skips_pin_targets(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """--no-pin-sync must skip all pin_targets updates."""
     doc = _setup_pin_bump(tmp_path)
@@ -1838,17 +1975,21 @@ def test_cmd_bump_no_pin_sync_skips_pin_targets(
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label: "",
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git_log_since_latest_tag", lambda root: []
+        "repo_release_tools.commands.bump.git_log_since_latest_tag",
+        lambda root: [],
     )
 
     args = Namespace(
@@ -1870,7 +2011,8 @@ def test_cmd_bump_no_pin_sync_skips_pin_targets(
 
 
 def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Duplicate group/global pins should only update and stage once."""
     version_file = tmp_path / "pyproject.toml"
@@ -1908,7 +2050,8 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: config,
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.read_group_current_version",
@@ -1923,10 +2066,12 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
         lambda pin, version, dry_run: pin_updates.append((pin.path, version, dry_run)),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
@@ -1946,7 +2091,7 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -1957,7 +2102,8 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
 
 
 def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     version_file_a = tmp_path / "pyproject.toml"
     version_file_b = tmp_path / "src" / "example" / "__init__.py"
@@ -2018,7 +2164,10 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
 
     @contextmanager
     def fake_spinner_lines(
-        label: str, *, detail: str | None = None, file: object = None
+        label: str,
+        *,
+        detail: str | None = None,
+        file: object = None,
     ) -> Generator[None, None, None]:
         spinner_calls.append((label, detail, file))
         yield
@@ -2036,17 +2185,20 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: config,
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.read_group_current_version",
         lambda grp: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr("repo_release_tools.commands.bump.ProgressLine", _FakeProgressLine)
@@ -2065,7 +2217,7 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0
@@ -2086,7 +2238,8 @@ class _TtyBuffer(io.StringIO):
 
 
 def test_progress_bar_renders_25_50_75_100_on_same_line(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """25 / 50 / 75 / 100% bar renders each use \\r in-place — no bare \\n between renders.
 
@@ -2122,20 +2275,24 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
         print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
 
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.load_or_autodetect_config", lambda root: config
+        "repo_release_tools.commands.bump.load_or_autodetect_config",
+        lambda root: config,
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.read_group_current_version",
         lambda grp: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file", fake_replace_version
+        "repo_release_tools.commands.bump.replace_version_in_file",
+        fake_replace_version,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr("repo_release_tools.commands.bump.git.run", lambda *a, **kw: "")
@@ -2158,7 +2315,7 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
             include_maintenance=False,
             base_branch=None,
             group=None,
-        )
+        ),
     )
 
     assert result == 0

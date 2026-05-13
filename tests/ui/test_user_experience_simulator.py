@@ -47,14 +47,21 @@ Affected entrypoints:
 -   toc     Generate a Markdown table of contents from headings
 -   tree    Show a project tree with gitignore-aware filtering
 -   docs    Extract and manage source-owned documentation blocks
+-   drift   Lock and check agent-surface drift
 
 ## Git Workflow
 -   branch  Branch management helpers for conventional branch naming
 -   git     Git workflow helpers for repository status, commit, sync, and history operations
 
 ## Setup & Tooling
--   init   Generate a recommended rrt configuration for the current repository
--   skill  Install the bundled repo-release-tools agent skill
+-   install Install bundled rrt agent surfaces into local/global roots
+-   agents  Install bundled agent definitions for Claude and Codex
+-   hooks   Install boilerplate lifecycle hook scripts for Claude and Codex
+-   init    Generate a recommended rrt configuration for the current repository
+-   skill   Install the bundled repo-release-tools agent skill
+
+## CI & Automation
+-   action  Scaffold a starter GitHub Actions workflow for repo-release-tools
 
 """
 
@@ -126,7 +133,8 @@ class TestSyntaxHighlight:
         assert result == "key = 'val'"
 
     def test_returns_highlighted_when_color_on_and_toml(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(syntax, "supports_color", lambda stream=None: True)
         monkeypatch.setattr(syntax, "detect_color_level", lambda: "standard")
@@ -228,7 +236,8 @@ class TestPrompts:
         assert ask("Name?", default="rrt") == "rrt"
 
     def test_ask_returns_empty_when_no_default_on_non_tty(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
         assert ask("Name?") == ""
@@ -238,7 +247,8 @@ class TestPrompts:
         assert confirm("Proceed?", default=True) is True
 
     def test_confirm_returns_false_default_on_non_tty(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr("sys.stdin", io.StringIO(""))
         assert confirm("Proceed?", default=False) is False
@@ -309,7 +319,9 @@ class TestLayout:
 class TestEmphasis:
     def test_bold_emits_sgr1_when_color_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            font, "apply", lambda text, style, *, stream=None: f"\x1b[1m{text}\x1b[0m"
+            font,
+            "apply",
+            lambda text, style, *, stream=None: f"\x1b[1m{text}\x1b[0m",
         )
         assert "\x1b[1m" in bold("x")
 
@@ -337,7 +349,8 @@ class TestEmphasis:
 
 class TestApplyStyle:
     def test_combined_bold_and_named_color_emits_ansi(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         result = apply_style("Done!", bold=True, color="success")
@@ -355,7 +368,8 @@ class TestApplyStyle:
         assert "38;2;255;0;0" in result
 
     def test_rgb_fg_downsampled_in_standard_no_24bit_code(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
         monkeypatch.setattr(color, "detect_color_level", lambda: "standard")
@@ -392,7 +406,8 @@ class TestColorLevels:
         assert detect_color_level() == "none"
 
     def test_colorterm_truecolor_returns_truecolor_level(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("NO_COLOR", raising=False)
         monkeypatch.delenv("RRT_COLOR", raising=False)
@@ -424,7 +439,8 @@ class TestColorLevels:
         assert detect_color_level() == "none"
 
     def test_rrt_color_override_truecolor_returns_truecolor(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.delenv("NO_COLOR", raising=False)
         monkeypatch.setenv("RRT_COLOR", "truecolor")
@@ -501,7 +517,8 @@ class TestMessaging:
         assert "quiet" in result
 
     def test_all_messaging_functions_plain_when_no_color(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         for fn in (error, warning, info, success, subtle):
@@ -570,7 +587,8 @@ class TestDryRunPrinter:
         assert "add entry" in out
 
     def test_would_install_shows_name_target_location(
-        self, capsys: pytest.CaptureFixture[str]
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         p = DryRunPrinter(dry_run=True)
         p.would_install("skill.md", "copilot-local", "/some/path")
@@ -605,7 +623,8 @@ class TestDryRunPrinter:
         assert "Proceeding anyway" in out
 
     def test_footer_live_shows_message_no_dry_run_suffix(
-        self, capsys: pytest.CaptureFixture[str]
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         p = DryRunPrinter(dry_run=False)
         p.footer("Completed")
@@ -622,7 +641,9 @@ class TestDryRunPrinter:
         assert "complete" in out
 
     def test_no_color_fallback(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setattr(color, "supports_color", lambda stream=None: False)
         p = DryRunPrinter(dry_run=False)
@@ -636,7 +657,9 @@ class TestFileEntry:
     """Verify DryRunPrinter.file_entry renders each kind with path and correct stream."""
 
     def test_added_contains_path(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
@@ -646,7 +669,9 @@ class TestFileEntry:
         assert out.strip()
 
     def test_removed_contains_path(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
@@ -655,7 +680,9 @@ class TestFileEntry:
         assert "src/foo.py" in out
 
     def test_modified_contains_path(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
@@ -664,7 +691,9 @@ class TestFileEntry:
         assert "src/foo.py" in out
 
     def test_renamed_contains_path(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
@@ -673,7 +702,9 @@ class TestFileEntry:
         assert "src/foo.py" in out
 
     def test_conflict_contains_path(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
@@ -682,7 +713,9 @@ class TestFileEntry:
         assert "src/foo.py" in out
 
     def test_untracked_contains_path(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
@@ -691,7 +724,9 @@ class TestFileEntry:
         assert "src/foo.py" in out
 
     def test_stream_routes_to_stderr(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         import sys
 
@@ -707,7 +742,9 @@ class TestListItem:
     """Verify DryRunPrinter.list_item renders bullet text and respects stream=."""
 
     def test_text_appears_in_stdout(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setenv("NO_COLOR", "1")
         p = DryRunPrinter(dry_run=False)
@@ -717,7 +754,9 @@ class TestListItem:
         assert captured.err == ""
 
     def test_stream_routes_to_stderr(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         import sys
 

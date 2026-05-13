@@ -78,19 +78,19 @@ def pytest_collection_finish(session: pytest.Session) -> None:
         if missing_from_docs:
             lines.append(
                 f"  CLI subcommands missing from the test docstring: "
-                f"{', '.join(sorted(missing_from_docs))}"
+                f"{', '.join(sorted(missing_from_docs))}",
             )
             lines.append(
                 "  → Add them under 'Affected entrypoints' in "
-                "tests/test_user_experience_simulator.py"
+                "tests/test_user_experience_simulator.py",
             )
         if extra_in_docs:
             lines.append(
                 f"  Docstring entries with no matching CLI subcommand: "
-                f"{', '.join(sorted(extra_in_docs))}"
+                f"{', '.join(sorted(extra_in_docs))}",
             )
             lines.append(
                 "  → Either register the subcommand in cli.build_parser() "
-                "or remove it from the docstring."
+                "or remove it from the docstring.",
             )
         pytest.exit("\n".join(lines), returncode=2)

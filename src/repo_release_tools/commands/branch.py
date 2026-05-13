@@ -182,7 +182,7 @@ def normalize_commit_type(value: str) -> str:
     if normalized not in CONVENTIONAL_TYPES:
         allowed = ", ".join(CONVENTIONAL_TYPES)
         raise argparse.ArgumentTypeError(
-            f"invalid conventional type: {value!r} (choose one of: {allowed})"
+            f"invalid conventional type: {value!r} (choose one of: {allowed})",
         )
     return normalized
 
@@ -239,7 +239,10 @@ def cmd_new(args: argparse.Namespace) -> int:
 
     p.section("Creating branch")
     git.run(
-        ["git", "checkout", "-b", branch_name], root, dry_run=args.dry_run, label="git checkout -b"
+        ["git", "checkout", "-b", branch_name],
+        root,
+        dry_run=args.dry_run,
+        label="git checkout -b",
     )
 
     if dirty:
@@ -277,7 +280,7 @@ def _parse_current_branch(branch: str) -> tuple[str, str]:
     if "/" not in branch:
         raise ValueError(
             f"Current branch {branch!r} does not follow the '<type>/<slug>' convention. "
-            "Cannot determine which part to rename."
+            "Cannot determine which part to rename.",
         )
     commit_type, _, slug = branch.partition("/")
     return commit_type, slug
@@ -358,7 +361,9 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
     if new_name == current_branch:
         DryRunPrinter(False).line(
-            "Branch name is unchanged. Nothing to do.", ok=False, stream=sys.stderr
+            "Branch name is unchanged. Nothing to do.",
+            ok=False,
+            stream=sys.stderr,
         )
         return 1
 
@@ -456,7 +461,10 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     p.blank_line()
     p.section("Resetting origin branch")
     git.run(
-        ["git", "checkout", origin_branch], root, dry_run=args.dry_run, label="git checkout origin"
+        ["git", "checkout", origin_branch],
+        root,
+        dry_run=args.dry_run,
+        label="git checkout origin",
     )
     git.run(
         ["git", "reset", "--hard", reset_target],
@@ -468,7 +476,10 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     p.blank_line()
     p.section("Switching back to rescue branch")
     git.run(
-        ["git", "checkout", branch_name], root, dry_run=args.dry_run, label="git checkout rescue"
+        ["git", "checkout", branch_name],
+        root,
+        dry_run=args.dry_run,
+        label="git checkout rescue",
     )
 
     rescued_count = "Selected" if args.dry_run else str(len(log_lines))
@@ -476,7 +487,7 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     p.footer(
         f"Done. {rescued_count} commit(s) rescued into '{branch_name}'. "
         f"'{origin_branch}' reset to '{reset_target}'. "
-        f"Suggested commit title: {commit_title}"
+        f"Suggested commit title: {commit_title}",
     )
     return 0
 
@@ -552,6 +563,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="New branch description words (replaces the current description).",
     )
     rename_parser.add_argument(
-        "--dry-run", action="store_true", help="Preview the rename without touching git."
+        "--dry-run",
+        action="store_true",
+        help="Preview the rename without touching git.",
     )
     rename_parser.set_defaults(handler=cmd_rename)

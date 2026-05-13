@@ -52,6 +52,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 .claude/hooks/completeness_guard.py",
+            "timeout": 60
+          },
+          {
+            "type": "command",
             "command": "python3 .claude/hooks/coverage_non_regression.py",
             "timeout": 60
           }

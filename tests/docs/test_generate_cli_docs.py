@@ -5,12 +5,12 @@ import importlib
 import io
 import os
 from pathlib import Path
-from types import ModuleType
+from typing import Any
 
 import pytest
 
 
-def _load_generator_module() -> ModuleType:
+def _load_generator_module() -> Any:
     """Return a freshly-reloaded docs_publisher module for test isolation."""
     import repo_release_tools.docs.publisher as pub
 
@@ -62,8 +62,8 @@ def test_render_command_docs_only_for_top_level_commands() -> None:
     class DummyModule:
         __doc__ = "# Overview\n\nParagraph.\n\n## Details\n\nMore."
 
-    setattr(docs, "COMMAND_DOC_MODULES", {"branch": DummyModule})
-    setattr(docs, "COMMAND_DOC_SOURCES", {})
+    docs.COMMAND_DOC_MODULES = {"branch": DummyModule}
+    docs.COMMAND_DOC_SOURCES = {}
 
     rendered = docs.render_command_docs(("branch",), heading_level=2)
 
@@ -86,13 +86,9 @@ def test_render_command_docs_prefers_source_owned_topic_docs_for_branch_and_git(
 
 def test_generate_markdown_places_command_docs_before_help_block() -> None:
     docs = _load_generator_module()
-    setattr(
-        docs,
-        "iter_help_sections",
-        lambda: iter([docs.HelpSection(argv=("branch",), heading_level=2)]),
-    )
-    setattr(docs, "render_command_docs", lambda argv, heading_level: "### Overview\n\nDoc text")
-    setattr(docs, "render_help", lambda argv: "Usage: rrt branch")
+    docs.iter_help_sections = lambda: iter([docs.HelpSection(argv=("branch",), heading_level=2)])
+    docs.render_command_docs = lambda argv, heading_level: "### Overview\n\nDoc text"
+    docs.render_help = lambda argv: "Usage: rrt branch"
 
     content = docs.generate_markdown()
 
@@ -129,8 +125,8 @@ def test_render_command_docs_returns_empty_for_blank_docstring() -> None:
     class BlankModule:
         __doc__ = "   "
 
-    setattr(docs, "COMMAND_DOC_SOURCES", {})
-    setattr(docs, "COMMAND_DOC_MODULES", {"branch": BlankModule})
+    docs.COMMAND_DOC_SOURCES = {}
+    docs.COMMAND_DOC_MODULES = {"branch": BlankModule}
 
     assert docs.render_command_docs(("branch",), heading_level=2) == ""
 
@@ -148,7 +144,8 @@ def test_iter_help_sections_without_subparsers_yields_root_only(
     docs = _load_generator_module()
 
     monkeypatch.setattr(
-        "repo_release_tools.cli.build_parser", lambda: __import__("argparse").ArgumentParser()
+        "repo_release_tools.cli.build_parser",
+        lambda: __import__("argparse").ArgumentParser(),
     )
 
     sections = list(docs.iter_help_sections())
@@ -299,7 +296,7 @@ def test_cmd_publish_renders_each_target_once(monkeypatch: pytest.MonkeyPatch) -
     )
 
     exit_code = docs_cmd._cmd_publish(
-        argparse.Namespace(check=False, dry_run=False, fail_on_change=False)
+        argparse.Namespace(check=False, dry_run=False, fail_on_change=False),
     )
 
     assert exit_code == 0
@@ -400,23 +397,20 @@ def test_generate_readme_links_markdown_contains_all_doc_entries() -> None:
 
 
 def test_task_generate_and_check_cover_all_generated_docs(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     docs = _load_generator_module()
     semantic_path = tmp_path / "branch.md"
     git_path = tmp_path / "git.md"
     cli_path = tmp_path / "rrt-cli.md"
 
-    setattr(
-        docs,
-        "iter_generated_doc_targets",
-        lambda: iter(
-            [
-                docs.DocTarget(cli_path, lambda: "cli\n"),
-                docs.DocTarget(semantic_path, lambda: "semantic\n"),
-                docs.DocTarget(git_path, lambda: "git\n"),
-            ]
-        ),
+    docs.iter_generated_doc_targets = lambda: iter(
+        [
+            docs.DocTarget(cli_path, lambda: "cli\n"),
+            docs.DocTarget(semantic_path, lambda: "semantic\n"),
+            docs.DocTarget(git_path, lambda: "git\n"),
+        ]
     )
 
     assert docs.task_generate() == 0
@@ -657,7 +651,8 @@ def test_apply_generated_docs_anchor_mode_fails_when_file_missing(tmp_path: Path
 
 
 def test_task_inject_shared_blocks_raises_for_malformed_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     docs = _load_generator_module()
     monkeypatch.chdir(tmp_path)
@@ -734,7 +729,8 @@ def _make_docs_file(tmp_path: Path, subdir: str = "docs") -> Path:
 
 
 def test_apply_shared_blocks_writes_rich_inline_content(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rich inline shared block content is injected unchanged apart from placeholders."""
     docs = _load_generator_module()
@@ -754,7 +750,8 @@ def test_apply_shared_blocks_writes_rich_inline_content(
 
 
 def test_apply_shared_blocks_writes_inline_content(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Shared block with inline content is injected into matching doc files."""
     docs = _load_generator_module()
@@ -769,7 +766,8 @@ def test_apply_shared_blocks_writes_inline_content(
 
 
 def test_apply_shared_blocks_check_mode_fails_for_stale_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Check mode returns 1 when a block is stale (not yet injected)."""
     docs = _load_generator_module()
@@ -783,7 +781,8 @@ def test_apply_shared_blocks_check_mode_fails_for_stale_file(
 
 
 def test_apply_shared_blocks_check_mode_passes_for_current_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Check mode returns 0 when all blocks are already up to date."""
     docs = _load_generator_module()
@@ -800,7 +799,8 @@ def test_apply_shared_blocks_check_mode_passes_for_current_file(
 
 
 def test_apply_shared_blocks_noop_when_no_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Returns 0 gracefully when no rrt config exists in cwd."""
     docs = _load_generator_module()
@@ -811,7 +811,8 @@ def test_apply_shared_blocks_noop_when_no_config(
 
 
 def test_apply_shared_blocks_noop_when_no_shared_blocks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Returns 0 gracefully when config exists but has no shared_blocks."""
     docs = _load_generator_module()
@@ -828,7 +829,9 @@ def test_apply_shared_blocks_noop_when_no_shared_blocks(
 
 
 def test_apply_shared_blocks_warns_when_no_targets_matched(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     """Logs a message when no target files match the glob patterns."""
     docs = _load_generator_module()
@@ -843,7 +846,8 @@ def test_apply_shared_blocks_warns_when_no_targets_matched(
 
 
 def test_apply_shared_blocks_rejects_legacy_template_key(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Legacy template-backed shared blocks still work with deprecation warning."""
     docs = _load_generator_module()
@@ -851,7 +855,8 @@ def test_apply_shared_blocks_rejects_legacy_template_key(
 
     (tmp_path / "scripts" / "templates").mkdir(parents=True, exist_ok=True)
     (tmp_path / "scripts" / "templates" / "test-footer.md").write_text(
-        "legacy footer\n", encoding="utf-8"
+        "legacy footer\n",
+        encoding="utf-8",
     )
     (tmp_path / "docs").mkdir(parents=True, exist_ok=True)
     (tmp_path / "docs" / "guide.md").write_text(

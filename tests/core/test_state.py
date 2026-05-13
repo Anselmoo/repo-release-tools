@@ -196,7 +196,7 @@ class TestLockIsCurrent:
         old_sources = [{"source_file": "a.py", "hash": "sha256:abc", "lang": "python"}]
         write_lock(lock_path, build_lock(old_sources))
         new_sources = old_sources + [
-            {"source_file": "b.py", "hash": "sha256:def", "lang": "python"}
+            {"source_file": "b.py", "hash": "sha256:def", "lang": "python"},
         ]
         ok, messages = lock_is_current(lock_path, new_sources)
         assert not ok

@@ -1,10 +1,9 @@
-"""Install the bundled repo-release-tools agent skill.
+"""Install bundled rrt user workflow skills.
 
 ## Overview
 
-`rrt skill` manages installation of the packaged `repo-release-tools` skill
-into tool-specific skill directories. The only implemented subcommand is
-`install`.
+`rrt skill` manages installation of the packaged user-facing `rrt` skills into
+tool-specific skill directories. The only implemented subcommand is `install`.
 
 ## Target surfaces
 
@@ -12,9 +11,10 @@ The install command can write to local or global skill roots for:
 
 - Claude: `.claude/skills`
 - Codex: `.codex/skills`
-- Copilot: `.copilot/skills`
+- Copilot: `.github/skills` (local), `~/.copilot/skills` (global)
+- Gemini: `.gemini/skills`
 
-Each target receives a directory named after the bundled skill, containing
+Each target receives one directory per bundled skill, each containing a
 `SKILL.md`.
 
 ## Behavior
@@ -22,7 +22,7 @@ Each target receives a directory named after the bundled skill, containing
 - Accepts one or more `--target` values; duplicates are ignored after first use.
 - Resolves local targets relative to the current working directory and global
   targets relative to the home directory.
-- Refuses to overwrite an existing installation unless `--force` is provided.
+- Refuses to overwrite an existing skill directory unless `--force` is provided.
 - Supports `--dry-run` previews that show the resolved destination paths
   without writing files.
 
@@ -30,6 +30,7 @@ Each target receives a directory named after the bundled skill, containing
 
 - `rrt skill install --target copilot-local`
 - `rrt skill install --target claude-local --target codex-local`
+- `rrt skill install --target gemini-local`
 - `rrt skill install --target copilot-global --force --dry-run`
 
 ## Caveats
@@ -44,12 +45,13 @@ Each target receives a directory named after the bundled skill, containing
 from __future__ import annotations
 
 import argparse
+import contextlib
 import shutil
 import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-from repo_release_tools.integrations.skill_assets import INSTALLED_CLI_SKILL
+from repo_release_tools.integrations.skill_assets import BUNDLED_SKILLS
 from repo_release_tools.ui import DryRunPrinter
 
 TARGET_PATHS = {
@@ -58,50 +60,50 @@ TARGET_PATHS = {
     "codex-global": lambda cwd, home: home / ".codex" / "skills",
     "codex-local": lambda cwd, home: cwd / ".codex" / "skills",
     "copilot-global": lambda cwd, home: home / ".copilot" / "skills",
-    "copilot-local": lambda cwd, home: cwd / ".copilot" / "skills",
+    "copilot-local": lambda cwd, home: cwd / ".github" / "skills",
+    "gemini-global": lambda cwd, home: home / ".gemini" / "skills",
+    "gemini-local": lambda cwd, home: cwd / ".gemini" / "skills",
 }
 
 
 SKILL_EXAMPLES = (
     "  $ rrt skill install --target copilot-local\n"
-    "  $ rrt skill install --target claude-local --target codex-local"
+    "  $ rrt skill install --target claude-local --target codex-local\n"
+    "  $ rrt skill install --target gemini-local"
 )
 
 SKILL_INSTALL_EXAMPLES = (
     "  $ rrt skill install --target copilot-local\n"
     "  $ rrt skill install --target claude-local --target codex-local\n"
-    "  $ rrt skill install --target copilot-global --force --dry-run"
+    "  $ rrt skill install --target copilot-global --force --dry-run\n"
+    "  $ rrt skill install --target gemini-global"
 )
 
 SKILLS_DOC = """# rrt skill
 
-This repository bundles two agent skills:
+This repository bundles ten user workflow skills:
 
-- `/.github/skills/repo-release-tools-uvx/SKILL.md` — zero-install guidance
-- `/.github/skills/repo-release-tools/SKILL.md` — guidance for an installed `rrt`
+- `rrt-user-bootstrap`
+- `rrt-user-versioning`
+- `rrt-user-release-flow`
+- `rrt-user-branch-strategy`
+- `rrt-user-commit-quality`
+- `rrt-user-changelog-automation`
+- `rrt-user-docs-consistency`
+- `rrt-user-config-safety`
+- `rrt-user-ci-readiness`
+- `rrt-user-migration-uvx-to-installed`
 
 If you need the exact CLI syntax for branch, Git, or skill commands, use the
 [rrt CLI reference](rrt-cli.md) first.
 
-## Which skill to use
+## What the skill bundle covers
 
-### `repo-release-tools-uvx`
+Use this bundle when you want shipped help for setup, versioning, release flow,
+branch naming, commit quality, changelog automation, docs consistency, config
+safety, CI readiness, and migration from `uvx` to installed workflows.
 
-Use this when `repo-release-tools` is not installed and you want quick
-`uvx`-based usage examples for branches, bumps, or one-off release automation.
-
-### `repo-release-tools`
-
-Use this when `rrt` is already available and you want help with:
-
-- `rrt branch ...` naming and branch repair
-- `rrt bump ...` release versioning
-- `rrt git ...` workflow helpers
-- `rrt doctor` / `rrt config`
-- `rrt skill install ...`
-- hook and CI workflow guidance that points back to the main docs
-
-## Installing the bundled CLI skill
+## Installing the bundled user skills
 
 Install into one or more agent skill locations with:
 
@@ -116,15 +118,18 @@ Supported targets:
 
 | Target | Directory |
 |---|---|
-| `copilot-local` | `.copilot/skills` |
+| `copilot-local` | `.github/skills` |
 | `claude-local` | `.claude/skills` |
 | `codex-local` | `.codex/skills` |
 | `copilot-global` | `~/.copilot/skills` |
 | `claude-global` | `~/.claude/skills` |
 | `codex-global` | `~/.codex/skills` |
+| `gemini-local` | `.gemini/skills` |
+| `gemini-global` | `~/.gemini/skills` |
 
-The installer refuses to overwrite an existing skill unless you pass `--force`.
-Use `--dry-run` to preview the destination paths first.
+The installer writes one directory per bundled skill. It refuses to overwrite an
+existing skill directory unless you pass `--force`. Use `--dry-run` to preview
+the destination paths first.
 
 ## Related docs
 
@@ -133,14 +138,12 @@ Use `--dry-run` to preview the destination paths first.
 - [GitHub Action](action.md)
 - [rrt git](git_cmd.md)
 
-## Skill eval fixtures
+## Install surfaces
 
-Keep the canonical skill eval prompts in `/evals/evals.json`.
-
-Structured workspace artifacts under
-`.github/skills/repo-release-tools-workspace/` may be committed as evidence of an
-evaluation run. Do **not** commit ad-hoc execution transcripts
-(`transcript.md`).
+- Claude: `./.claude/skills` and `~/.claude/skills`
+- Codex: `./.codex/skills` and `~/.codex/skills`
+- Gemini: `./.gemini/skills` and `~/.gemini/skills`
+- Copilot: `./.github/skills` and `~/.copilot/skills`
 """
 
 # Ordered source-owned topic docs for docs generation.
@@ -161,14 +164,17 @@ def _dedupe_targets(targets: Iterable[str]) -> list[str]:
 
 def _display_path(path: Path, *, cwd: Path, home: Path) -> str:
     """Render *path* relative to cwd or home when possible."""
-    try:
+    with contextlib.suppress(ValueError):
         return str(path.relative_to(cwd))
-    except ValueError:
-        pass
-    try:
+    with contextlib.suppress(ValueError):
         return f"~/{path.relative_to(home)}"
-    except ValueError:
-        return str(path)
+    return str(path)
+
+
+def _emit_install_error(message: str) -> int:
+    p = DryRunPrinter(False)
+    p.line(message, ok=False, stream=sys.stderr)
+    return 1
 
 
 def _resolve_install_plan(targets: list[str], *, cwd: Path, home: Path) -> list[tuple[str, Path]]:
@@ -176,32 +182,35 @@ def _resolve_install_plan(targets: list[str], *, cwd: Path, home: Path) -> list[
     return [(target, TARGET_PATHS[target](cwd, home)) for target in _dedupe_targets(targets)]
 
 
+def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
+    p = DryRunPrinter(True)
+    p.blank_line()
+    p.header("Skill install", Skills=str(len(BUNDLED_SKILLS)))
+    p.section("Available targets")
+    for target_name, resolver in sorted(TARGET_PATHS.items()):
+        for skill in BUNDLED_SKILLS:
+            location = _display_path(
+                resolver(cwd, home) / skill.name / "SKILL.md",
+                cwd=cwd,
+                home=home,
+            )
+            p.would_install(skill.name, target_name, location)
+    p.blank_line()
+    p.footer("pass --target DEST to install (see targets above)")
+
+
 def cmd_install(args: argparse.Namespace) -> int:
-    """Install the bundled repo-release-tools skill into one or more agent skill dirs."""
+    """Install the bundled rrt user skills into one or more agent skill dirs."""
     cwd = Path.cwd()
     home = Path.home()
     if not args.targets:
         if args.dry_run:
-            p = DryRunPrinter(True)
-            p.blank_line()
-            p.header("Skill install", Skill=INSTALLED_CLI_SKILL.name)
-            p.section("Available targets")
-            for target_name, resolver in sorted(TARGET_PATHS.items()):
-                location = _display_path(
-                    resolver(cwd, home) / INSTALLED_CLI_SKILL.name / "SKILL.md", cwd=cwd, home=home
-                )
-                p.would_install(INSTALLED_CLI_SKILL.name, target_name, location)
-            p.blank_line()
-            p.footer("pass --target DEST to install (see targets above)")
+            _show_available_install_targets(cwd=cwd, home=home)
             return 0
         available = ", ".join(sorted(TARGET_PATHS))
-        p = DryRunPrinter(False)
-        p.line(
+        return _emit_install_error(
             f"No --target specified. Pass --target DEST (e.g. --target claude-local). Available: {available}.",
-            ok=False,
-            stream=sys.stderr,
         )
-        return 1
 
     install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
 
@@ -209,59 +218,52 @@ def cmd_install(args: argparse.Namespace) -> int:
     p.blank_line()
     p.header(
         "Skill install",
-        Skill=INSTALLED_CLI_SKILL.name,
+        Skills=str(len(BUNDLED_SKILLS)),
         Targets=str(len(install_plan)),
     )
 
-    conflicts: list[tuple[str, Path]] = []
+    conflicts: list[tuple[str, str, Path]] = []
     for target_name, skills_dir in install_plan:
-        destination = skills_dir / INSTALLED_CLI_SKILL.name
-        if destination.exists() and not args.force:
-            conflicts.append((target_name, destination))
+        for skill in BUNDLED_SKILLS:
+            destination = skills_dir / skill.name
+            if destination.exists() and not args.force:
+                conflicts.append((target_name, skill.name, destination))
 
     if conflicts:
-        for target_name, destination in conflicts:
+        for target_name, skill_name, destination in conflicts:
             location = _display_path(destination, cwd=cwd, home=home)
-            p = DryRunPrinter(False)
-            p.line(
-                f"{target_name} already has {INSTALLED_CLI_SKILL.name} at {location}. Use --force to overwrite it.",
-                ok=False,
-                stream=sys.stderr,
+            return _emit_install_error(
+                f"{target_name} already has {skill_name} at {location}. Use --force to overwrite it.",
             )
-        return 1
 
     if args.dry_run:
         for target_name, skills_dir in install_plan:
-            destination = skills_dir / INSTALLED_CLI_SKILL.name / "SKILL.md"
-            location = _display_path(destination, cwd=cwd, home=home)
-            p.would_install(INSTALLED_CLI_SKILL.name, target_name, location)
+            for skill in BUNDLED_SKILLS:
+                destination = skills_dir / skill.name / "SKILL.md"
+                location = _display_path(destination, cwd=cwd, home=home)
+                p.would_install(skill.name, target_name, location)
         p.blank_line()
         p.footer("no files were modified")
         return 0
 
     for target_name, skills_dir in install_plan:
-        destination_dir = skills_dir / INSTALLED_CLI_SKILL.name
-        destination_file = destination_dir / "SKILL.md"
-        try:
-            if destination_dir.is_symlink() or destination_dir.is_file():
-                destination_dir.unlink()
-            elif destination_dir.exists():
-                shutil.rmtree(destination_dir)
-            destination_dir.mkdir(parents=True, exist_ok=True)
-            destination_file.write_text(
-                INSTALLED_CLI_SKILL.markdown.rstrip() + "\n", encoding="utf-8"
-            )
-        except OSError as exc:
+        for skill in BUNDLED_SKILLS:
+            destination_dir = skills_dir / skill.name
+            destination_file = destination_dir / "SKILL.md"
+            try:
+                if destination_dir.is_symlink() or destination_dir.is_file():
+                    destination_dir.unlink()
+                elif destination_dir.exists():
+                    shutil.rmtree(destination_dir)
+                destination_dir.mkdir(parents=True, exist_ok=True)
+                destination_file.write_text(skill.markdown.rstrip() + "\n", encoding="utf-8")
+            except OSError as exc:
+                location = _display_path(destination_file, cwd=cwd, home=home)
+                return _emit_install_error(
+                    f"Could not install {skill.name} to {target_name} ({location}): {exc}",
+                )
             location = _display_path(destination_file, cwd=cwd, home=home)
-            p = DryRunPrinter(False)
-            p.line(
-                f"Could not install {INSTALLED_CLI_SKILL.name} to {target_name} ({location}): {exc}",
-                ok=False,
-                stream=sys.stderr,
-            )
-            return 1
-        location = _display_path(destination_file, cwd=cwd, home=home)
-        p.ok(f"Installed {INSTALLED_CLI_SKILL.name} to {target_name}: {location}")
+            p.ok(f"Installed {skill.name} to {target_name}: {location}")
     return 0
 
 
@@ -269,8 +271,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     """Register the skill command group."""
     parser = subparsers.add_parser(
         "skill",
-        help="Install the bundled repo-release-tools agent skill.",
-        description="Install the bundled repo-release-tools agent skill.",
+        help="Install bundled rrt user workflow skills.",
+        description="Install the bundled rrt user workflow skills.",
         epilog=SKILL_EXAMPLES,
     )
     skill_sub = parser.add_subparsers(
@@ -282,8 +284,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     install_parser = skill_sub.add_parser(
         "install",
-        help="Install the bundled repo-release-tools skill into agent skill directories.",
-        description="Install the bundled repo-release-tools skill into one or more local or global agent skill directories.",
+        help="Install bundled rrt user skills into agent skill directories.",
+        description="Install the bundled rrt user skills into one or more local or global agent skill directories.",
         epilog=SKILL_INSTALL_EXAMPLES,
     )
     install_parser.add_argument(
@@ -295,15 +297,18 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="DEST",
         help=(
             "Install target. Repeat to install into multiple locations: "
-            "copilot-local, claude-local, codex-local, copilot-global, claude-global, codex-global."
+            "copilot-local, claude-local, codex-local, gemini-local, "
+            "copilot-global, claude-global, codex-global, gemini-global."
         ),
     )
     install_parser.add_argument(
-        "--dry-run", action="store_true", help="Preview without writing files."
+        "--dry-run",
+        action="store_true",
+        help="Preview without writing files.",
     )
     install_parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite an existing installed repo-release-tools skill.",
+        help="Overwrite existing installed skill directories.",
     )
     install_parser.set_defaults(handler=cmd_install)

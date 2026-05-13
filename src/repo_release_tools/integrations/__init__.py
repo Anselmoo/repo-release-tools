@@ -1,5 +1,5 @@
 """Integration surfaces for repo-release-tools."""
 
-from . import action, skill_assets
+from . import action, agent_assets, skill_assets
 
-__all__ = ["action", "skill_assets"]
+__all__ = ["action", "agent_assets", "skill_assets"]

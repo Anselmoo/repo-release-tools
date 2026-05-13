@@ -86,7 +86,10 @@ def test_cmd_docs_suggest_applies_scaffold(tmp_path: Path) -> None:
     target.write_text("from __future__ import annotations\n\nVALUE = 1\n", encoding="utf-8")
 
     args = argparse.Namespace(
-        root=str(tmp_path), paths=[str(target)], min_chars=MIN_DEFAULT, apply=True
+        root=str(tmp_path),
+        paths=[str(target)],
+        min_chars=MIN_DEFAULT,
+        apply=True,
     )
 
     result = cmd_docs_suggest(args)
@@ -100,7 +103,10 @@ def test_cmd_docs_suggest_replaces_existing_docstring(tmp_path: Path) -> None:
     target.write_text('"""Short docstring.\n\nBody.\n"""\nVALUE = 1\n', encoding="utf-8")
 
     args = argparse.Namespace(
-        root=str(tmp_path), paths=[str(target)], min_chars=STRICT_MIN_CHARS, apply=True
+        root=str(tmp_path),
+        paths=[str(target)],
+        min_chars=STRICT_MIN_CHARS,
+        apply=True,
     )
 
     result = cmd_docs_suggest(args)
@@ -119,7 +125,10 @@ def test_cmd_docs_suggest_inserts_after_shebang_and_encoding_comment(tmp_path: P
     )
 
     args = argparse.Namespace(
-        root=str(tmp_path), paths=[str(target)], min_chars=STRICT_MIN_CHARS, apply=True
+        root=str(tmp_path),
+        paths=[str(target)],
+        min_chars=STRICT_MIN_CHARS,
+        apply=True,
     )
 
     result = cmd_docs_suggest(args)
@@ -132,7 +141,8 @@ def test_cmd_docs_suggest_inserts_after_shebang_and_encoding_comment(tmp_path: P
 
 
 def test_cmd_docs_suggest_resolves_relative_paths_against_root(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = tmp_path / "repo"
     repo_src = repo / "src"
@@ -142,7 +152,10 @@ def test_cmd_docs_suggest_resolves_relative_paths_against_root(
     monkeypatch.chdir(tmp_path)
 
     args = argparse.Namespace(
-        root=str(repo), paths=["src/example.py"], min_chars=MIN_DEFAULT, apply=True
+        root=str(repo),
+        paths=["src/example.py"],
+        min_chars=MIN_DEFAULT,
+        apply=True,
     )
 
     result = cmd_docs_suggest(args)
@@ -152,13 +165,17 @@ def test_cmd_docs_suggest_resolves_relative_paths_against_root(
 
 
 def test_cmd_docs_suggest_skips_unparseable_apply_targets(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     target = tmp_path / "broken.py"
     target.write_text("def broken(\n", encoding="utf-8")
 
     args = argparse.Namespace(
-        root=str(tmp_path), paths=[str(target)], min_chars=MIN_DEFAULT, apply=True
+        root=str(tmp_path),
+        paths=[str(target)],
+        min_chars=MIN_DEFAULT,
+        apply=True,
     )
 
     result = cmd_docs_suggest(args)
@@ -170,7 +187,8 @@ def test_cmd_docs_suggest_skips_unparseable_apply_targets(
 
 
 def test_cmd_docs_suggest_handles_paths_outside_root(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     root = tmp_path / "repo"
     root.mkdir()
@@ -178,7 +196,10 @@ def test_cmd_docs_suggest_handles_paths_outside_root(
     target.write_text("VALUE = 1\n", encoding="utf-8")
 
     args = argparse.Namespace(
-        root=str(root), paths=[str(target)], min_chars=STRICT_MIN_CHARS, apply=False
+        root=str(root),
+        paths=[str(target)],
+        min_chars=STRICT_MIN_CHARS,
+        apply=False,
     )
 
     result = cmd_docs_suggest(args)
@@ -193,7 +214,10 @@ def test_cmd_docs_suggest_no_findings(tmp_path: Path) -> None:
     target.write_text('"""Long enough docstring.\n\nBody text.\n"""\n', encoding="utf-8")
 
     args = argparse.Namespace(
-        root=str(tmp_path), paths=[str(target)], min_chars=SHORT_MIN_CHARS, apply=False
+        root=str(tmp_path),
+        paths=[str(target)],
+        min_chars=SHORT_MIN_CHARS,
+        apply=False,
     )
 
     result = cmd_docs_suggest(args)

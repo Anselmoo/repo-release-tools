@@ -25,17 +25,45 @@ Current hook registrations in `.claude/settings.json`:
 | `PreToolUse` | `Bash` | `.claude/hooks/check_push_coverage.py` | Block `git push` below 85.71% coverage |
 | `PreToolUse` | `Write\|Edit\|…` | `.claude/hooks/rrt_ux_write_guard.py` | Block raw ANSI writes in `src/` |
 | `PostToolUse` | `""` | `.claude/hooks/refresh_coverage_baseline.py` | Auto-refresh baseline after pytest |
+| `Stop` | `""` | `.claude/hooks/completeness_guard.py` | Block completion when required hooks, agents, or skills are missing |
 | `Stop` | `""` | `.claude/hooks/coverage_non_regression.py` | Block completion on coverage regression |
 
 ## Source-of-truth boundaries
 
-- **`.claude/settings.json` + `.claude/hooks/` + `.claude/agents/`** are the
-  canonical Claude automation surface for this repo.
+- **`.claude/settings.json` + `.claude/hooks/`** are the canonical Claude
+  runtime automation surface for this repo.
+- **`.github/agents/` + `.github/skills/`** are the committed source-owned
+  agent/skill definitions shipped with the wheel.
 - **`.github/instructions/`** and **`.github/copilot-instructions.md`** must
   mirror that Claude surface instead of describing a parallel hook layout.
 - **`.github/skills/`** remains the committed source tree for repo-owned skill
-  definitions; install targets such as **`.claude/skills/`** are generated
-  runtime locations, not the source-of-truth files to edit in this repository.
+  definitions and the Copilot local install target; install targets such as
+  **`.claude/skills/`** are generated runtime locations, not the source-of-truth
+  files to edit in this repository.
+- When loading bundled hook scripts for installer commands, resolve
+  source-owned files from **`.github/hooks/`** first and keep legacy
+  `repo_release_tools.assets/hooks/*` paths as fallbacks only; do not assume
+  `src/repo_release_tools/assets/hooks/*` exists in the checkout.
+- When reading wheel-shipped files from `[tool.uv.build-backend].data`, account
+  for uv_build's flattened install layout: `.github/skills/<name>/...` is
+  installed under `purelib/<name>/...`, and `.github/agents/...` under the
+  `data` scheme root (agent files directly under `data/`), while `.github/hooks/...`
+  lands under the `headers` scheme root. These files are not nested beneath
+  `.github/` prefixes after installation.
+- When a Docker image installs the project with `pip install .` or `uv build`,
+  keep the `Dockerfile` aligned with `[tool.uv.build-backend].source-include` by
+  copying every source tree that the backend walks into the image before the
+  install step; for this repo that means `.github/skills/`, `.github/agents/`,
+  and `.github/hooks/` alongside `src/`.
+- When updating skill installers, keep Copilot mapped to **`.github/skills/`**
+  for workspace installs and **`~/.copilot/skills/`** for user-global installs.
+  Keep Claude/Codex/Gemini mapped to their matching local and global roots:
+  **`.claude/skills/`** / **`~/.claude/skills/`**, **`.codex/skills/`** /
+  **`~/.codex/skills/`**, and **`.gemini/skills/`** / **`~/.gemini/skills/`**.
+- When updating installer-generated Copilot hook registrations, write managed
+  hook JSON under **`.github/hooks/*.json`** for workspace installs and
+  **`~/.copilot/hooks/*.json`** for user-global installs. Do not invent or
+  document a repo-local **`.github/settings.json`** hook location.
 
 When working in `repo-release-tools`, follow these rules:
 
@@ -47,6 +75,7 @@ When working in `repo-release-tools`, follow these rules:
 - After moving code into a semantic package, update source imports and tests to the canonical package path and delete obsolete root modules in the same change. Do not leave permanent flat-module duplicates behind.
 - Inside a domain package, split logic by role (`core.py`, `data.py`, `detect.py`, `targets.py`, `semver.py`) rather than creating a new oversized sibling module.
 - Anchor-based file injection lives in `src/repo_release_tools/tools/inject.py` — import from `repo_release_tools.tools.inject`, not from `repo_release_tools.inject` (old path removed).
+- Prefer `match` for closed-set dispatch helpers such as hook surface selection or managed config-path resolution; keep simple guard clauses for validation and command flow.
 - In `src/repo_release_tools/docs/publisher.py`, never add YAML frontmatter to content rendered for targets that use `anchor_id` (for example `docs/index.md` and `README.md`); anchored targets must render body-only fragments.
 - Author docs shared blocks inline in `[tool.rrt.docs.shared_blocks].content` under `pyproject.toml` or `.rrt.toml`; do not add new scripts or template files for doc footers, headers, or shared text fragments.
 - Use `fetch_webpage` and `mcp_github_search_code` when researching external examples, issue comments, or PR context before changing behavior.
@@ -55,6 +84,7 @@ When working in `repo-release-tools`, follow these rules:
 - Use existing hook behavior as a guardrail: coverage below 85.71% should be treated as a blocker unless the user explicitly approves a follow-on test expansion.
 - When making CLI errors friendlier, preserve argparse semantics and exit codes while improving help text, suggestions, and examples.
 - When you add or rename a top-level `rrt` subcommand, update the `Affected entrypoints` docstring block in `tests/test_user_experience_simulator.py` in the same change so the UX contract stays aligned with the live CLI surface.
+- When you add a new top-level `rrt` subcommand, update `docs/commands/rrt-cli.md` and the dedicated command doc page in the same change so the published docs stay aligned with the CLI.
 - Persist preferences and follow-up context in repo-scoped memory when they are specific to this repository's workflow.
 - Keep the hook-registration table in sync with `.claude/settings.json`; if the active hook path changes, update the documented path in this file immediately so contributors are not sent to a stale location.
 

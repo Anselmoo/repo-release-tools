@@ -11,7 +11,9 @@ from repo_release_tools.workflow import git
 
 
 def test_run_dry_run_skips_subprocess(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
         subprocess,
@@ -26,10 +28,16 @@ def test_run_dry_run_skips_subprocess(
 
 
 def test_run_prints_stdout_on_success(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "status"]
         return subprocess.CompletedProcess(cmd, 0, stdout="line one\nline two\n", stderr="")
@@ -46,10 +54,16 @@ def test_run_prints_stdout_on_success(
 
 
 def test_run_can_suppress_initial_command_announcement(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "status"]
         return subprocess.CompletedProcess(cmd, 0, stdout="line one\n", stderr="")
@@ -71,10 +85,16 @@ def test_run_can_suppress_initial_command_announcement(
 
 
 def test_run_prints_stdout_and_stderr_before_raising(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 2, stdout="out line\n", stderr="err line\n")
 
@@ -89,10 +109,15 @@ def test_run_prints_stdout_and_stderr_before_raising(
 
 
 def test_capture_and_capture_checked_strip_output(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 0, stdout="  value\n", stderr="")
 
@@ -103,10 +128,15 @@ def test_capture_and_capture_checked_strip_output(
 
 
 def test_capture_checked_raises_on_nonzero_exit(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 7, stdout="", stderr="fatal")
 
@@ -117,7 +147,8 @@ def test_capture_checked_raises_on_nonzero_exit(
 
 
 def test_current_branch_branch_exists_and_commits_ahead_delegate(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     def fake_capture(cmd: list[str], cwd: Path) -> str:
         if cmd == ["git", "branch", "--show-current"]:
@@ -139,7 +170,8 @@ def test_current_branch_branch_exists_and_commits_ahead_delegate(
 
 
 def test_working_tree_clean_and_ahead_behind_handle_multiple_outcomes(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     responses = iter(
         [
@@ -148,7 +180,7 @@ def test_working_tree_clean_and_ahead_behind_handle_multiple_outcomes(
             subprocess.CompletedProcess([], 0, stdout="3 2\n", stderr=""),
             subprocess.CompletedProcess([], 1, stdout="", stderr="fatal"),
             subprocess.CompletedProcess([], 0, stdout="malformed\n", stderr=""),
-        ]
+        ],
     )
 
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: next(responses))
@@ -161,14 +193,15 @@ def test_working_tree_clean_and_ahead_behind_handle_multiple_outcomes(
 
 
 def test_upstream_branch_returns_value_or_none(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     responses = iter(
         [
             subprocess.CompletedProcess([], 0, stdout="origin/main\n", stderr=""),
             subprocess.CompletedProcess([], 0, stdout="\n", stderr=""),
             subprocess.CompletedProcess([], 128, stdout="", stderr="fatal"),
-        ]
+        ],
     )
 
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: next(responses))
@@ -179,7 +212,8 @@ def test_upstream_branch_returns_value_or_none(
 
 
 def test_git_dir_merge_base_remote_names_and_repository_detection(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     responses = iter(
         [
@@ -191,7 +225,7 @@ def test_git_dir_merge_base_remote_names_and_repository_detection(
             subprocess.CompletedProcess([], 0, stdout="true\n", stderr=""),
             subprocess.CompletedProcess([], 0, stdout="false\n", stderr=""),
             subprocess.CompletedProcess([], 128, stdout="", stderr="fatal"),
-        ]
+        ],
     )
 
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: next(responses))
@@ -209,10 +243,15 @@ def test_git_dir_merge_base_remote_names_and_repository_detection(
 
 
 def test_status_porcelain_preserves_leading_spaces(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "status", "--short"]
         return subprocess.CompletedProcess(
@@ -230,10 +269,15 @@ def test_status_porcelain_preserves_leading_spaces(
 
 
 def test_status_porcelain_can_include_branch_header(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "status", "--short", "--branch"]
         return subprocess.CompletedProcess(cmd, 0, stdout="## feat/add-parser\n", stderr="")
@@ -244,10 +288,15 @@ def test_status_porcelain_can_include_branch_header(
 
 
 def test_status_porcelain_raises_on_git_failure(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="fatal")
 
@@ -263,7 +312,11 @@ def test_status_porcelain_raises_on_git_failure(
 
 def test_ref_exists_checks_rev_parse(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def fake_run(
-        cmd: list[str], cwd: Path, capture_output: bool, text: bool, check: bool
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
     ) -> subprocess.CompletedProcess[str]:
         assert cmd == ["git", "rev-parse", "--verify", "--quiet", "HEAD~1"]
         return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n", stderr="")
@@ -274,7 +327,8 @@ def test_ref_exists_checks_rev_parse(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
 
 def test_in_progress_operation_detects_rebase_and_merge(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     rebase_dir = tmp_path / ".git" / "rebase-merge"
     rebase_dir.mkdir(parents=True)
@@ -289,7 +343,8 @@ def test_in_progress_operation_detects_rebase_and_merge(
 
 
 def test_in_progress_operation_returns_none_without_git_dir_or_markers(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(git, "git_dir", lambda cwd: None)
     assert git.in_progress_operation(tmp_path) is None

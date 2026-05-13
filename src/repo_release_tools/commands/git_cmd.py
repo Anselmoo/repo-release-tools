@@ -41,6 +41,7 @@ summary first, followed by the details needed to act on the result.
   working tree.
 - `rebootstrap` backs up `.git`, reinitializes the repository, and creates a
   fresh history snapshot or empty bootstrap commit.
+- `purge-cache` expires reflogs and runs `git gc` to reclaim local cache space.
 
 ## Behavior details
 
@@ -52,6 +53,8 @@ summary first, followed by the details needed to act on the result.
   state, such as unresolved conflicts, an in-progress merge or rebase, or a
   missing upstream branch.
 - `rebootstrap` requires explicit confirmation before it can destroy history.
+- `purge-cache` is safe for normal worktrees but can take time on large repos;
+    use `--dry-run` first to preview the maintenance commands.
 
 ## Examples
 
@@ -61,6 +64,7 @@ $ rrt git commit "refresh help examples"
 $ rrt git sync --dry-run
 $ rrt git squash-local --base-ref origin/main "ship parser"
 $ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
+$ rrt git purge-cache --dry-run
 ```
 
 ## Safety notes
@@ -132,7 +136,7 @@ def normalize_commit_subject_type(value: str) -> str:
     if normalized not in COMMIT_TYPES:
         allowed = ", ".join(COMMIT_TYPES)
         raise argparse.ArgumentTypeError(
-            f"invalid commit type: {value!r} (choose one of: {allowed})"
+            f"invalid commit type: {value!r} (choose one of: {allowed})",
         )
     return normalized
 
@@ -160,7 +164,7 @@ def resolve_commit_subject(args: argparse.Namespace, root: Path) -> tuple[str, s
     if commit_type is None:
         raise ValueError(
             "Could not infer a conventional commit type from the current branch. "
-            "Use --type explicitly."
+            "Use --type explicitly.",
         )
 
     subject = CommitSubject(
@@ -414,7 +418,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 relation_problem is None,
                 f"{branch_name} does not need sync from {upstream}.",
                 relation_problem or "",
-            )
+            ),
         )
 
     for ok, ok_msg, problem in checks:
@@ -930,7 +934,10 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
         if not args.hard_init:
             git.run(["git", "add", "."], root, dry_run=False, label="git add")
             git.run(
-                ["git", "commit", "-m", commit_message], root, dry_run=False, label="git commit"
+                ["git", "commit", "-m", commit_message],
+                root,
+                dry_run=False,
+                label="git commit",
             )
     except RuntimeError as exc:
         p = DryRunPrinter(False)
@@ -951,6 +958,41 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_purge_cache(args: argparse.Namespace) -> int:
+    """Expire reflogs and run git garbage collection."""
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        p = DryRunPrinter(False)
+        p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
+        return 1
+
+    dirty = not git.working_tree_clean(root)
+    p = DryRunPrinter(args.dry_run)
+    p.blank_line()
+    p.header(
+        "Purge cache",
+        **{
+            "Working tree": "dirty" if dirty else "clean",
+            "Scope": "reflogs + git gc",
+        },
+    )
+    if dirty:
+        p.warn("Working tree changes are preserved; this only rewrites local Git maintenance data.")
+
+    p.section("Purging")
+    git.run(
+        ["git", "reflog", "expire", "--expire=now", "--all"],
+        root,
+        dry_run=args.dry_run,
+        label="git reflog expire",
+    )
+    git.run(["git", "gc", "--prune=now"], root, dry_run=args.dry_run, label="git gc")
+
+    p.blank_line()
+    p.footer("Done. Git cache maintenance complete.")
+    return 0
+
+
 def _parse_diff_line(raw: str) -> tuple[str, str, int | None]:
     """Parse a unified diff header or context line into (kind, text, lineno)."""
     if raw.startswith("+++") or raw.startswith("---"):
@@ -958,7 +1000,7 @@ def _parse_diff_line(raw: str) -> tuple[str, str, int | None]:
     if raw.startswith("@@"):
         # Extract new-file line number from @@ -a,b +c,d @@ ...
         try:
-            after_plus = raw.split("+")[1].split(",")[0].split(" ")[0]
+            after_plus = raw.split("+")[1].split(",", maxsplit=1)[0].split(" ", maxsplit=1)[0]
             lineno = int(after_plus)
         except (IndexError, ValueError):
             lineno = None
@@ -967,7 +1009,7 @@ def _parse_diff_line(raw: str) -> tuple[str, str, int | None]:
         return ("added", raw[1:], None)
     if raw.startswith("-"):
         return ("removed", raw[1:], None)
-    return ("unchanged", raw[1:] if raw.startswith(" ") else raw, None)
+    return ("unchanged", raw.removeprefix(" "), None)
 
 
 def _parse_diff_hunk_header(raw: str) -> tuple[int, int] | None:
@@ -1072,7 +1114,9 @@ def cmd_diff(args: argparse.Namespace) -> int:
                 new_lineno += 1
 
         rendered = GLYPHS.diff.line(
-            kind, text.rstrip(), lineno=rendered_lineno if kind != "unchanged" else None
+            kind,
+            text.rstrip(),
+            lineno=rendered_lineno if kind != "unchanged" else None,
         )
         p = DryRunPrinter(False)
         p.line(f"  {rendered}")
@@ -1153,6 +1197,8 @@ GIT_REBOOTSTRAP_EXAMPLES = (
     "  $ rrt git rebootstrap --yes-i-know-this-destroys-history --empty-first\n"
     "  $ rrt git rebootstrap --yes-i-know-this-destroys-history --hard-init --branch main"
 )
+
+GIT_PURGE_CACHE_EXAMPLES = "  $ rrt git purge-cache\n  $ rrt git purge-cache --dry-run"
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -1374,3 +1420,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     add_dry_run_flag(rebootstrap_parser)
     rebootstrap_parser.set_defaults(handler=cmd_rebootstrap)
+
+    purge_cache_parser = git_sub.add_parser(
+        "purge-cache",
+        help="Expire reflogs and run git garbage collection.",
+        description="Expire local reflogs and run git gc to reclaim repository cache space.",
+        epilog=GIT_PURGE_CACHE_EXAMPLES,
+    )
+    add_dry_run_flag(purge_cache_parser)
+    purge_cache_parser.set_defaults(handler=cmd_purge_cache)

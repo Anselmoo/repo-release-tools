@@ -54,7 +54,7 @@ def test_tree_render_supports_nested_entries() -> None:
         [
             ("src", True, [("repo_release_tools", True, [("glyphs.py", False, None)])]),
             ("README.md", False, None),
-        ]
+        ],
     )
 
     assert "src/" in rendered

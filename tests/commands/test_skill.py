@@ -13,21 +13,40 @@ from repo_release_tools.commands.skill import (
     cmd_install,
     register,
 )
-from repo_release_tools.integrations.skill_assets import INSTALLED_CLI_SKILL
+from repo_release_tools.integrations.skill_assets import BUNDLED_SKILLS
+
+EXPECTED_SKILL_NAMES = {
+    "rrt-user-bootstrap",
+    "rrt-user-versioning",
+    "rrt-user-release-flow",
+    "rrt-user-branch-strategy",
+    "rrt-user-commit-quality",
+    "rrt-user-changelog-automation",
+    "rrt-user-docs-consistency",
+    "rrt-user-config-safety",
+    "rrt-user-ci-readiness",
+    "rrt-user-migration-uvx-to-installed",
+}
 
 
 def _mock_home(monkeypatch: pytest.MonkeyPatch, home: Path) -> None:
     monkeypatch.setattr("repo_release_tools.commands.skill.Path.home", lambda: home)
 
 
-def test_bundled_skill_matches_checked_in_skill_file() -> None:
+def test_bundled_skills_match_checked_in_skill_files() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    checked_in = repo_root / ".github" / "skills" / "repo-release-tools" / "SKILL.md"
 
-    assert checked_in.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
+    for skill in BUNDLED_SKILLS:
+        checked_in = repo_root / ".github" / "skills" / skill.name / "SKILL.md"
+        assert checked_in.read_text(encoding="utf-8") == skill.markdown.rstrip() + "\n"
 
 
-def test_cmd_install_writes_local_skill(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_bundled_skills_contains_expected_names() -> None:
+    names = {skill.name for skill in BUNDLED_SKILLS}
+    assert names == EXPECTED_SKILL_NAMES
+
+
+def test_cmd_install_writes_local_skills(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
@@ -35,13 +54,17 @@ def test_cmd_install_writes_local_skill(monkeypatch: pytest.MonkeyPatch, tmp_pat
     result = cmd_install(Namespace(targets=["copilot-local"], dry_run=False, force=False))
 
     assert result == 0
-    installed = tmp_path / ".copilot" / "skills" / "repo-release-tools" / "SKILL.md"
-    assert installed.exists()
-    assert installed.read_text(encoding="utf-8").startswith("---\nname: repo-release-tools\n")
+    skills_dir = tmp_path / ".github" / "skills"
+    for skill in BUNDLED_SKILLS:
+        installed = skills_dir / skill.name / "SKILL.md"
+        assert installed.exists()
+        assert installed.read_text(encoding="utf-8") == skill.markdown.rstrip() + "\n"
 
 
 def test_cmd_install_dry_run_does_not_write(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
@@ -51,13 +74,15 @@ def test_cmd_install_dry_run_does_not_write(
 
     captured = capsys.readouterr()
     assert result == 0
-    assert not (tmp_path / ".claude" / "skills" / "repo-release-tools").exists()
-    assert "Would install repo-release-tools to claude-local" in captured.out
+    assert not (tmp_path / ".claude" / "skills").exists()
+    assert "Would install rrt-user-bootstrap to claude-local" in captured.out
     assert "[dry-run] complete" in captured.out
 
 
 def test_cmd_install_no_targets_dry_run_shows_available_targets(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
@@ -69,11 +94,13 @@ def test_cmd_install_no_targets_dry_run_shows_available_targets(
     assert result == 0
     assert "Available targets" in captured.out
     assert "pass --target DEST to install" in captured.out
-    assert not (tmp_path / ".copilot").exists()
+    assert not (tmp_path / ".github").exists()
 
 
 def test_cmd_install_no_targets_without_dry_run_errors(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, tmp_path / "home")
@@ -87,12 +114,14 @@ def test_cmd_install_no_targets_without_dry_run_errors(
 
 
 def test_cmd_install_refuses_existing_skill_without_force(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
-    installed = tmp_path / ".codex" / "skills" / "repo-release-tools"
+    installed = tmp_path / ".codex" / "skills" / "rrt-user-bootstrap"
     installed.mkdir(parents=True)
     skill_file = installed / "SKILL.md"
     skill_file.write_text("old skill\n", encoding="utf-8")
@@ -106,61 +135,61 @@ def test_cmd_install_refuses_existing_skill_without_force(
 
 
 def test_cmd_install_force_overwrites_existing_skill(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
-    installed = tmp_path / ".copilot" / "skills" / "repo-release-tools"
+    installed = tmp_path / ".github" / "skills" / "rrt-user-bootstrap"
     installed.mkdir(parents=True)
     (installed / "SKILL.md").write_text("old skill\n", encoding="utf-8")
 
     result = cmd_install(Namespace(targets=["copilot-local"], dry_run=False, force=True))
 
+    skill = next(item for item in BUNDLED_SKILLS if item.name == "rrt-user-bootstrap")
     assert result == 0
-    assert (installed / "SKILL.md").read_text(encoding="utf-8") == (
-        INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
-    )
+    assert (installed / "SKILL.md").read_text(encoding="utf-8") == skill.markdown.rstrip() + "\n"
 
 
 def test_cmd_install_force_replaces_symlink(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
-    skills_dir = tmp_path / ".copilot" / "skills"
+    skills_dir = tmp_path / ".github" / "skills"
     skills_dir.mkdir(parents=True)
     real_dir = tmp_path / "other-skill"
     real_dir.mkdir()
-    (skills_dir / "repo-release-tools").symlink_to(real_dir)
+    (skills_dir / "rrt-user-bootstrap").symlink_to(real_dir)
 
     result = cmd_install(Namespace(targets=["copilot-local"], dry_run=False, force=True))
 
     assert result == 0
-    installed = skills_dir / "repo-release-tools" / "SKILL.md"
+    installed = skills_dir / "rrt-user-bootstrap" / "SKILL.md"
     assert installed.is_file()
-    assert installed.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
 
 
 def test_cmd_install_force_replaces_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
-    skills_dir = tmp_path / ".copilot" / "skills"
+    skills_dir = tmp_path / ".github" / "skills"
     skills_dir.mkdir(parents=True)
-    (skills_dir / "repo-release-tools").write_text("not a directory\n", encoding="utf-8")
+    (skills_dir / "rrt-user-bootstrap").write_text("not a directory\n", encoding="utf-8")
 
     result = cmd_install(Namespace(targets=["copilot-local"], dry_run=False, force=True))
 
     assert result == 0
-    installed = skills_dir / "repo-release-tools" / "SKILL.md"
+    installed = skills_dir / "rrt-user-bootstrap" / "SKILL.md"
     assert installed.is_file()
-    assert installed.read_text(encoding="utf-8") == INSTALLED_CLI_SKILL.markdown.rstrip() + "\n"
 
 
 def test_cmd_install_global_target_uses_home_directory(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
@@ -169,33 +198,48 @@ def test_cmd_install_global_target_uses_home_directory(
     result = cmd_install(Namespace(targets=["claude-global"], dry_run=False, force=False))
 
     assert result == 0
-    installed = home / ".claude" / "skills" / "repo-release-tools" / "SKILL.md"
+    installed = home / ".claude" / "skills" / "rrt-user-bootstrap" / "SKILL.md"
     assert installed.exists()
 
 
-def test_cmd_install_aborts_all_targets_when_one_conflicts(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+def test_cmd_install_gemini_targets_are_supported(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
     _mock_home(monkeypatch, home)
-    conflict_dir = tmp_path / ".copilot" / "skills" / "repo-release-tools"
+
+    assert cmd_install(Namespace(targets=["gemini-global"], dry_run=False, force=False)) == 0
+    assert cmd_install(Namespace(targets=["gemini-local"], dry_run=False, force=False)) == 0
+    assert (home / ".gemini" / "skills" / "rrt-user-bootstrap" / "SKILL.md").exists()
+    assert (tmp_path / ".gemini" / "skills" / "rrt-user-bootstrap" / "SKILL.md").exists()
+
+
+def test_cmd_install_aborts_all_targets_when_one_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, home)
+    conflict_dir = tmp_path / ".github" / "skills" / "rrt-user-bootstrap"
     conflict_dir.mkdir(parents=True)
     (conflict_dir / "SKILL.md").write_text("old skill\n", encoding="utf-8")
 
     result = cmd_install(
-        Namespace(targets=["copilot-local", "codex-local"], dry_run=False, force=False)
+        Namespace(targets=["copilot-local", "codex-local"], dry_run=False, force=False),
     )
 
     captured = capsys.readouterr()
     assert result == 1
-    assert "copilot-local already has repo-release-tools" in captured.err
-    assert not (tmp_path / ".codex" / "skills" / "repo-release-tools").exists()
+    assert "copilot-local already has rrt-user-bootstrap" in captured.err
+    assert not (tmp_path / ".codex" / "skills" / "rrt-user-bootstrap").exists()
 
 
 def test_dedupe_targets_preserves_order_and_drops_duplicates() -> None:
     result = _dedupe_targets(["copilot-local", "claude-local", "copilot-local", "codex-local"])
-
     assert result == ["copilot-local", "claude-local", "codex-local"]
 
 
@@ -207,8 +251,8 @@ def test_display_path_uses_cwd_home_and_absolute(tmp_path: Path) -> None:
 
     assert _display_path(cwd / "file.txt", cwd=cwd, home=home) == "file.txt"
     assert (
-        _display_path(home / ".copilot" / "skills" / "repo-release-tools", cwd=cwd, home=home)
-        == "~/.copilot/skills/repo-release-tools"
+        _display_path(home / ".copilot" / "skills" / "rrt-user-bootstrap", cwd=cwd, home=home)
+        == "~/.copilot/skills/rrt-user-bootstrap"
     )
     absolute = Path("/tmp") / "outside"
     assert _display_path(absolute, cwd=cwd, home=home) == str(absolute)
@@ -221,17 +265,21 @@ def test_resolve_install_plan_uses_target_mappings(tmp_path: Path) -> None:
     home.mkdir()
 
     plan = _resolve_install_plan(
-        ["copilot-local", "claude-global", "copilot-local"], cwd=cwd, home=home
+        ["copilot-local", "claude-global", "copilot-local"],
+        cwd=cwd,
+        home=home,
     )
 
     assert plan == [
-        ("copilot-local", cwd / ".copilot" / "skills"),
+        ("copilot-local", cwd / ".github" / "skills"),
         ("claude-global", home / ".claude" / "skills"),
     ]
 
 
 def test_cmd_install_returns_one_for_os_error(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     home = tmp_path / "home"
     monkeypatch.chdir(tmp_path)
@@ -246,7 +294,7 @@ def test_cmd_install_returns_one_for_os_error(
 
     captured = capsys.readouterr()
     assert result == 1
-    assert "Could not install repo-release-tools to copilot-local" in captured.err
+    assert "Could not install rrt-user-bootstrap to copilot-local" in captured.err
 
 
 def test_register_adds_skill_install_parser() -> None:

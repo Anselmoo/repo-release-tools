@@ -54,7 +54,7 @@ def main() -> int:
     repo_root = Path.cwd()
     coverage_xml = Path(os.getenv("COVERAGE_XML_PATH", str(repo_root / "coverage.xml")))
     baseline_file = Path(
-        os.getenv("COVERAGE_BASELINE_FILE", str(repo_root / ".claude" / "coverage-baseline.json"))
+        os.getenv("COVERAGE_BASELINE_FILE", str(repo_root / ".claude" / "coverage-baseline.json")),
     )
 
     target_pct = _env_float("TARGET_COVERAGE_PCT", 100.0)
@@ -84,13 +84,13 @@ def main() -> int:
             failures.append(
                 "Absolute coverage drop exceeded threshold: "
                 f"current={current_pct:.2f}% baseline={baseline_pct:.2f}% "
-                f"drop={abs_drop_pct:.2f}pp allowed={max_abs_drop_pct:.2f}pp"
+                f"drop={abs_drop_pct:.2f}pp allowed={max_abs_drop_pct:.2f}pp",
             )
         if rel_drop_pct - 1e-9 > max_rel_drop_pct:
             failures.append(
                 "Relative coverage drop exceeded threshold: "
                 f"current={current_pct:.2f}% baseline={baseline_pct:.2f}% "
-                f"drop={rel_drop_pct:.3f}% allowed={max_rel_drop_pct:.3f}%"
+                f"drop={rel_drop_pct:.3f}% allowed={max_rel_drop_pct:.3f}%",
             )
 
     if failures:

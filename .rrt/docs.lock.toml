@@ -1,0 +1,33 @@
+[meta]
+generated_at = "2026-05-12T09:32:51+00:00"
+rrt_version = "1.4.0"
+
+[sources."src/repo_release_tools/commands/branch.py"]
+hash = "sha256:a27d9766948e29a58a0b8ed370c35606ceb6aee6582eb1c14cef1b4d38fb43fa"
+symbols = ["SEMANTIC_BRANCHES_DOC"]
+lang = "python"
+updated_at = "2026-05-12T09:32:51+00:00"
+
+[sources."src/repo_release_tools/commands/tree.py"]
+hash = "sha256:32e3691319770165a19daa355261333adaaa85cdcae902c87d398112f0c7fe2d"
+symbols = ["TREE_DOC"]
+lang = "python"
+updated_at = "2026-05-12T09:32:51+00:00"
+
+[sources."src/repo_release_tools/hooks.py"]
+hash = "sha256:8cc337927b9da7d781c1ea497d1f7efb62e1c17974680d7d9f51d49075f1928e"
+symbols = ["PRE_COMMIT_DOC", "AGENT_INSTRUCTIONS_DOC"]
+lang = "python"
+updated_at = "2026-05-12T09:32:51+00:00"
+
+[sources."src/repo_release_tools/workflow/git.py"]
+hash = "sha256:748cace397d7f0c9507a64599c7f6956ddebbae018888784beae11aac261dd8b"
+symbols = ["GIT_DOC"]
+lang = "python"
+updated_at = "2026-05-12T09:32:51+00:00"
+
+[sources."src/repo_release_tools/workflow/hooks.py"]
+hash = "sha256:2a2368078a8d2f8e951da3930745f88ecd00a0acdd8628bc51c0b7a4fb2801c0"
+symbols = ["PRE_COMMIT_DOC", "AGENT_INSTRUCTIONS_DOC"]
+lang = "python"
+updated_at = "2026-05-12T09:32:51+00:00"

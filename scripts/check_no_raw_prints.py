@@ -3,6 +3,7 @@
 
 Allow prints in:
  - src/repo_release_tools/ui/
+ - src/repo_release_tools/assets/hooks/  (boilerplate standalone scripts)
  - tests/ (test scaffolding)
 
 Otherwise, report file:line occurrences and exit non-zero.
@@ -12,9 +13,10 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(".")
+ROOT = Path()
 PATTERN = re.compile(r"\bprint\s*\(")
 IGNORE_DIR = Path("src/repo_release_tools/ui")
+IGNORE_ASSETS_HOOKS = Path("src/repo_release_tools/assets/hooks")
 
 errors = []
 for p in (ROOT / "src" / "repo_release_tools").rglob("*.py"):
@@ -23,6 +25,8 @@ for p in (ROOT / "src" / "repo_release_tools").rglob("*.py"):
     except Exception:
         rel = p
     if IGNORE_DIR in p.parents:
+        continue
+    if IGNORE_ASSETS_HOOKS in p.parents:
         continue
     if "tests" in p.parts:
         continue

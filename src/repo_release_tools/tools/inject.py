@@ -131,14 +131,14 @@ def apply_generated_docs(
     if anchor_id is not None:
         if current is None:
             stderr.write(
-                f"{output_path} missing required anchor block ({ANCHOR_START_TOKEN}{anchor_id}).\n"
+                f"{output_path} missing required anchor block ({ANCHOR_START_TOKEN}{anchor_id}).\n",
             )
             return 1
         replaced = replace_anchored_block(current, anchor_id=anchor_id, content=content)
         if replaced is None:
             stderr.write(
                 f"{output_path} is missing required anchors "
-                f"{ANCHOR_START_TOKEN}{anchor_id} / {ANCHOR_END_TOKEN}{anchor_id}.\n"
+                f"{ANCHOR_START_TOKEN}{anchor_id} / {ANCHOR_END_TOKEN}{anchor_id}.\n",
             )
             return 1
         desired = replaced
@@ -156,7 +156,7 @@ def apply_generated_docs(
 
     if fail_on_change:
         stderr.write(
-            f"Updated {output_path}. Review the generated diff and re-stage the file before retrying.\n"
+            f"Updated {output_path}. Review the generated diff and re-stage the file before retrying.\n",
         )
         return 1
 

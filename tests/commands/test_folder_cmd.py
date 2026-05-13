@@ -108,13 +108,14 @@ def test_folder_check_passes_for_python_package_template(
     (tmp_path / "README.md").write_text("# Example\n", encoding="utf-8")
     (tmp_path / "src" / "package").mkdir(parents=True)
     (tmp_path / "src" / "package" / "__init__.py").write_text(
-        '"""Example package."""\n', encoding="utf-8"
+        '"""Example package."""\n',
+        encoding="utf-8",
     )
     (tmp_path / "tests").mkdir()
     monkeypatch.chdir(tmp_path)
 
     rc = folder.cmd_folder_check(
-        _args(root=str(tmp_path), template=["python-package"], format="json")
+        _args(root=str(tmp_path), template=["python-package"], format="json"),
     )
 
     assert rc == 0
@@ -171,7 +172,7 @@ def test_folder_check_report_only_downgrades_failure(
     monkeypatch.chdir(tmp_path)
 
     rc = folder.cmd_folder_check(
-        _args(root=str(tmp_path), template=["docs-only"], report_only=True, format="json")
+        _args(root=str(tmp_path), template=["docs-only"], report_only=True, format="json"),
     )
 
     assert rc == 0

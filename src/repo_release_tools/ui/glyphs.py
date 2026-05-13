@@ -12,8 +12,9 @@ import locale
 import os
 import sys
 import unicodedata
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Iterator, Literal
+from typing import Literal
 
 
 def _detect_legacy_terminal() -> bool:
@@ -70,9 +71,7 @@ def display_width(text: str) -> int:
         if unicodedata.combining(char) or unicodedata.category(char) in {"Cc", "Cf"}:
             continue
         eaw = unicodedata.east_asian_width(char)
-        if eaw in {"F", "W"}:
-            width += 2
-        elif eaw == "A" and _AMBIGUOUS_IS_WIDE:
+        if eaw in {"F", "W"} or (eaw == "A" and _AMBIGUOUS_IS_WIDE):
             width += 2
         else:
             width += 1
@@ -84,7 +83,7 @@ def pad_right(text: str, width: int) -> str:
     return text + (" " * max(0, width - display_width(text)))
 
 
-def _repeat_to_width(glyph: "Glyph | str", target_cells: int) -> str:
+def _repeat_to_width(glyph: Glyph | str, target_cells: int) -> str:
     """Repeat *glyph* until exactly *target_cells* terminal columns are filled.
 
     When the glyph's display width does not evenly divide *target_cells*, the
@@ -153,7 +152,7 @@ class BoxGlyphs:
                 f"{self.tl}{_repeat_to_width(self.h, width)}{self.tr}",
                 f"{self.v}{inner}{self.v}",
                 f"{self.bl}{_repeat_to_width(self.h, width)}{self.br}",
-            ]
+            ],
         )
 
     def double_box(self, text: str, padding: int = 1) -> str:
@@ -166,7 +165,7 @@ class BoxGlyphs:
                 f"{self.dtl}{_repeat_to_width(self.dh, width)}{self.dtr}",
                 f"{self.dv}{inner}{self.dv}",
                 f"{self.dbl}{_repeat_to_width(self.dh, width)}{self.dbr}",
-            ]
+            ],
         )
 
     def table(self, headers: list[str], rows: list[list[str]]) -> str:
@@ -197,7 +196,7 @@ class BoxGlyphs:
                 sep(self.left, self.cross, self.right),
                 *(row_line(row) for row in rows),
                 sep(self.bl, self.bottom, self.br),
-            ]
+            ],
         )
 
 
@@ -230,7 +229,7 @@ class RoundedBoxGlyphs:
                 f"{self.tl}{_repeat_to_width(self.h, width)}{self.tr}",
                 f"{self.v}{inner}{self.v}",
                 f"{self.bl}{_repeat_to_width(self.h, width)}{self.br}",
-            ]
+            ],
         )
 
 
@@ -260,7 +259,7 @@ class BoldBoxGlyphs:
                 f"{self.tl}{_repeat_to_width(self.h, width)}{self.tr}",
                 f"{self.v}{inner}{self.v}",
                 f"{self.bl}{_repeat_to_width(self.h, width)}{self.br}",
-            ]
+            ],
         )
 
 

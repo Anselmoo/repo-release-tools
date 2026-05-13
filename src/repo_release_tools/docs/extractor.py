@@ -132,7 +132,7 @@ def _extract_python_implicit(source: str, source_file: str) -> list[DocEntry]:
                     source_file=source_file,
                     line=1,
                     hash=hash_content(content),
-                )
+                ),
             )
 
     # class / def docstrings
@@ -153,7 +153,7 @@ def _extract_python_implicit(source: str, source_file: str) -> list[DocEntry]:
                     source_file=source_file,
                     line=line,
                     hash=hash_content(content),
-                )
+                ),
             )
     return entries
 
@@ -179,7 +179,7 @@ def _extract_ts_js_implicit(source: str, source_file: str, lang: str) -> list[Do
                     source_file=source_file,
                     line=line,
                     hash=hash_content(content),
-                )
+                ),
             )
     return entries
 
@@ -204,7 +204,7 @@ def _extract_go_implicit(source: str, source_file: str) -> list[DocEntry]:
                     source_file=source_file,
                     line=line,
                     hash=hash_content(content),
-                )
+                ),
             )
     return entries
 
@@ -229,7 +229,7 @@ def _extract_rust_implicit(source: str, source_file: str) -> list[DocEntry]:
                     source_file=source_file,
                     line=line,
                     hash=hash_content(content),
-                )
+                ),
             )
     return entries
 
@@ -295,7 +295,7 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
                     source_file=source_file,
                     line=line_no,
                     hash=hash_content(content),
-                )
+                ),
             )
 
     return entries
@@ -307,7 +307,9 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
 
 
 def _extract_python_source_owned(
-    source: str, source_file: str, module_vars: dict[str, str]
+    source: str,
+    source_file: str,
+    module_vars: dict[str, str],
 ) -> list[DocEntry]:
     """Detect SOURCE_OWNED_TOPIC_DOCS and resolve variable references to their content."""
     entries: list[DocEntry] = []
@@ -332,7 +334,7 @@ def _extract_python_source_owned(
                         source_file=source_file,
                         line=line,
                         hash=hash_content(content),
-                    )
+                    ),
                 )
         del slug
     return entries
@@ -359,7 +361,7 @@ def _extract_python_module_string_vars(source: str) -> dict[str, str]:
 
 def extract_docs(
     path: Path,
-    config: "DocsConfig",
+    config: DocsConfig,
     *,
     relative_to: Path | None = None,
 ) -> list[DocEntry]:
@@ -419,7 +421,7 @@ def extract_docs(
 
 def extract_docs_from_dir(
     root: Path,
-    config: "DocsConfig",
+    config: DocsConfig,
 ) -> list[DocEntry]:
     """Recursively extract docs from all matching source files under *root*.
 

@@ -22,7 +22,7 @@ GO_VERSION_PATTERN = re.compile(
     r"\s*(?:const|var)\s+Version\s*=\s*\""
     r"|"
     r"\s*(?:const|var)\s*\(\s*.*?^\s*Version\s*=\s*\""
-    r')([^"]+)(")'
+    r')([^"]+)(")',
 )
 
 
@@ -52,7 +52,10 @@ def replace_version_in_file(
         updated = replace_pattern_version(text, target.pattern, new_version)
     else:
         updated = replace_toml_field(
-            text, new_version, section=target.section or "", field=target.field or ""
+            text,
+            new_version,
+            section=target.section or "",
+            field=target.field or "",
         )
 
     if dry_run:
@@ -185,9 +188,7 @@ def replace_package_json_version(text: str, new_version: str) -> str:
     current["version"] = new_version
     indent = _detect_json_indent(text)
     updated = json.dumps(current, indent=indent, ensure_ascii=False)
-    if indent is not None:
-        updated += "\n"
-    elif text.endswith("\n"):
+    if indent is not None or text.endswith("\n"):
         updated += "\n"
     return updated
 

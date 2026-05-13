@@ -72,9 +72,10 @@ Raw `print()` is forbidden outside `src/repo_release_tools/ui/`. Run `python3 sc
 Every improvement to the tool extends what agents can do autonomously. Follow
 these rules whenever an agent session touches this repo:
 
-- **Treat `.claude/settings.json`, `.claude/hooks/`, and `.claude/agents/` as the
-  canonical Claude automation surface.** Keep `.github/instructions/` and this file
-  aligned to them; do not document a parallel hook layout.
+- **Treat `.claude/settings.json` and `.claude/hooks/` as the canonical Claude
+  runtime automation surface, and `.github/agents/` + `.github/skills/` as the
+  committed source-owned agent/skill surfaces.** Keep `.github/instructions/` and
+  this file aligned to them; do not document a parallel hook layout.
 - **Create branches via `rrt branch new <slug>`** — never `git checkout -b` directly.
   This enforces the `<type>/<kebab-slug>` naming convention and validates the type.
 - **Preview bumps with `rrt bump --dry-run`** before applying any version change.
@@ -90,10 +91,10 @@ these rules whenever an agent session touches this repo:
   their logic inline.
 - **When adding a new agentic capability**, check whether it belongs as a subcommand
   (`commands/`), a Claude hook (`.claude/hooks/`), a Claude agent
-  (`.claude/agents/`), or a repo-owned skill source (`.github/skills/`) before
+  source (`.github/agents/`), or a repo-owned skill source (`.github/skills/`) before
   writing ad-hoc script code.
 - **Document new agent-facing commands** in `docs/commands/` and register them in
-  the skill that exposes them (`rrt-ux-design`, `repo-release-tools`, etc.).
+  the user-facing skill that exposes them (`rrt-user-bootstrap`, `rrt-user-ci-readiness`, etc.).
 
 ## Coverage discipline (tests)
 

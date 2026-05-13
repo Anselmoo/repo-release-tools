@@ -101,7 +101,7 @@ _TREE_FALLBACK_IGNORE_DIR_NAMES: frozenset[str] = frozenset(
         ".tox",
         "dist",
         "build",
-    }
+    },
 )
 
 TREE_EPILOG = """  $ rrt tree
@@ -312,14 +312,15 @@ def _render_rich_tree(entries: list[TreeEntry]) -> str | None:
             if children:
                 build(children, node)
 
-    console = Console(record=True, no_color=True, highlight=False)
-    with console.capture() as capture:
-        for name, is_dir, children in entries:
-            top = Tree(f"{name}/" if is_dir else name)
-            if children:
-                build(children, top)
-            getattr(console, "print")(top)
-    return capture.get().rstrip("\n")
+    console = Console(no_color=True, highlight=False)
+    rendered: list[str] = []
+    for name, is_dir, children in entries:
+        top = Tree(f"{name}/" if is_dir else name)
+        if children:
+            build(children, top)
+        lines = console.render_lines(top, pad=False, new_lines=False)
+        rendered.extend("".join(segment.text for segment in line).rstrip() for line in lines)
+    return "\n".join(rendered).rstrip("\n")
 
 
 def _entry_count(entries: list[TreeEntry]) -> int:
@@ -385,7 +386,7 @@ def _build_entries(
                 rel_text
                 for _child, _name, rel_text in candidates
                 if rel_text is not None and rel_text not in ignore_cache
-            }
+            },
         )
         ignored_set = _batch_ignored_by_git(uncached, repo_root=repo_root)
         for rel_text in uncached:

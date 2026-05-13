@@ -97,7 +97,7 @@ class EolRecord:
     days_until_eol: int | None
 
     @classmethod
-    def from_api_dict(cls, entry: dict[str, object], today: date | None = None) -> "EolRecord":
+    def from_api_dict(cls, entry: dict[str, object], today: date | None = None) -> EolRecord:
         """Parse an endoflife.date API dict into an EolRecord."""
         if today is None:
             today = date.today()
@@ -231,7 +231,8 @@ def _find_record(cycle: str, records: list[EolRecord]) -> EolRecord | None:
 def _rust_lag_position(cycle: str, records: list[EolRecord]) -> int:
     """Return how many releases behind *cycle* is relative to the latest stable."""
     latest_idx = next(
-        (i for i, record in enumerate(records) if not record.is_eol and record.eol_date is None), 0
+        (i for i, record in enumerate(records) if not record.is_eol and record.eol_date is None),
+        0,
     )
     for index, record in enumerate(records):
         if record.cycle == cycle:
@@ -317,10 +318,10 @@ def check_eol_status(
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("eol", __doc__ or ""),)
 
 __all__ = [
-    "EolRecord",
-    "EolStatus",
     "SOURCE_OWNED_TOPIC_DOCS",
     "SUPPORTED_LANGUAGES",
+    "EolRecord",
+    "EolStatus",
     "_extract_version",
     "_find_record",
     "_parse_cycle",

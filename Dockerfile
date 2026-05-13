@@ -6,6 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY LICENSE README.md pyproject.toml ./
+COPY .github/skills ./.github/skills
+COPY .github/agents ./.github/agents
+COPY .github/hooks ./.github/hooks
 COPY src ./src
 
 RUN python -m pip install --no-cache-dir --upgrade pip \

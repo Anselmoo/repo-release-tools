@@ -63,7 +63,7 @@ _PYTHON_RULES: list[tuple[str, re.Pattern[str]]] = [
         "kw",
         re.compile(
             r"\b(def|class|import|from|return|if|else|elif|for|while|with|as|in|not|"
-            r"and|or|is|lambda|yield|raise|try|except|finally|pass|break|continue)\b"
+            r"and|or|is|lambda|yield|raise|try|except|finally|pass|break|continue)\b",
         ),
     ),
 ]

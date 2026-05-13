@@ -51,7 +51,18 @@ VALID_TARGET_KINDS = frozenset({"pep621", "package_json", "python_version", "go_
 
 # Directory names to skip when scanning for Python __version__ files.
 _IGNORE_DIR_NAMES: frozenset[str] = frozenset(
-    {".venv", "venv", "env", ".env", "node_modules", "__pycache__", ".git", ".tox", "dist", "build"}
+    {
+        ".venv",
+        "venv",
+        "env",
+        ".env",
+        "node_modules",
+        "__pycache__",
+        ".git",
+        ".tox",
+        "dist",
+        "build",
+    },
 )
 
 # Matches the first occurrence of a `__version__ = "..."` / `'...'` declaration,
@@ -80,7 +91,7 @@ _RESERVED_BRANCH_TYPES = frozenset(
         # dependency bot types
         "dependabot",
         "renovate",
-    }
+    },
 )
 
 # Valid identifier pattern for extra_branch_types entries (after normalization).
@@ -104,7 +115,7 @@ PYTHON_TOOL_RRT_EXAMPLE = dedent(
     [[tool.rrt.version_targets]]
     path = "pyproject.toml"
     kind = "pep621"
-    """
+    """,
 ).strip()
 
 NODE_TOOL_RRT_EXAMPLE = dedent(
@@ -116,7 +127,7 @@ NODE_TOOL_RRT_EXAMPLE = dedent(
     path = "package.json"
     kind = "package_json"
     ci_format = "semver_pre"
-    """
+    """,
 ).strip()
 
 RUST_TOOL_RRT_EXAMPLE = dedent(
@@ -129,7 +140,7 @@ RUST_TOOL_RRT_EXAMPLE = dedent(
     section = "package"
     field = "version"
     ci_format = "semver_pre"
-    """
+    """,
 ).strip()
 
 GO_TOOL_RRT_EXAMPLE = dedent(
@@ -140,7 +151,7 @@ GO_TOOL_RRT_EXAMPLE = dedent(
     [[tool.rrt.version_targets]]
     path = "internal/version/version.go"
     kind = "go_version"
-    """
+    """,
 ).strip()
 
 GENERIC_TOOL_RRT_EXAMPLE = dedent(
@@ -153,7 +164,7 @@ GENERIC_TOOL_RRT_EXAMPLE = dedent(
     [[tool.rrt.version_targets]]
     path = "path/to/version-file"
     pattern = '^(const Version = ")([^"]+)(")$'
-    """
+    """,
 ).strip()
 
 
@@ -203,12 +214,12 @@ class VersionTarget:
         if configured_modes == 0:
             kind_opts = " or ".join(f"kind={k!r}" for k in sorted(VALID_TARGET_KINDS))
             raise ValueError(
-                f"Each version target must define either {kind_opts}, pattern, or section+field"
+                f"Each version target must define either {kind_opts}, pattern, or section+field",
             )
         if configured_modes > 1:
             raise ValueError(
                 "Version target replacement selectors are mutually exclusive: "
-                "use exactly one of kind, pattern, or section+field"
+                "use exactly one of kind, pattern, or section+field",
             )
 
         if has_pattern:
@@ -218,11 +229,11 @@ class VersionTarget:
             if not isinstance(self.ci_format, str):
                 raise ValueError(
                     f"ci_format must be a string equal to 'pep440' or 'semver_pre', "
-                    f"got {type(self.ci_format).__name__}: {self.ci_format!r}"
+                    f"got {type(self.ci_format).__name__}: {self.ci_format!r}",
                 )
             if self.ci_format not in VALID_CI_FORMATS:
                 raise ValueError(
-                    f"ci_format must be 'pep440' or 'semver_pre', got {self.ci_format!r}"
+                    f"ci_format must be 'pep440' or 'semver_pre', got {self.ci_format!r}",
                 )
 
 
@@ -253,7 +264,7 @@ class PinTarget:
             raise ValueError(f"pin_targets pattern is not a valid regex: {exc}") from exc
         if compiled.groups != 3:
             raise ValueError(
-                "pin_targets pattern must have exactly 3 capture groups (prefix, version, suffix)"
+                "pin_targets pattern must have exactly 3 capture groups (prefix, version, suffix)",
             )
 
 
@@ -281,7 +292,7 @@ class VersionGroup:
                 return target
 
         raise ValueError(
-            f"Group {self.name!r} version_source {self.version_source} does not match any target"
+            f"Group {self.name!r} version_source {self.version_source} does not match any target",
         )
 
 
@@ -322,7 +333,7 @@ class SharedBlock:
             raise ValueError(f"shared_blocks entry {self.anchor_id!r} must define 'content'")
         if not self.targets:
             raise ValueError(
-                f"shared_blocks entry {self.anchor_id!r} must define at least one target glob"
+                f"shared_blocks entry {self.anchor_id!r} must define at least one target glob",
             )
 
 
@@ -395,7 +406,7 @@ class FolderTemplate:
         if self.strictness not in VALID_TEMPLATE_STRICTNESS:
             allowed = ", ".join(sorted(VALID_TEMPLATE_STRICTNESS))
             raise ValueError(
-                f"folder template {self.name!r} strictness must be one of {allowed}, got {self.strictness!r}"
+                f"folder template {self.name!r} strictness must be one of {allowed}, got {self.strictness!r}",
             )
 
         for label, entries in (
@@ -407,7 +418,8 @@ class FolderTemplate:
         ):
             for entry in entries:
                 _validate_relative_folder_path(
-                    entry, label=f"folder template {self.name!r} {label}"
+                    entry,
+                    label=f"folder template {self.name!r} {label}",
                 )
 
         for scaffold_file in self.scaffold_files:
@@ -440,7 +452,7 @@ class FolderRule:
         if self.mode is not None and self.mode not in VALID_FOLDER_MODES:
             allowed = ", ".join(sorted(VALID_FOLDER_MODES))
             raise ValueError(
-                f"folder rule {self.name!r} mode must be one of {allowed}, got {self.mode!r}"
+                f"folder rule {self.name!r} mode must be one of {allowed}, got {self.mode!r}",
             )
 
         for label, entries in (
@@ -519,7 +531,7 @@ class RrtConfig:
         available = ", ".join(group.name for group in self.version_groups)
         raise ValueError(
             "Multiple version groups configured. Select one explicitly with --group "
-            f"(available: {available})."
+            f"(available: {available}).",
         )
 
     @property

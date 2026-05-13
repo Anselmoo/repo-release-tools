@@ -349,7 +349,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
     if not args.no_changelog:
         p.section("Updating changelog")
         effective_changelog_mode = resolve_changelog_mode(
-            config, getattr(args, "changelog_mode", None)
+            config,
+            getattr(args, "changelog_mode", None),
         )
         update_changelog(
             RrtConfig(
@@ -408,7 +409,10 @@ def cmd_bump(args: argparse.Namespace) -> int:
             seen_pin_stage.add(key)
             files_to_stage.append(str(pin.path.relative_to(root)))
     git.run(
-        ["git", "add", *dict.fromkeys(files_to_stage)], root, dry_run=args.dry_run, label="git add"
+        ["git", "add", *dict.fromkeys(files_to_stage)],
+        root,
+        dry_run=args.dry_run,
+        label="git add",
     )
 
     if not args.no_commit:
@@ -454,7 +458,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     release_grp = parser.add_argument_group("Release control")
     release_grp.add_argument(
-        "--dry-run", action="store_true", help="Preview changes without writing to disk."
+        "--dry-run",
+        action="store_true",
+        help="Preview changes without writing to disk.",
     )
     release_grp.add_argument(
         "--force",
@@ -470,7 +476,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     content_grp = parser.add_argument_group("Content")
     content_grp.add_argument(
-        "--no-changelog", action="store_true", help="Do not update the changelog file."
+        "--no-changelog",
+        action="store_true",
+        help="Do not update the changelog file.",
     )
     content_grp.add_argument(
         "--no-pin-sync",

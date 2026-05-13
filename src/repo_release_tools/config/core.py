@@ -195,7 +195,7 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
             "  - Cargo.toml -> [package].version",
             "",
             "If none of those exist, add rrt config using the appropriate section for your project file:",
-        ]
+        ],
     )
     for name in CONFIG_FILE_CANDIDATES:
         lines.append(f"  - {name} \u2192 {CONFIG_SECTION_BY_FILE[name]}")
@@ -221,7 +221,7 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
             "",
             "Local repo config works too: put that table in .rrt.toml or .config/rrt.toml",
             "if you do not want to keep release-tool config in pyproject.toml.",
-        ]
+        ],
     )
     return "\n".join(lines)
 
@@ -274,13 +274,13 @@ def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
                 section="tool.poetry",
                 field="version",
                 ci_format="pep440",
-            )
+            ),
         )
 
     package_json = root / "package.json"
     if _json_string_field_exists(package_json, field="version"):
         targets.append(
-            VersionTarget(path=package_json, kind="package_json", ci_format="semver_pre")
+            VersionTarget(path=package_json, kind="package_json", ci_format="semver_pre"),
         )
 
     cargo_toml = root / "Cargo.toml"
@@ -291,7 +291,7 @@ def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
                 section="package",
                 field="version",
                 ci_format="semver_pre",
-            )
+            ),
         )
     elif _toml_string_field_exists(cargo_toml, section="workspace.package", field="version"):
         targets.append(
@@ -300,7 +300,7 @@ def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
                 section="workspace.package",
                 field="version",
                 ci_format="semver_pre",
-            )
+            ),
         )
 
     # Python __version__ variable files (secondary targets alongside pep621/poetry).
@@ -387,7 +387,7 @@ def recommend_init_config(root: Path) -> str:
             [
                 "# Edit the starter target below before using `rrt bump`.",
                 GO_TOOL_RRT_EXAMPLE,
-            ]
+            ],
         )
 
     return GENERIC_TOOL_RRT_EXAMPLE
@@ -406,7 +406,9 @@ def recommend_init_section_for_cargo(root: Path) -> str:
     config = autodetect_config(root)
     if config is not None:
         return _render_recommended_rrt_toml(
-            root, config.resolve_group(), prefix="package.metadata.rrt"
+            root,
+            config.resolve_group(),
+            prefix="package.metadata.rrt",
         )
     return RUST_TOOL_RRT_EXAMPLE
 
@@ -438,7 +440,7 @@ def recommend_init_config_for_go(root: Path) -> str:
         [
             "# Edit the starter target below before using `rrt bump`.",
             GO_TOOL_RRT_EXAMPLE,
-        ]
+        ],
     )
 
 
@@ -476,7 +478,10 @@ def _render_recommended_rrt_dict(root: Path, group: VersionGroup) -> dict[str, o
 
 
 def _render_recommended_rrt_toml(
-    root: Path, group: VersionGroup, *, prefix: str = "tool.rrt"
+    root: Path,
+    group: VersionGroup,
+    *,
+    prefix: str = "tool.rrt",
 ) -> str:
     """Render an rrt config block mirroring the current recommended defaults.
 
@@ -497,7 +502,7 @@ def _render_recommended_rrt_toml(
         lines.append(f"generated_files = {_toml_string_list(generated_files)}")
     if len(group.version_targets) > 1:
         lines.append(
-            f"version_source = {_toml_basic_string(str(group.primary_target().path.relative_to(root)))}"
+            f"version_source = {_toml_basic_string(str(group.primary_target().path.relative_to(root)))}",
         )
 
     for target in group.version_targets:
@@ -594,7 +599,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         isinstance(item, str) for item in raw_extra_branch_types
     ):
         raise ValueError("tool.rrt.extra_branch_types must be a list of strings")
-    typed_extra_branch_types = cast(list[str], raw_extra_branch_types)
+    typed_extra_branch_types = cast("list[str]", raw_extra_branch_types)
     seen_extra: set[str] = set()
     extra_branch_types_list: list[str] = []
     for raw_item in typed_extra_branch_types:
@@ -604,12 +609,12 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         if not _BRANCH_TYPE_IDENTIFIER_RE.fullmatch(normalized):
             raise ValueError(
                 f"tool.rrt.extra_branch_types entry {raw_item!r} is not a valid identifier "
-                "(use lowercase letters, digits, hyphens, or underscores, starting with a letter)"
+                "(use lowercase letters, digits, hyphens, or underscores, starting with a letter)",
             )
         if normalized in _RESERVED_BRANCH_TYPES:
             raise ValueError(
                 f"tool.rrt.extra_branch_types entry {normalized!r} overlaps with a built-in "
-                "branch type and must not be listed here"
+                "branch type and must not be listed here",
             )
         if normalized not in seen_extra:
             seen_extra.add(normalized)
@@ -632,7 +637,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
                 group_name="default",
                 raw_group=raw,
                 defaults=group_defaults,
-            )
+            ),
         ]
         default_group_name = "default"
     else:
@@ -643,7 +648,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         for item in raw_groups:
             if not isinstance(item, dict):
                 raise ValueError("Each tool.rrt.version_groups entry must be a table")
-            typed_item = cast(dict[str, object], item)
+            typed_item = cast("dict[str, object]", item)
             name = typed_item.get("name")
             if not isinstance(name, str) or not name:
                 raise ValueError("Each tool.rrt.version_groups entry needs a non-empty name")
@@ -657,14 +662,14 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
                     group_name=name,
                     raw_group=typed_item,
                     defaults=group_defaults,
-                )
+                ),
             )
 
         if default_group_name is not None and default_group_name not in seen_names:
             available = ", ".join(sorted(seen_names))
             raise ValueError(
                 f"tool.rrt.default_group {default_group_name!r} is not defined. "
-                f"Available groups: {available}"
+                f"Available groups: {available}",
             )
 
     return RrtConfig(
@@ -911,10 +916,10 @@ def _load_cargo_toml_config(config_file: Path) -> dict[str, object]:
 
     if package_rrt is not None or workspace_rrt is not None:
         raise ValueError(
-            "[package.metadata.rrt] or [workspace.metadata.rrt] in Cargo.toml must be a table"
+            "[package.metadata.rrt] or [workspace.metadata.rrt] in Cargo.toml must be a table",
         )
     raise MissingRrtConfigError(
-        "Missing [package.metadata.rrt] or [workspace.metadata.rrt] configuration in Cargo.toml"
+        "Missing [package.metadata.rrt] or [workspace.metadata.rrt] configuration in Cargo.toml",
     )
 
 
@@ -933,7 +938,7 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
     for item in raw_pins:
         if not isinstance(item, dict):
             raise ValueError("Each pin_targets entry must be a table")
-        typed_item = cast(dict[str, object], item)
+        typed_item = cast("dict[str, object]", item)
         raw_path = typed_item.get("path")
         raw_pattern = typed_item.get("pattern")
         if not isinstance(raw_path, str) or not raw_path:
@@ -945,14 +950,14 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
         # relative paths so downstream code can safely call ``relative_to(root)``.
         if Path(raw_path).is_absolute():
             raise ValueError(
-                f"pin_targets.path {raw_path!r} must be a relative path inside the repository"
+                f"pin_targets.path {raw_path!r} must be a relative path inside the repository",
             )
 
         if has_magic(raw_path):
             matched_paths = sorted(path for path in root.glob(raw_path) if path.is_file())
             if not matched_paths:
                 raise ValueError(
-                    f"pin_targets path glob {raw_path!r} matched no files under {root}"
+                    f"pin_targets path glob {raw_path!r} matched no files under {root}",
                 )
             for matched_path in matched_paths:
                 # Resolve matched path and verify it is contained by the repo root.
@@ -962,7 +967,7 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
                     matched_resolved = matched_path
                 if not matched_resolved.is_relative_to(root_resolved):
                     raise ValueError(
-                        f"pin_targets path glob {raw_path!r} resolved to {matched_resolved} which is outside repository root {root_resolved}"
+                        f"pin_targets path glob {raw_path!r} resolved to {matched_resolved} which is outside repository root {root_resolved}",
                     )
                 pin = PinTarget(path=matched_resolved, pattern=raw_pattern)
                 pin.validate()
@@ -976,7 +981,7 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
             candidate_resolved = candidate
         if not candidate_resolved.is_relative_to(root_resolved):
             raise ValueError(
-                f"pin_targets path {raw_path!r} resolves to {candidate_resolved} which is outside repository root {root_resolved}"
+                f"pin_targets path {raw_path!r} resolves to {candidate_resolved} which is outside repository root {root_resolved}",
             )
         pin = PinTarget(path=candidate_resolved, pattern=raw_pattern)
         pin.validate()
@@ -1001,7 +1006,7 @@ def _load_version_group(
     for item in raw_targets:
         if not isinstance(item, dict):
             raise ValueError("Each version target must be a table")
-        typed_item = cast(dict[str, object], item)
+        typed_item = cast("dict[str, object]", item)
         raw_path = typed_item.get("path")
         if not isinstance(raw_path, str) or not raw_path:
             raise ValueError("Each version target must have a non-empty 'path' string")
@@ -1057,7 +1062,7 @@ def _load_version_group(
     ):
         raise ValueError("lock_command must be a list of strings")
     else:
-        lock_command = cast(list[str], lock_command_raw)
+        lock_command = cast("list[str]", lock_command_raw)
 
     generated_files_raw = raw_group.get("generated_files", defaults["generated_files"])
     if generated_files_raw is None:
@@ -1068,7 +1073,7 @@ def _load_version_group(
     ):
         raise ValueError("generated_files must be a list of strings")
     else:
-        generated_files = cast(list[str], generated_files_raw)
+        generated_files = cast("list[str]", generated_files_raw)
 
     raw_version_source = raw_group.get("version_source")
     if raw_version_source is not None and not isinstance(raw_version_source, str):
@@ -1076,7 +1081,7 @@ def _load_version_group(
     version_source = root / raw_version_source if isinstance(raw_version_source, str) else None
     if version_source is not None and all(target.path != version_source for target in targets):
         raise ValueError(
-            f"version_source {raw_version_source!r} for group {group_name!r} does not match any target path"
+            f"version_source {raw_version_source!r} for group {group_name!r} does not match any target path",
         )
 
     return VersionGroup(
@@ -1101,6 +1106,15 @@ __all__ = [
     "DEFAULT_INIT_CONFIG",
     "DEFAULT_LOCK_COMMAND",
     "DEFAULT_RELEASE_BRANCH",
+    "GENERIC_TOOL_RRT_EXAMPLE",
+    "GO_TOOL_RRT_EXAMPLE",
+    "NODE_TOOL_RRT_EXAMPLE",
+    "PYTHON_TOOL_RRT_EXAMPLE",
+    "RUST_TOOL_RRT_EXAMPLE",
+    "VALID_CHANGELOG_WORKFLOWS",
+    "VALID_CI_FORMATS",
+    "VALID_TARGET_KINDS",
+    "_VALID_LANGUAGES",
     "DocsConfig",
     "EolConfig",
     "EolOverride",
@@ -1108,21 +1122,23 @@ __all__ = [
     "FolderRule",
     "FolderScaffoldFile",
     "FolderTemplate",
-    "GENERIC_TOOL_RRT_EXAMPLE",
-    "GO_TOOL_RRT_EXAMPLE",
     "MissingRrtConfigError",
-    "NODE_TOOL_RRT_EXAMPLE",
-    "PYTHON_TOOL_RRT_EXAMPLE",
     "PinTarget",
-    "RUST_TOOL_RRT_EXAMPLE",
     "RrtConfig",
     "SharedBlock",
-    "VALID_CHANGELOG_WORKFLOWS",
-    "VALID_CI_FORMATS",
-    "VALID_TARGET_KINDS",
     "VersionGroup",
     "VersionTarget",
-    "_VALID_LANGUAGES",
+    "_autodetect_version_targets",
+    "_describe_version_target",
+    "_detect_lock_and_files",
+    "_find_python_version_files",
+    "_json_string_field_exists",
+    "_load_raw_config",
+    "_recommended_lock_settings",
+    "_render_recommended_rrt_dict",
+    "_render_recommended_rrt_toml",
+    "_target_ecosystem",
+    "_toml_string_field_exists",
     "auto_detect_config",
     "autodetect_config",
     "find_changelog_file",
@@ -1141,15 +1157,4 @@ __all__ = [
     "recommend_init_section_for_cargo",
     "recommend_init_section_for_node",
     "recommend_init_section_for_pyproject",
-    "_autodetect_version_targets",
-    "_describe_version_target",
-    "_detect_lock_and_files",
-    "_find_python_version_files",
-    "_json_string_field_exists",
-    "_load_raw_config",
-    "_recommended_lock_settings",
-    "_render_recommended_rrt_dict",
-    "_render_recommended_rrt_toml",
-    "_target_ecosystem",
-    "_toml_string_field_exists",
 ]

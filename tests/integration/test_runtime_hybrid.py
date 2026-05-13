@@ -4,9 +4,9 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import pytest
 
@@ -46,7 +46,7 @@ def _run(
             f"Command failed: {' '.join(cmd)}\n"
             f"cwd={cwd}\n"
             f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
+            f"stderr:\n{result.stderr}",
         )
     return result
 
