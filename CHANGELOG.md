@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-13
+
+### Added
+- finalize hook and workspace automation updates (#58)
+
 ## [1.4.0] - 2026-05-10
 
 ### Added
