@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-13
+
+_No notable changes recorded._
+
 ## [1.4.0] - 2026-05-10
 
 ### Added
