@@ -50,6 +50,11 @@ Current hook registrations in `.claude/settings.json`:
   `data` scheme root (agent files directly under `data/`), while `.github/hooks/...`
   lands under the `headers` scheme root. These files are not nested beneath
   `.github/` prefixes after installation.
+- When a Docker image installs the project with `pip install .` or `uv build`,
+  keep the `Dockerfile` aligned with `[tool.uv.build-backend].source-include` by
+  copying every source tree that the backend walks into the image before the
+  install step; for this repo that means `.github/skills/`, `.github/agents/`,
+  and `.github/hooks/` alongside `src/`.
 - When updating skill installers, keep Copilot mapped to **`.github/skills/`**
   for workspace installs and **`~/.copilot/skills/`** for user-global installs.
   Keep Claude/Codex/Gemini mapped to their matching local and global roots:
