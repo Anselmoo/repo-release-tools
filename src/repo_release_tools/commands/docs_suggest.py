@@ -29,10 +29,10 @@ from __future__ import annotations
 import argparse
 import ast
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
-from typing import Iterable
 
 from repo_release_tools.ui import DryRunPrinter
 
@@ -72,8 +72,7 @@ def _should_exempt(path: Path, text: str) -> bool:
 def _command_slug(path: Path) -> str:
     """Convert a module path into a command slug."""
     stem = path.stem
-    if stem.endswith("_cmd"):
-        stem = stem[:-4]
+    stem = stem.removesuffix("_cmd")
     return stem.replace("_", "-")
 
 
@@ -114,7 +113,7 @@ def build_scaffold(path: Path) -> str:
 
         Replace this scaffold with a concise, accurate, multi-line module
         docstring that uses Markdown consistently.
-        """
+        """,
     ).strip()
     return f'"""{body}\n"""\n'
 
@@ -127,7 +126,7 @@ def _insert_or_replace_docstring(path: Path, scaffold: str) -> bool:
     except SyntaxError as exc:
         sys.stderr.write(
             f"Skipping {path}: could not apply docstring scaffold because the file "
-            f"failed to parse ({exc.msg}).\n"
+            f"failed to parse ({exc.msg}).\n",
         )
         return False
     lines = source.splitlines(keepends=True)

@@ -10,7 +10,8 @@ from repo_release_tools.commands import env_cmd
 
 
 def test_cmd_env_outputs_json(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(sys, "version", "3.12.0 final")
@@ -34,7 +35,8 @@ def test_cmd_env_outputs_json(
 
 
 def test_cmd_env_prints_panel_when_json_disabled(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(sys, "version", "3.12.0 final")
@@ -61,7 +63,8 @@ def test_cmd_env_check_detects_no_duplicates(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_cmd_env_check_detects_duplicates(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # PATH contains duplicate /usr/bin entries
     monkeypatch.setenv("PATH", "/usr/bin:/bin:/usr/bin")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import repo_release_tools.ui as ui
+from repo_release_tools import ui
 
 
 def test_fmt_path_applies_public_underline_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:

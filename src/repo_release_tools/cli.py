@@ -8,32 +8,38 @@ import importlib.metadata
 import os
 import re
 import sys
-from collections.abc import Iterable
-from typing import IO, Any, Callable, NoReturn, cast
+from collections.abc import Callable, Iterable
+from typing import IO, Any, NoReturn, cast
 
 from repo_release_tools.commands import (
+    agents_cmd,
     branch,
     bump,
     ci_version,
     config_cmd,
     docs_cmd,
     doctor,
+    drift_cmd,
     env_cmd,
     eol_check,
     folder,
     git_cmd,
+    hooks_cmd,
     init,
+    install_cmd,
     release_cmd,
     skill,
     toc,
     tree,
 )
+from repo_release_tools.commands.action_cmd import register as action_register
 from repo_release_tools.ui import (
     DryRunPrinter,
     Style,
     apply_style,
     bold,
     chrome,
+    cli_error,
     rule,
     subtle,
     supports_color,
@@ -105,10 +111,12 @@ COMMAND_GROUPS: dict[str, list[str]] = {
         "toc",
         "tree",
         "docs",
+        "drift",
         "folder",
     ],
+    "CI & Automation": ["action"],
     "Git Workflow": ["branch", "git"],
-    "Setup & Tooling": ["init", "skill"],
+    "Setup & Tooling": ["install", "init", "skill", "agents", "hooks"],
 }
 
 READ_COMMANDS = {
@@ -124,11 +132,16 @@ READ_COMMANDS = {
 }
 
 WRITE_COMMANDS = {
+    "action",
+    "agents",
     "branch",
     "bump",
     "ci-version",
+    "drift",
     "git",
+    "hooks",
     "init",
+    "install",
     "skill",
     "commit",
     "commit-all",
@@ -142,13 +155,48 @@ DANGER_COMMANDS = {
     "rebootstrap",
 }
 
+COMMAND_REGISTRARS = (
+    agents_cmd.register,
+    branch.register,
+    bump.register,
+    ci_version.register,
+    action_register,
+    config_cmd.register,
+    doctor.register,
+    drift_cmd.register,
+    env_cmd.register,
+    eol_check.register,
+    folder.register,
+    git_cmd.register,
+    hooks_cmd.register,
+    init.register,
+    install_cmd.register,
+    release_cmd.register,
+    skill.register,
+    toc.register,
+    tree.register,
+    docs_cmd.register,
+)
+
+
+def _register_command_parsers(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Register all top-level command modules on the root parser."""
+    for register in COMMAND_REGISTRARS:
+        register(subparsers)
+
+
 _ROOT_EXAMPLES = (
     '  $ rrt branch new feat "add parser"\n'
     '  $ rrt branch rename --type fix --scope api "repair config loader"\n'
     "  $ rrt bump patch --dry-run\n"
     "  $ rrt release check\n"
+    "  $ rrt action init\n"
+    "  $ rrt drift check\n"
     "  $ rrt git status\n"
     "  $ rrt doctor\n"
+    "  $ rrt install --target claude-local\n"
     "  $ rrt skill install --target copilot-local\n"
     "  $ rrt @args.txt"
 )
@@ -259,7 +307,7 @@ class RrtHelpFormatter(argparse.RawDescriptionHelpFormatter):
 
     def end_section(self) -> None:
         """End the current section (no-op override)."""
-        return None
+        return
 
     def format_epilog(self, epilog: str | None) -> str:  # type: ignore[override]
         """Return formatted epilog with rule and Examples heading."""
@@ -346,10 +394,10 @@ class RrtArgumentParser(argparse.ArgumentParser):
     """Argument parser with friendlier parse-error output."""
 
     _INVALID_CHOICE_RE = re.compile(
-        r"invalid choice: ['\"](?P<invalid>.+?)['\"] \(choose from (?P<choices>.+)\)"
+        r"invalid choice: ['\"](?P<invalid>.+?)['\"] \(choose from (?P<choices>.+)\)",
     )
     _INVALID_VALUE_RE = re.compile(
-        r"invalid [^:]+: ['\"](?P<invalid>.+?)['\"] \(choose one of: (?P<choices>.+)\)"
+        r"invalid [^:]+: ['\"](?P<invalid>.+?)['\"] \(choose one of: (?P<choices>.+)\)",
     )
     _UNRECOGNIZED_RE = re.compile(r"unrecognized arguments: (?P<args>.+)")
 
@@ -362,7 +410,7 @@ class RrtArgumentParser(argparse.ArgumentParser):
         self._optionals.title = "Options"
 
     def _get_formatter(self) -> argparse.HelpFormatter:  # type: ignore[override]
-        formatter_class = cast(type[RrtHelpFormatter], self.formatter_class)
+        formatter_class = cast("type[RrtHelpFormatter]", self.formatter_class)
         return formatter_class(
             prog=self.prog,
             width=terminal_width(),
@@ -373,8 +421,9 @@ class RrtArgumentParser(argparse.ArgumentParser):
         """Return formatted help text including epilog."""
         formatter = self._get_formatter()
         all_actions = [action for group in self._action_groups for action in group._group_actions]
-        cast(RrtHelpFormatter, formatter)._col_width = _compute_col_width(
-            all_actions, terminal_width()
+        cast("RrtHelpFormatter", formatter)._col_width = _compute_col_width(
+            all_actions,
+            terminal_width(),
         )
         formatter.add_usage(self.usage, self._actions, self._mutually_exclusive_groups)
         formatter.add_text(self.description)
@@ -385,14 +434,14 @@ class RrtArgumentParser(argparse.ArgumentParser):
             formatter.end_section()
         help_text = formatter.format_help()
         if self.epilog:
-            help_text += cast(RrtHelpFormatter, formatter).format_epilog(self.epilog)
+            help_text += cast("RrtHelpFormatter", formatter).format_epilog(self.epilog)
         return help_text
 
     def print_help(self, file: IO[str] | None = None) -> None:  # type: ignore[override]  # ty: ignore[invalid-method-override]
         """Write help text to *file* (defaults to stdout)."""
         if file is None:
             file = sys.stdout
-        cast(IO[str], file).write(self.format_help())
+        cast("IO[str]", file).write(self.format_help())
 
     def convert_arg_line_to_args(self, arg_line: str) -> list[str]:  # type: ignore[override]
         """Strip inline comments and split response-file lines."""
@@ -418,7 +467,10 @@ class RrtArgumentParser(argparse.ArgumentParser):
 
         if suggestion:
             rendered_suggestion = apply_style(
-                suggestion, color="warning", bold=True, stream=sys.stderr
+                suggestion,
+                color="warning",
+                bold=True,
+                stream=sys.stderr,
             )
             p.line(f"  {rendered_suggestion}", ok=False, stream=sys.stderr)
         help_hint = f"Run {help_target} for usage and examples."
@@ -531,23 +583,10 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         parser_class=RrtArgumentParser,
     )
-    branch.register(cast(argparse._SubParsersAction, subparsers))
-    bump.register(cast(argparse._SubParsersAction, subparsers))
-    ci_version.register(cast(argparse._SubParsersAction, subparsers))
-    config_cmd.register(cast(argparse._SubParsersAction, subparsers))
-    doctor.register(cast(argparse._SubParsersAction, subparsers))
-    env_cmd.register(cast(argparse._SubParsersAction, subparsers))
-    eol_check.register(cast(argparse._SubParsersAction, subparsers))
-    folder.register(cast(argparse._SubParsersAction, subparsers))
-    git_cmd.register(cast(argparse._SubParsersAction, subparsers))
-    init.register(cast(argparse._SubParsersAction, subparsers))
-    release_cmd.register(cast(argparse._SubParsersAction, subparsers))
-    skill.register(cast(argparse._SubParsersAction, subparsers))
-    toc.register(cast(argparse._SubParsersAction, subparsers))
-    tree.register(cast(argparse._SubParsersAction, subparsers))
-    docs_cmd.register(cast(argparse._SubParsersAction, subparsers))
+    _register_command_parsers(cast("argparse._SubParsersAction", subparsers))
     parser.epilog = _build_grouped_epilog(
-        cast(argparse._SubParsersAction, subparsers), COMMAND_GROUPS
+        cast("argparse._SubParsersAction", subparsers),
+        COMMAND_GROUPS,
     )
     return parser
 
@@ -558,7 +597,11 @@ def main() -> None:
     args = parser.parse_args()
     if getattr(args, "no_color", False):
         os.environ.setdefault("NO_COLOR", "1")
-    raise SystemExit(args.handler(args))
+    try:
+        raise SystemExit(args.handler(args))
+    except (RuntimeError, ValueError) as exc:
+        sys.stderr.write(cli_error(str(exc), stream=sys.stderr) + "\n")
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

@@ -464,7 +464,9 @@ def test_append_to_unreleased_rst_adds_to_existing_section() -> None:
 
 def test_append_to_unreleased_rst_inserts_under_existing_subsection() -> None:
     result = append_to_unreleased(
-        _RST_UNRELEASED_WITH_ENTRIES, "fix: another bug", ChangelogFormat.RST
+        _RST_UNRELEASED_WITH_ENTRIES,
+        "fix: another bug",
+        ChangelogFormat.RST,
     )
     entries = get_unreleased_entries(result, ChangelogFormat.RST)
     descriptions = [e.lstrip("- ") for e in entries]
@@ -500,7 +502,10 @@ from repo_release_tools.changelog import build_changelog_section  # noqa: E402
 
 def test_build_changelog_section_rst_heading_format() -> None:
     result = build_changelog_section(
-        "1.1.0", ["feat: cool thing"], include_maintenance=False, fmt=ChangelogFormat.RST
+        "1.1.0",
+        ["feat: cool thing"],
+        include_maintenance=False,
+        fmt=ChangelogFormat.RST,
     )
     # No Markdown brackets around version
     assert "## [" not in result
@@ -515,7 +520,10 @@ def test_build_changelog_section_rst_heading_format() -> None:
 
 def test_build_changelog_section_rst_no_notable_changes() -> None:
     result = build_changelog_section(
-        "1.1.0", [], include_maintenance=False, fmt=ChangelogFormat.RST
+        "1.1.0",
+        [],
+        include_maintenance=False,
+        fmt=ChangelogFormat.RST,
     )
     assert "1.1.0" in result
     assert "_No notable changes recorded._" in result
@@ -554,7 +562,10 @@ def test_promote_unreleased_rst_fresh_placeholder_is_empty() -> None:
 
 def test_insert_generated_section_rst_after_empty_unreleased() -> None:
     section = build_changelog_section(
-        "1.1.0", ["feat: new thing"], include_maintenance=False, fmt=ChangelogFormat.RST
+        "1.1.0",
+        ["feat: new thing"],
+        include_maintenance=False,
+        fmt=ChangelogFormat.RST,
     )
     result = insert_generated_section(_RST_UNRELEASED_EMPTY, section, ChangelogFormat.RST)
     assert result.index("Unreleased") < result.index("1.1.0") < result.index("1.0.0")
@@ -562,7 +573,10 @@ def test_insert_generated_section_rst_after_empty_unreleased() -> None:
 
 def test_insert_generated_section_rst_adds_placeholder_when_absent() -> None:
     section = build_changelog_section(
-        "1.1.0", ["feat: new thing"], include_maintenance=False, fmt=ChangelogFormat.RST
+        "1.1.0",
+        ["feat: new thing"],
+        include_maintenance=False,
+        fmt=ChangelogFormat.RST,
     )
     result = insert_generated_section(_RST_NO_UNRELEASED, section, ChangelogFormat.RST)
     assert has_unreleased_section(result, ChangelogFormat.RST)
@@ -571,7 +585,10 @@ def test_insert_generated_section_rst_adds_placeholder_when_absent() -> None:
 
 def test_insert_generated_section_rst_preserves_title() -> None:
     section = build_changelog_section(
-        "0.2.0", [], include_maintenance=False, fmt=ChangelogFormat.RST
+        "0.2.0",
+        [],
+        include_maintenance=False,
+        fmt=ChangelogFormat.RST,
     )
     result = insert_generated_section(_RST_EMPTY, section, ChangelogFormat.RST)
     assert result.startswith("Changelog\n=========")

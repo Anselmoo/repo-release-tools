@@ -37,7 +37,7 @@ class TestStatusLabel:
         ],
     )
     def test_label(self, status: str, expected: str) -> None:
-        assert _status_label(cast(EolStatus, status)) == expected
+        assert _status_label(cast("EolStatus", status)) == expected
 
 
 # ---------------------------------------------------------------------------

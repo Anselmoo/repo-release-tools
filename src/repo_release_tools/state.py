@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import tomllib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ def hash_content(content: str) -> str:
 
 def now_utc() -> str:
     """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(tz=UTC).isoformat(timespec="seconds")
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +111,7 @@ def lock_is_current(lock_path: Path, sources: list[dict[str, Any]]) -> tuple[boo
 # ---------------------------------------------------------------------------
 
 
-def _toml_value(v: Any) -> str:  # noqa: ANN401
+def _toml_value(v: Any) -> str:
     if isinstance(v, bool):
         return "true" if v else "false"
     if isinstance(v, int):

@@ -2,6 +2,7 @@
 
 This project uses two local Claude hooks for coverage safety:
 
+- `completeness_guard.py` (`Stop`): blocks completion when required hooks, agents, or skills are missing.
 - `coverage_non_regression.py` (`Stop`): blocks completion when current coverage is below policy floor and/or below baseline thresholds.
 - `refresh_coverage_baseline.py` (`PostToolUse`): auto-refreshes `.claude/coverage-baseline.json` from `coverage.xml` after successful `pytest` commands.
 

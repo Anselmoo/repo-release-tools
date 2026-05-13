@@ -56,7 +56,7 @@ def parse_markdown_lines(text: str) -> tuple[MarkdownLine, ...]:
         level = heading_level(line)
         if level is not None:
             parsed.append(
-                MarkdownLine(kind="heading", text=stripped[level + 1 :].strip(), level=level)
+                MarkdownLine(kind="heading", text=stripped[level + 1 :].strip(), level=level),
             )
             continue
         parsed.append(MarkdownLine(kind="text", text=line))

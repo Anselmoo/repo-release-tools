@@ -57,7 +57,9 @@ def _make_config(
 
 
 def test_doctor_no_config_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 1 and prints guidance when no config file is found."""
     monkeypatch.chdir(tmp_path)
@@ -69,7 +71,9 @@ def test_doctor_no_config_file(
 
 
 def test_doctor_no_rrt_section(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 1 when config exists but has no [tool.rrt] section."""
     monkeypatch.chdir(tmp_path)
@@ -82,7 +86,9 @@ def test_doctor_no_rrt_section(
 
 
 def test_doctor_generic_value_error_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Unexpected ValueError is surfaced to stderr."""
     monkeypatch.chdir(tmp_path)
@@ -99,7 +105,9 @@ def test_doctor_generic_value_error_returns_1(
 
 
 def test_doctor_runtime_error_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Runtime errors while loading config are surfaced to stderr."""
     monkeypatch.chdir(tmp_path)
@@ -121,7 +129,9 @@ def test_doctor_runtime_error_returns_1(
 
 
 def test_doctor_all_healthy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Returns 0 and reports core automation warnings as non-fatal."""
     monkeypatch.chdir(tmp_path)
@@ -138,7 +148,9 @@ def test_doctor_all_healthy(
 
 
 def test_doctor_panel_shows_config_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Panel header shows the config file path."""
     monkeypatch.chdir(tmp_path)
@@ -152,7 +164,9 @@ def test_doctor_panel_shows_config_file(
 
 
 def test_doctor_panel_shows_group_count(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Panel header shows version group count."""
     monkeypatch.chdir(tmp_path)
@@ -166,7 +180,9 @@ def test_doctor_panel_shows_group_count(
 
 
 def test_doctor_autodetected_warns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Autodetected config prints a warning to stderr."""
     monkeypatch.chdir(tmp_path)
@@ -179,7 +195,9 @@ def test_doctor_autodetected_warns(
 
 
 def test_doctor_pre_commit_surface_detected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A repo-managed pre-commit config is reported as OK."""
     monkeypatch.chdir(tmp_path)
@@ -197,7 +215,9 @@ def test_doctor_pre_commit_surface_detected(
 
 
 def test_doctor_pre_commit_surface_missing_markers_warns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A generic pre-commit config warns but does not fail doctor."""
     monkeypatch.chdir(tmp_path)
@@ -220,7 +240,9 @@ def test_doctor_pre_commit_surface_missing_markers_warns(
 
 
 def test_doctor_lefthook_surface_detected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A lefthook config with rrt-hooks is reported as OK."""
     monkeypatch.chdir(tmp_path)
@@ -238,7 +260,9 @@ def test_doctor_lefthook_surface_detected(
 
 
 def test_doctor_github_actions_surface_detected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A workflow using repo-release-tools is reported as OK."""
     monkeypatch.chdir(tmp_path)
@@ -258,7 +282,9 @@ def test_doctor_github_actions_surface_detected(
 
 
 def test_doctor_github_actions_surface_without_rrt_markers_warns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A generic workflow file warns when no repo-release-tools step is present."""
     monkeypatch.chdir(tmp_path)
@@ -275,7 +301,9 @@ def test_doctor_github_actions_surface_without_rrt_markers_warns(
 
 
 def test_doctor_empty_workflows_dir_warns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """An empty workflows directory warns but does not fail doctor."""
     monkeypatch.chdir(tmp_path)
@@ -290,7 +318,9 @@ def test_doctor_empty_workflows_dir_warns(
 
 
 def test_doctor_unreadable_workflow_file_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Unreadable workflow entries fail doctor."""
     monkeypatch.chdir(tmp_path)
@@ -307,7 +337,9 @@ def test_doctor_unreadable_workflow_file_returns_1(
 
 
 def test_doctor_unreadable_automation_file_returns_1(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Unreadable automation files fail doctor."""
     monkeypatch.chdir(tmp_path)
@@ -324,7 +356,9 @@ def test_doctor_unreadable_automation_file_returns_1(
 
 
 def test_doctor_feature_specific_hints_follow_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Doctor points configured features to their dedicated commands."""
     monkeypatch.chdir(tmp_path)

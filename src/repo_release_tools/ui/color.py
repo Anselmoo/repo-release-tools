@@ -17,7 +17,7 @@ from typing import IO, Literal
 ColorLevel = Literal["none", "standard", "256", "truecolor"]
 
 # Named semantic colors used by apply_style().
-_NAMED_STYLES: dict[str, "Style"] = {}  # populated after Style is defined
+_NAMED_STYLES: dict[str, Style] = {}  # populated after Style is defined
 
 
 def detect_color_level() -> ColorLevel:
@@ -105,7 +105,7 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
 
 def apply(
     text: str,
-    style: "Style",
+    style: Style,
     *,
     fg: tuple[int, int, int] | str | None = None,
     bg: tuple[int, int, int] | str | None = None,
@@ -171,9 +171,9 @@ def apply_style(
     italic: bool = False,
     underline: bool = False,
     dim: bool = False,
-    color: "str | Style | None" = None,
-    fg: "tuple[int, int, int] | str | None" = None,
-    bg: "tuple[int, int, int] | str | None" = None,
+    color: str | Style | None = None,
+    fg: tuple[int, int, int] | str | None = None,
+    bg: tuple[int, int, int] | str | None = None,
     stream: IO[str] | None = None,
 ) -> str:
     """Apply combined color and emphasis in a single call.
@@ -317,5 +317,5 @@ _NAMED_STYLES.update(
         "subtle": Style(fg=90),
         "heading": Style(fg=33, bold=True),
         "chrome": Style(fg=33, dim=True),
-    }
+    },
 )

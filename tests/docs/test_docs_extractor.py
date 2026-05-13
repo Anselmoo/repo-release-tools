@@ -62,7 +62,9 @@ class TestExtractDocs:
         )
 
     def test_extract_docs_python_explicit_marker(
-        self, tmp_path: Path, docs_config: DocsConfig
+        self,
+        tmp_path: Path,
+        docs_config: DocsConfig,
     ) -> None:
         """Should extract Python docstrings with explicit markers."""
         py_file = tmp_path / "module.py"
@@ -128,7 +130,7 @@ class TestExtractDocs:
         """Should extract TypeScript JSDoc comments in implicit mode."""
         ts_file = tmp_path / "module.ts"
         ts_file.write_text(
-            "/**\n * My function\n * Detailed description\n */\nexport function myFunc() {}\n"
+            "/**\n * My function\n * Detailed description\n */\nexport function myFunc() {}\n",
         )
 
         config = DocsConfig(
@@ -147,7 +149,7 @@ class TestExtractDocs:
         """Should extract Go doc comments in implicit mode."""
         go_file = tmp_path / "main.go"
         go_file.write_text(
-            "// MyFunc is a test function.\n// It does something.\nfunc MyFunc() {}\n"
+            "// MyFunc is a test function.\n// It does something.\nfunc MyFunc() {}\n",
         )
 
         config = DocsConfig(
@@ -166,7 +168,7 @@ class TestExtractDocs:
         """Should extract Rust doc comments in implicit mode."""
         rs_file = tmp_path / "lib.rs"
         rs_file.write_text(
-            "/// MyFunc is a test function.\n/// It does something.\npub fn my_func() {}\n"
+            "/// MyFunc is a test function.\n/// It does something.\npub fn my_func() {}\n",
         )
 
         config = DocsConfig(
@@ -189,7 +191,7 @@ class TestExtractDocs:
             'MY_DOC = """My documentation"""\n\n'
             "SOURCE_OWNED_TOPIC_DOCS = (\n"
             '    ("my_topic", MY_DOC),\n'
-            ")\n"
+            ")\n",
         )
 
         config = DocsConfig(
@@ -209,7 +211,7 @@ class TestExtractDocs:
         py_file.write_text(
             '# sym: explicit\nEXPLICIT_DOC = """Explicit doc"""\n\n'
             '"""Implicit module doc"""\n\n'
-            'def func():\n    """Function doc"""\n    pass\n'
+            'def func():\n    """Function doc"""\n    pass\n',
         )
 
         config = DocsConfig(
@@ -265,10 +267,10 @@ class TestExtractDocsFromDir:
 
         # Create Python files
         (src_dir / "module1.py").write_text(
-            '# sym: first\nFIRST_DOC = """First documentation."""\n'
+            '# sym: first\nFIRST_DOC = """First documentation."""\n',
         )
         (src_dir / "module2.py").write_text(
-            '# sym: second\nSECOND_DOC = """Second documentation."""\n'
+            '# sym: second\nSECOND_DOC = """Second documentation."""\n',
         )
 
         config = DocsConfig(
@@ -321,7 +323,7 @@ class TestExtractDocsFromDir:
 
         (src_dir / "python_module.py").write_text('# sym: py\nPY_DOC = """Python docs."""\n')
         (src_dir / "ts_module.ts").write_text(
-            "// sym: ts\nexport const TS_DOC = `TypeScript docs`;\n"
+            "// sym: ts\nexport const TS_DOC = `TypeScript docs`;\n",
         )
 
         config = DocsConfig(
@@ -418,7 +420,7 @@ class TestExtractExplicitEdgeCases:
         """Rust explicit marker should collect comment lines after the marker."""
         rs_file = tmp_path / "lib.rs"
         rs_file.write_text(
-            "// sym: my_func\n/// This function does X.\n/// And Y.\npub fn my_func() {}\n"
+            "// sym: my_func\n/// This function does X.\n/// And Y.\npub fn my_func() {}\n",
         )
         config = DocsConfig(
             extraction_mode="explicit",
@@ -434,7 +436,7 @@ class TestExtractExplicitEdgeCases:
         """A blank line after comment lines should stop collection."""
         go_file = tmp_path / "main.go"
         go_file.write_text(
-            "// sym: MyFunc\n// Line one.\n\n// This is NOT part of it.\nfunc MyFunc() {}\n"
+            "// sym: MyFunc\n// Line one.\n\n// This is NOT part of it.\nfunc MyFunc() {}\n",
         )
         config = DocsConfig(
             extraction_mode="explicit",
@@ -483,7 +485,7 @@ class TestExtractPythonSourceOwned:
             'MY_DOC = """\nThis is my documentation.\n"""\n\n'
             "SOURCE_OWNED_TOPIC_DOCS = (\n"
             '    ("my_topic", MY_DOC),\n'
-            ")\n"
+            ")\n",
         )
         config = DocsConfig(
             extraction_mode="explicit",

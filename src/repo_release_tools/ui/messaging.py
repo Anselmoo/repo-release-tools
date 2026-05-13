@@ -70,7 +70,9 @@ def render_info(message: str, *, indent: int = 2, stream: IO[str] | None = None)
 def render_hint(message: str, *, indent: int = 2, stream: IO[str] | None = None) -> str:
     """Render a hint line: ``… <message>``."""
     return render_status(
-        GLYPHS.typography.ellipsis, _c_subtle(message, stream=stream), indent=indent
+        GLYPHS.typography.ellipsis,
+        _c_subtle(message, stream=stream),
+        indent=indent,
     )
 
 
@@ -167,8 +169,8 @@ class DryRunPrinter:
         print(
             _c_subtle(
                 f"{GLYPHS.bullet.skip} [dry-run] Would install {name} to {target}: "
-                f"{underline(location)}"
-            )
+                f"{underline(location)}",
+            ),
         )
 
     def action(self, message: str, *, stream: IO[str] | None = None) -> None:
@@ -266,6 +268,6 @@ class DryRunPrinter:
         if self.dry_run:
             print(
                 _c_subtle(
-                    f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no changes made"
-                )
+                    f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no changes made",
+                ),
             )

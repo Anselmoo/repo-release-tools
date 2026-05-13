@@ -18,7 +18,8 @@ def test_infer_commit_type_from_branch() -> None:
 
 
 def test_cmd_commit_dry_run_uses_branch_type(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
     args = argparse.Namespace(
@@ -37,7 +38,8 @@ def test_cmd_commit_dry_run_uses_branch_type(
 
 
 def test_cmd_status_renders_summary_and_entries(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -60,7 +62,8 @@ def test_cmd_status_renders_summary_and_entries(
 
 
 def test_cmd_status_renders_clean_tree(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
@@ -76,7 +79,8 @@ def test_cmd_status_renders_clean_tree(
 
 
 def test_cmd_status_reports_status_failure(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
@@ -95,7 +99,8 @@ def test_cmd_status_reports_status_failure(
 
 
 def test_cmd_log_renders_compact_history(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(
@@ -118,14 +123,17 @@ def test_cmd_log_renders_compact_history(
 
 
 def test_cmd_doctor_reports_failures(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
     monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: None)
     monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
     monkeypatch.setattr(
-        git_cmd.git, "status_porcelain", lambda cwd: [" M src/repo_release_tools/cli.py"]
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [" M src/repo_release_tools/cli.py"],
     )
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (0, 0))
 
@@ -149,7 +157,8 @@ def test_cmd_doctor_reports_failures(
 
 
 def test_cmd_doctor_reports_success(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -175,7 +184,8 @@ def test_cmd_doctor_reports_success(
 
 
 def test_cmd_doctor_uses_commit_subject_for_changelog_risk(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -201,7 +211,8 @@ def test_cmd_doctor_uses_commit_subject_for_changelog_risk(
 
 
 def test_cmd_doctor_reports_conflicts_and_sync_need(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -234,7 +245,9 @@ def test_cmd_doctor_reports_conflicts_and_sync_need(
 
 
 def test_cmd_sync_requires_git_repository(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
@@ -247,7 +260,9 @@ def test_cmd_sync_requires_git_repository(
 
 
 def test_cmd_move_requires_git_repository(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
@@ -260,7 +275,8 @@ def test_cmd_move_requires_git_repository(
 
 
 def test_cmd_sync_dry_run_stashes_before_rebase(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -268,7 +284,9 @@ def test_cmd_sync_dry_run_stashes_before_rebase(
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
     monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
     monkeypatch.setattr(
-        git_cmd.git, "status_porcelain", lambda cwd: [" M src/repo_release_tools/cli.py"]
+        git_cmd.git,
+        "status_porcelain",
+        lambda cwd: [" M src/repo_release_tools/cli.py"],
     )
     monkeypatch.setattr(git_cmd.git, "ahead_behind", lambda cwd, ref: (2, 1))
     args = argparse.Namespace(merge=False, dry_run=True)
@@ -283,7 +301,8 @@ def test_cmd_sync_dry_run_stashes_before_rebase(
 
 
 def test_cmd_sync_rejects_unresolved_conflicts(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -292,7 +311,9 @@ def test_cmd_sync_rejects_unresolved_conflicts(
     monkeypatch.setattr(git_cmd.git, "in_progress_operation", lambda cwd: None)
     monkeypatch.setattr(git_cmd.git, "status_porcelain", lambda cwd: ["UU src/conflicted.py"])
     monkeypatch.setattr(
-        git_cmd.git, "run", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError)
+        git_cmd.git,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError),
     )
     args = argparse.Namespace(merge=False, dry_run=True)
 
@@ -304,7 +325,8 @@ def test_cmd_sync_rejects_unresolved_conflicts(
 
 
 def test_cmd_sync_status_reports_diverged_rebase_conflicts(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -330,7 +352,8 @@ def test_cmd_sync_status_reports_diverged_rebase_conflicts(
 
 
 def test_cmd_sync_status_reports_clean_branch(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
@@ -349,7 +372,8 @@ def test_cmd_sync_status_reports_clean_branch(
 
 
 def test_cmd_sync_status_requires_base_ref_when_missing_upstream(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -365,7 +389,8 @@ def test_cmd_sync_status_requires_base_ref_when_missing_upstream(
 
 
 def test_cmd_sync_status_rejects_missing_base_ref(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -380,7 +405,8 @@ def test_cmd_sync_status_rejects_missing_base_ref(
 
 
 def test_cmd_check_dirty_tree_reports_status_lines(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
@@ -404,7 +430,8 @@ def test_cmd_check_dirty_tree_reports_status_lines(
 
 
 def test_cmd_check_dirty_tree_reports_status_failure(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
@@ -424,7 +451,8 @@ def test_cmd_check_dirty_tree_reports_status_failure(
 
 
 def test_cmd_move_dry_run_stashes_before_checkout(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
@@ -440,7 +468,9 @@ def test_cmd_move_dry_run_stashes_before_checkout(
 
 
 def test_cmd_rebootstrap_requires_confirmation(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -453,7 +483,9 @@ def test_cmd_rebootstrap_requires_confirmation(
 
 
 def test_cmd_rebootstrap_hard_init_dry_run_skips_snapshot_commit(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -479,7 +511,9 @@ def test_cmd_rebootstrap_hard_init_dry_run_skips_snapshot_commit(
 
 
 def test_cmd_rebootstrap_rejects_hard_init_with_empty_first(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -501,7 +535,8 @@ def test_cmd_rebootstrap_rejects_hard_init_with_empty_first(
 
 
 def test_cmd_rebootstrap_hard_init_runs_empty_commit_only(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -573,7 +608,9 @@ def test_parse_diff_line_file_headers() -> None:
 
 
 def test_cmd_diff_not_git_repo(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: False)
@@ -584,7 +621,8 @@ def test_cmd_diff_not_git_repo(
 
 
 def test_cmd_diff_no_changes(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
     monkeypatch.setattr(git_cmd.git, "capture_checked", lambda cmd, cwd: "")
@@ -595,7 +633,8 @@ def test_cmd_diff_no_changes(
 
 
 def test_cmd_diff_renders_added_and_removed(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     diff_output = (
         "diff --git a/foo.py b/foo.py\n"
@@ -647,14 +686,15 @@ def test_cmd_diff_against_ref(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_cmd_diff_reports_invalid_ref(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
     monkeypatch.setattr(
         git_cmd.git,
         "capture_checked",
         lambda cmd, cwd: (_ for _ in ()).throw(
-            RuntimeError("git diff --unified=3 badref failed (exit 128)")
+            RuntimeError("git diff --unified=3 badref failed (exit 128)"),
         ),
     )
     args = argparse.Namespace(staged=False, against="badref")
@@ -667,7 +707,8 @@ def test_cmd_diff_reports_invalid_ref(
 
 
 def test_cmd_diff_handles_deleted_file_headers(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     diff_output = (
         "diff --git a/deleted.txt b/deleted.txt\n"
@@ -691,7 +732,10 @@ def test_cmd_diff_handles_deleted_file_headers(
 
 def test_commit_subject_render_includes_scope_and_breaking_marker() -> None:
     subject = git_cmd.CommitSubject(
-        type="feat", description="ship parser", scope="cli", breaking=True
+        type="feat",
+        description="ship parser",
+        scope="cli",
+        breaking=True,
     )
 
     assert subject.render() == "feat(cli)!: ship parser"
@@ -706,7 +750,8 @@ def test_normalize_commit_subject_type_accepts_and_rejects_values() -> None:
 
 
 def test_resolve_commit_subject_requires_explicit_type_for_uninferable_branch(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
     args = argparse.Namespace(description=["ship", "it"], type=None, scope=None, breaking=False)
@@ -735,7 +780,9 @@ def test_describe_sync_relation_and_sync_problem_cover_remaining_states() -> Non
 
 
 def test_cmd_status_requires_git_repository(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
@@ -745,7 +792,9 @@ def test_cmd_status_requires_git_repository(
 
 
 def test_cmd_log_requires_git_repository(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
@@ -755,7 +804,8 @@ def test_cmd_log_requires_git_repository(
 
 
 def test_cmd_log_handles_empty_history(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "capture", lambda cmd, cwd: "")
@@ -765,7 +815,9 @@ def test_cmd_log_handles_empty_history(
 
 
 def test_cmd_doctor_requires_git_repository(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
@@ -775,7 +827,8 @@ def test_cmd_doctor_requires_git_repository(
 
 
 def test_cmd_doctor_reports_status_failure(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
@@ -791,7 +844,8 @@ def test_cmd_doctor_reports_status_failure(
 
 
 def test_cmd_doctor_reports_missing_changelog_entry(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -815,7 +869,9 @@ def test_cmd_doctor_reports_missing_changelog_entry(
 
 
 def test_cmd_check_dirty_tree_requires_git_repository(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
@@ -825,7 +881,8 @@ def test_cmd_check_dirty_tree_requires_git_repository(
 
 
 def test_cmd_check_dirty_tree_reports_clean_tree(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
@@ -838,7 +895,9 @@ def test_cmd_check_dirty_tree_reports_clean_tree(
 
 
 def test_cmd_sync_status_requires_git_repository(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
@@ -848,7 +907,8 @@ def test_cmd_sync_status_requires_git_repository(
 
 
 def test_cmd_sync_status_reports_status_failure(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -866,7 +926,8 @@ def test_cmd_sync_status_reports_status_failure(
 
 
 def test_cmd_sync_status_reports_branch_ahead(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -881,7 +942,9 @@ def test_cmd_sync_status_reports_branch_ahead(
 
 
 def test_cmd_commit_requires_explicit_type_when_branch_not_inferable(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
@@ -898,7 +961,8 @@ def test_cmd_commit_requires_explicit_type_when_branch_not_inferable(
 
 
 def test_cmd_commit_all_stages_and_commits(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -921,7 +985,8 @@ def test_cmd_commit_all_stages_and_commits(
 
 
 def test_cmd_sync_requires_upstream_branch(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -932,7 +997,8 @@ def test_cmd_sync_requires_upstream_branch(
 
 
 def test_cmd_sync_reports_status_failure(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -949,7 +1015,8 @@ def test_cmd_sync_reports_status_failure(
 
 
 def test_cmd_sync_rejects_in_progress_operation(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -963,7 +1030,8 @@ def test_cmd_sync_rejects_in_progress_operation(
 
 
 def test_cmd_sync_warns_when_pull_fails_after_auto_stash(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -988,7 +1056,8 @@ def test_cmd_sync_warns_when_pull_fails_after_auto_stash(
 
 
 def test_cmd_move_warns_when_checkout_fails_after_stash(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "main")
@@ -1008,7 +1077,8 @@ def test_cmd_move_warns_when_checkout_fails_after_stash(
 
 
 def test_cmd_squash_local_rejects_dirty_tree(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
 
@@ -1020,7 +1090,7 @@ def test_cmd_squash_local_rejects_dirty_tree(
             scope=None,
             breaking=False,
             dry_run=False,
-        )
+        ),
     )
 
     assert result == 1
@@ -1028,7 +1098,8 @@ def test_cmd_squash_local_rejects_dirty_tree(
 
 
 def test_cmd_squash_local_requires_upstream_or_base(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "upstream_branch", lambda cwd: None)
@@ -1041,7 +1112,7 @@ def test_cmd_squash_local_requires_upstream_or_base(
             scope=None,
             breaking=False,
             dry_run=False,
-        )
+        ),
     )
 
     assert result == 1
@@ -1049,11 +1120,14 @@ def test_cmd_squash_local_requires_upstream_or_base(
 
 
 def test_cmd_squash_local_requires_commits_ahead(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
     monkeypatch.setattr(
-        git_cmd, "resolve_commit_subject", lambda args, root: ("feat/add", "feat: add")
+        git_cmd,
+        "resolve_commit_subject",
+        lambda args, root: ("feat/add", "feat: add"),
     )
     monkeypatch.setattr(git_cmd.git, "commits_ahead", lambda cwd, base_ref: [])
 
@@ -1065,7 +1139,7 @@ def test_cmd_squash_local_requires_commits_ahead(
             scope=None,
             breaking=False,
             dry_run=False,
-        )
+        ),
     )
 
     assert result == 1
@@ -1073,11 +1147,14 @@ def test_cmd_squash_local_requires_commits_ahead(
 
 
 def test_cmd_squash_local_requires_merge_base(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
     monkeypatch.setattr(
-        git_cmd, "resolve_commit_subject", lambda args, root: ("feat/add", "feat: add")
+        git_cmd,
+        "resolve_commit_subject",
+        lambda args, root: ("feat/add", "feat: add"),
     )
     monkeypatch.setattr(git_cmd.git, "commits_ahead", lambda cwd, base_ref: ["abc123 feat: add"])
     monkeypatch.setattr(git_cmd.git, "merge_base", lambda cwd, base_ref: None)
@@ -1090,7 +1167,7 @@ def test_cmd_squash_local_requires_merge_base(
             scope=None,
             breaking=False,
             dry_run=False,
-        )
+        ),
     )
 
     assert result == 1
@@ -1098,7 +1175,8 @@ def test_cmd_squash_local_requires_merge_base(
 
 
 def test_cmd_squash_local_reports_commit_subject_resolution_error(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
     monkeypatch.setattr(
@@ -1115,7 +1193,7 @@ def test_cmd_squash_local_reports_commit_subject_resolution_error(
             scope=None,
             breaking=False,
             dry_run=False,
-        )
+        ),
     )
 
     assert result == 1
@@ -1123,13 +1201,18 @@ def test_cmd_squash_local_reports_commit_subject_resolution_error(
 
 
 def test_cmd_squash_local_dry_run_success(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
-        git_cmd, "resolve_commit_subject", lambda args, root: ("feat/add", "feat: add")
+        git_cmd,
+        "resolve_commit_subject",
+        lambda args, root: ("feat/add", "feat: add"),
     )
     monkeypatch.setattr(
-        git_cmd.git, "commits_ahead", lambda cwd, base_ref: ["a1 feat: one", "b2 fix: two"]
+        git_cmd.git,
+        "commits_ahead",
+        lambda cwd, base_ref: ["a1 feat: one", "b2 fix: two"],
     )
     monkeypatch.setattr(git_cmd.git, "merge_base", lambda cwd, base_ref: "abc123")
     commands: list[list[str]] = []
@@ -1147,7 +1230,7 @@ def test_cmd_squash_local_dry_run_success(
             scope=None,
             breaking=False,
             dry_run=True,
-        )
+        ),
     )
 
     assert result == 0
@@ -1156,7 +1239,8 @@ def test_cmd_squash_local_dry_run_success(
 
 
 def test_cmd_undo_safe_runs_soft_reset_in_dry_run(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     commands: list[list[str]] = []
     monkeypatch.setattr(
@@ -1166,7 +1250,7 @@ def test_cmd_undo_safe_runs_soft_reset_in_dry_run(
     )
 
     result = git_cmd.cmd_undo_safe(
-        argparse.Namespace(target="HEAD~2", keep_staged=True, dry_run=True)
+        argparse.Namespace(target="HEAD~2", keep_staged=True, dry_run=True),
     )
 
     assert result == 0
@@ -1190,7 +1274,9 @@ def test_cmd_undo_safe_runs_mixed_reset(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_cmd_rebootstrap_rejects_missing_git_dir(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(git_cmd.git, "git_dir", lambda cwd: None)
@@ -1201,7 +1287,9 @@ def test_cmd_rebootstrap_rejects_missing_git_dir(
 
 
 def test_cmd_rebootstrap_rejects_remote_guard(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -1222,7 +1310,9 @@ def test_cmd_rebootstrap_rejects_remote_guard(
 
 
 def test_cmd_rebootstrap_empty_first_dry_run(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -1256,7 +1346,8 @@ def test_cmd_rebootstrap_empty_first_dry_run(
 
 
 def test_cmd_rebootstrap_empty_first_non_dry_run(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -1291,7 +1382,9 @@ def test_cmd_rebootstrap_empty_first_non_dry_run(
 
 
 def test_cmd_rebootstrap_reinitializes_snapshot_history(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -1328,7 +1421,9 @@ def test_cmd_rebootstrap_reinitializes_snapshot_history(
 
 
 def test_cmd_rebootstrap_reports_runtime_failure_and_backup(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".git").mkdir()
@@ -1356,6 +1451,51 @@ def test_cmd_rebootstrap_reports_runtime_failure_and_backup(
     assert "Original git data is backed up" in capsys.readouterr().err
 
 
+def test_cmd_purge_cache_dry_run_runs_maintenance_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: True)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_cmd.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+
+    assert git_cmd.cmd_purge_cache(argparse.Namespace(dry_run=True)) == 0
+    assert commands == [
+        ["git", "reflog", "expire", "--expire=now", "--all"],
+        ["git", "gc", "--prune=now"],
+    ]
+    assert "Purge cache" in capsys.readouterr().out
+
+
+def test_cmd_purge_cache_rejects_non_git_repo(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: False)
+
+    assert git_cmd.cmd_purge_cache(argparse.Namespace(dry_run=False)) == 1
+    assert "not inside a Git work tree" in capsys.readouterr().err
+
+
+def test_cmd_purge_cache_warns_when_working_tree_is_dirty(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
+    monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
+    monkeypatch.setattr(git_cmd.git, "run", lambda cmd, cwd, *, dry_run, label: "")
+
+    assert git_cmd.cmd_purge_cache(argparse.Namespace(dry_run=True)) == 0
+    assert "Working tree changes are preserved" in capsys.readouterr().out
+
+
 def test_parse_diff_line_handles_malformed_hunk_header() -> None:
     kind, text, lineno = git_cmd._parse_diff_line("@@ nonsense +oops @@")
     assert kind == "unchanged"
@@ -1363,8 +1503,21 @@ def test_parse_diff_line_handles_malformed_hunk_header() -> None:
     assert lineno is None
 
 
+def test_register_adds_git_purge_cache_parser() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+    git_cmd.register(subparsers)
+
+    args = parser.parse_args(["git", "purge-cache"])
+
+    assert args.command == "git"
+    assert args.git_command == "purge-cache"
+    assert args.handler.__name__ == "cmd_purge_cache"
+
+
 def test_cmd_diff_prints_malformed_hunk_headers(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     diff_output = "diff --git a/foo.py b/foo.py\n+++ b/foo.py\n@@ bad +12 @@\n+added line\n"
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda _: True)
@@ -1377,7 +1530,8 @@ def test_cmd_diff_prints_malformed_hunk_headers(
 
 
 def test_cmd_diff_uses_old_path_when_new_path_is_dev_null(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     diff_output = (
         "diff --git a/deleted.txt /dev/null\n"
@@ -1394,7 +1548,8 @@ def test_cmd_diff_uses_old_path_when_new_path_is_dev_null(
 
 
 def test_cmd_status_truncates_long_change_list(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -1411,7 +1566,8 @@ def test_cmd_status_truncates_long_change_list(
 
 
 def test_cmd_doctor_truncates_conflicts(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -1438,7 +1594,8 @@ def test_cmd_doctor_truncates_conflicts(
 
 
 def test_cmd_check_dirty_tree_truncates_status_lines(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "working_tree_clean", lambda cwd: False)
@@ -1456,7 +1613,8 @@ def test_cmd_check_dirty_tree_truncates_status_lines(
 
 
 def test_cmd_sync_status_truncates_conflicts(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -1475,7 +1633,8 @@ def test_cmd_sync_status_truncates_conflicts(
 
 
 def test_cmd_sync_truncates_conflicts(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(git_cmd.git, "is_git_repository", lambda cwd: True)
     monkeypatch.setattr(git_cmd.git, "current_branch", lambda cwd: "feat/add-parser")
@@ -1491,7 +1650,7 @@ def test_cmd_sync_truncates_conflicts(
         git_cmd.git,
         "run",
         lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("git.run should not be called")
+            AssertionError("git.run should not be called"),
         ),
     )
 

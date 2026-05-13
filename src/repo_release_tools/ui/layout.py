@@ -84,7 +84,11 @@ def align(text: str, width: int, mode: str = "left") -> str:
 
 
 def section_line(
-    title: str, *, body_width: int | None = None, glyph: str = "─", left: int = 2
+    title: str,
+    *,
+    body_width: int | None = None,
+    glyph: str = "─",
+    left: int = 2,
 ) -> str:
     """Render a horizontal section line compatible with current rrt style.
 
@@ -200,7 +204,7 @@ def render_table(rows: list[tuple[str, str]], ctx: object | None = None) -> str:
     lines = [top]
     for index, (label, value) in enumerate(rows):
         lines.append(
-            f"{glyphs.v} {pad_right(label, col1 - 2)} {glyphs.v} {pad_right(value, col2 - 2)} {glyphs.v}"
+            f"{glyphs.v} {pad_right(label, col1 - 2)} {glyphs.v} {pad_right(value, col2 - 2)} {glyphs.v}",
         )
         if index < len(rows) - 1:
             lines.append(sep)
@@ -382,7 +386,7 @@ def panel(
             row_label = label if line_idx == 0 else ""
             lines.append(
                 f"{outer.v} {pad_right(row_label, label_width)} {inner.v} "
-                f"{pad_right(value_line, value_width)} {outer.v}"
+                f"{pad_right(value_line, value_width)} {outer.v}",
             )
         if index != len(rows) - 1:
             lines.append(row_sep)

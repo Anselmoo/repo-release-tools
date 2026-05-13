@@ -16,7 +16,7 @@ def _load_eol_config(raw: object) -> EolConfig | None:
     if not isinstance(raw, dict):
         raise ValueError("tool.rrt.eol must be a table")
 
-    d: dict[str, object] = cast(dict[str, object], raw)
+    d: dict[str, object] = cast("dict[str, object]", raw)
 
     raw_langs = d.get("languages") or ["python"]
     if not isinstance(raw_langs, list) or not all(isinstance(x, str) for x in raw_langs):
@@ -50,7 +50,7 @@ def _load_eol_config(raw: object) -> EolConfig | None:
     for entry in raw_overrides:
         if not isinstance(entry, dict):
             raise ValueError("Each tool.rrt.eol.overrides entry must be a table")
-        e = cast(dict[str, object], entry)
+        e = cast("dict[str, object]", entry)
         language = e.get("language")
         cycle = e.get("cycle")
         eol = e.get("eol")
@@ -63,7 +63,7 @@ def _load_eol_config(raw: object) -> EolConfig | None:
         overrides.append(EolOverride(language=language, cycle=cycle, eol=eol))
 
     return EolConfig(
-        languages=tuple(cast(list[str], raw_langs)),
+        languages=tuple(cast("list[str]", raw_langs)),
         warn_days=warn_days,
         error_days=error_days,
         fetch_live=fetch_live,
@@ -79,7 +79,7 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
     if not isinstance(raw, dict):
         raise ValueError("tool.rrt.docs must be a table")
 
-    d: dict[str, object] = cast(dict[str, object], raw)
+    d: dict[str, object] = cast("dict[str, object]", raw)
 
     raw_mirror = d.get("mirror_src_tree")
     mirror_src_tree = False if raw_mirror is None else raw_mirror
@@ -103,7 +103,7 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
     # Normalize: strip whitespace, reject blanks, deduplicate preserving order.
     seen_stubs: set[str] = set()
     normalized_stubs: list[str] = []
-    for s in cast(list[str], raw_stubs):
+    for s in cast("list[str]", raw_stubs):
         s = s.strip()
         if not s:
             raise ValueError("tool.rrt.docs.stubs must not contain empty entries")
@@ -147,12 +147,12 @@ def _load_docs_languages(d: dict[str, object]) -> tuple[str, ...]:
         return ("python",)
     if not isinstance(raw, list) or not all(isinstance(lang, str) for lang in raw):
         raise ValueError("tool.rrt.docs.languages must be a list of strings")
-    langs = [str(lang).strip().lower() for lang in cast(list[str], raw)]
+    langs = [str(lang).strip().lower() for lang in cast("list[str]", raw)]
     invalid = [lang for lang in langs if lang not in _VALID_LANGUAGES]
     if invalid:
         raise ValueError(
             f"tool.rrt.docs.languages contains unsupported entries: {invalid}. "
-            f"Supported: {list(_VALID_LANGUAGES)}"
+            f"Supported: {list(_VALID_LANGUAGES)}",
         )
     return tuple(langs)
 
@@ -172,14 +172,14 @@ def _load_docs_formats(d: dict[str, object]) -> tuple[str, ...]:
         return ("md",)
     if not isinstance(raw, list) or not all(isinstance(f, str) for f in raw):
         raise ValueError("tool.rrt.docs.formats must be a list of strings")
-    fmts = [str(f).strip().lower() for f in cast(list[str], raw)]
+    fmts = [str(f).strip().lower() for f in cast("list[str]", raw)]
     if not fmts:
         raise ValueError("tool.rrt.docs.formats must not be empty; at least one format is required")
     invalid = [f for f in fmts if f not in _VALID_FORMATS]
     if invalid:
         raise ValueError(
             f"tool.rrt.docs.formats contains unsupported entries: {invalid}. "
-            f"Supported: {list(_VALID_FORMATS)}"
+            f"Supported: {list(_VALID_FORMATS)}",
         )
     return tuple(fmts)
 
@@ -196,7 +196,9 @@ def _load_optional_docs_string(d: dict[str, object], key: str) -> str | None:
 
 
 def _load_shared_blocks(
-    d: dict[str, object], *, root: Path | None = None
+    d: dict[str, object],
+    *,
+    root: Path | None = None,
 ) -> tuple[SharedBlock, ...]:
     raw = d.get("shared_blocks")
     if raw is None:
@@ -207,11 +209,11 @@ def _load_shared_blocks(
     for i, entry in enumerate(raw):
         if not isinstance(entry, dict):
             raise ValueError(f"tool.rrt.docs.shared_blocks[{i}] must be a table")
-        item = cast(dict[str, object], entry)
+        item = cast("dict[str, object]", entry)
         anchor_id = item.get("anchor_id")
         if not isinstance(anchor_id, str) or not anchor_id.strip():
             raise ValueError(
-                f"tool.rrt.docs.shared_blocks[{i}].anchor_id must be a non-empty string"
+                f"tool.rrt.docs.shared_blocks[{i}].anchor_id must be a non-empty string",
             )
         template = item.get("template")
         content = item.get("content")
@@ -219,7 +221,7 @@ def _load_shared_blocks(
         if template is not None:
             if not isinstance(template, str) or not template.strip():
                 raise ValueError(
-                    f"tool.rrt.docs.shared_blocks[{i}].template must be a non-empty string"
+                    f"tool.rrt.docs.shared_blocks[{i}].template must be a non-empty string",
                 )
 
             warnings.warn(
@@ -238,7 +240,7 @@ def _load_shared_blocks(
                 template_content = template_path.read_text(encoding="utf-8")
             except OSError as exc:
                 raise ValueError(
-                    f"tool.rrt.docs.shared_blocks[{i}].template unreadable: {template_path} ({exc})"
+                    f"tool.rrt.docs.shared_blocks[{i}].template unreadable: {template_path} ({exc})",
                 ) from exc
 
             if content is None:
@@ -254,7 +256,7 @@ def _load_shared_blocks(
         block = SharedBlock(
             anchor_id=anchor_id.strip(),
             content=content,
-            targets=tuple(cast(list[str], raw_targets)),
+            targets=tuple(cast("list[str]", raw_targets)),
         )
         block.validate()
         blocks.append(block)

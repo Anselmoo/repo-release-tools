@@ -68,4 +68,4 @@ def ask(
     except (EOFError, KeyboardInterrupt):
         out.write("\n")
         return fallback
-    return reply if reply else fallback
+    return reply or fallback

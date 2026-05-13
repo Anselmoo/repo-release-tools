@@ -32,8 +32,8 @@ def test_load_folder_templates_parses_scaffold_entries() -> None:
                 "allow_patterns": ["*.tmp"],
                 "scaffold_dirs": ["src"],
                 "scaffold_files": [{"path": "src/main.py", "content": "x", "executable": False}],
-            }
-        ]
+            },
+        ],
     )
 
     assert len(templates) == 1

@@ -216,7 +216,8 @@ def staged_files(cwd: Path) -> list[str]:
 def changed_files_for_ref(cwd: Path, ref: str) -> list[str]:
     """Return files changed by a single git ref, typically HEAD."""
     out = git.capture(
-        ["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", ref], cwd
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", ref],
+        cwd,
     )
     return [line.strip() for line in out.splitlines() if line.strip()]
 
@@ -582,7 +583,7 @@ def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml") -> int:
                 "hash": hash_content(combined),
                 "symbols": [e.name for e in src_entries],
                 "lang": src_entries[0].lang,
-            }
+            },
         )
 
     lock_path = docs_lock_path(cwd, effective_lock)
@@ -791,7 +792,9 @@ def run_post_correct(
 
     try:
         added_lines, positions = collect_squash_changelog_hunks(
-            cwd, ref=ref, changelog_file=changelog_file
+            cwd,
+            ref=ref,
+            changelog_file=changelog_file,
         )
     except RuntimeError as exc:
         return emit_failure("Changelog post-correction failed.", [str(exc)])
@@ -807,7 +810,10 @@ def run_post_correct(
     deduped_lines = dedup_changelog_entries(added_lines)
 
     changed = apply_dedup_to_changelog(
-        changelog_path, added_lines, deduped_lines, added_line_positions=positions
+        changelog_path,
+        added_lines,
+        deduped_lines,
+        added_line_positions=positions,
     )
     if not changed:
         p = DryRunPrinter(False)
@@ -881,7 +887,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Validate an explicit commit subject.",
     )
     subject_check_parser.add_argument(
-        "--subject", required=True, help="Commit subject to validate."
+        "--subject",
+        required=True,
+        help="Commit subject to validate.",
     )
 
     changelog_check_parser = subparsers.add_parser(
@@ -1048,7 +1056,8 @@ def main(argv: list[str] | None = None) -> int:
                 subject = read_commit_subject(msg_path)
             except (OSError, UnicodeDecodeError) as exc:
                 return emit_failure(
-                    "update-unreleased failed.", [f"Could not read message file: {exc}"]
+                    "update-unreleased failed.",
+                    [f"Could not read message file: {exc}"],
                 )
         elif parsed.subject is not None:
             subject = parsed.subject

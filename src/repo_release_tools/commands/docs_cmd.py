@@ -130,7 +130,7 @@ def _build_docs_lock_sources(entries: list[DocEntry]) -> list[dict[str, object]]
                 "hash": hash_content(combined),
                 "symbols": [e.name for e in sorted_entries],
                 "lang": src_entries[0].lang,
-            }
+            },
         )
     return sources
 

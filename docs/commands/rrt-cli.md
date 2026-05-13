@@ -49,7 +49,13 @@ Repository Health
   toc     Read a Markdown file and print a nested bullet-list TOC to stdout.
   tree    Render a directory tree from the selected root while respecting gitignore rules.
   docs    Scan source files and extract inline documentation blocks
+  drift   Lock and check the repo's agent-facing surfaces, such as Claude hooks, agent prompts, and shared skill docs.
   folder  Supervise folder structures against config-defined rules or built-in templates, scaffold missing structure, and infer new templates from existing trees.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+CI & Automation
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  action  Scaffold a starter GitHub Actions workflow that runs repo-release-tools checks.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Git Workflow
@@ -60,8 +66,11 @@ Git Workflow
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Setup & Tooling
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  init   Generate a starter rrt configuration for the current repository or manifest.
-  skill  Install the bundled repo-release-tools agent skill.
+  install  Install one or more bundled rrt agent surfaces (skill, agents, hooks) into one or more local/global targets.
+  init     Generate a starter rrt configuration for the current repository or manifest.
+  skill    Install the bundled rrt user workflow skills.
+  agents   Install bundled rrt user agents into one or more local or global agent directories.
+  hooks    Install bundled rrt user workflow hook scripts into one or more local hook directories and update the surface's hook registration JSON.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -70,8 +79,11 @@ Examples
   $ rrt branch rename --type fix --scope api "repair config loader"
   $ rrt bump patch --dry-run
   $ rrt release check
+  $ rrt action init
+  $ rrt drift check
   $ rrt git status
   $ rrt doctor
+  $ rrt install --target claude-local
   $ rrt skill install --target copilot-local
   $ rrt @args.txt
 ```
@@ -1105,6 +1117,82 @@ Options
   --apply        Write scaffold docstrings back into the target files.
 ```
 
+## `rrt drift`
+
+```text
+Usage:  rrt drift [OPTIONS] <drift_command>
+
+Lock and check the repo's agent-facing surfaces, such as Claude hooks, agent prompts, and shared skill docs.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  generate    Write the drift lockfile for agent surfaces.
+  check       Check whether the drift lockfile is current.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt drift generate --dry-run
+  $ rrt drift check
+```
+
+### `rrt drift generate`
+
+```text
+Usage:  rrt drift generate [OPTIONS]
+
+Write a TOML lockfile that records hashes for the configured agent-facing surfaces.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --root PATH       Repository root to scan. Defaults to the current directory.
+  --lock-file PATH  Lock file path relative to .rrt/ (default: drift.lock.toml).
+  --dry-run         Preview without writing files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt drift generate --dry-run
+  $ rrt drift check
+```
+
+### `rrt drift check`
+
+```text
+Usage:  rrt drift check [OPTIONS]
+
+Compare the current agent-facing surfaces against the stored drift lockfile.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --root PATH       Repository root to scan. Defaults to the current directory.
+  --lock-file PATH  Lock file path relative to .rrt/ (default: drift.lock.toml).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt drift generate --dry-run
+  $ rrt drift check
+```
+
 ## `rrt folder`
 
 ```text
@@ -1186,6 +1274,57 @@ Options
   --name NAME      Template name to emit.
   --selector GLOB  Selector to pair with the emitted rule snippet.
   --loose          Emit a permissive loose template instead of an exact one.
+```
+
+## `rrt action`
+
+```text
+Usage:  rrt action [OPTIONS] <action_command>
+
+Scaffold a starter GitHub Actions workflow that runs repo-release-tools checks.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  init        Write a starter workflow that uses repo-release-tools.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt action init
+  $ rrt action init --dry-run
+  $ rrt action init --force
+```
+
+### `rrt action init`
+
+```text
+Usage:  rrt action init [OPTIONS]
+
+Write a starter .github/workflows/rrt.yml workflow for repo-release-tools CI.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --dry-run   Preview without writing files.
+  --force     Overwrite an existing workflow file.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt action init
+  $ rrt action init --dry-run
+  $ rrt action init --force
 ```
 
 ## `rrt branch`
@@ -1481,6 +1620,7 @@ Arguments
   squash-local      Squash local commits since upstream or a base ref into one commit.
   undo-safe         Undo a commit while keeping work staged or in the working tree.
   rebootstrap       Destroy current git history and create a fresh repository history.
+  purge-cache       Expire reflogs and run git garbage collection.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -1836,6 +1976,83 @@ Examples
   $ rrt git rebootstrap --yes-i-know-this-destroys-history --hard-init --branch main
 ```
 
+### `rrt git purge-cache`
+
+```text
+Usage:  rrt git purge-cache [OPTIONS]
+
+Expire local reflogs and run git gc to reclaim repository cache space.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --dry-run   Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git purge-cache
+  $ rrt git purge-cache --dry-run
+```
+
+## `rrt install`
+
+Install bundled rrt user workflow surfaces into local/global tool roots.
+
+### Overview
+
+`rrt install` is a unified entrypoint for the existing installer surfaces:
+
+- `skill install`
+- `agents install`
+- `hooks install`
+
+Use `--surface` to limit which surface(s) are installed, or omit it to install
+all surfaces.
+
+### Target roots
+
+Supported local/global roots are:
+
+- Claude: `./.claude` and `~/.claude`
+- Codex: `./.codex` and `~/.codex`
+- Copilot: `./.github` and `~/.copilot`
+- Gemini: `./.gemini` and `~/.gemini`
+
+Each surface appends its own subdirectory (for example `skills`, `agents`, or
+`hooks`) using the existing per-surface installer logic.
+
+```text
+Usage:  rrt install [OPTIONS]
+
+Install one or more bundled rrt agent surfaces (skill, agents, hooks) into one or more local/global targets.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help         Show this message and exit.
+  --surface SURFACE  Surface to install. Repeat for multiple values. Defaults to all: skill, agents, hooks.
+  --target DEST      Install target. Repeat to install into multiple locations. Use --dry-run with no targets to inspect supported values.
+  --dry-run          Preview without writing files.
+  --force            Overwrite existing installed files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt install --target claude-local
+  $ rrt install --surface skill --target copilot-local
+  $ rrt install --surface agents --surface hooks --target codex-global --dry-run
+```
+
 ## `rrt init`
 
 Initialize repo-release-tools configuration for a repository.
@@ -1912,13 +2129,12 @@ Examples
 
 ## `rrt skill`
 
-Install the bundled repo-release-tools agent skill.
+Install bundled rrt user workflow skills.
 
 ### Overview
 
-`rrt skill` manages installation of the packaged `repo-release-tools` skill
-into tool-specific skill directories. The only implemented subcommand is
-`install`.
+`rrt skill` manages installation of the packaged user-facing `rrt` skills into
+tool-specific skill directories. The only implemented subcommand is `install`.
 
 ### Target surfaces
 
@@ -1926,9 +2142,10 @@ The install command can write to local or global skill roots for:
 
 - Claude: `.claude/skills`
 - Codex: `.codex/skills`
-- Copilot: `.copilot/skills`
+- Copilot: `.github/skills` (local), `~/.copilot/skills` (global)
+- Gemini: `.gemini/skills`
 
-Each target receives a directory named after the bundled skill, containing
+Each target receives one directory per bundled skill, each containing a
 `SKILL.md`.
 
 ### Behavior
@@ -1936,7 +2153,7 @@ Each target receives a directory named after the bundled skill, containing
 - Accepts one or more `--target` values; duplicates are ignored after first use.
 - Resolves local targets relative to the current working directory and global
   targets relative to the home directory.
-- Refuses to overwrite an existing installation unless `--force` is provided.
+- Refuses to overwrite an existing skill directory unless `--force` is provided.
 - Supports `--dry-run` previews that show the resolved destination paths
   without writing files.
 
@@ -1944,6 +2161,7 @@ Each target receives a directory named after the bundled skill, containing
 
 - `rrt skill install --target copilot-local`
 - `rrt skill install --target claude-local --target codex-local`
+- `rrt skill install --target gemini-local`
 - `rrt skill install --target copilot-global --force --dry-run`
 
 ### Caveats
@@ -1957,12 +2175,12 @@ Each target receives a directory named after the bundled skill, containing
 ```text
 Usage:  rrt skill [OPTIONS] <skill_command>
 
-Install the bundled repo-release-tools agent skill.
+Install the bundled rrt user workflow skills.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  install     Install the bundled repo-release-tools skill into agent skill directories.
+  install     Install bundled rrt user skills into agent skill directories.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -1974,6 +2192,7 @@ Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt skill install --target copilot-local
   $ rrt skill install --target claude-local --target codex-local
+  $ rrt skill install --target gemini-local
 ```
 
 ### `rrt skill install`
@@ -1981,7 +2200,7 @@ Examples
 ```text
 Usage:  rrt skill install [OPTIONS]
 
-Install the bundled repo-release-tools skill into one or more local or global agent skill directories.
+Install the bundled rrt user skills into one or more local or global agent skill directories.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -1991,9 +2210,9 @@ Arguments
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help     Show this message and exit.
-  --target DEST  Install target. Repeat to install into multiple locations: copilot-local, claude-local, codex-local, copilot-global, claude-global, codex-global.
+  --target DEST  Install target. Repeat to install into multiple locations: copilot-local, claude-local, codex-local, gemini-local, copilot-global, claude-global, codex-global, gemini-global.
   --dry-run      Preview without writing files.
-  --force        Overwrite an existing installed repo-release-tools skill.
+  --force        Overwrite existing installed skill directories.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -2001,4 +2220,114 @@ Examples
   $ rrt skill install --target copilot-local
   $ rrt skill install --target claude-local --target codex-local
   $ rrt skill install --target copilot-global --force --dry-run
+  $ rrt skill install --target gemini-global
+```
+
+## `rrt agents`
+
+```text
+Usage:  rrt agents [OPTIONS] <agents_command>
+
+Install bundled rrt user agents into one or more local or global agent directories.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  install     Install bundled rrt user agents into agent directories.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt agents install --target claude-local
+  $ rrt agents install --target claude-local --target codex-local
+  $ rrt agents install --target copilot-local
+  $ rrt agents install --target claude-global --force
+```
+
+### `rrt agents install`
+
+```text
+Usage:  rrt agents install [OPTIONS]
+
+Install bundled .agent.md user agents into one or more local or global agent directories.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --target DEST  Install target. Repeat to install into multiple locations: claude-local, claude-global, codex-local, codex-global, copilot-local, copilot-global, gemini-local, gemini-global.
+  --dry-run      Preview without writing files.
+  --force        Overwrite existing agent files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt agents install --target claude-local
+  $ rrt agents install --target claude-local --target codex-local
+  $ rrt agents install --target gemini-local
+  $ rrt agents install --target claude-global --force --dry-run
+  $ rrt agents install --target copilot-global
+```
+
+## `rrt hooks`
+
+```text
+Usage:  rrt hooks [OPTIONS] <hooks_command>
+
+Install bundled rrt user workflow hook scripts into one or more local hook directories and update the surface's hook registration JSON.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  install     Install bundled rrt hook scripts into hook directories and register them.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt hooks install --target claude-local
+  $ rrt hooks install --target codex-local
+  $ rrt hooks install --target gemini-local
+  $ rrt hooks install --target claude-local --force
+```
+
+### `rrt hooks install`
+
+```text
+Usage:  rrt hooks install [OPTIONS]
+
+Install bundled rrt user workflow hook .py scripts into one or more local hook directories and update the native hook-registration JSON for that surface.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --target DEST  Install target. Repeat to install into multiple locations: claude-local, claude-global, codex-local, codex-global, copilot-local, copilot-global, gemini-local, gemini-global.
+  --dry-run      Preview without writing files.
+  --force        Overwrite existing hook files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt hooks install --target claude-local
+  $ rrt hooks install --target claude-local --force --dry-run
+  $ rrt hooks install --target codex-global
+  $ rrt hooks install --target copilot-local
 ```

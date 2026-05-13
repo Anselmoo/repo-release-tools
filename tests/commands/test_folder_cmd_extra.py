@@ -1,6 +1,6 @@
 import argparse
 import stat
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pytest
 
@@ -13,14 +13,14 @@ class DummyReport:
     def __init__(
         self,
         ok: bool = True,
-        actions: Optional[List[Any]] = None,
-        targets: Optional[List[Any]] = None,
+        actions: list[Any] | None = None,
+        targets: list[Any] | None = None,
     ) -> None:
         self._ok = ok
         self.actions = actions or []
         self.targets = targets or []
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "ok": self._ok,
             "actions": [{"kind": a.kind, "path": a.path, "detail": a.detail} for a in self.actions],
@@ -107,7 +107,7 @@ def test_cmd_folder_check_human_readable(monkeypatch: Any, capsys: Any) -> None:
             self.message = message
 
     class T:
-        def __init__(self, rule_name: str, base_path: str, ok: bool, violations: List[Any]) -> None:
+        def __init__(self, rule_name: str, base_path: str, ok: bool, violations: list[Any]) -> None:
             self.rule_name = rule_name
             self.base_path = base_path
             self.ok = ok
@@ -119,7 +119,9 @@ def test_cmd_folder_check_human_readable(monkeypatch: Any, capsys: Any) -> None:
 
     report = DummyReport(ok=False, actions=None, targets=[t1, t2, t3])
     monkeypatch.setattr(
-        folder_mod, "check_folders", lambda root, policy, template_names, mode_override: report
+        folder_mod,
+        "check_folders",
+        lambda root, policy, template_names, mode_override: report,
     )
 
     args = argparse.Namespace(root=".", template=[], report_only=False)
@@ -178,7 +180,11 @@ def test_scaffold_sets_executable(tmp_path: Any) -> None:
     base.mkdir()
     # Call internal scaffold implementation directly for focused testing.
     folder_core._scaffold_one_target(
-        base_path=base, root=tmp_path, rule=rule, force=False, dry_run=False
+        base_path=base,
+        root=tmp_path,
+        rule=rule,
+        force=False,
+        dry_run=False,
     )
     created = base / "bin" / "script.sh"
     assert created.exists()

@@ -87,15 +87,15 @@ def _render_structured_rich(content: str) -> str:
     return "\n".join(parts).strip()
 
 
-def _source_path(entry: "DocEntry") -> str:
+def _source_path(entry: DocEntry) -> str:
     return entry.source_file.replace("\\", "/")
 
 
-def _source_reference(entry: "DocEntry") -> str:
+def _source_reference(entry: DocEntry) -> str:
     return f"{_source_path(entry)}:{entry.line}"
 
 
-def _source_url(entry: "DocEntry", config: "DocsConfig") -> str | None:
+def _source_url(entry: DocEntry, config: DocsConfig) -> str | None:
     repo_url = getattr(config, "source_repo_url", None)
     template = getattr(config, "source_url_template", None)
     ref = getattr(config, "source_ref", None) or "main"
@@ -119,7 +119,7 @@ def _source_url(entry: "DocEntry", config: "DocsConfig") -> str | None:
         except (KeyError, ValueError) as exc:
             raise ValueError(
                 "Invalid source_url_template "
-                f"{template!r}: {exc}. Supported placeholders: {placeholders}."
+                f"{template!r}: {exc}. Supported placeholders: {placeholders}.",
             ) from exc
     repo_base = repo_url.rstrip("/") if repo_url else ""
     return f"{repo_base}/blob/{ref}/{path}#L{entry.line}"
@@ -130,7 +130,7 @@ def _source_url(entry: "DocEntry", config: "DocsConfig") -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def render_md(entries: list["DocEntry"], config: "DocsConfig") -> str:
+def render_md(entries: list[DocEntry], config: DocsConfig) -> str:
     """Render entries as a Markdown document."""
     parts: list[str] = ["# Documentation\n"]
     for entry in entries:
@@ -146,8 +146,8 @@ def render_md(entries: list["DocEntry"], config: "DocsConfig") -> str:
 
 
 def inject_md(
-    entries: list["DocEntry"],
-    config: "DocsConfig",
+    entries: list[DocEntry],
+    config: DocsConfig,
     *,
     target_file: Path,
 ) -> str:
@@ -174,7 +174,7 @@ def inject_md(
 # ---------------------------------------------------------------------------
 
 
-def render_txt(entries: list["DocEntry"], config: "DocsConfig") -> str:
+def render_txt(entries: list[DocEntry], config: DocsConfig) -> str:
     """Render entries as plain text."""
     parts: list[str] = []
     for entry in entries:
@@ -188,7 +188,7 @@ def render_txt(entries: list["DocEntry"], config: "DocsConfig") -> str:
                 "",
                 _render_structured_txt(entry.content),
                 "",
-            ]
+            ],
         )
     return "\n".join(parts)
 
@@ -198,7 +198,7 @@ def render_txt(entries: list["DocEntry"], config: "DocsConfig") -> str:
 # ---------------------------------------------------------------------------
 
 
-def render_rich(entries: list["DocEntry"], config: "DocsConfig") -> str:
+def render_rich(entries: list[DocEntry], config: DocsConfig) -> str:
     """Render entries with ANSI colour via ui helpers."""
     from repo_release_tools.ui import bold, info, subtle
 
@@ -221,7 +221,7 @@ def render_rich(entries: list["DocEntry"], config: "DocsConfig") -> str:
 # ---------------------------------------------------------------------------
 
 
-def render_json(entries: list["DocEntry"], config: "DocsConfig") -> str:
+def render_json(entries: list[DocEntry], config: DocsConfig) -> str:
     """Render entries as a JSON array."""
     payload = []
     for entry in entries:
@@ -238,17 +238,17 @@ def render_json(entries: list["DocEntry"], config: "DocsConfig") -> str:
 
 
 def render_toml(
-    entries: list["DocEntry"],
-    config: "DocsConfig",
+    entries: list[DocEntry],
+    config: DocsConfig,
     *,
     root: Path,
 ) -> str:
     """Write a .rrt/docs.lock.toml and return the TOML text."""
     from collections import defaultdict
 
-    from repo_release_tools.state import _dict_to_toml  # noqa: PLC2701
+    from repo_release_tools.state import _dict_to_toml
 
-    by_file: dict[str, list["DocEntry"]] = defaultdict(list)
+    by_file: dict[str, list[DocEntry]] = defaultdict(list)
     for entry in entries:
         by_file[entry.source_file].append(entry)
 
@@ -264,7 +264,7 @@ def render_toml(
                 "hash": hash_content(combined),
                 "symbols": [e.name for e in src_entries],
                 "lang": src_entries[0].lang,
-            }
+            },
         )
 
     lock_data = build_lock(sources)
@@ -288,8 +288,8 @@ _RENDERERS = {
 
 def render(
     fmt: str,
-    entries: list["DocEntry"],
-    config: "DocsConfig",
+    entries: list[DocEntry],
+    config: DocsConfig,
     *,
     root: Path | None = None,
 ) -> str:

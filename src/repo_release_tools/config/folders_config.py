@@ -21,7 +21,7 @@ def _load_folders_config(raw: object) -> FolderPolicyConfig | None:
     if not isinstance(raw, dict):
         raise ValueError("tool.rrt.folders must be a table")
 
-    d: dict[str, object] = cast(dict[str, object], raw)
+    d: dict[str, object] = cast("dict[str, object]", raw)
     raw_mode = d.get("mode")
     mode = "strict" if raw_mode is None else raw_mode
     if not isinstance(mode, str) or mode not in VALID_FOLDER_MODES:
@@ -48,7 +48,7 @@ def _load_folder_templates(raw: object) -> tuple[FolderTemplate, ...]:
     for index, entry in enumerate(raw):
         if not isinstance(entry, dict):
             raise ValueError(f"tool.rrt.folders.templates[{index}] must be a table")
-        item = cast(dict[str, object], entry)
+        item = cast("dict[str, object]", entry)
         name = _required_string(item.get("name"), label=f"templates[{index}].name")
         description = _optional_string(item.get("description"), default="", label="description")
         strictness = _optional_string(
@@ -59,7 +59,7 @@ def _load_folder_templates(raw: object) -> tuple[FolderTemplate, ...]:
         if strictness not in VALID_TEMPLATE_STRICTNESS:
             allowed = ", ".join(sorted(VALID_TEMPLATE_STRICTNESS))
             raise ValueError(
-                f"tool.rrt.folders.templates[{index}].strictness must be one of {allowed}"
+                f"tool.rrt.folders.templates[{index}].strictness must be one of {allowed}",
             )
 
         templates.append(
@@ -78,7 +78,7 @@ def _load_folder_templates(raw: object) -> tuple[FolderTemplate, ...]:
                     item.get("scaffold_files"),
                     label=f"tool.rrt.folders.templates[{index}].scaffold_files",
                 ),
-            )
+            ),
         )
     return tuple(templates)
 
@@ -94,7 +94,7 @@ def _load_folder_rules(raw: object) -> tuple[FolderRule, ...]:
     for index, entry in enumerate(raw):
         if not isinstance(entry, dict):
             raise ValueError(f"tool.rrt.folders.rules[{index}] must be a table")
-        item = cast(dict[str, object], entry)
+        item = cast("dict[str, object]", entry)
         rules.append(
             FolderRule(
                 name=_required_string(item.get("name"), label=f"rules[{index}].name"),
@@ -116,7 +116,7 @@ def _load_folder_rules(raw: object) -> tuple[FolderRule, ...]:
                     item.get("scaffold_files"),
                     label=f"tool.rrt.folders.rules[{index}].scaffold_files",
                 ),
-            )
+            ),
         )
     return tuple(rules)
 
@@ -132,15 +132,17 @@ def _load_scaffold_files(raw: object, *, label: str) -> tuple[FolderScaffoldFile
     for index, entry in enumerate(raw):
         if not isinstance(entry, dict):
             raise ValueError(f"{label}[{index}] must be a table")
-        item = cast(dict[str, object], entry)
+        item = cast("dict[str, object]", entry)
         scaffold_files.append(
             FolderScaffoldFile(
                 path=_required_string(item.get("path"), label=f"{label}[{index}].path"),
                 content=_optional_string(item.get("content"), default="", label="content"),
                 executable=_optional_bool(
-                    item.get("executable"), default=False, label="executable"
+                    item.get("executable"),
+                    default=False,
+                    label="executable",
                 ),
-            )
+            ),
         )
     return tuple(scaffold_files)
 
@@ -153,7 +155,7 @@ def _string_tuple(raw: object, *, label: str) -> tuple[str, ...]:
         raise ValueError(f"tool.rrt.folders.{label} must be a list of strings")
     seen: set[str] = set()
     values: list[str] = []
-    for item in cast(list[str], raw):
+    for item in cast("list[str]", raw):
         stripped = item.strip()
         if not stripped:
             raise ValueError(f"tool.rrt.folders.{label} must not contain empty strings")

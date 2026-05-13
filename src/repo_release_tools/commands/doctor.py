@@ -171,7 +171,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
             p = DryRunPrinter(False)
             p.warn("No [tool.rrt] configuration found.", stream=sys.stderr)
             p.action(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)), stream=sys.stderr
+                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
+                stream=sys.stderr,
             )
             return 1
         p = DryRunPrinter(False)
@@ -235,7 +236,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
     p.blank_line()
     p.warn(
         "Compatibility note: release-target validation lives in 'rrt release check'. "
-        "Use both checks for historical doctor coverage."
+        "Use both checks for historical doctor coverage.",
     )
     p.blank_line()
     p.section("Feature-specific checks")

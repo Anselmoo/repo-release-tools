@@ -97,7 +97,7 @@ class GitHubContext:
     run_attempt: str
 
     @classmethod
-    def from_env(cls) -> "GitHubContext":
+    def from_env(cls) -> GitHubContext:
         """Build a context object from the current process environment."""
         return cls(
             ref=os.environ.get("GITHUB_REF", ""),
@@ -143,7 +143,7 @@ def compute_published_version(base_version: str, context: GitHubContext) -> str:
         except ValueError as exc:
             raise ValueError(
                 f"Invalid GitHub run attempt value {context.run_attempt!r}; "
-                "GITHUB_RUN_ATTEMPT/--run-attempt must be an integer."
+                "GITHUB_RUN_ATTEMPT/--run-attempt must be an integer.",
             ) from exc
         return f"{base_version}.dev{context.run_id}{attempt:02d}"
 
@@ -190,7 +190,8 @@ def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
             p = DryRunPrinter(dry_run=False)
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
             p.action(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)), stream=sys.stderr
+                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
+                stream=sys.stderr,
             )
             return None
         p = DryRunPrinter(dry_run=False)
@@ -257,7 +258,8 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             p = DryRunPrinter(dry_run=False)
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
             p.action(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)), stream=sys.stderr
+                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
+                stream=sys.stderr,
             )
             return 1
         p = DryRunPrinter(dry_run=False)
@@ -320,8 +322,8 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     if args.dry_run:
         p.line(
             subtle(
-                f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no files were modified"
-            )
+                f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no files were modified",
+            ),
         )
     else:
         p.ok("Done.")
@@ -349,7 +351,9 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
     p.action(f"Applying published version: {version}")
 
     apply_args = argparse.Namespace(
-        version=version, dry_run=args.dry_run, group=getattr(args, "group", None)
+        version=version,
+        dry_run=args.dry_run,
+        group=getattr(args, "group", None),
     )
     return cmd_ci_version_apply(apply_args)
 
@@ -460,7 +464,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Version string to apply (e.g. 0.2.0.dev12345601).",
     )
     apply_parser.add_argument(
-        "--dry-run", action="store_true", help="Preview without writing changes."
+        "--dry-run",
+        action="store_true",
+        help="Preview without writing changes.",
     )
     apply_parser.add_argument(
         "--group",
@@ -479,6 +485,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     _add_compute_args(sync_parser)
     sync_parser.add_argument(
-        "--dry-run", action="store_true", help="Preview without writing changes."
+        "--dry-run",
+        action="store_true",
+        help="Preview without writing changes.",
     )
     sync_parser.set_defaults(handler=cmd_ci_version_sync)

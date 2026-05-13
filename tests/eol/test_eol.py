@@ -109,7 +109,7 @@ class TestParseCycle:
 
 
 class TestFindRecord:
-    @pytest.fixture()
+    @pytest.fixture
     def records(self) -> list[EolRecord]:
         return get_eol_records("python", today=date(2025, 6, 1))
 
@@ -243,7 +243,12 @@ class TestCheckEolStatus:
         today = date(2025, 6, 1)
         records = self._make_records([("3.12", False)])
         status, record = check_eol_status(
-            "3.12.4", records, language="python", warn_days=180, error_days=0, today=today
+            "3.12.4",
+            records,
+            language="python",
+            warn_days=180,
+            error_days=0,
+            today=today,
         )
         assert status == "ok"
         assert record is not None
@@ -252,7 +257,12 @@ class TestCheckEolStatus:
         today = date(2025, 6, 1)
         records = self._make_records([("3.8", "2024-10-07")])
         status, record = check_eol_status(
-            "3.8.18", records, language="python", warn_days=180, error_days=0, today=today
+            "3.8.18",
+            records,
+            language="python",
+            warn_days=180,
+            error_days=0,
+            today=today,
         )
         assert status == "error"
 
@@ -275,7 +285,12 @@ class TestCheckEolStatus:
         far = (today + timedelta(days=365)).isoformat()
         records = self._make_records([("3.12", far)])
         status, _ = check_eol_status(
-            "3.12.4", records, language="python", warn_days=180, error_days=0, today=today
+            "3.12.4",
+            records,
+            language="python",
+            warn_days=180,
+            error_days=0,
+            today=today,
         )
         assert status == "ok"
 
@@ -284,7 +299,12 @@ class TestCheckEolStatus:
         soon = (today + timedelta(days=20)).isoformat()
         records = self._make_records([("3.10", soon)])
         status, _ = check_eol_status(
-            "3.10.0", records, language="python", warn_days=180, error_days=30, today=today
+            "3.10.0",
+            records,
+            language="python",
+            warn_days=180,
+            error_days=30,
+            today=today,
         )
         assert status == "error"
 
@@ -322,7 +342,8 @@ class TestCheckEolStatus:
         today = date(2025, 6, 1)
         records = self._make_records([("3.12", False)])
         with patch(
-            "repo_release_tools.eol.get_eol_records", return_value=records
+            "repo_release_tools.eol.get_eol_records",
+            return_value=records,
         ) as mock_get_records:
             status, record = check_eol_status("3.12.4", "python", today=today)
         assert status == "ok"
@@ -367,7 +388,11 @@ class TestCheckEolStatus:
     def test_unknown_cycle(self) -> None:
         records = self._make_records([("3.12", False)])
         status, record = check_eol_status(
-            "9.99.0", records, language="python", warn_days=180, error_days=0
+            "9.99.0",
+            records,
+            language="python",
+            warn_days=180,
+            error_days=0,
         )
         assert status == "unknown"
         assert record is None
@@ -375,7 +400,11 @@ class TestCheckEolStatus:
     def test_unparseable_version(self) -> None:
         records = self._make_records([("3.12", False)])
         status, record = check_eol_status(
-            "invalid", records, language="python", warn_days=180, error_days=0
+            "invalid",
+            records,
+            language="python",
+            warn_days=180,
+            error_days=0,
         )
         assert status == "unknown"
         assert record is None
@@ -387,7 +416,7 @@ class TestCheckEolStatus:
 
 
 class TestRustLagCheck:
-    @pytest.fixture()
+    @pytest.fixture
     def rust_records(self) -> list[EolRecord]:
         today = date(2025, 6, 1)
         entries: list[dict[str, object]] = [
@@ -409,14 +438,22 @@ class TestRustLagCheck:
 
     def test_ok_on_latest(self, rust_records: list[EolRecord]) -> None:
         status, _ = check_eol_status(
-            "1.95.0", rust_records, language="rust", warn_days=180, error_days=0
+            "1.95.0",
+            rust_records,
+            language="rust",
+            warn_days=180,
+            error_days=0,
         )
         assert status == "ok"
 
     def test_warn_when_behind_by_warn_lag(self, rust_records: list[EolRecord]) -> None:
         # 1.93 is 2 behind 1.95 → RUST_WARN_LAG == 2 → warn
         status, _ = check_eol_status(
-            "1.93.0", rust_records, language="rust", warn_days=180, error_days=0
+            "1.93.0",
+            rust_records,
+            language="rust",
+            warn_days=180,
+            error_days=0,
         )
         assert status == "warn"
 
@@ -433,7 +470,11 @@ class TestRustLagCheck:
         records = [EolRecord.from_api_dict(e, today=today) for e in entries]
         # 1.91 is 4 behind 1.95 → RUST_ERROR_LAG == 4 → error
         status, _ = check_eol_status(
-            "1.91.0", records, language="rust", warn_days=180, error_days=0
+            "1.91.0",
+            records,
+            language="rust",
+            warn_days=180,
+            error_days=0,
         )
         assert status == "error"
 
@@ -524,7 +565,8 @@ class TestDetectHostVersion:
 class TestDetectProjectMinimum:
     def test_python_reads_requires_python(self, tmp_path: Path) -> None:
         (tmp_path / "pyproject.toml").write_text(
-            '[project]\nrequires-python = ">=3.12"\n', encoding="utf-8"
+            '[project]\nrequires-python = ">=3.12"\n',
+            encoding="utf-8",
         )
         v = detect_project_minimum("python", tmp_path)
         assert v == "3.12"
@@ -564,7 +606,8 @@ class TestDetectProjectMinimum:
 
     def test_rust_reads_rust_version(self, tmp_path: Path) -> None:
         (tmp_path / "Cargo.toml").write_text(
-            '[package]\nname = "x"\nrust-version = "1.85"\n', encoding="utf-8"
+            '[package]\nname = "x"\nrust-version = "1.85"\n',
+            encoding="utf-8",
         )
         v = detect_project_minimum("rust", tmp_path)
         assert v == "1.85"
@@ -615,7 +658,7 @@ class TestRustLagUnknownCycle:
         """cycle not in any record → returns len(records) (line 359)."""
         today = date(2025, 6, 1)
         entries: list[dict[str, object]] = [
-            {"cycle": "1.95", "eol": False, "releaseDate": "2026-04-16"}
+            {"cycle": "1.95", "eol": False, "releaseDate": "2026-04-16"},
         ]
         records = [EolRecord.from_api_dict(e, today=today) for e in entries]
         lag = _rust_lag_position("9.99.0", records)
@@ -643,7 +686,8 @@ def test_python_minimum_toml_exception(tmp_path: Path, monkeypatch: pytest.Monke
     import tomllib
 
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\npython_requires = ">=3.12"\n', encoding="utf-8"
+        '[project]\npython_requires = ">=3.12"\n',
+        encoding="utf-8",
     )
 
     def _raise(_f: object) -> None:
@@ -676,7 +720,8 @@ def test_node_minimum_invalid_json(tmp_path: Path) -> None:
 def test_rust_minimum_non_string_rust_version(tmp_path: Path) -> None:
     """Integer rust-version in Cargo.toml → _detect_rust_minimum returns None (line 578)."""
     (tmp_path / "Cargo.toml").write_text(
-        '[package]\nname = "x"\nrust-version = 185\n', encoding="utf-8"
+        '[package]\nname = "x"\nrust-version = 185\n',
+        encoding="utf-8",
     )
     result = detect_project_minimum("rust", tmp_path)
     assert result is None
@@ -687,7 +732,8 @@ def test_rust_minimum_toml_exception(tmp_path: Path, monkeypatch: pytest.MonkeyP
     import tomllib
 
     (tmp_path / "Cargo.toml").write_text(
-        '[package]\nname = "x"\nrust-version = "1.85"\n', encoding="utf-8"
+        '[package]\nname = "x"\nrust-version = "1.85"\n',
+        encoding="utf-8",
     )
 
     def _raise(_f: object) -> None:

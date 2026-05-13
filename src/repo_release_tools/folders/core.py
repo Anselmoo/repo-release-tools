@@ -60,7 +60,9 @@ def check_folders(
 ) -> FolderCheckReport:
     """Check folder structure under *root*."""
     rules = _resolve_rules(
-        policy=policy, template_names=template_names, mode_override=mode_override
+        policy=policy,
+        template_names=template_names,
+        mode_override=mode_override,
     )
     target_reports: list[FolderTargetReport] = []
 
@@ -80,7 +82,7 @@ def check_folders(
                             severity=_severity_for_mode(rule.mode),
                         ),
                     ),
-                )
+                ),
             )
             continue
 
@@ -88,7 +90,8 @@ def check_folders(
             target_reports.append(_check_one_target(base_path=base_path, root=root, rule=rule))
 
     return FolderCheckReport(
-        mode=mode_override or (policy.mode if policy else "strict"), targets=tuple(target_reports)
+        mode=mode_override or (policy.mode if policy else "strict"),
+        targets=tuple(target_reports),
     )
 
 
@@ -103,7 +106,9 @@ def scaffold_folders(
 ) -> FolderScaffoldReport:
     """Scaffold directories and files under *root*."""
     rules = _resolve_rules(
-        policy=policy, template_names=template_names, mode_override=mode_override
+        policy=policy,
+        template_names=template_names,
+        mode_override=mode_override,
     )
     actions: list[FolderScaffoldAction] = []
 
@@ -120,7 +125,7 @@ def scaffold_folders(
                     rule=rule,
                     force=force,
                     dry_run=dry_run,
-                )
+                ),
             )
 
     return FolderScaffoldReport(actions=tuple(actions))
@@ -139,13 +144,13 @@ def _resolve_rules(
     if template_names:
         adhoc_rule = FolderRule(name="adhoc", selector=".", templates=template_names)
         rules.append(
-            _merge_rule(adhoc_rule, policy=policy, catalog=catalog, mode_override=mode_override)
+            _merge_rule(adhoc_rule, policy=policy, catalog=catalog, mode_override=mode_override),
         )
 
     if policy is not None:
         for rule in policy.rules:
             rules.append(
-                _merge_rule(rule, policy=policy, catalog=catalog, mode_override=mode_override)
+                _merge_rule(rule, policy=policy, catalog=catalog, mode_override=mode_override),
             )
 
     return rules
@@ -172,7 +177,7 @@ def _merge_rule(
         if rule.exact is not None
         else any(
             template.exact and template.strictness == "strict" for template in resolved_templates
-        )
+        ),
     )
 
     return _EffectiveRule(
@@ -181,22 +186,28 @@ def _merge_rule(
         mode=effective_mode,
         exact=effective_exact,
         required_files=_merge_string_fields(
-            *(template.required_files for template in resolved_templates), rule.required_files
+            *(template.required_files for template in resolved_templates),
+            rule.required_files,
         ),
         required_dirs=_merge_string_fields(
-            *(template.required_dirs for template in resolved_templates), rule.required_dirs
+            *(template.required_dirs for template in resolved_templates),
+            rule.required_dirs,
         ),
         allowed_files=_merge_string_fields(
-            *(template.allowed_files for template in resolved_templates), rule.allowed_files
+            *(template.allowed_files for template in resolved_templates),
+            rule.allowed_files,
         ),
         allowed_dirs=_merge_string_fields(
-            *(template.allowed_dirs for template in resolved_templates), rule.allowed_dirs
+            *(template.allowed_dirs for template in resolved_templates),
+            rule.allowed_dirs,
         ),
         allow_patterns=_merge_string_fields(
-            *(template.allow_patterns for template in resolved_templates), rule.allow_patterns
+            *(template.allow_patterns for template in resolved_templates),
+            rule.allow_patterns,
         ),
         scaffold_dirs=_merge_string_fields(
-            *(template.scaffold_dirs for template in resolved_templates), rule.scaffold_dirs
+            *(template.scaffold_dirs for template in resolved_templates),
+            rule.scaffold_dirs,
         ),
         scaffold_files=_merge_scaffold_files(
             *(template.scaffold_files for template in resolved_templates),
@@ -259,7 +270,7 @@ def _check_one_target(*, base_path: Path, root: Path, rule: _EffectiveRule) -> F
                     path=_relative_text(path, root),
                     message=f"Missing required directory {required_dir!r}.",
                     severity=_severity_for_mode(rule.mode),
-                )
+                ),
             )
 
     for required_file in rule.required_files:
@@ -271,7 +282,7 @@ def _check_one_target(*, base_path: Path, root: Path, rule: _EffectiveRule) -> F
                     path=_relative_text(path, root),
                     message=f"Missing required file {required_file!r}.",
                     severity=_severity_for_mode(rule.mode),
-                )
+                ),
             )
 
     if rule.exact and base_path.exists() and base_path.is_dir():
@@ -288,7 +299,7 @@ def _check_one_target(*, base_path: Path, root: Path, rule: _EffectiveRule) -> F
                     path=_relative_text(child, root),
                     message=f"Unexpected entry {child_name!r} under exact rule {rule.name!r}.",
                     severity=_severity_for_mode(rule.mode),
-                )
+                ),
             )
 
     return FolderTargetReport(
@@ -315,7 +326,7 @@ def _scaffold_one_target(
         if not dry_run:
             directory_path.mkdir(parents=True, exist_ok=True)
         actions.append(
-            FolderScaffoldAction(kind="mkdir", path=_relative_text(directory_path, root))
+            FolderScaffoldAction(kind="mkdir", path=_relative_text(directory_path, root)),
         )
 
     scaffold_files = {scaffold.path: scaffold for scaffold in rule.scaffold_files}
@@ -331,7 +342,7 @@ def _scaffold_one_target(
                     kind="skip",
                     path=_relative_text(file_path, root),
                     detail="exists",
-                )
+                ),
             )
             continue
         if not dry_run:
@@ -351,7 +362,7 @@ def _scaffold_one_target(
                 kind="write",
                 path=_relative_text(file_path, root),
                 detail="overwritten" if existed_before and force else "created",
-            )
+            ),
         )
 
     return actions

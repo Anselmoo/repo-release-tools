@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rrt-ux-design agent hook — UserPromptSubmit.
+"""rrt UX agent hook — UserPromptSubmit.
 
 Reads the UserPromptSubmit JSON from stdin. Does two things:
 
@@ -205,7 +205,7 @@ HARD RULES
 
 
 def main() -> None:
-    """Main entry point for the rrt-ux-design guard."""
+    """Main entry point for the rrt UX guard."""
     payload = json.loads(sys.stdin.read())
     prompt: str = payload.get("prompt", "") or ""
 
@@ -230,9 +230,9 @@ def main() -> None:
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": additional_context,
-                    }
-                }
-            )
+                    },
+                },
+            ),
         )
 
     # Always exit 0 — this hook never blocks.

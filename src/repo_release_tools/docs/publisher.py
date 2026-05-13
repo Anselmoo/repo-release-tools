@@ -32,6 +32,7 @@ from repo_release_tools import eol as eol_module
 from repo_release_tools.commands import branch as branch_module
 from repo_release_tools.commands import doctor as doctor_module
 from repo_release_tools.commands import eol_check as eol_check_module
+from repo_release_tools.commands import install_cmd as install_module
 from repo_release_tools.commands import skill as skill_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
@@ -122,9 +123,10 @@ SOURCE_OWNED_TOPIC_DOCS: dict[str, str] = _collect_source_owned_topic_docs(
         action_module,
         skill_module,
         doctor_module,
+        install_module,
         eol_module,
         tree_module,
-    )
+    ),
 )
 
 
@@ -152,6 +154,7 @@ def _get_command_doc_modules() -> dict[str, object]:
         "eol": cli.eol_check,
         "git": cli.git_cmd,
         "init": cli.init,
+        "install": cli.install_cmd,
         "skill": cli.skill,
         "toc": toc_module,
         "tree": cli.tree,
@@ -356,7 +359,7 @@ def generate_markdown() -> str:
             [
                 f"{'#' * section.heading_level} {section.title}",
                 "",
-            ]
+            ],
         )
         if prose:
             parts.extend([prose, ""])
@@ -366,7 +369,7 @@ def generate_markdown() -> str:
                 render_help(section.argv),
                 "```",
                 "",
-            ]
+            ],
         )
 
     return "\n".join(parts).rstrip() + "\n"
@@ -423,6 +426,7 @@ TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
     "hooks": Path("docs/commands/hooks.md"),
     "action": Path("docs/action.md"),
     "skill": Path("docs/commands/skill.md"),
+    "install": Path("docs/commands/install.md"),
     "agent-instructions": Path("docs/agent-instructions.md"),
     "doctor": Path("docs/commands/doctor.md"),
     "eol": Path("docs/commands/eol_check.md"),
@@ -441,6 +445,7 @@ TITLE_OVERRIDES: dict[str, str] = {
     "hooks": "rrt hooks",
     "action": "GitHub Action",
     "skill": "rrt skill",
+    "install": "rrt install",
     "agent-instructions": "Hook & Action Reference",
     "doctor": "rrt doctor",
     "eol": "rrt eol",

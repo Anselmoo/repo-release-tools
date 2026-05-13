@@ -54,7 +54,7 @@ def render_captured_template_toml(
                 f"name = {json.dumps(f'{template.name}-rule')}",
                 f"selector = {json.dumps(selector)}",
                 f"templates = [{json.dumps(template.name)}]",
-            ]
+            ],
         )
 
     return "\n".join(lines) + "\n"

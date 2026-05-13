@@ -309,19 +309,18 @@ def append_to_unreleased(
                 new_body = f"\n### {section}\n{bullet}" + trailing
 
         return content[:insert_pos] + new_body + content[section_body_end:]
-    else:
-        new_section = f"## [Unreleased]\n\n### {section}\n{bullet}\n"
-        title_m = _CHANGELOG_TITLE_RE.match(content)
-        if title_m:
-            insert_pos = title_m.end()
-            remainder = content[insert_pos:]
-            # Avoid a double blank line: if the existing content already starts
-            # with \n (blank line before first version header), don't add one.
-            separator = "" if remainder.startswith("\n") else "\n"
-            return content[:insert_pos] + "\n" + new_section + separator + remainder
-        # No title line: add a separator before any existing content.
-        separator = "\n" if content and not content.startswith("\n") else ""
-        return new_section + separator + content
+    new_section = f"## [Unreleased]\n\n### {section}\n{bullet}\n"
+    title_m = _CHANGELOG_TITLE_RE.match(content)
+    if title_m:
+        insert_pos = title_m.end()
+        remainder = content[insert_pos:]
+        # Avoid a double blank line: if the existing content already starts
+        # with \n (blank line before first version header), don't add one.
+        separator = "" if remainder.startswith("\n") else "\n"
+        return content[:insert_pos] + "\n" + new_section + separator + remainder
+    # No title line: add a separator before any existing content.
+    separator = "\n" if content and not content.startswith("\n") else ""
+    return new_section + separator + content
 
 
 def _append_to_unreleased_rst(content: str, section: str, bullet: str) -> str:
@@ -352,17 +351,14 @@ def _append_to_unreleased_rst(content: str, section: str, bullet: str) -> str:
             new_body = stripped + f"\n\n{_rst_heading(section, _RST_SUBSECTION_CHAR)}{bullet}\n"
 
         return content[:insert_pos] + new_body + content[section_body_end:]
-    else:
-        new_section = (
-            f"{RST_UNRELEASED_PLACEHOLDER}\n"
-            f"{_rst_heading(section, _RST_SUBSECTION_CHAR)}"
-            f"{bullet}\n\n"
-        )
-        title_m = _RST_TITLE_RE.match(content)
-        if title_m:
-            insert_pos = title_m.end()
-            return content[:insert_pos] + "\n" + new_section + content[insert_pos:]
-        return new_section + content
+    new_section = (
+        f"{RST_UNRELEASED_PLACEHOLDER}\n{_rst_heading(section, _RST_SUBSECTION_CHAR)}{bullet}\n\n"
+    )
+    title_m = _RST_TITLE_RE.match(content)
+    if title_m:
+        insert_pos = title_m.end()
+        return content[:insert_pos] + "\n" + new_section + content[insert_pos:]
+    return new_section + content
 
 
 def insert_generated_section(
@@ -400,13 +396,12 @@ def insert_generated_section(
         next_section_m = section_boundary_re.search(content, insert_pos)
         next_section_pos = next_section_m.start() if next_section_m else len(content)
         return content[:insert_pos] + "\n" + section + "\n" + content[next_section_pos:]
-    else:
-        new_content = unreleased_placeholder + "\n" + section + "\n"
-        title_m = title_re.match(content)
-        if title_m:
-            insert_pos = title_m.end()
-            return content[:insert_pos] + "\n" + new_content + content[insert_pos:]
-        return new_content + content
+    new_content = unreleased_placeholder + "\n" + section + "\n"
+    title_m = title_re.match(content)
+    if title_m:
+        insert_pos = title_m.end()
+        return content[:insert_pos] + "\n" + new_content + content[insert_pos:]
+    return new_content + content
 
 
 def promote_unreleased(

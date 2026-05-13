@@ -27,6 +27,9 @@ reached before declaring work done. The coverage summary in
 - When overriding a module-level registry or tuple for a regression test, prefer
   `monkeypatch.setattr(..., raising=False)` over direct assignment so the override is
   both temporary and type-checker friendly.
+- When a test needs a fake `ModuleType` shim with ad-hoc attributes, cast the shim
+  to `Any` before attaching those attributes; avoid broad `ty: ignore` comments on
+  the whole test when a narrower shim cast will do.
 - To make a monkeypatched function raise an exception, use the generator throw pattern:
   `lambda *a, **kw: (_ for _ in ()).throw(SomeError("msg"))`.
 - When asserting exception messages with `pytest.raises(..., match=...)`, escape regex metacharacters in literal text (especially `[` and `]`) or use `re.escape(...)`.

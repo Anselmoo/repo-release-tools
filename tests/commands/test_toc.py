@@ -216,7 +216,8 @@ def test_cmd_toc_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> N
 
 
 def test_cmd_toc_inject_and_anchor_must_be_together_inject_only(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     md = tmp_path / "doc.md"
     md.write_text("# Title\n", encoding="utf-8")
@@ -227,7 +228,8 @@ def test_cmd_toc_inject_and_anchor_must_be_together_inject_only(
 
 
 def test_cmd_toc_inject_and_anchor_must_be_together_anchor_only(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     md = tmp_path / "doc.md"
     md.write_text("# Title\n", encoding="utf-8")

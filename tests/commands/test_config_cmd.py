@@ -49,7 +49,9 @@ def _make_config(tmp_path: Path, *, autodetected: bool = False) -> RrtConfig:
 
 
 def test_cmd_config_no_config_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
@@ -60,7 +62,9 @@ def test_cmd_config_no_config_file(
 
 
 def test_cmd_config_renders_panel_header(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
@@ -75,7 +79,9 @@ def test_cmd_config_renders_panel_header(
 
 
 def test_cmd_config_shows_autodetected_label(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path, autodetected=True)
@@ -88,7 +94,9 @@ def test_cmd_config_shows_autodetected_label(
 
 
 def test_cmd_config_shows_explicit_config_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path, autodetected=False)
@@ -102,7 +110,9 @@ def test_cmd_config_shows_explicit_config_file(
 
 
 def test_cmd_config_tree_shows_release_branch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
@@ -115,7 +125,9 @@ def test_cmd_config_tree_shows_release_branch(
 
 
 def test_cmd_config_tree_shows_lock_command(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
@@ -128,7 +140,9 @@ def test_cmd_config_tree_shows_lock_command(
 
 
 def test_cmd_config_tree_shows_version_targets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
@@ -142,7 +156,9 @@ def test_cmd_config_tree_shows_version_targets(
 
 
 def test_cmd_config_tree_shows_generated_files(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     conf = _make_config(tmp_path)
@@ -155,7 +171,9 @@ def test_cmd_config_tree_shows_generated_files(
 
 
 def test_cmd_config_tree_describes_pattern_target_without_none_label(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     target = VersionTarget(path=tmp_path / "VERSION.txt", pattern=r"^(version=)(.+)$")
@@ -179,7 +197,9 @@ def test_cmd_config_tree_describes_pattern_target_without_none_label(
 
 
 def test_cmd_config_multiple_groups(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "src" / "pkg").mkdir(parents=True)
@@ -220,7 +240,9 @@ def test_cmd_config_multiple_groups(
 
 
 def test_cmd_config_value_error_shows_message(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
@@ -257,7 +279,9 @@ def test_register_adds_raw_flag() -> None:
 
 
 def test_cmd_config_raw_prints_toml(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     from repo_release_tools.commands import config_cmd
 
@@ -275,7 +299,8 @@ def test_cmd_config_raw_prints_toml(
 
     monkeypatch.setattr(cfg_mod, "load_or_autodetect_config", lambda _: conf)
     monkeypatch.setattr(
-        "repo_release_tools.commands.config_cmd.highlight_terminal", lambda code, lang, **kw: code
+        "repo_release_tools.commands.config_cmd.highlight_terminal",
+        lambda code, lang, **kw: code,
     )
     monkeypatch.chdir(tmp_path)
 
@@ -287,7 +312,9 @@ def test_cmd_config_raw_prints_toml(
 
 
 def test_cmd_config_raw_unreadable_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conf = _make_config(tmp_path)
     # Don't create the file so OSError is raised
@@ -302,7 +329,9 @@ def test_cmd_config_raw_unreadable_file(
 
 
 def test_cmd_config_panel_uses_rule_separator(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conf = _make_config(tmp_path)
     import repo_release_tools.config as cfg_mod
@@ -318,7 +347,9 @@ def test_cmd_config_panel_uses_rule_separator(
 
 
 def test_cmd_config_aligns_tree_details(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     conf = _make_config(tmp_path)
     import repo_release_tools.config as cfg_mod

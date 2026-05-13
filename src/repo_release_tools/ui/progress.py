@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import sys
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import IO, Generator
+from typing import IO
 
 from repo_release_tools.ui.glyphs import GLYPHS, IS_LEGACY_TERMINAL
 

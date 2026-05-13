@@ -77,7 +77,8 @@ def test_replace_python_version_single_quotes(tmp_path: Path) -> None:
 
 
 def test_replace_python_version_dry_run_no_write(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     f = tmp_path / "__init__.py"
     original = '__version__ = "1.0.0"\n'
@@ -210,7 +211,8 @@ def test_replace_go_version_var(tmp_path: Path) -> None:
 
 
 def test_replace_go_version_dry_run_no_write(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     f = tmp_path / "version.go"
     original = 'package version\n\nconst Version = "1.0.0"\n'
@@ -265,7 +267,8 @@ def test_replace_pin_in_file_updates_version(tmp_path: Path, capsys: pytest.Capt
 
 
 def test_replace_pin_in_file_dry_run_does_not_write(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     from repo_release_tools.config import PinTarget
     from repo_release_tools.version.targets import replace_pin_in_file
@@ -287,7 +290,8 @@ def test_replace_pin_in_file_dry_run_does_not_write(
 
 
 def test_replace_pin_in_file_already_current_skips(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     from repo_release_tools.config import PinTarget
     from repo_release_tools.version.targets import replace_pin_in_file
@@ -323,7 +327,8 @@ def test_replace_pin_in_file_no_match_warns(tmp_path: Path, capsys: pytest.Captu
 
 
 def test_replace_pin_in_file_replaces_all_occurrences(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
 ) -> None:
     """replace_pin_in_file updates every occurrence, not just the first."""
     from repo_release_tools.config import PinTarget
@@ -380,7 +385,10 @@ def test_check_autodetected_version_consistency_not_autodetected(tmp_path: Path)
         version_targets=[target],
     )
     cfg = RrtConfig(
-        root=tmp_path, config_file=pyproject, version_groups=[group], autodetected=False
+        root=tmp_path,
+        config_file=pyproject,
+        version_groups=[group],
+        autodetected=False,
     )
     assert check_autodetected_version_consistency(cfg) is None
 

@@ -13,7 +13,7 @@ from repo_release_tools.config import (
     DocsConfig,
     EolConfig,
     EolOverride,
-    MissingRrtConfigError,  # noqa: F401 — tested indirectly via match patterns
+    MissingRrtConfigError,
     RrtConfig,
     SharedBlock,
     VersionGroup,
@@ -65,7 +65,8 @@ def test_load_config_falls_back_to_rrt_toml(tmp_path: Path) -> None:
 def test_load_config_prefers_pyproject_toml(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(_RRT_CONFIG, encoding="utf-8")
     (tmp_path / ".rrt.toml").write_text(
-        _RRT_CONFIG.replace("release/v{version}", "ignored"), encoding="utf-8"
+        _RRT_CONFIG.replace("release/v{version}", "ignored"),
+        encoding="utf-8",
     )
 
     config = load_config(tmp_path)
@@ -148,7 +149,9 @@ def test_find_explicit_config_file_returns_none_when_candidates_lack_tool_rrt(
     [
         (
             VersionTarget(
-                path=Path("x.toml"), kind="pep621", pattern=r"(version = \")([^\"]+)(\")"
+                path=Path("x.toml"),
+                kind="pep621",
+                pattern=r"(version = \")([^\"]+)(\")",
             ),
             "mutually exclusive",
         ),
@@ -176,7 +179,8 @@ def test_find_explicit_config_file_returns_none_when_candidates_lack_tool_rrt(
     ],
 )
 def test_version_target_validate_rejects_incomplete_or_conflicting_selectors(
-    target: VersionTarget, message: str
+    target: VersionTarget,
+    message: str,
 ) -> None:
     with pytest.raises(ValueError, match=message):
         target.validate()
@@ -457,7 +461,9 @@ rrt = \"oops\"
     ],
 )
 def test_load_config_rejects_invalid_group_scalar_types(
-    tmp_path: Path, body: str, message: str
+    tmp_path: Path,
+    body: str,
+    message: str,
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         f"""\
@@ -492,7 +498,9 @@ kind = \"package_json\"
     ],
 )
 def test_load_config_rejects_invalid_target_field_types(
-    tmp_path: Path, target_body: str, message: str
+    tmp_path: Path,
+    target_body: str,
+    message: str,
 ) -> None:
     (tmp_path / ".rrt.toml").write_text(
         f"""\
@@ -512,14 +520,16 @@ def test_load_config_rejects_missing_version_targets_in_group(tmp_path: Path) ->
     (tmp_path / ".rrt.toml").write_text("[tool.rrt]\nversion_targets = []\n", encoding="utf-8")
 
     with pytest.raises(
-        ValueError, match=r"Missing \[\[tool\.rrt\.version_targets\]\] configuration"
+        ValueError,
+        match=r"Missing \[\[tool\.rrt\.version_targets\]\] configuration",
     ):
         load_config(tmp_path)
 
 
 def test_load_config_rejects_non_table_target_entry(tmp_path: Path) -> None:
     (tmp_path / ".rrt.toml").write_text(
-        '[tool.rrt]\nversion_targets = ["package.json"]\n', encoding="utf-8"
+        '[tool.rrt]\nversion_targets = ["package.json"]\n',
+        encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match="Each version target must be a table"):
@@ -584,7 +594,8 @@ kind = "pep621"
 def test_auto_detect_pep621_project(tmp_path: Path) -> None:
     """A plain PEP 621 pyproject.toml is detected without any [tool.rrt] section."""
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "1.2.3"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "1.2.3"\n',
+        encoding="utf-8",
     )
 
     config = load_config(tmp_path)
@@ -615,7 +626,8 @@ def test_auto_detect_poetry_project(tmp_path: Path) -> None:
 def test_auto_detect_package_json_project_no_lockfile(tmp_path: Path) -> None:
     """A package.json project without a lockfile gets no lock command."""
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "3.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "3.0.0"}',
+        encoding="utf-8",
     )
 
     config = load_config(tmp_path)
@@ -672,7 +684,8 @@ pattern = '^(const Version = ")([^"]+)(")$'
 
 def test_auto_detect_package_json_with_npm_lockfile(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "3.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "3.0.0"}',
+        encoding="utf-8",
     )
     (tmp_path / "package-lock.json").write_text("{}", encoding="utf-8")
 
@@ -685,7 +698,8 @@ def test_auto_detect_package_json_with_npm_lockfile(tmp_path: Path) -> None:
 
 def test_auto_detect_package_json_prefers_pnpm_over_npm(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "3.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "3.0.0"}',
+        encoding="utf-8",
     )
     (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
     (tmp_path / "package-lock.json").write_text("{}", encoding="utf-8")
@@ -699,7 +713,8 @@ def test_auto_detect_package_json_prefers_pnpm_over_npm(tmp_path: Path) -> None:
 
 def test_auto_detect_package_json_with_yarn_lockfile(tmp_path: Path) -> None:
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "3.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "3.0.0"}',
+        encoding="utf-8",
     )
     (tmp_path / "yarn.lock").write_text("# yarn lockfile v1\n", encoding="utf-8")
 
@@ -723,7 +738,8 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "1.0.0"}',
+        encoding="utf-8",
     )
     (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
 
@@ -748,7 +764,8 @@ kind = "package_json"
         encoding="utf-8",
     )
     (tmp_path / "package.json").write_text(
-        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+        '{"name": "example", "version": "1.0.0"}',
+        encoding="utf-8",
     )
     (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
 
@@ -969,7 +986,8 @@ def test_find_changelog_file_returns_plain_changelog(tmp_path: Path) -> None:
 def test_autodetect_config_picks_up_rst_changelog(tmp_path: Path) -> None:
     """Zero-config autodetect should use CHANGELOG.rst when no CHANGELOG.md exists."""
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "example"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[project]\nname = "example"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "CHANGELOG.rst").write_text("", encoding="utf-8")
 
@@ -1157,7 +1175,7 @@ path = "pyproject.toml"
 kind = "pep621"
 
 [[tool.rrt.pin_targets]]
-path = "{str(abs_target.resolve())}"
+path = "{abs_target.resolve()!s}"
 pattern = '(rev: v)(\\d+\\.\\d+\\.\\d+)()'
 
 [project]
@@ -1926,7 +1944,8 @@ def test_load_config_docs_shared_blocks_template_not_string(tmp_path: Path) -> N
         'anchor_id = "doc-footer"\ntemplate = 123\ntargets = ["docs/**/*.md"]\n',
     )
     with pytest.raises(
-        ValueError, match=r"shared_blocks\[0\]\.template must be a non-empty string"
+        ValueError,
+        match=r"shared_blocks\[0\]\.template must be a non-empty string",
     ):
         load_config(tmp_path)
 
@@ -2000,7 +2019,9 @@ def test_shared_block_validate_rejects_empty_anchor_id() -> None:
 
 def test_shared_block_validate_rejects_missing_content() -> None:
     """SharedBlock.validate raises ValueError when content is missing."""
-    block = SharedBlock(anchor_id="doc-footer", content=cast(str, None), targets=("docs/**/*.md",))
+    block = SharedBlock(
+        anchor_id="doc-footer", content=cast("str", None), targets=("docs/**/*.md",)
+    )
     with pytest.raises(ValueError, match=r"must define 'content'"):
         block.validate()
 
@@ -2091,7 +2112,8 @@ def test_load_or_autodetect_config_raises_file_not_found_when_nothing(tmp_path: 
 def test_load_or_autodetect_config_falls_back_on_missing_rrt(tmp_path: Path) -> None:
     """Falls back to autodetect when config file exists but lacks [tool.rrt]."""
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[project]\nname = "x"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     config = load_or_autodetect_config(tmp_path)
     assert config.autodetected is True
@@ -2125,7 +2147,8 @@ def test_find_python_version_files_handles_read_text_oserror(tmp_path: Path) -> 
 def test_autodetect_version_targets_finds_cargo_workspace_package(tmp_path: Path) -> None:
     """Cargo.toml with [workspace.package].version is auto-detected."""
     (tmp_path / "Cargo.toml").write_text(
-        '[workspace.package]\nname = "ws"\nversion = "0.1.0"\n', encoding="utf-8"
+        '[workspace.package]\nname = "ws"\nversion = "0.1.0"\n',
+        encoding="utf-8",
     )
     targets = _autodetect_version_targets(tmp_path)
     assert any(t.section == "workspace.package" for t in targets)
@@ -2134,7 +2157,8 @@ def test_autodetect_version_targets_finds_cargo_workspace_package(tmp_path: Path
 def test_autodetect_version_targets_detects_python_version_files(tmp_path: Path) -> None:
     """__version__ files are discovered as secondary targets for pep621 projects."""
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[project]\nname = "x"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     pkg = tmp_path / "src" / "mypkg"
     pkg.mkdir(parents=True)
@@ -2181,7 +2205,8 @@ def test_describe_version_target_fallback(tmp_path: Path) -> None:
 def test_recommend_init_config_with_autodetect(tmp_path: Path) -> None:
     """recommend_init_config returns rendered TOML when autodetect succeeds."""
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[project]\nname = "x"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     result = recommend_init_config(tmp_path)
     assert "[tool.rrt]" in result
@@ -2199,7 +2224,8 @@ def test_recommend_init_config_go_mod_fallback(tmp_path: Path) -> None:
 def test_recommend_init_config_for_go_with_autodetect(tmp_path: Path) -> None:
     """recommend_init_config_for_go returns rendered TOML when autodetect succeeds."""
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[project]\nname = "x"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     result = recommend_init_config_for_go(tmp_path)
     assert "[tool.rrt]" in result
@@ -2207,7 +2233,8 @@ def test_recommend_init_config_for_go_with_autodetect(tmp_path: Path) -> None:
 
 def test_recommend_init_section_for_pyproject_with_autodetect(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[project]\nname = "x"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     result = recommend_init_section_for_pyproject(tmp_path)
     assert "[tool.rrt]" in result
@@ -2215,7 +2242,8 @@ def test_recommend_init_section_for_pyproject_with_autodetect(tmp_path: Path) ->
 
 def test_recommend_init_section_for_cargo_with_autodetect(tmp_path: Path) -> None:
     (tmp_path / "Cargo.toml").write_text(
-        '[package]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[package]\nname = "x"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "Cargo.lock").write_text("", encoding="utf-8")
     result = recommend_init_section_for_cargo(tmp_path)
@@ -2236,7 +2264,8 @@ def test_render_recommended_rrt_dict_with_lock_and_generated(tmp_path: Path) -> 
 def test_render_recommended_rrt_dict_with_multiple_targets(tmp_path: Path) -> None:
     """recommend_init_section_for_node encodes version_source and section/field."""
     (tmp_path / "Cargo.toml").write_text(
-        '[package]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[package]\nname = "x"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "package.json").write_text('{"name": "x", "version": "1.0.0"}', encoding="utf-8")
     result = recommend_init_section_for_node(tmp_path)
@@ -2251,7 +2280,8 @@ def test_render_recommended_rrt_dict_with_multiple_targets(tmp_path: Path) -> No
 def test_render_recommended_rrt_toml_version_source_multiple_targets(tmp_path: Path) -> None:
     """_render_recommended_rrt_toml emits version_source when group has >1 targets."""
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+        '[project]\nname = "x"\nversion = "1.0.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "package.json").write_text('{"name": "x", "version": "1.0.0"}', encoding="utf-8")
     result = recommend_init_config(tmp_path)
@@ -2261,7 +2291,8 @@ def test_render_recommended_rrt_toml_version_source_multiple_targets(tmp_path: P
 def test_recommended_lock_settings_poetry_ecosystem(tmp_path: Path) -> None:
     """recommend_init_config returns poetry lock command for poetry projects."""
     (tmp_path / "pyproject.toml").write_text(
-        '[tool.poetry]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
+        '[tool.poetry]\nname = "x"\nversion = "0.1.0"\n',
+        encoding="utf-8",
     )
     result = recommend_init_config(tmp_path)
     assert "poetry" in result
@@ -2484,7 +2515,7 @@ def test_rrtconfig_resolve_group_returns_single_group_directly() -> None:
         version_targets=[t],
     )
     config = RrtConfig(
-        root=Path("."),
+        root=Path(),
         config_file=Path(".rrt.toml"),
         version_groups=[group],
         default_group_name=None,
@@ -2496,7 +2527,7 @@ def test_is_missing_tool_rrt_error_with_direct_exception() -> None:
     """is_missing_tool_rrt_error returns True for MissingRrtConfigError instances."""
     from repo_release_tools.config import is_missing_tool_rrt_error
 
-    exc = MissingRrtConfigError("Missing [tool.rrt]")  # noqa: F821 — imported above
+    exc = MissingRrtConfigError("Missing [tool.rrt]")
     assert is_missing_tool_rrt_error(exc) is True
 
 
@@ -2646,7 +2677,8 @@ def test_load_or_autodetect_config_reraises_non_missing_rrt_value_error(tmp_path
 
 
 def test_autodetect_version_targets_skips_duplicate_python_version_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Line 662: py_file already present in targets is skipped via continue."""
     import repo_release_tools.config as _config_mod
@@ -2661,7 +2693,8 @@ def test_autodetect_version_targets_skips_duplicate_python_version_file(
 
 
 def test_load_or_autodetect_file_not_found_with_autodetect_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Line 463: load_or_autodetect_config returns autodetected when load_config raises FileNotFoundError."""
     import repo_release_tools.config as _config_mod
@@ -2682,7 +2715,8 @@ def test_load_or_autodetect_file_not_found_with_autodetect_success(
 
 
 def test_load_or_autodetect_missing_rrt_with_autodetect_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Line 470: load_or_autodetect_config returns autodetected when load_config raises missing-rrt ValueError."""
     import repo_release_tools.config as _config_mod
@@ -2704,7 +2738,8 @@ def test_load_or_autodetect_missing_rrt_with_autodetect_success(
 
 
 def test_recommended_lock_settings_unknown_ecosystem(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Line 888: _recommended_lock_settings returns ([], []) for a single unknown ecosystem."""
     import repo_release_tools.config as _config_mod
@@ -2716,7 +2751,8 @@ def test_recommended_lock_settings_unknown_ecosystem(
 
 
 def test_load_config_from_path_rejects_non_dict_raw(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Line 932: load_config_from_path raises ValueError when raw config is not a dict."""
     import repo_release_tools.config as _config_mod
@@ -2729,13 +2765,15 @@ def test_load_config_from_path_rejects_non_dict_raw(
 
 
 def test_auto_detect_config_poetry_falls_back_to_default_lock(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Lines 1302-1303: auto_detect_config sets poetry lock defaults when _detect_lock_and_files returns empty."""
     import repo_release_tools.config as _config_mod
 
     (tmp_path / "pyproject.toml").write_text(
-        '[tool.poetry]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
+        '[tool.poetry]\nname = "x"\nversion = "0.1.0"\n',
+        encoding="utf-8",
     )
     (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     monkeypatch.setattr(_config_mod, "_detect_lock_and_files", lambda root, targets: ([], []))

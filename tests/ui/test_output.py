@@ -70,7 +70,7 @@ def test_panel_keeps_branch_summary_width_consistent() -> None:
             f"{b.left}{b.h * 8}{b.cross}{b.h * 16}{b.right}",
             f"{b.v} Title  {b.v} feat: v0.15.0  {b.v}",
             f"{b.bl}{b.h * 8}{b.bottom}{b.h * 16}{b.br}",
-        ]
+        ],
     )
 
 
@@ -248,9 +248,8 @@ def test_progress_line_noop_on_non_tty() -> None:
 
 def test_spinner_lines_propagates_exception() -> None:
     """Exceptions raised inside the context propagate out."""
-    with pytest.raises(ValueError, match="boom"):
-        with output.spinner_lines("x", file=io.StringIO()):
-            raise ValueError("boom")
+    with pytest.raises(ValueError, match="boom"), output.spinner_lines("x", file=io.StringIO()):
+        raise ValueError("boom")
 
 
 class _TtyBuffer(io.StringIO):
@@ -397,9 +396,8 @@ def test_spinner_lines_writes_error_status_on_tty_exception(
     monkeypatch.setattr(_prog.threading, "Event", _FakeEvent)
     monkeypatch.setattr(_prog.threading, "Thread", _FakeThread)
 
-    with pytest.raises(RuntimeError, match="boom"):
-        with output.spinner_lines("Exploding", file=tty):
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"), output.spinner_lines("Exploding", file=tty):
+        raise RuntimeError("boom")
 
     rendered = tty.getvalue()
     assert "Exploding" in rendered
@@ -450,9 +448,8 @@ def test_spinner_lines_cancelled_writes_warning_glyph(
     monkeypatch.setattr(_prog.threading, "Event", _FakeEvent)
     monkeypatch.setattr(_prog.threading, "Thread", _FakeThread)
 
-    with pytest.raises(KeyboardInterrupt):
-        with output.spinner_lines("Task", file=tty):
-            raise KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt), output.spinner_lines("Task", file=tty):
+        raise KeyboardInterrupt
 
     rendered = tty.getvalue()
     assert "Cancelled" in rendered

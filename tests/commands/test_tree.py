@@ -5,6 +5,7 @@ import sys
 import types
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -34,7 +35,9 @@ def _make_fixture_tree(tmp_path: Path) -> None:
 
 
 def test_cmd_tree_classic_renders_tree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -49,7 +52,9 @@ def test_cmd_tree_classic_renders_tree(
 
 
 def test_cmd_tree_ascii_uses_ascii_connectors(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -62,7 +67,9 @@ def test_cmd_tree_ascii_uses_ascii_connectors(
 
 
 def test_cmd_tree_markdown_uses_bullets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -84,7 +91,9 @@ def test_render_rich_tree_returns_none_on_legacy_terminal(
 
 
 def test_cmd_tree_rich_falls_back_when_unavailable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -98,7 +107,9 @@ def test_cmd_tree_rich_falls_back_when_unavailable(
 
 
 def test_cmd_tree_respects_max_depth(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -113,7 +124,9 @@ def test_cmd_tree_respects_max_depth(
 
 
 def test_cmd_tree_show_hidden_includes_dotfiles(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -126,7 +139,9 @@ def test_cmd_tree_show_hidden_includes_dotfiles(
 
 
 def test_cmd_tree_dirs_only_hides_files(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -140,7 +155,9 @@ def test_cmd_tree_dirs_only_hides_files(
 
 
 def test_cmd_tree_non_git_fallback_ignores_known_dirs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (tmp_path / "node_modules").mkdir()
     (tmp_path / "node_modules" / "leftpad.js").write_text("x", encoding="utf-8")
@@ -156,7 +173,9 @@ def test_cmd_tree_non_git_fallback_ignores_known_dirs(
 
 
 def test_cmd_tree_gitignore_filtering_uses_git_check(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     (tmp_path / "keep.txt").write_text("keep", encoding="utf-8")
     (tmp_path / "ignored.txt").write_text("ignore", encoding="utf-8")
@@ -212,7 +231,9 @@ def _make_inject_file(tmp_path: Path, anchor: str = "project-tree") -> Path:
 
 
 def test_inject_replaces_anchored_block(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     target = _make_inject_file(tmp_path)
@@ -230,7 +251,9 @@ def test_inject_replaces_anchored_block(
 
 
 def test_inject_dry_run_does_not_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     target = _make_inject_file(tmp_path)
@@ -238,7 +261,7 @@ def test_inject_dry_run_does_not_write(
     monkeypatch.chdir(tmp_path)
 
     rc = tree.cmd_tree(
-        _args(format="markdown", inject=str(target), anchor="project-tree", dry_run=True)
+        _args(format="markdown", inject=str(target), anchor="project-tree", dry_run=True),
     )
 
     assert rc == 0
@@ -248,20 +271,24 @@ def test_inject_dry_run_does_not_write(
 
 
 def test_inject_missing_file_returns_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
 
     rc = tree.cmd_tree(
-        _args(format="markdown", inject=str(tmp_path / "nonexistent.md"), anchor="project-tree")
+        _args(format="markdown", inject=str(tmp_path / "nonexistent.md"), anchor="project-tree"),
     )
 
     assert rc == 1
 
 
 def test_inject_missing_anchor_in_file_returns_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     target = _make_inject_file(tmp_path, anchor="project-tree")
@@ -273,7 +300,9 @@ def test_inject_missing_anchor_in_file_returns_error(
 
 
 def test_inject_without_anchor_returns_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     target = _make_inject_file(tmp_path)
@@ -285,7 +314,9 @@ def test_inject_without_anchor_returns_error(
 
 
 def test_anchor_without_inject_returns_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     _make_fixture_tree(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -301,7 +332,7 @@ def test_register_exposes_inject_and_anchor_flags() -> None:
     tree.register(subs)
 
     parsed = parser.parse_args(
-        ["tree", "--format", "markdown", "--inject", "README.md", "--anchor", "my-tree"]
+        ["tree", "--format", "markdown", "--inject", "README.md", "--anchor", "my-tree"],
     )
     assert parsed.inject == "README.md"
     assert parsed.anchor == "my-tree"
@@ -313,7 +344,8 @@ def test_register_exposes_inject_and_anchor_flags() -> None:
 
 
 def test_resolve_git_root_returns_path_on_success(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Cover lines 181-182: success path when git returns a repo root."""
     expected = tmp_path
@@ -328,7 +360,8 @@ def test_resolve_git_root_returns_path_on_success(
 
 
 def test_resolve_git_root_returns_none_on_empty_stdout(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Cover line 182 branch: raw is empty string after strip."""
 
@@ -347,7 +380,8 @@ def test_resolve_git_root_returns_none_on_empty_stdout(
 
 
 def test_is_ignored_by_git_returns_true_when_git_ignores(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Cover lines 187-194: git check-ignore exits 0 means ignored."""
 
@@ -360,7 +394,8 @@ def test_is_ignored_by_git_returns_true_when_git_ignores(
 
 
 def test_is_ignored_by_git_returns_false_when_not_ignored(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Cover lines 187-194: git check-ignore exits non-zero means not ignored."""
 
@@ -377,11 +412,11 @@ def test_is_ignored_by_git_returns_false_when_not_ignored(
 # ---------------------------------------------------------------------------
 
 
-def _make_fake_rich_modules() -> tuple[types.ModuleType, types.ModuleType]:
+def _make_fake_rich_modules() -> tuple[Any, Any]:
     """Return fake rich.console and rich.tree modules."""
 
     class _FakeCapture:
-        def __enter__(self) -> "_FakeCapture":
+        def __enter__(self) -> _FakeCapture:
             return self
 
         def __exit__(self, *_: object) -> None:
@@ -394,25 +429,43 @@ def _make_fake_rich_modules() -> tuple[types.ModuleType, types.ModuleType]:
         def __init__(self, **kwargs: object) -> None:
             pass
 
-        def capture(self) -> _FakeCapture:
-            return _FakeCapture()
+        def render_lines(
+            self,
+            renderable: object,
+            *,
+            pad: bool = True,
+            new_lines: bool = False,
+        ) -> list[list[SimpleNamespace]]:
+            lines: list[list[SimpleNamespace]] = []
 
-        def print(self, *args: object) -> None:  # noqa: A003
-            pass
+            def walk(node: object) -> None:
+                lines.append([SimpleNamespace(text=getattr(node, "label", ""))])
+                for child in getattr(node, "children", []):
+                    walk(child)
+
+            walk(renderable)
+            return lines
 
     class _FakeNode:
-        def add(self, label: str) -> "_FakeNode":
-            return _FakeNode()
+        def __init__(self, label: str) -> None:
+            self.label = label
+            self.children: list[_FakeNode] = []
+
+        def add(self, label: str) -> _FakeNode:
+            child = _FakeNode(label)
+            self.children.append(child)
+            return child
 
     class _FakeTree(_FakeNode):
         def __init__(self, label: str) -> None:
-            pass
+            self.label = label
+            self.children: list[_FakeNode] = []
 
-    fake_console_mod = types.ModuleType("rich.console")
-    setattr(fake_console_mod, "Console", _FakeConsole)
+    fake_console_mod = cast(Any, types.ModuleType("rich.console"))
+    fake_console_mod.Console = _FakeConsole
 
-    fake_tree_mod = types.ModuleType("rich.tree")
-    setattr(fake_tree_mod, "Tree", _FakeTree)
+    fake_tree_mod = cast(Any, types.ModuleType("rich.tree"))
+    fake_tree_mod.Tree = _FakeTree
 
     return fake_console_mod, fake_tree_mod
 
@@ -439,10 +492,10 @@ def test_render_rich_tree_does_not_emit_root_dot(monkeypatch: pytest.MonkeyPatch
     """Regression: rich rendering should not include a synthetic '.' root node."""
 
     class _FakeCapture:
-        def __init__(self, console: "_FakeConsole") -> None:
+        def __init__(self, console: _FakeConsole) -> None:
             self._console = console
 
-        def __enter__(self) -> "_FakeCapture":
+        def __enter__(self) -> _FakeCapture:
             return self
 
         def __exit__(self, *_: object) -> None:
@@ -455,24 +508,37 @@ def test_render_rich_tree_does_not_emit_root_dot(monkeypatch: pytest.MonkeyPatch
         def __init__(self, **kwargs: object) -> None:
             self.lines: list[str] = []
 
-        def capture(self) -> _FakeCapture:
-            return _FakeCapture(self)
+        def render_lines(
+            self,
+            renderable: object,
+            *,
+            pad: bool = True,
+            new_lines: bool = False,
+        ) -> list[list[SimpleNamespace]]:
+            lines: list[list[SimpleNamespace]] = []
 
-        def print(self, tree_obj: object) -> None:  # noqa: A003
-            label = getattr(tree_obj, "label", "")
-            self.lines.append(str(label))
+            def walk(node: object) -> None:
+                lines.append([SimpleNamespace(text=getattr(node, "label", ""))])
+                for child in getattr(node, "children", []):
+                    walk(child)
+
+            walk(renderable)
+            return lines
 
     class _FakeNode:
         def __init__(self, label: str) -> None:
             self.label = label
+            self.children: list[_FakeNode] = []
 
-        def add(self, label: str) -> "_FakeNode":
-            return _FakeNode(label)
+        def add(self, label: str) -> _FakeNode:
+            child = _FakeNode(label)
+            self.children.append(child)
+            return child
 
-    fake_console_mod = types.ModuleType("rich.console")
-    setattr(fake_console_mod, "Console", _FakeConsole)
-    fake_tree_mod = types.ModuleType("rich.tree")
-    setattr(fake_tree_mod, "Tree", _FakeNode)
+    fake_console_mod = cast(Any, types.ModuleType("rich.console"))
+    fake_console_mod.Console = _FakeConsole
+    fake_tree_mod = cast(Any, types.ModuleType("rich.tree"))
+    fake_tree_mod.Tree = _FakeNode
 
     monkeypatch.setattr(tree, "IS_LEGACY_TERMINAL", False)
     monkeypatch.setitem(sys.modules, "rich.console", fake_console_mod)
@@ -529,7 +595,8 @@ def test_render_rich_tree_returns_none_when_console_attr_missing(
 
 
 def test_cmd_tree_nonexistent_root_returns_error(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Cover lines 379-380: root path does not exist."""
     rc = tree.cmd_tree(_args(root=str(tmp_path / "no_such_dir")))
@@ -537,7 +604,8 @@ def test_cmd_tree_nonexistent_root_returns_error(
 
 
 def test_cmd_tree_file_root_returns_error(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Cover lines 382-383: root path is a file, not a directory."""
     f = tmp_path / "file.txt"
@@ -552,7 +620,9 @@ def test_cmd_tree_file_root_returns_error(
 
 
 def test_cmd_tree_rich_renders_successfully(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Cover line 413: rich rendering returns actual output (not None)."""
     _make_fixture_tree(tmp_path)
@@ -572,7 +642,9 @@ def test_cmd_tree_rich_renders_successfully(
 
 
 def test_cmd_tree_empty_directory_shows_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Cover line 461: empty tree prints (empty) action."""
     monkeypatch.chdir(tmp_path)
@@ -590,7 +662,9 @@ def test_cmd_tree_empty_directory_shows_empty(
 
 
 def test_cmd_tree_reports_warnings_for_unreadable_dirs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Cover lines 465, 467: warnings are printed and followed by blank line."""
     _make_fixture_tree(tmp_path)
@@ -639,7 +713,8 @@ def test_cmd_tree_reports_warnings_for_unreadable_dirs(
 
 
 def test_build_entries_handles_oserror_on_sorted_children(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Cover lines 305-307: OSError when listing a subdir's children."""
     subdir = tmp_path / "subdir"
@@ -675,7 +750,8 @@ def test_build_entries_handles_oserror_on_sorted_children(
 
 
 def test_build_entries_relative_to_root_valueerror(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Cover lines 319-320: relative_to(root) raises ValueError falls back gracefully."""
     subdir = tmp_path / "sub"
@@ -707,7 +783,8 @@ def test_build_entries_relative_to_root_valueerror(
 
 
 def test_build_entries_relative_to_repo_valueerror(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Cover lines 326-327: relative_to(repo_root) raises ValueError falls back to relative_to_root."""
     subdir = tmp_path / "sub"
@@ -750,7 +827,8 @@ def test_batch_ignored_empty_list_returns_empty_set(tmp_path: Path) -> None:
 
 
 def test_batch_ignored_returns_nonempty_set_from_stdout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Line 239: _batch_ignored_by_git returns the set of ignored paths from git stdout."""
     import subprocess as _sp
@@ -783,7 +861,8 @@ def test_render_rich_tree_recursive_children(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_build_entries_rel_text_set_to_none_when_equal_repo_root(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Line 378: rel_text is set to None when child.relative_to(repo_root) == Path('.')."""
     # Create a child directory that IS the repo_root so relative_to returns Path(".")

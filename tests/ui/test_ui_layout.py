@@ -150,7 +150,9 @@ def test_rule_title_only_when_too_wide() -> None:
 
 def test_terminal_width_returns_default_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        layout.shutil, "get_terminal_size", lambda fallback: (_ for _ in ()).throw(OSError())
+        layout.shutil,
+        "get_terminal_size",
+        lambda fallback: (_ for _ in ()).throw(OSError()),
     )
     assert layout.terminal_width(default=12) == 12
 
@@ -202,7 +204,9 @@ def test_sparkline_returns_flat_line_for_constant_values() -> None:
 
 def test_section_wraps_section_line_with_heading_style(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        layout, "section_line", lambda title, glyph="─", left=2: f"{glyph}{left}:{title}"
+        layout,
+        "section_line",
+        lambda title, glyph="─", left=2: f"{glyph}{left}:{title}",
     )
     monkeypatch.setattr("repo_release_tools.ui.color.heading", lambda text: f"styled:{text}")
 

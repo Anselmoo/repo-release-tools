@@ -7,7 +7,6 @@ import re
 import runpy
 import subprocess
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -15,6 +14,10 @@ import pytest
 
 from repo_release_tools import cli
 from repo_release_tools.ui import OutputContext, color
+
+ANSI_PREFIX = chr(27) + "["
+ANSI_RESET = ANSI_PREFIX + "0m"
+ANSI_RE_PREFIX = re.escape(ANSI_PREFIX)
 
 
 def test_module_help_smoke() -> None:
@@ -142,6 +145,26 @@ def test_build_parser_registers_skill_install_command() -> None:
     assert args.handler.__name__ == "cmd_install"
 
 
+def test_build_parser_registers_install_command() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["install", "--target", "claude-local"])
+
+    assert args.command == "install"
+    assert args.targets == ["claude-local"]
+    assert args.handler.__name__ == "cmd_install"
+
+
+def test_build_parser_registers_action_init_command() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["action", "init"])
+
+    assert args.command == "action"
+    assert args.action_command == "init"
+    assert args.handler.__name__ == "cmd_init"
+
+
 def test_build_parser_registers_env_command() -> None:
     parser = cli.build_parser()
 
@@ -162,7 +185,8 @@ def test_build_parser_registers_folder_check_command() -> None:
 
 
 def test_styled_help_applies_to_subcommands(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     parser = cli.build_parser()
     monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
@@ -172,11 +196,12 @@ def test_styled_help_applies_to_subcommands(
 
     captured = capsys.readouterr()
     assert "Usage:" in captured.out
-    assert "\x1b[" in captured.out
+    assert ANSI_PREFIX in captured.out
 
 
 def test_parse_error_is_colorized_when_supported(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     parser = cli.build_parser()
     monkeypatch.setattr(cli, "supports_color", lambda stream=None: True)
@@ -187,7 +212,7 @@ def test_parse_error_is_colorized_when_supported(
 
     captured = capsys.readouterr()
     assert exc_info.value.code == 2
-    assert "\x1b[" in captured.err
+    assert ANSI_PREFIX in captured.err
     assert "error:" in captured.err
 
 
@@ -224,6 +249,28 @@ def test_main_dispatches_to_selected_handler(monkeypatch: pytest.MonkeyPatch) ->
         cli.main()
 
     assert exc.value.code == 7
+
+
+def test_main_renders_handler_value_error_as_cli_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def _raise_value_error(_: object) -> int:
+        raise ValueError("boom")
+
+    class _FakeParser:
+        def parse_args(self) -> argparse.Namespace:
+            return argparse.Namespace(handler=_raise_value_error, no_color=False)
+
+    monkeypatch.setattr(cli, "build_parser", lambda: _FakeParser())
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    captured = capsys.readouterr()
+    assert exc.value.code == 1
+    assert "boom" in captured.err
+    assert "error" in captured.err.lower()
 
 
 def test_convert_arg_line_to_args_handles_comments_and_empty_lines() -> None:
@@ -266,7 +313,7 @@ def test_format_suggestion_returns_empty_string_for_no_matches() -> None:
 
 
 def test_available_choices_includes_subcommands_and_options() -> None:
-    parser = cast(cli.FriendlyArgumentParser, cli.build_parser())
+    parser = cast("cli.FriendlyArgumentParser", cli.build_parser())
     choices = parser._available_choices()
 
     assert "branch" in choices
@@ -433,7 +480,8 @@ def test_version_flag_prints_version_and_exits(capsys: pytest.CaptureFixture[str
 
 
 def test_subcommand_usage_line_is_bold(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The 'usage:' prefix in subcommand help must be bold when color is on."""
     import repo_release_tools.ui.color as _color_mod
@@ -446,8 +494,8 @@ def test_subcommand_usage_line_is_bold(
         parser.parse_args(["bump", "--help"])
 
     captured = capsys.readouterr()
-    # Bold escape code (\x1b[1m) or just ANSI present in the output
-    assert "\x1b[" in captured.out
+    # Bold styling should emit ANSI when color is enabled.
+    assert ANSI_PREFIX in captured.out
 
 
 def test_style_help_static_method_is_noop() -> None:
@@ -569,7 +617,7 @@ def test_compute_col_width_uses_longest_flag_plus_indent() -> None:
     ]
     # Longest is either --include-maintenance (21) or --changelog-mode MODE (21)
     # + 4 = 25
-    assert _compute_col_width(cast(list[argparse.Action], actions)) == 25
+    assert _compute_col_width(cast("list[argparse.Action]", actions)) == 25
 
 
 def test_compute_col_width_default_when_no_options() -> None:
@@ -580,8 +628,9 @@ def test_compute_col_width_default_when_no_options() -> None:
 
 
 def test_strip_ansi_and_display_len() -> None:
-    assert cli._strip_ansi("\x1b[31mred\x1b[0m") == "red"
-    assert cli._display_len("\x1b[31mred\x1b[0m") == 3
+    colored = f"{ANSI_PREFIX}31mred{ANSI_RESET}"
+    assert cli._strip_ansi(colored) == "red"
+    assert cli._display_len(colored) == 3
 
 
 def test_metavar_text_handles_tuple_and_suppressed() -> None:
@@ -590,9 +639,11 @@ def test_metavar_text_handles_tuple_and_suppressed() -> None:
             self.dest = dest
             self.metavar = metavar
 
-    assert cli._metavar_text(cast(argparse.Action, FakeAction("foo", ("BAR", "BAZ")))) == "BAR BAZ"
-    assert cli._metavar_text(cast(argparse.Action, FakeAction(argparse.SUPPRESS, None))) == ""
-    assert cli._metavar_text(cast(argparse.Action, FakeAction("==SUPPRESS==", None))) == ""
+    assert (
+        cli._metavar_text(cast("argparse.Action", FakeAction("foo", ("BAR", "BAZ")))) == "BAR BAZ"
+    )
+    assert cli._metavar_text(cast("argparse.Action", FakeAction(argparse.SUPPRESS, None))) == ""
+    assert cli._metavar_text(cast("argparse.Action", FakeAction("==SUPPRESS==", None))) == ""
 
 
 def test_compute_col_width_handles_choice_dict() -> None:
@@ -604,7 +655,7 @@ def test_compute_col_width_handles_choice_dict() -> None:
             self.metavar = None
 
     action = FakeAction({"short": None, "longer": None})
-    assert cli._compute_col_width(cast(list[argparse.Action], [action]), width=100) == 10
+    assert cli._compute_col_width(cast("list[argparse.Action]", [action]), width=100) == 10
 
 
 def test_build_grouped_epilog_skips_unknown_command() -> None:
@@ -627,14 +678,14 @@ def test_formatter_compute_col_width_uses_width() -> None:
             self.metavar = None
             self.choices = None
 
-    assert formatter._compute_col_width(cast(list[argparse.Action], [FakeAction()])) == 6
+    assert formatter._compute_col_width(cast("list[argparse.Action]", [FakeAction()])) == 6
 
 
 def test_decolor_returns_plain_text() -> None:
     formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
 
-    decolor = cast(Callable[[str], str], formatter._decolor)
-    assert decolor("\x1b[31mred\x1b[0m") == "red"
+    decolor = formatter._decolor
+    assert decolor(f"{ANSI_PREFIX}31mred{ANSI_RESET}") == "red"
 
 
 def test_start_section_is_noop_for_empty_heading() -> None:
@@ -655,7 +706,7 @@ def test_format_action_skips_suppressed_help() -> None:
     class FakeAction:
         help = argparse.SUPPRESS
 
-    assert formatter._format_action(cast(argparse.Action, FakeAction())) == ""
+    assert formatter._format_action(cast("argparse.Action", FakeAction())) == ""
 
 
 def test_render_row_wraps_when_column_underflow() -> None:
@@ -675,7 +726,7 @@ def test_format_subparser_action_uses_choices_dict() -> None:
         _choices_actions = []
         choices = {"foo": FakeParser()}
 
-    result = formatter._format_subparser_action(cast(argparse._SubParsersAction, FakeAction()))
+    result = formatter._format_subparser_action(cast("argparse._SubParsersAction", FakeAction()))
 
     assert "foo" in result
     assert "Fake parser" in result
@@ -691,7 +742,7 @@ def test_format_choice_action_renders_choices_and_help() -> None:
         help = "select one"
         dest = "choice"
 
-    rendered = formatter._format_choice_action(cast(argparse.Action, FakeAction()))
+    rendered = formatter._format_choice_action(cast("argparse.Action", FakeAction()))
 
     assert "CHOICE" in rendered
     assert "one" in rendered
@@ -710,7 +761,7 @@ def test_error_prints_colored_suggestion_when_available(
         parser.error("invalid choice: 'feaut' (choose from 'feat', 'fix')")
 
     err = capsys.readouterr().err
-    plain = re.sub(r"\x1b\[[0-9;]*m", "", err)
+    plain = re.sub(rf"{ANSI_RE_PREFIX}[0-9;]*m", "", err)
     assert "Did you mean: feat?" in plain
     assert "Run rrt --help for usage and examples." in plain
     assert "✖  error:" in plain
@@ -722,7 +773,7 @@ def test_build_parser_falls_back_when_package_version_missing(
     monkeypatch.setattr(
         cli.importlib.metadata,
         "version",
-        lambda package: (_ for _ in ()).throw(importlib.metadata.PackageNotFoundError()),
+        _raise_package_not_found,
     )
     parser = cli.build_parser()
 
@@ -730,6 +781,10 @@ def test_build_parser_falls_back_when_package_version_missing(
         parser.parse_args(["--version"])
 
     assert parser.description is not None
+
+
+def _raise_package_not_found(_: str) -> str:
+    raise importlib.metadata.PackageNotFoundError()
 
 
 def test_clean_error_message_replaces_raw_tokens() -> None:
@@ -771,7 +826,7 @@ def test_format_choice_action_renders_without_help() -> None:
         help = None
         dest = "choice"
 
-    rendered = formatter._format_choice_action(cast(argparse.Action, FakeAction()))
+    rendered = formatter._format_choice_action(cast("argparse.Action", FakeAction()))
 
     assert "CHOICE" in rendered
     assert "one" in rendered
@@ -788,7 +843,7 @@ def test_format_action_uses_choice_action_branch() -> None:
         help = "select one"
         dest = "choice"
 
-    rendered = formatter._format_action(cast(argparse.Action, FakeAction()))
+    rendered = formatter._format_action(cast("argparse.Action", FakeAction()))
 
     assert "CHOICE" in rendered
     assert "one" in rendered
@@ -812,7 +867,7 @@ def test_metavar_text_returns_tag_for_dest_without_metavar() -> None:
             self.dest = "name"
             self.metavar = None
 
-    assert cli._metavar_text(cast(argparse.Action, FakeAction())) == "<name>"
+    assert cli._metavar_text(cast("argparse.Action", FakeAction())) == "<name>"
 
 
 def test_compute_col_width_with_metavar_and_options() -> None:
@@ -822,7 +877,7 @@ def test_compute_col_width_with_metavar_and_options() -> None:
             self.metavar = "MODE"
             self.choices = None
 
-    assert cli._compute_col_width(cast(list[argparse.Action], [FakeAction()]), width=100) == 30
+    assert cli._compute_col_width(cast("list[argparse.Action]", [FakeAction()]), width=100) == 30
 
 
 def test_render_row_returns_simple_line_when_no_help() -> None:
@@ -839,7 +894,7 @@ def test_format_subparser_action_renders_rows_from_choice_action() -> None:
         choices = None
 
     rendered = formatter._format_subparser_action(
-        cast(argparse._SubParsersAction, FakeChoiceAction())
+        cast("argparse._SubParsersAction", FakeChoiceAction()),
     )
 
     assert "foo" in rendered
@@ -850,7 +905,7 @@ def test_error_help_hint_includes_help_target() -> None:
     parser = cli.RrtArgumentParser(prog="rrt")
 
     assert "Run 'rrt --help' for usage and examples." in parser._error_help_hint(
-        "invalid choice: 'feat' (choose from 'feat')"
+        "invalid choice: 'feat' (choose from 'feat')",
     )
 
 
@@ -880,23 +935,24 @@ def test_compute_col_width_with_choices_actions() -> None:
         option_strings = []
         metavar = None
 
-    assert cli._compute_col_width(cast(list[argparse.Action], [FakeAction()]), width=100) == 10
+    assert cli._compute_col_width(cast("list[argparse.Action]", [FakeAction()]), width=100) == 10
 
 
 def test_style_command_name_returns_danger_style(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
     styled = cli._style_command_name("rebootstrap")
-    assert "\x1b[" in styled
+    assert ANSI_PREFIX in styled
 
 
 def test_style_command_name_returns_write_style(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
     styled = cli._style_command_name("bump")
-    assert "\x1b[" in styled
+    assert ANSI_PREFIX in styled
 
 
 def test_bump_help_column_alignment_with_color(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """ANSI codes must not inflate action_max_length and force descriptions to wrap.
 
@@ -912,7 +968,7 @@ def test_bump_help_column_alignment_with_color(
     # Strip ANSI so we can do plain-text line checks.
     import re as _re
 
-    plain = _re.sub(r"\x1b\[[0-9;]*m", "", out)
+    plain = _re.sub(rf"{ANSI_RE_PREFIX}[0-9;]*m", "", out)
     for line in plain.splitlines():
         # Only check argparse flag-definition lines (start with 2 spaces + double-dash).
         # Exclude example lines (start with '  $') which also contain flag names.
@@ -928,7 +984,7 @@ def test_bump_help_column_alignment_with_color(
 
 def test_help_formatter_decolor_strips_ansi_sequences() -> None:
 
-    assert cli._strip_ansi("\x1b[31mrrt\x1b[0m") == "rrt"
+    assert cli._strip_ansi(f"{ANSI_PREFIX}31mrrt{ANSI_RESET}") == "rrt"
 
 
 def test_git_help_has_no_enum_blob(capsys: pytest.CaptureFixture[str]) -> None:
@@ -944,7 +1000,8 @@ def test_git_help_has_no_enum_blob(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_git_help_uses_semantic_command_colors(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     parser = cli.build_parser()
     monkeypatch.setattr(color, "supports_color", lambda stream=None: True)
@@ -953,10 +1010,10 @@ def test_git_help_uses_semantic_command_colors(
         parser.parse_args(["git", "--help"])
 
     out = capsys.readouterr().out
-    assert "\x1b[" in out
+    assert ANSI_PREFIX in out
     # Read-oriented command (cyan) and danger command (red) should differ.
-    assert re.search(r"\x1b\[[0-9;]*36mstatus\x1b\[0m", out)
-    assert re.search(r"\x1b\[[0-9;]*31mrebootstrap\x1b\[0m", out)
+    assert re.search(rf"{ANSI_RE_PREFIX}[0-9;]*36mstatus{ANSI_RE_PREFIX}0m", out)
+    assert re.search(rf"{ANSI_RE_PREFIX}[0-9;]*31mrebootstrap{ANSI_RE_PREFIX}0m", out)
 
 
 def test_ci_version_help_has_examples_and_no_enum_blob(capsys: pytest.CaptureFixture[str]) -> None:
@@ -1025,7 +1082,9 @@ def test_skill_help_has_examples_and_no_enum_blob(capsys: pytest.CaptureFixture[
     ],
 )
 def test_top_level_help_docs_are_useful(
-    argv: list[str], expected: list[str], capsys: pytest.CaptureFixture[str]
+    argv: list[str],
+    expected: list[str],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     parser = cli.build_parser()
 
@@ -1082,6 +1141,7 @@ def test_root_help_includes_skill_example(capsys: pytest.CaptureFixture[str]) ->
         parser.parse_args(["--help"])
 
     out = capsys.readouterr().out
+    assert "  $ rrt install --target claude-local" in out
     assert "  $ rrt skill install --target copilot-local" in out
 
 
@@ -1096,22 +1156,22 @@ def test_start_section_emits_chrome_rules_and_heading_style(
 
     parser = cli.build_parser()
     formatter = parser._get_formatter()
-    cast(cli.RrtHelpFormatter, formatter)._col_width = 24
-    cast(cli.RrtHelpFormatter, formatter).start_section("Options")
-    cast(cli.RrtHelpFormatter, formatter).add_text(None)
-    cast(cli.RrtHelpFormatter, formatter).end_section()
+    cast("cli.RrtHelpFormatter", formatter)._col_width = 24
+    cast("cli.RrtHelpFormatter", formatter).start_section("Options")
+    cast("cli.RrtHelpFormatter", formatter).add_text(None)
+    cast("cli.RrtHelpFormatter", formatter).end_section()
     output = formatter.format_help()
 
     # fg=33 must appear: both heading (bold) and chrome (dim) use gold (33)
-    assert re.search(r"\x1b\[[0-9;]*33[m;]", output), (
+    assert re.search(rf"{ANSI_RE_PREFIX}[0-9;]*33[m;]", output), (
         "gold (fg=33) escape not found in section output"
     )
     # No underline (4) — headings are bold-only, no underline
-    assert not re.search(r"\x1b\[[0-9;]*4[m;]", output), (
+    assert not re.search(rf"{ANSI_RE_PREFIX}[0-9;]*4[m;]", output), (
         "unexpected underline escape in section output"
     )
     # No old subtle fg=90 — replaced by chrome fg=33 dim
-    assert "\x1b[90m" not in output
+    assert f"{ANSI_PREFIX}90m" not in output
 
 
 def test_format_epilog_emits_chrome_rules_and_heading_style(
@@ -1123,10 +1183,10 @@ def test_format_epilog_emits_chrome_rules_and_heading_style(
     formatter = cli.RrtHelpFormatter(prog="rrt", width=80)
     output = formatter.format_epilog('  $ rrt branch new feat "add parser"\n')
 
-    assert re.search(r"\x1b\[[0-9;]*33[m;]", output), (
+    assert re.search(rf"{ANSI_RE_PREFIX}[0-9;]*33[m;]", output), (
         "gold (fg=33) escape not found in epilog output"
     )
-    assert not re.search(r"\x1b\[[0-9;]*4[m;]", output), (
+    assert not re.search(rf"{ANSI_RE_PREFIX}[0-9;]*4[m;]", output), (
         "unexpected underline escape in epilog output"
     )
     assert "Examples" in output
@@ -1141,9 +1201,9 @@ def test_grouped_epilog_uses_chrome_rules_and_heading_style(
     parser = cli.build_parser()
     epilog = parser.epilog or ""
 
-    assert re.search(r"\x1b\[[0-9;]*33[m;]", epilog), (
+    assert re.search(rf"{ANSI_RE_PREFIX}[0-9;]*33[m;]", epilog), (
         "gold (fg=33) escape not found in grouped epilog"
     )
-    assert not re.search(r"\x1b\[[0-9;]*4[m;]", epilog), (
+    assert not re.search(rf"{ANSI_RE_PREFIX}[0-9;]*4[m;]", epilog), (
         "unexpected underline in grouped epilog headings"
     )

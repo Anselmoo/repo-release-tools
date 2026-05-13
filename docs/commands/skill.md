@@ -5,33 +5,29 @@ permalink: "/commands/skill/"
 
 # rrt skill
 
-This repository bundles two agent skills:
+This repository bundles ten user workflow skills:
 
-- `/.github/skills/repo-release-tools-uvx/SKILL.md` — zero-install guidance
-- `/.github/skills/repo-release-tools/SKILL.md` — guidance for an installed `rrt`
+- `rrt-user-bootstrap`
+- `rrt-user-versioning`
+- `rrt-user-release-flow`
+- `rrt-user-branch-strategy`
+- `rrt-user-commit-quality`
+- `rrt-user-changelog-automation`
+- `rrt-user-docs-consistency`
+- `rrt-user-config-safety`
+- `rrt-user-ci-readiness`
+- `rrt-user-migration-uvx-to-installed`
 
 If you need the exact CLI syntax for branch, Git, or skill commands, use the
 [rrt CLI reference](rrt-cli.md) first.
 
-## Which skill to use
+## What the skill bundle covers
 
-### `repo-release-tools-uvx`
+Use this bundle when you want shipped help for setup, versioning, release flow,
+branch naming, commit quality, changelog automation, docs consistency, config
+safety, CI readiness, and migration from `uvx` to installed workflows.
 
-Use this when `repo-release-tools` is not installed and you want quick
-`uvx`-based usage examples for branches, bumps, or one-off release automation.
-
-### `repo-release-tools`
-
-Use this when `rrt` is already available and you want help with:
-
-- `rrt branch ...` naming and branch repair
-- `rrt bump ...` release versioning
-- `rrt git ...` workflow helpers
-- `rrt doctor` / `rrt config`
-- `rrt skill install ...`
-- hook and CI workflow guidance that points back to the main docs
-
-## Installing the bundled CLI skill
+## Installing the bundled user skills
 
 Install into one or more agent skill locations with:
 
@@ -46,15 +42,18 @@ Supported targets:
 
 | Target | Directory |
 |---|---|
-| `copilot-local` | `.copilot/skills` |
+| `copilot-local` | `.github/skills` |
 | `claude-local` | `.claude/skills` |
 | `codex-local` | `.codex/skills` |
 | `copilot-global` | `~/.copilot/skills` |
 | `claude-global` | `~/.claude/skills` |
 | `codex-global` | `~/.codex/skills` |
+| `gemini-local` | `.gemini/skills` |
+| `gemini-global` | `~/.gemini/skills` |
 
-The installer refuses to overwrite an existing skill unless you pass `--force`.
-Use `--dry-run` to preview the destination paths first.
+The installer writes one directory per bundled skill. It refuses to overwrite an
+existing skill directory unless you pass `--force`. Use `--dry-run` to preview
+the destination paths first.
 
 ## Related docs
 
@@ -63,11 +62,9 @@ Use `--dry-run` to preview the destination paths first.
 - [GitHub Action](action.md)
 - [rrt git](git_cmd.md)
 
-## Skill eval fixtures
+## Install surfaces
 
-Keep the canonical skill eval prompts in `/evals/evals.json`.
-
-Structured workspace artifacts under
-`.github/skills/repo-release-tools-workspace/` may be committed as evidence of an
-evaluation run. Do **not** commit ad-hoc execution transcripts
-(`transcript.md`).
+- Claude: `./.claude/skills` and `~/.claude/skills`
+- Codex: `./.codex/skills` and `~/.codex/skills`
+- Gemini: `./.gemini/skills` and `~/.gemini/skills`
+- Copilot: `./.github/skills` and `~/.copilot/skills`

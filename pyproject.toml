@@ -32,11 +32,22 @@ Source = "https://github.com/Anselmoo/repo-release-tools"
 [project.scripts]
 repo-release-tools = "repo_release_tools.cli:main"
 rrt = "repo_release_tools.cli:main"
+rrt-agents = "repo_release_tools.commands.agents_cmd:main"
 rrt-hooks = "repo_release_tools.workflow.hooks:main"
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+source-include = [".github/agents/**", ".github/hooks/**", ".github/skills/**"]
+
+[tool.uv.build-backend.data]
+purelib = ".github/skills"
+data = ".github/agents"
+headers = ".github/hooks"
+
 
 [dependency-groups]
 dev = [
@@ -69,6 +80,10 @@ cmd = "rrt docs publish --check"
 [tool.poe.groups.docs.tasks.docs]
 help = "Regenerate generated docs and confirm they are current."
 sequence = ["docs-generate", "docs-inject", "docs-check", "docs-inject-check"]
+
+[tool.poe.groups.docs.tasks.sync-assets]
+help = "Validate source-owned skill and agent assets are present (no copy needed)."
+cmd = "python -c \"from pathlib import Path; req=[Path('.github/skills/rrt-user-bootstrap/SKILL.md'), Path('.github/skills/rrt-user-versioning/SKILL.md'), Path('.github/skills/rrt-user-release-flow/SKILL.md'), Path('.github/skills/rrt-user-branch-strategy/SKILL.md'), Path('.github/skills/rrt-user-commit-quality/SKILL.md'), Path('.github/skills/rrt-user-changelog-automation/SKILL.md'), Path('.github/skills/rrt-user-docs-consistency/SKILL.md'), Path('.github/skills/rrt-user-config-safety/SKILL.md'), Path('.github/skills/rrt-user-ci-readiness/SKILL.md'), Path('.github/skills/rrt-user-migration-uvx-to-installed/SKILL.md'), Path('.github/agents/rrt-user-bootstrap.agent.md'), Path('.github/agents/rrt-user-version-planner.agent.md'), Path('.github/agents/rrt-user-release-readiness.agent.md'), Path('.github/agents/rrt-user-branch-guard.agent.md'), Path('.github/agents/rrt-user-commit-lint-triage.agent.md'), Path('.github/agents/rrt-user-changelog-curator.agent.md'), Path('.github/agents/rrt-user-config-validator.agent.md'), Path('.github/agents/rrt-user-docs-sync-auditor.agent.md'), Path('.github/agents/rrt-user-ci-failure-triage.agent.md'), Path('.github/agents/rrt-user-upgrade-assistant.agent.md'), Path('.github/hooks/rrt_user_branch_policy.py'), Path('.github/hooks/rrt_user_commit_policy.py'), Path('.github/hooks/rrt_user_changelog_policy.py'), Path('.github/hooks/rrt_user_release_readiness.py'), Path('.github/hooks/rrt_user_config_sanity.py'), Path('.github/hooks/rrt_user_docs_sync_hint.py'), Path('.github/hooks/rrt_user_dirty_tree_guard.py'), Path('.github/hooks/rrt_user_version_drift_guard.py'), Path('.github/hooks/rrt_user_ci_local_preflight.py'), Path('.github/hooks/rrt_user_security_hygiene_hint.py')]; missing=[str(p) for p in req if not p.exists()]; print('source-owned assets verified' if not missing else 'missing assets: '+', '.join(missing)); raise SystemExit(0 if not missing else 1)\""
 
 [tool.rrt]
 
@@ -116,10 +131,6 @@ pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 path = ".github/skills/**/SKILL.md"
 pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 
-[[tool.rrt.pin_targets]]
-path = ".github/skills/**/outputs/answer.md"
-pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
-
 [tool.rrt.folders]
 
 [[tool.rrt.folders.templates]]
@@ -147,6 +158,7 @@ description = "One test file per rrt subcommand"
 strictness = "loose"
 exact = false
 required_files = [
+    "test_agents_cmd.py",
     "test_branch.py",
     "test_bump.py",
     "test_ci_version.py",
@@ -158,6 +170,7 @@ required_files = [
     "test_folder_cmd.py",
     "test_folder_cmd_extra.py",
     "test_git_cmd.py",
+    "test_hooks_cmd.py",
     "test_init.py",
     "test_release_cmd.py",
     "test_skill.py",
@@ -356,6 +369,7 @@ line-length = 100
 target-version = "py312"
 output-format = "full"
 
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "ANN", "D"]
 # D203 (one-blank-line-before-class) conflicts with D211 (no-blank-line-before-class)
@@ -399,7 +413,7 @@ markers = ["runtime: end-to-end runtime/toolchain integration tests"]
 
 [tool.coverage.run]
 source = ["src/repo_release_tools"]
-omit = ["tests/*"]
+omit = ["tests/*", "src/repo_release_tools/assets/hooks/**/*.py"]
 
 [tool.coverage.report]
 show_missing = true

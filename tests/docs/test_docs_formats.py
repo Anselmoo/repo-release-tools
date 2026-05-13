@@ -20,7 +20,9 @@ from repo_release_tools.state import hash_content
 
 
 def _entry(
-    name: str = "example", content: str = "Example content.", lang: str = "python"
+    name: str = "example",
+    content: str = "Example content.",
+    lang: str = "python",
 ) -> DocEntry:
     return DocEntry(
         name=name,
@@ -231,7 +233,7 @@ class TestRenderRich:
             _entry(
                 "hello",
                 "# Overview\n\n## Details\n```python\nprint('x')\n```\nBody text",
-            )
+            ),
         ]
 
         result = render_rich(entries, _config())
