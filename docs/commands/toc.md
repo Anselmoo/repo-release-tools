@@ -2,6 +2,10 @@
 title: "rrt toc"
 permalink: "/commands/toc/"
 ---
+<!-- rrt:auto:start:page-header -->
+[![GitHub](docs/assets/badges/github.svg)](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:page-header -->
+
 
 # rrt toc
 

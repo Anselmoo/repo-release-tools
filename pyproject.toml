@@ -343,6 +343,17 @@ stubs = [
 
 # Shared-block anchor id used by injected doc footer content.
 [[tool.rrt.docs.shared_blocks]]
+anchor_id = "page-header"
+content = """{platform_badge}
+"""
+targets = [
+    "docs/index.md",
+    "docs/action.md",
+    "docs/agent-instructions.md",
+    "docs/commands/*.md",
+]
+
+[[tool.rrt.docs.shared_blocks]]
 anchor_id = "doc-footer"
 content = """
 ---
@@ -351,12 +362,9 @@ content = """
 """
 targets = [
     "docs/index.md",
-    "docs/commands/bump.md",
-    "docs/commands/ci_version.md",
-    "docs/commands/config_cmd.md",
-    "docs/commands/env_cmd.md",
-    "docs/commands/init.md",
-    "docs/commands/toc.md",
+    "docs/action.md",
+    "docs/agent-instructions.md",
+    "docs/commands/*.md",
 ]
 
 [[tool.rrt.eol.overrides]]

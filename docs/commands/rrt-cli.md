@@ -1006,6 +1006,7 @@ Arguments
   publish      Write CLI-reference docs from the live rrt parser.
   inject       Inject shared anchor blocks defined in [tool.rrt.docs.shared_blocks].
   suggest      Suggest or scaffold rich module docstrings for Python files.
+  badges       Generate platform SVG badge files into docs/assets/badges/.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -1092,10 +1093,11 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help   Show this message and exit.
-  --check      Fail if any anchor block is stale; do not write.
-  --root PATH  Project root directory (default: current directory).
-  --dry-run    Print which files would be updated without writing.
+  -h, --help     Show this message and exit.
+  --check        Fail if any anchor block is stale; do not write.
+  --root PATH    Project root directory (default: current directory).
+  --dry-run      Print which files would be updated without writing.
+  --add-anchors  Prepend missing anchor stubs to target files (first-time setup).
 ```
 
 ### `rrt docs suggest`
@@ -1115,6 +1117,28 @@ Options
   --root PATH    Project root directory (default: current directory).
   --min-chars N  Minimum docstring length to accept (default: 150).
   --apply        Write scaffold docstrings back into the target files.
+```
+
+### `rrt docs badges`
+
+```text
+Usage:  rrt docs badges [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help           Show this message and exit.
+  --platform PLATFORM  Generate badge for a single platform (e.g. github, gitlab).
+  --all-platforms      Generate badges for all known platforms (default when --platform is omitted).
+  --output-dir PATH    Override output directory (default: badge_assets_dir from config).
+  --check              Fail if any badge file is stale; do not write.
+  --root PATH          Project root directory (default: current directory).
+  --dry-run            Print which files would be written without doing so.
+  --variant            Generate only one visual variant (default: all three).
 ```
 
 ## `rrt drift`
@@ -2331,9 +2355,3 @@ Examples
   $ rrt hooks install --target codex-global
   $ rrt hooks install --target copilot-local
 ```
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->
