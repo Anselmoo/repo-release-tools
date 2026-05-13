@@ -1,10 +1,7 @@
 .git
 .github/*
-!.github/skills/
 !.github/skills/**
-!.github/agents/
 !.github/agents/**
-!.github/hooks/
 !.github/hooks/**
 .venv
 .uv-cache
