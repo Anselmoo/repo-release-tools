@@ -72,3 +72,9 @@ eol      = "2026-06-01"
 - [rrt doctor](doctor.md)
 - [GitHub Action](action.md)
 - [pre-commit / lefthook](hooks.md)
+
+<!-- rrt:auto:start:doc-footer -->
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:doc-footer -->
