@@ -11,12 +11,17 @@ import pytest
 from repo_release_tools.commands.docs_cmd import (
     SOURCE_OWNED_TOPIC_DOCS,
     _build_docs_lock_sources,
+    _cmd_badges,
     _cmd_check,
     _cmd_generate,
     _cmd_inject,
     _cmd_publish,
     _cmd_suggest,
     _config_for_cwd,
+    _effective_platform,
+    _effective_source_url_template,
+    _expand_platform_vars,
+    _prepend_anchor_if_missing,
     cmd_docs,
 )
 from repo_release_tools.config import DocsConfig, SharedBlock
@@ -675,7 +680,12 @@ class TestCmdInject:
         )
         monkeypatch.setattr(
             "repo_release_tools.commands.docs_cmd.load_config",
-            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=(block,))),
+            lambda root: SimpleNamespace(
+                docs=DocsConfig(
+                    shared_blocks=(block,),
+                    source_repo_url="https://github.com/Anselmoo/repo-release-tools",
+                )
+            ),
         )
 
         args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
@@ -750,7 +760,12 @@ targets = ["README.md"]
         )
         monkeypatch.setattr(
             "repo_release_tools.commands.docs_cmd.load_config",
-            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=(block,))),
+            lambda root: SimpleNamespace(
+                docs=DocsConfig(
+                    shared_blocks=(block,),
+                    source_repo_url="https://github.com/Anselmoo/repo-release-tools",
+                )
+            ),
         )
 
         args = argparse.Namespace(root=str(temp_repo), check=False, dry_run=False)
@@ -771,3 +786,235 @@ class TestSourceOwnedTopicDocs:
         assert SOURCE_OWNED_TOPIC_DOCS is not None
         assert len(SOURCE_OWNED_TOPIC_DOCS) > 0
         assert SOURCE_OWNED_TOPIC_DOCS[0][0] == "docs"
+
+
+class TestPlatformHelpers:
+    """Tests for _effective_platform, _effective_source_url_template, _expand_platform_vars."""
+
+    def test_effective_platform_explicit(self) -> None:
+        docs = DocsConfig(platform="gitlab")
+        assert _effective_platform(docs) == "gitlab"
+
+    def test_effective_platform_auto_detects_from_url(self) -> None:
+        docs = DocsConfig(source_repo_url="https://github.com/o/r")
+        assert _effective_platform(docs) == "github"
+
+    def test_effective_platform_fallback_generic(self) -> None:
+        docs = DocsConfig()
+        assert _effective_platform(docs) == "generic"
+
+    def test_effective_source_url_template_explicit(self) -> None:
+        docs = DocsConfig(source_url_template="custom/{path}")
+        assert _effective_source_url_template(docs, "github") == "custom/{path}"
+
+    def test_effective_source_url_template_default(self) -> None:
+        from repo_release_tools.tools.platform import PLATFORM_URL_TEMPLATES
+
+        docs = DocsConfig()
+        result = _effective_source_url_template(docs, "github")
+        assert result == PLATFORM_URL_TEMPLATES["github"]
+
+    def test_expand_platform_vars_badge(self) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="text",
+        )
+        result = _expand_platform_vars("see {platform_badge}", docs)
+        assert "GitHub" in result
+        assert "{platform_badge}" not in result
+
+    def test_expand_platform_vars_inline_badge(self) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="text",
+        )
+        result = _expand_platform_vars("{platform_badge_inline}", docs)
+        assert "GitHub" in result
+        assert "{platform_badge_inline}" not in result
+
+    def test_expand_platform_vars_plain(self) -> None:
+        docs = DocsConfig(source_repo_url="https://gitlab.com/o/r")
+        result = _expand_platform_vars("{platform} - {platform_label}", docs)
+        assert "gitlab - GitLab" == result
+
+    def test_expand_platform_vars_svg_badge_uses_target_relative_assets_path(
+        self, tmp_path: Path
+    ) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="svg",
+            badge_assets_dir="docs/assets/badges",
+        )
+        target = tmp_path / "docs" / "commands" / "skill.md"
+        target.parent.mkdir(parents=True)
+        result = _expand_platform_vars(
+            "{platform_badge}",
+            docs,
+            root=tmp_path,
+            target_path=target,
+        )
+        assert "](../assets/badges/github.svg)" in result
+
+
+class TestCmdBadges:
+    """Tests for rrt docs badges subcommand."""
+
+    def test_cmd_badges_writes_svg_files(self, tmp_path: Path) -> None:
+        out_dir = tmp_path / "badges"
+        args = argparse.Namespace(
+            root=str(tmp_path),
+            check=False,
+            dry_run=False,
+            output_dir=str(out_dir),
+            all_platforms=False,
+            platform="github",
+        )
+        assert _cmd_badges(args) == 0
+        assert (out_dir / "github.svg").exists()
+
+    def test_cmd_badges_all_platforms(self, tmp_path: Path) -> None:
+        from repo_release_tools.tools.platform import PLATFORM_LABELS
+
+        out_dir = tmp_path / "badges"
+        args = argparse.Namespace(
+            root=str(tmp_path),
+            check=False,
+            dry_run=False,
+            output_dir=str(out_dir),
+            all_platforms=True,
+            platform=None,
+        )
+        assert _cmd_badges(args) == 0
+        for plat in PLATFORM_LABELS:
+            assert (out_dir / f"{plat}.svg").exists()
+
+    def test_cmd_badges_dry_run(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        out_dir = tmp_path / "badges"
+        args = argparse.Namespace(
+            root=str(tmp_path),
+            check=False,
+            dry_run=True,
+            output_dir=str(out_dir),
+            all_platforms=False,
+            platform="github",
+        )
+        assert _cmd_badges(args) == 0
+        assert not (out_dir / "github.svg").exists()
+
+    def test_cmd_badges_check_exits_1_when_stale(self, tmp_path: Path) -> None:
+        out_dir = tmp_path / "badges"
+        args = argparse.Namespace(
+            root=str(tmp_path),
+            check=True,
+            dry_run=False,
+            output_dir=str(out_dir),
+            all_platforms=False,
+            platform="github",
+        )
+        result = _cmd_badges(args)
+        assert result == 1  # stale: file doesn't exist
+
+    def test_cmd_docs_dispatch_badges(self, tmp_path: Path) -> None:
+        out_dir = tmp_path / "badges"
+        args = argparse.Namespace(
+            docs_action="badges",
+            root=str(tmp_path),
+            check=False,
+            dry_run=False,
+            output_dir=str(out_dir),
+            all_platforms=False,
+            platform="github",
+        )
+        assert cmd_docs(args) == 0
+
+    def test_cmd_badges_generates_all_variants(self, tmp_path: Path) -> None:
+        out_dir = tmp_path / "badges"
+        args = argparse.Namespace(
+            root=str(tmp_path),
+            check=False,
+            dry_run=False,
+            output_dir=str(out_dir),
+            all_platforms=False,
+            platform="github",
+            variant=None,
+        )
+        assert _cmd_badges(args) == 0
+        assert (out_dir / "github.svg").exists()
+        assert (out_dir / "github-dark.svg").exists()
+        assert (out_dir / "github-light.svg").exists()
+
+    def test_cmd_badges_single_variant(self, tmp_path: Path) -> None:
+        out_dir = tmp_path / "badges"
+        args = argparse.Namespace(
+            root=str(tmp_path),
+            check=False,
+            dry_run=False,
+            output_dir=str(out_dir),
+            all_platforms=False,
+            platform="github",
+            variant="dark",
+        )
+        assert _cmd_badges(args) == 0
+        assert not (out_dir / "github.svg").exists()
+        assert (out_dir / "github-dark.svg").exists()
+        assert not (out_dir / "github-light.svg").exists()
+
+
+class TestPrependAnchorIfMissing:
+    """Tests for _prepend_anchor_if_missing helper."""
+
+    def test_prepends_stub_after_front_matter(self, tmp_path: Path) -> None:
+        f = tmp_path / "README.md"
+        f.write_text("---\ntitle: Test\n---\n# Hello\n", encoding="utf-8")
+        _prepend_anchor_if_missing(f, "page-header")
+        content = f.read_text(encoding="utf-8")
+        assert "---\ntitle: Test\n---\n<!-- rrt:auto:start:page-header -->" in content
+        assert "# Hello\n" in content
+
+    def test_prepends_stub_at_top_without_front_matter(self, tmp_path: Path) -> None:
+        f = tmp_path / "README.md"
+        f.write_text("# Hello\n", encoding="utf-8")
+        _prepend_anchor_if_missing(f, "page-header")
+        content = f.read_text(encoding="utf-8")
+        assert content.startswith("<!-- rrt:auto:start:page-header -->")
+
+    def test_idempotent_when_anchor_already_present(self, tmp_path: Path) -> None:
+        f = tmp_path / "README.md"
+        f.write_text(
+            "---\ntitle: Test\n---\n<!-- rrt:auto:start:page-header -->\n<!-- rrt:auto:end:page-header -->\n\n# Hello\n",
+            encoding="utf-8",
+        )
+        _prepend_anchor_if_missing(f, "page-header")
+        content = f.read_text(encoding="utf-8")
+        assert content.count("<!-- rrt:auto:start:page-header -->") == 1
+
+    def test_no_op_when_file_does_not_exist(self, tmp_path: Path) -> None:
+        f = tmp_path / "missing.md"
+        _prepend_anchor_if_missing(f, "page-header")
+        assert not f.exists()
+
+
+class TestCmdInjectAddAnchors:
+    """Tests for rrt docs inject --add-anchors flag."""
+
+    def test_inject_add_anchors_prepends_stub(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        readme = tmp_path / "README.md"
+        readme.write_text("# Existing Content\n", encoding="utf-8")
+        block = SharedBlock(
+            anchor_id="page-header",
+            content="badge content",
+            targets=("README.md",),
+        )
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=(block,))),
+        )
+        args = argparse.Namespace(root=str(tmp_path), check=False, dry_run=False, add_anchors=True)
+        assert _cmd_inject(args) == 0
+        content = readme.read_text(encoding="utf-8")
+        assert "<!-- rrt:auto:start:page-header -->" in content
+        assert "badge content" in content

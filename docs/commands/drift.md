@@ -2,6 +2,10 @@
 title: "rrt drift"
 permalink: "/commands/drift/"
 ---
+<!-- rrt:auto:start:page-header -->
+[![GitHub](docs/assets/badges/github.svg)](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:page-header -->
+
 
 # rrt drift
 
@@ -32,3 +36,9 @@ rrt drift check
 
 - [rrt CLI](rrt-cli.md)
 - [GitHub Action](../action.md)
+
+<!-- rrt:auto:start:doc-footer -->
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:doc-footer -->

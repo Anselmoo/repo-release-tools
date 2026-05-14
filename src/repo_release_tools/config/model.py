@@ -103,6 +103,8 @@ _BRANCH_TYPE_IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_-]*")
 VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
 VALID_FOLDER_MODES = frozenset({"strict", "warn", "off"})
 VALID_TEMPLATE_STRICTNESS = frozenset({"strict", "loose"})
+VALID_BADGE_STYLES = frozenset({"svg", "shields", "text"})
+VALID_BADGE_VARIANTS = frozenset({"color", "dark", "light"})
 
 AUTODETECTED_CONFIG_BASENAME = ".rrt.autodetected.toml"
 DEFAULT_INIT_CONFIG = ".rrt.toml"
@@ -354,6 +356,25 @@ class DocsConfig:
     source_ref: str | None = None
     source_url_template: str | None = None
     shared_blocks: tuple[SharedBlock, ...] = ()
+    # Platform badge / source-anchor settings
+    platform: str | None = None  # auto-detected from source_repo_url when None
+    badge_style: str = "svg"  # "svg" | "shields" | "text"
+    badge_assets_dir: str = "docs/assets/badges"
+    badge_variant: str = "color"  # "color" | "dark" | "light"
+    source_link_badge: bool = False  # prefix per-file source links with a badge
+
+    def validate(self) -> None:
+        """Validate badge_style and badge_variant values."""
+        if self.badge_style not in VALID_BADGE_STYLES:
+            allowed = ", ".join(sorted(VALID_BADGE_STYLES))
+            raise ValueError(
+                f"docs badge_style must be one of {allowed}, got {self.badge_style!r}",
+            )
+        if self.badge_variant not in VALID_BADGE_VARIANTS:
+            allowed = ", ".join(sorted(VALID_BADGE_VARIANTS))
+            raise ValueError(
+                f"docs badge_variant must be one of {allowed}, got {self.badge_variant!r}",
+            )
 
 
 def _validate_relative_folder_path(path: str, *, label: str) -> None:

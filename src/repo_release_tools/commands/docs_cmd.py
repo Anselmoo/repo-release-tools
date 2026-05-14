@@ -69,6 +69,7 @@ rrt docs check                             # exits 1 if lock is stale
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -82,6 +83,11 @@ from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs.formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
 from repo_release_tools.tools.inject import apply_generated_docs
+from repo_release_tools.tools.platform import (
+    PLATFORM_URL_TEMPLATES,
+    detect_platform,
+    render_badge,
+)
 from repo_release_tools.ui import DryRunPrinter
 
 # ---------------------------------------------------------------------------
@@ -289,12 +295,98 @@ def _cmd_publish(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _effective_platform(docs: DocsConfig) -> str:
+    """Return the effective platform, auto-detecting from source_repo_url if needed."""
+    if docs.platform:
+        return docs.platform
+    if docs.source_repo_url:
+        return detect_platform(docs.source_repo_url)
+    return "generic"
+
+
+def _effective_source_url_template(docs: DocsConfig, platform: str) -> str:
+    """Return the source URL template, defaulting to the per-platform template."""
+    if docs.source_url_template:
+        return docs.source_url_template
+    return PLATFORM_URL_TEMPLATES.get(platform, PLATFORM_URL_TEMPLATES["generic"])
+
+
+def _badge_assets_dir_for_target(
+    docs: DocsConfig, *, root: Path | None, target_path: Path | None
+) -> str:
+    """Return badge assets path for *target_path*.
+
+    For SVG badges we compute a target-relative path so injected markdown links
+    stay valid regardless of target directory depth.
+
+    Args:
+        docs: Docs configuration holding badge style and configured assets dir.
+        root: Repository root used to resolve relative configured assets paths.
+        target_path: Target document path that will receive injected content.
+
+    Returns:
+        A POSIX-style path string suitable for markdown image links from
+        ``target_path.parent`` to the badge assets directory.
+    """
+    if docs.badge_style != "svg" or root is None or target_path is None:
+        return docs.badge_assets_dir
+
+    assets_path = Path(docs.badge_assets_dir)
+    if not assets_path.is_absolute():
+        assets_path = (root / assets_path).resolve()
+    resolved_target = target_path if target_path.is_absolute() else (root / target_path)
+    return Path(os.path.relpath(assets_path, start=resolved_target.parent.resolve())).as_posix()
+
+
+def _expand_platform_vars(
+    content: str,
+    docs: DocsConfig,
+    *,
+    root: Path | None = None,
+    target_path: Path | None = None,
+) -> str:
+    """Expand {platform}, {platform_label}, {platform_badge}, {platform_badge_inline}."""
+    from repo_release_tools.tools.platform import PLATFORM_LABELS  # noqa: PLC0415
+
+    platform = _effective_platform(docs)
+    label = PLATFORM_LABELS.get(platform, platform.title())
+    repo_url = docs.source_repo_url or ""
+    badge_assets_dir = _badge_assets_dir_for_target(docs, root=root, target_path=target_path)
+
+    if "{platform_badge}" in content or "{platform_badge_inline}" in content:
+        badge_linked = render_badge(
+            platform,
+            repo_url=repo_url,
+            badge_style=docs.badge_style,
+            badge_assets_dir=badge_assets_dir,
+            badge_variant=docs.badge_variant,
+            label=label,
+            linked=True,
+        )
+        badge_inline = render_badge(
+            platform,
+            repo_url=repo_url,
+            badge_style=docs.badge_style,
+            badge_assets_dir=badge_assets_dir,
+            badge_variant=docs.badge_variant,
+            label=label,
+            linked=False,
+        )
+        content = content.replace("{platform_badge}", badge_linked)
+        content = content.replace("{platform_badge_inline}", badge_inline)
+
+    content = content.replace("{platform}", platform)
+    content = content.replace("{platform_label}", label)
+    return content
+
+
 def _cmd_inject(args: argparse.Namespace) -> int:
     """Inject or verify all shared anchor blocks from [tool.rrt.docs.shared_blocks]."""
     from repo_release_tools import __version__ as rrt_version  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
     dry_run: bool = getattr(args, "dry_run", False)
+    add_anchors: bool = getattr(args, "add_anchors", False)
     root = Path(getattr(args, "root", ".")).resolve()
 
     cfg = None
@@ -318,7 +410,7 @@ def _cmd_inject(args: argparse.Namespace) -> int:
                 p.would_write(", ".join(block.targets), detail=f"anchor: {block.anchor_id!r}")
             return 0
 
-        repo_url = "https://github.com/Anselmoo/repo-release-tools"
+        repo_url = (cfg.docs.source_repo_url or "") if cfg.docs else ""
         p = DryRunPrinter(False)
 
         exit_code = 0
@@ -334,10 +426,20 @@ def _cmd_inject(args: argparse.Namespace) -> int:
                 continue
 
             for target_path in matched:
+                rendered_content = content
+                if cfg.docs:
+                    rendered_content = _expand_platform_vars(
+                        rendered_content,
+                        cfg.docs,
+                        root=root,
+                        target_path=target_path,
+                    )
+                if add_anchors:
+                    _prepend_anchor_if_missing(target_path, block.anchor_id)
                 exit_code = max(
                     exit_code,
                     apply_generated_docs(
-                        content,
+                        rendered_content,
                         output_path=target_path,
                         check=check,
                         write=not check,
@@ -352,6 +454,104 @@ def _cmd_inject(args: argparse.Namespace) -> int:
         return exit_code
 
     return 0
+
+
+def _prepend_anchor_if_missing(path: Path, anchor_id: str) -> None:
+    """Prepend empty anchor pair to *path* if the start marker is absent.
+
+    If the file starts with YAML front matter (lines between ---), insert
+    the anchor after the closing --- marker.
+    """
+    start = f"<!-- rrt:auto:start:{anchor_id} -->"
+    if not path.exists():
+        return
+    existing = path.read_text(encoding="utf-8")
+    if start in existing:
+        return
+
+    end = f"<!-- rrt:auto:end:{anchor_id} -->"
+    anchor_block = f"{start}\n{end}\n\n"
+
+    # Check for YAML front matter: starts with ---, ends with ---
+    if existing.startswith("---\n"):
+        lines = existing.split("\n")
+        close_idx = -1
+        for i in range(1, len(lines)):
+            if lines[i] == "---":
+                close_idx = i
+                break
+        if close_idx > 0:
+            # Insert anchor after front matter
+            before = "\n".join(lines[: close_idx + 1])
+            after = "\n".join(lines[close_idx + 1 :])
+            path.write_text(f"{before}\n{anchor_block}{after}", encoding="utf-8")
+            return
+
+    # No front matter: prepend at top
+    path.write_text(f"{anchor_block}{existing}", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Badges (generate platform SVG badge files)
+# ---------------------------------------------------------------------------
+
+
+def _cmd_badges(args: argparse.Namespace) -> int:
+    """Generate platform SVG badge files into docs/assets/badges/."""
+    from repo_release_tools.tools.platform import PLATFORM_LABELS, get_badge_svg  # noqa: PLC0415
+
+    check: bool = getattr(args, "check", False)
+    dry_run: bool = getattr(args, "dry_run", False)
+    root = Path(getattr(args, "root", ".")).resolve()
+    output_dir_arg: str | None = getattr(args, "output_dir", None)
+    all_platforms: bool = getattr(args, "all_platforms", False)
+    platform_arg: str | None = getattr(args, "platform", None)
+    variant_arg: str | None = getattr(args, "variant", None)
+
+    cfg = None
+    try:
+        cfg = load_config(root)
+    except (FileNotFoundError, ValueError):
+        pass
+
+    docs = (cfg.docs if cfg and cfg.docs else None) or DocsConfig()
+    assets_dir = output_dir_arg or docs.badge_assets_dir
+    output_path = root / assets_dir
+
+    if all_platforms or platform_arg is None:
+        platforms = list(PLATFORM_LABELS.keys())
+    else:
+        platforms = [platform_arg]
+
+    variants = ["color", "dark", "light"] if variant_arg is None else [variant_arg]
+
+    p = DryRunPrinter(dry_run=dry_run)
+    p.header("rrt docs badges")
+
+    exit_code = 0
+    for plat in platforms:
+        for variant in variants:
+            svg = get_badge_svg(plat, variant)
+            suffix = f"-{variant}" if variant != "color" else ""
+            dest = output_path / f"{plat}{suffix}.svg"
+            if dry_run:
+                p.would_write(str(dest), detail=f"platform: {plat!r}, variant: {variant!r}")
+                continue
+            exit_code = max(
+                exit_code,
+                apply_generated_docs(
+                    svg,
+                    output_path=dest,
+                    check=check,
+                    write=not check,
+                    fail_on_change=False,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                    stale_hint="rrt docs badges",
+                ),
+            )
+
+    return exit_code
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +582,8 @@ def cmd_docs(args: argparse.Namespace) -> int:
         return _cmd_inject(args)
     if sub == "suggest":
         return _cmd_suggest(args)
+    if sub == "badges":
+        return _cmd_badges(args)
     p = DryRunPrinter(False)
     p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
@@ -531,6 +733,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         default=False,
         help="Print which files would be updated without writing.",
     )
+    inj_p.add_argument(
+        "--add-anchors",
+        action="store_true",
+        default=False,
+        help="Prepend missing anchor stubs to target files (first-time setup).",
+    )
     inj_p.set_defaults(handler=cmd_docs)
 
     # ── suggest ───────────────────────────────────────────────────────────
@@ -564,3 +772,52 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Write scaffold docstrings back into the target files.",
     )
     sug_p.set_defaults(handler=cmd_docs)
+
+    # ── badges ────────────────────────────────────────────────────────────
+    bdg_p = sub.add_parser(
+        "badges",
+        help="Generate platform SVG badge files into docs/assets/badges/.",
+    )
+    bdg_p.add_argument(
+        "--platform",
+        default=None,
+        metavar="PLATFORM",
+        help="Generate badge for a single platform (e.g. github, gitlab).",
+    )
+    bdg_p.add_argument(
+        "--all-platforms",
+        action="store_true",
+        default=False,
+        help="Generate badges for all known platforms (default when --platform is omitted).",
+    )
+    bdg_p.add_argument(
+        "--output-dir",
+        default=None,
+        metavar="PATH",
+        help="Override output directory (default: badge_assets_dir from config).",
+    )
+    bdg_p.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Fail if any badge file is stale; do not write.",
+    )
+    bdg_p.add_argument(
+        "--root",
+        default=".",
+        metavar="PATH",
+        help="Project root directory (default: current directory).",
+    )
+    bdg_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print which files would be written without doing so.",
+    )
+    bdg_p.add_argument(
+        "--variant",
+        default=None,
+        choices=["color", "dark", "light"],
+        help="Generate only one visual variant (default: all three).",
+    )
+    bdg_p.set_defaults(handler=cmd_docs)

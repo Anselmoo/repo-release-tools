@@ -2780,3 +2780,85 @@ def test_auto_detect_config_poetry_falls_back_to_default_lock(
     config = auto_detect_config(tmp_path)
     assert config is not None
     assert config.version_groups[0].lock_command == ["poetry", "lock"]
+
+
+def test_docs_config_validate_invalid_badge_style() -> None:
+    """DocsConfig.validate should raise for unknown badge_style."""
+    from dataclasses import replace as dc_replace
+
+    from repo_release_tools.config import DocsConfig
+
+    bad = dc_replace(DocsConfig(), badge_style="unknown")
+    with pytest.raises(ValueError, match="badge_style"):
+        bad.validate()
+
+
+def test_load_badge_style_invalid(tmp_path: Path) -> None:
+    """_load_badge_style raises for unsupported badge_style values."""
+    from repo_release_tools.config.docs_config import _load_badge_style
+
+    with pytest.raises(ValueError, match="badge_style"):
+        _load_badge_style({"badge_style": "nope"})
+
+
+def test_load_badge_style_valid() -> None:
+    """_load_badge_style returns the value for valid badge styles."""
+    from repo_release_tools.config.docs_config import _load_badge_style
+
+    assert _load_badge_style({"badge_style": "shields"}) == "shields"
+
+
+def test_load_badge_assets_dir_invalid(tmp_path: Path) -> None:
+    """_load_badge_assets_dir raises when value is not a non-empty string."""
+    from repo_release_tools.config.docs_config import _load_badge_assets_dir
+
+    with pytest.raises(ValueError, match="badge_assets_dir"):
+        _load_badge_assets_dir({"badge_assets_dir": 123})
+
+
+def test_load_badge_assets_dir_valid() -> None:
+    """_load_badge_assets_dir returns stripped path for valid string."""
+    from repo_release_tools.config.docs_config import _load_badge_assets_dir
+
+    assert _load_badge_assets_dir({"badge_assets_dir": " assets/icons "}) == "assets/icons"
+
+
+def test_load_source_link_badge_invalid(tmp_path: Path) -> None:
+    """_load_source_link_badge raises when value is not a boolean."""
+    from repo_release_tools.config.docs_config import _load_source_link_badge
+
+    with pytest.raises(ValueError, match="source_link_badge"):
+        _load_source_link_badge({"source_link_badge": "yes"})
+
+
+def test_load_source_link_badge_valid() -> None:
+    """_load_source_link_badge returns True for valid bool."""
+    from repo_release_tools.config.docs_config import _load_source_link_badge
+
+    assert _load_source_link_badge({"source_link_badge": True}) is True
+
+
+def test_load_badge_variant_invalid() -> None:
+    """_load_badge_variant raises for unsupported values."""
+    from repo_release_tools.config.docs_config import _load_badge_variant
+
+    with pytest.raises(ValueError, match="badge_variant"):
+        _load_badge_variant({"badge_variant": "neon"})
+
+
+def test_load_badge_variant_valid() -> None:
+    """_load_badge_variant returns the value for valid variants."""
+    from repo_release_tools.config.docs_config import _load_badge_variant
+
+    assert _load_badge_variant({"badge_variant": "dark"}) == "dark"
+
+
+def test_docs_config_validate_invalid_badge_variant() -> None:
+    """DocsConfig.validate should raise for unknown badge_variant."""
+    from dataclasses import replace as dc_replace
+
+    from repo_release_tools.config import DocsConfig
+
+    bad = dc_replace(DocsConfig(), badge_variant="neon")
+    with pytest.raises(ValueError, match="badge_variant"):
+        bad.validate()

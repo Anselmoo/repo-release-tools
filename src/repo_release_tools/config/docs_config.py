@@ -6,7 +6,14 @@ import warnings
 from pathlib import Path
 from typing import cast
 
-from .model import DocsConfig, EolConfig, EolOverride, SharedBlock
+from .model import (
+    VALID_BADGE_STYLES,
+    VALID_BADGE_VARIANTS,
+    DocsConfig,
+    EolConfig,
+    EolOverride,
+    SharedBlock,
+)
 
 
 def _load_eol_config(raw: object) -> EolConfig | None:
@@ -124,6 +131,11 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
         source_ref=_load_optional_docs_string(d, "source_ref"),
         source_url_template=_load_optional_docs_string(d, "source_url_template"),
         shared_blocks=_load_shared_blocks(d, root=root),
+        platform=_load_optional_docs_string(d, "platform"),
+        badge_style=_load_badge_style(d),
+        badge_assets_dir=_load_badge_assets_dir(d),
+        badge_variant=_load_badge_variant(d),
+        source_link_badge=_load_source_link_badge(d),
     )
 
 
@@ -193,6 +205,46 @@ def _load_optional_docs_string(d: dict[str, object], key: str) -> str | None:
     if not (value := raw.strip()):
         raise ValueError(f"tool.rrt.docs.{key} must not be empty when provided")
     return value
+
+
+def _load_badge_style(d: dict[str, object]) -> str:
+    raw = d.get("badge_style")
+    if raw is None:
+        return "svg"
+    if raw not in VALID_BADGE_STYLES:
+        raise ValueError(
+            f"tool.rrt.docs.badge_style must be one of {sorted(VALID_BADGE_STYLES)}, got {raw!r}",
+        )
+    return str(raw)
+
+
+def _load_badge_assets_dir(d: dict[str, object]) -> str:
+    raw = d.get("badge_assets_dir")
+    if raw is None:
+        return "docs/assets/badges"
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError("tool.rrt.docs.badge_assets_dir must be a non-empty string")
+    return raw.strip()
+
+
+def _load_source_link_badge(d: dict[str, object]) -> bool:
+    raw = d.get("source_link_badge")
+    if raw is None:
+        return False
+    if not isinstance(raw, bool):
+        raise ValueError("tool.rrt.docs.source_link_badge must be a boolean")
+    return raw
+
+
+def _load_badge_variant(d: dict[str, object]) -> str:
+    raw = d.get("badge_variant")
+    if raw is None:
+        return "color"
+    if raw not in VALID_BADGE_VARIANTS:
+        raise ValueError(
+            f"tool.rrt.docs.badge_variant must be one of {sorted(VALID_BADGE_VARIANTS)}, got {raw!r}",
+        )
+    return str(raw)
 
 
 def _load_shared_blocks(
