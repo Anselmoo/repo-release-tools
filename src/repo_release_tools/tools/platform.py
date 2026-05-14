@@ -7,6 +7,7 @@ visual variants (color, dark, light).
 
 from __future__ import annotations
 
+from html import escape
 from urllib.parse import quote, urlparse
 
 # ---------------------------------------------------------------------------
@@ -170,6 +171,7 @@ def make_badge_svg(
         SVG markup as a UTF-8 string (no leading/trailing whitespace).
     """
     display = label or PLATFORM_LABELS.get(platform, platform.title())
+    label_xml = escape(display, quote=True)
 
     bg_color_spec, text_color = BADGE_VARIANT_COLORS.get(variant, BADGE_VARIANT_COLORS["color"])
     bg_color = (
@@ -185,7 +187,7 @@ def make_badge_svg(
     return _SVG_TEMPLATE.format(
         width=width,
         height=height,
-        label=display,
+        label=label_xml,
         bg_color=bg_color,
         text_color=text_color,
         cx=cx,

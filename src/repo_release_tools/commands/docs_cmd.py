@@ -311,6 +311,33 @@ def _effective_source_url_template(docs: DocsConfig, platform: str) -> str:
     return PLATFORM_URL_TEMPLATES.get(platform, PLATFORM_URL_TEMPLATES["generic"])
 
 
+def _badge_assets_dir_for_target(
+    docs: DocsConfig, *, root: Path | None, target_path: Path | None
+) -> str:
+    """Return badge assets path for *target_path*.
+
+    For SVG badges we compute a target-relative path so injected markdown links
+    stay valid regardless of target directory depth.
+
+    Args:
+        docs: Docs configuration holding badge style and configured assets dir.
+        root: Repository root used to resolve relative configured assets paths.
+        target_path: Target document path that will receive injected content.
+
+    Returns:
+        A POSIX-style path string suitable for markdown image links from
+        ``target_path.parent`` to the badge assets directory.
+    """
+    if docs.badge_style != "svg" or root is None or target_path is None:
+        return docs.badge_assets_dir
+
+    assets_path = Path(docs.badge_assets_dir)
+    if not assets_path.is_absolute():
+        assets_path = (root / assets_path).resolve()
+    resolved_target = target_path if target_path.is_absolute() else (root / target_path)
+    return Path(os.path.relpath(assets_path, start=resolved_target.parent.resolve())).as_posix()
+
+
 def _expand_platform_vars(
     content: str,
     docs: DocsConfig,
@@ -324,14 +351,7 @@ def _expand_platform_vars(
     platform = _effective_platform(docs)
     label = PLATFORM_LABELS.get(platform, platform.title())
     repo_url = docs.source_repo_url or ""
-    badge_assets_dir = docs.badge_assets_dir
-    if root is not None and target_path is not None and docs.badge_style == "svg":
-        assets_path = Path(docs.badge_assets_dir)
-        if not assets_path.is_absolute():
-            assets_path = (root / assets_path).resolve()
-        badge_assets_dir = os.path.relpath(assets_path, start=target_path.parent.resolve()).replace(
-            "\\", "/"
-        )
+    badge_assets_dir = _badge_assets_dir_for_target(docs, root=root, target_path=target_path)
 
     if "{platform_badge}" in content or "{platform_badge_inline}" in content:
         badge_linked = render_badge(

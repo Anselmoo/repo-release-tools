@@ -170,14 +170,25 @@ def test_make_badge_svg_unknown_platform() -> None:
     assert "Mygit" in svg
 
 
+def test_make_badge_svg_special_chars_label() -> None:
+    import xml.etree.ElementTree as ET
+
+    svg = make_badge_svg("github", label='C&C <repo> "x"')
+    ET.fromstring(svg)
+    assert "C&amp;C &lt;repo&gt; &quot;x&quot;" in svg
+
+
 # ---------------------------------------------------------------------------
 # shields_badge_url
 # ---------------------------------------------------------------------------
 
 
 def test_shields_badge_url_github() -> None:
+    from urllib.parse import urlparse
+
     url = shields_badge_url("github")
-    assert "img.shields.io" in url
+    assert url.startswith("https://img.shields.io/")
+    assert urlparse(url).netloc == "img.shields.io"
     assert "github" in url.lower()
 
 
@@ -193,7 +204,10 @@ def test_shields_badge_url_custom_label() -> None:
 
 
 def test_shields_badge_url_custom_label_special_chars() -> None:
+    from urllib.parse import urlparse
+
     url = shields_badge_url("github", label="C++ #1%")
+    assert urlparse(url).netloc == "img.shields.io"
     assert "C%2B%2B%20%231%25" in url
 
 
@@ -212,7 +226,7 @@ def test_render_badge_svg_style() -> None:
 
 def test_render_badge_shields_style() -> None:
     md = render_badge("gitlab", repo_url="https://gitlab.com/o/r", badge_style="shields")
-    assert "img.shields.io" in md
+    assert md.startswith("[![GitLab](https://img.shields.io/")
     assert "https://gitlab.com/o/r" in md
 
 
