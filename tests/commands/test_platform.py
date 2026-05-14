@@ -38,6 +38,8 @@ from repo_release_tools.tools.platform import (
         ("https://gitea.mycompany.com/owner/repo", "gitea"),
         # Unknown → generic
         ("https://mygit.example.com/owner/repo", "generic"),
+        # Hostname detection should ignore host-like fragments in path/query
+        ("https://example.com/github.com/owner/repo?via=gitlab.com", "generic"),
         ("", "generic"),
     ],
 )
@@ -188,6 +190,11 @@ def test_shields_badge_url_no_logo_for_generic() -> None:
 def test_shields_badge_url_custom_label() -> None:
     url = shields_badge_url("gitlab", label="My GitLab")
     assert "My%20GitLab" in url or "My_GitLab" in url or "My GitLab" in url.replace("%20", " ")
+
+
+def test_shields_badge_url_custom_label_special_chars() -> None:
+    url = shields_badge_url("github", label="C++ #1%")
+    assert "C%2B%2B%20%231%25" in url
 
 
 # ---------------------------------------------------------------------------

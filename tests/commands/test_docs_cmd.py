@@ -837,6 +837,24 @@ class TestPlatformHelpers:
         result = _expand_platform_vars("{platform} - {platform_label}", docs)
         assert "gitlab - GitLab" == result
 
+    def test_expand_platform_vars_svg_badge_uses_target_relative_assets_path(
+        self, tmp_path: Path
+    ) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="svg",
+            badge_assets_dir="docs/assets/badges",
+        )
+        target = tmp_path / "docs" / "commands" / "skill.md"
+        target.parent.mkdir(parents=True)
+        result = _expand_platform_vars(
+            "{platform_badge}",
+            docs,
+            root=tmp_path,
+            target_path=target,
+        )
+        assert "](../assets/badges/github.svg)" in result
+
 
 class TestCmdBadges:
     """Tests for rrt docs badges subcommand."""

@@ -7,6 +7,8 @@ visual variants (color, dark, light).
 
 from __future__ import annotations
 
+from urllib.parse import quote, urlparse
+
 # ---------------------------------------------------------------------------
 # Per-platform source URL templates
 # ---------------------------------------------------------------------------
@@ -92,15 +94,6 @@ def detect_platform(repo_url: str) -> str:
     if not repo_url:
         return "generic"
 
-    url_lower = repo_url.lower()
-
-    for host_fragment, platform in _PLATFORM_HOST_PATTERNS:
-        if host_fragment in url_lower:
-            return platform
-
-    # Self-hosted heuristics based on subdomain or path segment
-    from urllib.parse import urlparse
-
     try:
         parsed = urlparse(repo_url)
         host = parsed.hostname or ""
@@ -108,9 +101,16 @@ def detect_platform(repo_url: str) -> str:
     except ValueError:
         return "generic"
 
-    if host.startswith("gitlab.") or "/gitlab/" in path:
+    host_lower = host.lower()
+    path_lower = path.lower()
+    for host_fragment, platform in _PLATFORM_HOST_PATTERNS:
+        if host_lower == host_fragment or host_lower.endswith(f".{host_fragment}"):
+            return platform
+
+    # Self-hosted heuristics based on subdomain or path segment
+    if host_lower.startswith("gitlab.") or "/gitlab/" in path_lower:
         return "gitlab"
-    if host.startswith("gitea.") or "/gitea/" in path:
+    if host_lower.startswith("gitea.") or "/gitea/" in path_lower:
         return "gitea"
 
     return "generic"
@@ -127,7 +127,7 @@ def shields_badge_url(platform: str, label: str | None = None) -> str:
     color = PLATFORM_COLORS.get(platform, PLATFORM_COLORS["generic"]).lstrip("#")
     logo = _SHIELDS_LOGO.get(platform)
 
-    slug = display.replace(" ", "%20")
+    slug = quote(display, safe="")
     url = f"https://img.shields.io/badge/source-{slug}-{color}"
     if logo:
         url += f"?logo={logo}&logoColor=white"

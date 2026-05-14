@@ -69,6 +69,7 @@ rrt docs check                             # exits 1 if lock is stale
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -310,20 +311,34 @@ def _effective_source_url_template(docs: DocsConfig, platform: str) -> str:
     return PLATFORM_URL_TEMPLATES.get(platform, PLATFORM_URL_TEMPLATES["generic"])
 
 
-def _expand_platform_vars(content: str, docs: DocsConfig) -> str:
+def _expand_platform_vars(
+    content: str,
+    docs: DocsConfig,
+    *,
+    root: Path | None = None,
+    target_path: Path | None = None,
+) -> str:
     """Expand {platform}, {platform_label}, {platform_badge}, {platform_badge_inline}."""
     from repo_release_tools.tools.platform import PLATFORM_LABELS  # noqa: PLC0415
 
     platform = _effective_platform(docs)
     label = PLATFORM_LABELS.get(platform, platform.title())
     repo_url = docs.source_repo_url or ""
+    badge_assets_dir = docs.badge_assets_dir
+    if root is not None and target_path is not None and docs.badge_style == "svg":
+        assets_path = Path(docs.badge_assets_dir)
+        if not assets_path.is_absolute():
+            assets_path = (root / assets_path).resolve()
+        badge_assets_dir = os.path.relpath(assets_path, start=target_path.parent.resolve()).replace(
+            "\\", "/"
+        )
 
     if "{platform_badge}" in content or "{platform_badge_inline}" in content:
         badge_linked = render_badge(
             platform,
             repo_url=repo_url,
             badge_style=docs.badge_style,
-            badge_assets_dir=docs.badge_assets_dir,
+            badge_assets_dir=badge_assets_dir,
             badge_variant=docs.badge_variant,
             label=label,
             linked=True,
@@ -332,7 +347,7 @@ def _expand_platform_vars(content: str, docs: DocsConfig) -> str:
             platform,
             repo_url=repo_url,
             badge_style=docs.badge_style,
-            badge_assets_dir=docs.badge_assets_dir,
+            badge_assets_dir=badge_assets_dir,
             badge_variant=docs.badge_variant,
             label=label,
             linked=False,
@@ -384,8 +399,6 @@ def _cmd_inject(args: argparse.Namespace) -> int:
 
             content = content.replace("{version}", rrt_version)
             content = content.replace("{repo_url}", repo_url)
-            if cfg.docs:
-                content = _expand_platform_vars(content, cfg.docs)
 
             matched = sorted({p for pattern in block.targets for p in root.glob(pattern)})
             if not matched:
@@ -393,12 +406,20 @@ def _cmd_inject(args: argparse.Namespace) -> int:
                 continue
 
             for target_path in matched:
+                rendered_content = content
+                if cfg.docs:
+                    rendered_content = _expand_platform_vars(
+                        rendered_content,
+                        cfg.docs,
+                        root=root,
+                        target_path=target_path,
+                    )
                 if add_anchors:
                     _prepend_anchor_if_missing(target_path, block.anchor_id)
                 exit_code = max(
                     exit_code,
                     apply_generated_docs(
-                        content,
+                        rendered_content,
                         output_path=target_path,
                         check=check,
                         write=not check,
