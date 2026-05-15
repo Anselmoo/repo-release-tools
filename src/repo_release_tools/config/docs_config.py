@@ -1,4 +1,19 @@
-"""Docs and EOL config parsing helpers for rrt."""
+"""Configuration loaders for the ``rrt docs`` and ``rrt eol`` sub-systems.
+
+Parses the ``[tool.rrt.docs]`` and ``[tool.rrt.eol]`` tables from project
+config (``pyproject.toml``, ``Cargo.toml``, ``package.json``, or ``.rrt.toml``)
+and returns typed ``DocsConfig`` and ``EolConfig`` dataclasses.
+
+## Validation rules
+
+- ``extraction_mode`` — one of ``explicit``, ``implicit``, ``both``.
+- ``languages`` — subset of the supported slugs: ``python``, ``ts``, ``js``,
+  ``go``, ``rust``, ``bash``, ``fish``, ``powershell``.
+- ``formats`` — subset of ``md``, ``txt``, ``rich``, ``clipboard``,
+  ``json``, ``toml``.
+- ``shared_blocks`` — inline content only; template-backed blocks are
+  rejected with a ``ValueError``.
+"""
 
 from __future__ import annotations
 
@@ -140,7 +155,7 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
 
 
 _VALID_EXTRACTION_MODES = ("explicit", "implicit", "both")
-_VALID_LANGUAGES = ("python", "ts", "js", "go", "rust", "bash", "powershell")
+_VALID_LANGUAGES = ("python", "ts", "js", "go", "rust", "bash", "fish", "powershell")
 _VALID_FORMATS = ("md", "txt", "rich", "clipboard", "json", "toml")
 
 

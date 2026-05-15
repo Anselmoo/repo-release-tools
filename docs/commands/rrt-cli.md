@@ -994,7 +994,7 @@ Examples
 Usage:  rrt docs [OPTIONS] <docs_action>
 
 Scan source files and extract inline documentation blocks
-across Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell.
+across Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, Fish, and PowerShell.
 
 Sub-actions: generate (default), check, publish, inject, suggest, api
 

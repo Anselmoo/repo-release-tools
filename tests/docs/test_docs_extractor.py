@@ -864,7 +864,7 @@ class TestPowerShellExtraction:
 
 
 class TestDocsConfigLanguageValidation:
-    """Confirm that bash and powershell are accepted as valid language values."""
+    """Confirm that bash, fish, and powershell are accepted as valid language values."""
 
     def test_bash_accepted_in_config(self) -> None:
         """DocsConfig should accept 'bash' as a language."""
@@ -887,10 +887,11 @@ class TestDocsConfigLanguageValidation:
         assert "powershell" in cfg.languages
 
     def test_bash_and_powershell_in_valid_languages_constant(self) -> None:
-        """Both slugs should appear in _VALID_LANGUAGES exported from docs_config."""
+        """bash, fish, and powershell should appear in _VALID_LANGUAGES."""
         from repo_release_tools.config.docs_config import _VALID_LANGUAGES
 
         assert "bash" in _VALID_LANGUAGES
+        assert "fish" in _VALID_LANGUAGES
         assert "powershell" in _VALID_LANGUAGES
 
     def test_invalid_language_rejected(self) -> None:
@@ -1009,4 +1010,207 @@ class TestExtractorCoverageGaps:
         assert len(baz_entries) == 1
         # Should use the # comment, not the <# block #>
         assert "Hash doc for Get-Baz." in baz_entries[0].content
+
+
+class TestFishExtraction:
+    """Tests for Fish shell doc extraction."""
+
+    # ── lang_for_path ──────────────────────────────────────────────────────
+
+    def test_lang_for_path_fish(self) -> None:
+        """Should return 'fish' for .fish files."""
+        assert lang_for_path(Path("functions.fish")) == "fish"
+
+    # ── implicit: script header ────────────────────────────────────────────
+
+    def test_fish_implicit_script_header(self, tmp_path: Path) -> None:
+        """## header lines at top of file should be extracted as 'script' entry."""
+        fish_file = tmp_path / "funcs.fish"
+        fish_file.write_text(
+            "#!/usr/bin/env fish\n## A Fish utility.\n## Does stuff.\n\nfunction hello\n    echo hi\nend\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(fish_file, config, relative_to=tmp_path)
+        script_entries = [e for e in entries if e.name == "script"]
+        assert len(script_entries) == 1
+        assert "A Fish utility." in script_entries[0].content
+        assert script_entries[0].lang == "fish"
+
+    def test_fish_implicit_header_without_shebang(self, tmp_path: Path) -> None:
+        """## header block without shebang should still be extracted."""
+        fish_file = tmp_path / "lib.fish"
+        fish_file.write_text("## Fish library.\n\nfunction helper\n    true\nend\n")
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(fish_file, config, relative_to=tmp_path)
+        assert any(e.name == "script" for e in entries)
+
+    # ── implicit: function comments ────────────────────────────────────────
+
+    def test_fish_implicit_function_comments(self, tmp_path: Path) -> None:
+        """# comment lines before function declaration should be extracted."""
+        fish_file = tmp_path / "greet.fish"
+        fish_file.write_text(
+            "# Greet a user.\n"
+            "# Accepts one argument: the name.\n"
+            "function greet\n"
+            "    echo \"Hello $argv[1]\"\n"
+            "end\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(fish_file, config, relative_to=tmp_path)
+        func_entries = [e for e in entries if e.name == "greet"]
+        assert len(func_entries) == 1
+        assert "Greet a user." in func_entries[0].content
+        assert "Accepts one argument" in func_entries[0].content
+        assert func_entries[0].lang == "fish"
+
+    def test_fish_implicit_hyphenated_function_name(self, tmp_path: Path) -> None:
+        """Hyphenated Fish function names (fish-style) should be extracted."""
+        fish_file = tmp_path / "utils.fish"
+        fish_file.write_text(
+            "# Install a package.\n"
+            "function __fish-pkg-install\n"
+            "    true\n"
+            "end\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(fish_file, config, relative_to=tmp_path)
+        assert any("fish-pkg-install" in e.name for e in entries)
+
+    def test_fish_implicit_multiple_functions(self, tmp_path: Path) -> None:
+        """Multiple commented functions should each produce their own entry."""
+        fish_file = tmp_path / "multi.fish"
+        fish_file.write_text(
+            "# Say hello.\n"
+            "function say-hello\n"
+            "    echo hello\n"
+            "end\n"
+            "\n"
+            "# Say goodbye.\n"
+            "function say-bye\n"
+            "    echo bye\n"
+            "end\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(fish_file, config, relative_to=tmp_path)
+        names = [e.name for e in entries]
+        assert "say-hello" in names
+        assert "say-bye" in names
+
+    def test_fish_implicit_no_doc_no_entry(self, tmp_path: Path) -> None:
+        """Functions without preceding comments should not produce entries."""
+        fish_file = tmp_path / "nodoc.fish"
+        fish_file.write_text("function undocumented\n    true\nend\n")
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(fish_file, config, relative_to=tmp_path)
+        assert all(e.name != "undocumented" for e in entries)
+
+    # ── explicit extraction ────────────────────────────────────────────────
+
+    def test_fish_explicit_hash_marker(self, tmp_path: Path) -> None:
+        """# sym: NAME marker should extract the following # comment lines."""
+        fish_file = tmp_path / "deploy.fish"
+        fish_file.write_text(
+            "# sym: deploy\n"
+            "# Deploy the application to production.\n"
+            "# Reads DEPLOY_TARGET from environment.\n"
+            "function deploy\n"
+            "    true\n"
+            "end\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(fish_file, config, relative_to=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].name == "deploy"
+        assert "Deploy the application" in entries[0].content
+        assert entries[0].lang == "fish"
+
+    def test_fish_explicit_blank_line_stops_collection(self, tmp_path: Path) -> None:
+        """A blank line after # comment lines should stop collection."""
+        fish_file = tmp_path / "script.fish"
+        fish_file.write_text(
+            "# sym: myfunc\n# First line.\n\n# Should NOT be part of the doc.\nfunction myfunc\n    true\nend\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(fish_file, config, relative_to=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].content == "First line."
+
+    # ── config validation ──────────────────────────────────────────────────
+
+    def test_fish_accepted_in_config(self) -> None:
+        """DocsConfig should accept 'fish' as a language value."""
+        cfg = DocsConfig(
+            extraction_mode="explicit",
+            languages=("fish",),
+            src_dir=".",
+            formats=("json",),
+        )
+        assert "fish" in cfg.languages
+
+    def test_fish_in_valid_languages_constant(self) -> None:
+        """'fish' should appear in _VALID_LANGUAGES."""
+        from repo_release_tools.config.docs_config import _VALID_LANGUAGES
+
+        assert "fish" in _VALID_LANGUAGES
+
+    # ── from_dir integration ───────────────────────────────────────────────
+
+    def test_fish_from_dir(self, tmp_path: Path) -> None:
+        """extract_docs_from_dir should pick up .fish files when fish is in languages."""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "deploy.fish").write_text(
+            "# sym: deploy\n# Deploy the app.\nfunction deploy\n    true\nend\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("fish",),
+            src_dir="src",
+            formats=("json",),
+        )
+        entries = extract_docs_from_dir(tmp_path, config)
+        assert len(entries) == 1
+        assert entries[0].name == "deploy"
+        assert entries[0].lang == "fish"
 

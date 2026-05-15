@@ -3,7 +3,7 @@
 ## Overview
 
 `rrt docs` extracts inline documentation blocks from source files across
-Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell using
+Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, Fish, and PowerShell using
 static regex analysis.  No runtime AST parsers are required.
 
 ## Sub-actions
@@ -19,7 +19,7 @@ rrt docs generate --format json
 rrt docs generate --format toml   # writes .rrt/docs.lock.toml
 rrt docs suggest
 rrt docs generate --lang python,go
-rrt docs generate --lang bash,powershell
+rrt docs generate --lang bash,fish,powershell
 rrt docs generate --dry-run
 ```
 
@@ -68,6 +68,7 @@ Controlled by `[tool.rrt.docs] extraction_mode` in config:
 | go          | .go                      |
 | rust        | .rs                      |
 | bash        | .sh, .bash, .zsh         |
+| fish        | .fish                    |
 | powershell  | .ps1, .psm1, .psd1       |
 
 ## Lockfile

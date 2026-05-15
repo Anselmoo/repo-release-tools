@@ -1,13 +1,30 @@
 """Multi-language doc extraction engine for rrt docs.
 
 Supports extracting named documentation blocks from source files across
-Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell using
-static regex analysis — no runtime AST parsers required.
+Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, Fish, and PowerShell
+using static regex analysis — no runtime AST parsers required.
 
-Extraction modes (configured via DocsConfig.extraction_mode):
-  explicit  — only grab blocks preceded by a ``# sym: NAME`` marker
-  implicit  — only grab language-native docstrings / comment blocks
-  both      — explicit markers take priority; fall back to implicit
+## Extraction modes
+
+Configured via ``DocsConfig.extraction_mode``:
+
+- ``explicit`` — only grab blocks preceded by a ``# sym: NAME``
+  (or language-equivalent) marker.
+- ``implicit`` — only grab language-native docstrings / comment blocks.
+- ``both`` — explicit markers take priority; fall back to implicit.
+
+## Supported languages
+
+| Slug        | Extensions               | Implicit convention                     |
+|-------------|--------------------------|------------------------------------------|
+| python      | .py                      | Triple-quoted string docstrings          |
+| ts          | .ts, .tsx                | JSDoc ``/** … */`` blocks                |
+| js          | .js, .mjs, .cjs, .jsx    | JSDoc ``/** … */`` blocks                |
+| go          | .go                      | ``//`` comment blocks before declarations|
+| rust        | .rs                      | ``///`` doc-comment blocks               |
+| bash        | .sh, .bash, .zsh         | ``##`` file header; ``#`` before ``func``|
+| fish        | .fish                    | ``##`` file header; ``#`` before ``function``|
+| powershell  | .ps1, .psm1, .psd1       | ``<# … #>`` comment-based help blocks   |
 """
 
 from __future__ import annotations
@@ -61,6 +78,7 @@ _LANG_EXTENSIONS: dict[str, tuple[str, ...]] = {
     "go": (".go",),
     "rust": (".rs",),
     "bash": (".sh", ".bash", ".zsh"),
+    "fish": (".fish",),
     "powershell": (".ps1", ".psm1", ".psd1"),
 }
 
@@ -93,6 +111,8 @@ _EXPLICIT_PATTERNS: dict[str, re.Pattern[str]] = {
     "rust": re.compile(r"^[ \t]*//\s*sym:\s*(\w+)\s*$", re.MULTILINE),
     # Bash/Zsh: # sym: NAME  (same as Python single-line comment)
     "bash": re.compile(r"^[ \t]*#\s*sym:\s*(\w+)\s*$", re.MULTILINE),
+    # Fish: # sym: NAME  (Fish uses # for all comments)
+    "fish": re.compile(r"^[ \t]*#\s*sym:\s*(\w+)\s*$", re.MULTILINE),
     # PowerShell: # sym: NAME  OR  <# sym: NAME #>
     "powershell": re.compile(
         r"^[ \t]*(?:#\s*sym:\s*(\w+)|<#\s*sym:\s*(\w+)\s*#>)\s*$", re.MULTILINE
@@ -267,68 +287,69 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
 
         content: str | None = None
 
-        if lang == "python":
-            # Find the next triple-quoted string assignment
-            string_m = _PY_STRING_AFTER_MARKER.search(remainder)
-            if string_m:
-                content = (string_m.group(1) or string_m.group(2) or "").strip()
-        elif lang == "bash":
-            # Bash: collect consecutive comment lines after marker
-            comment_lines: list[str] = []
-            for raw_line in remainder.splitlines():
-                stripped = raw_line.strip()
-                if stripped.startswith("#"):
-                    comment_lines.append(re.sub(r"^[ \t]*#+\s?", "", raw_line).rstrip())
-                elif stripped == "":
-                    if comment_lines:
-                        break
-                else:
-                    break
-            if comment_lines:
-                content = "\n".join(comment_lines).strip()
-        elif lang == "powershell":
-            # PowerShell: next block may be <# ... #> (non-nested) or # comment lines
-            ps_block_m = re.match(r"\s*<#((?:[^#]|#(?!>))*)#>", remainder)
-            if ps_block_m:
-                content = ps_block_m.group(1).strip()
-            else:
-                ps_lines: list[str] = []
+        match lang:
+            case "python":
+                # Find the next triple-quoted string assignment
+                string_m = _PY_STRING_AFTER_MARKER.search(remainder)
+                if string_m:
+                    content = (string_m.group(1) or string_m.group(2) or "").strip()
+            case "bash" | "fish":
+                # Bash/Fish: collect consecutive # comment lines after marker
+                comment_lines: list[str] = []
                 for raw_line in remainder.splitlines():
                     stripped = raw_line.strip()
                     if stripped.startswith("#"):
-                        ps_lines.append(re.sub(r"^[ \t]*#+\s?", "", raw_line).rstrip())
+                        comment_lines.append(re.sub(r"^[ \t]*#+\s?", "", raw_line).rstrip())
                     elif stripped == "":
-                        if ps_lines:
+                        if comment_lines:
                             break
                     else:
                         break
-                if ps_lines:
-                    content = "\n".join(ps_lines).strip()
-        else:
-            # JS/TS/Go/Rust: next line may be the doc or assignment
-            # Look for a string literal or comment block immediately after
-            # Try: JS/TS string assignment
-            str_m = re.match(
-                r"\s*(?:export\s+)?(?:const|let|var)\s+\w+\s*[:=][^=][^\n]*?"
-                r'(?:`([\s\S]*?)`|"([\s\S]*?)"|\'([\s\S]*?)\')',
-                remainder,
-            )
-            if str_m:
-                content = (str_m.group(1) or str_m.group(2) or str_m.group(3) or "").strip()
-            else:
-                # Go/Rust: collect comment lines until blank/code
-                slash_lines: list[str] = []
-                for raw_line in remainder.splitlines():
-                    stripped = raw_line.strip()
-                    if stripped.startswith("//"):
-                        slash_lines.append(re.sub(r"^[ \t]*(?:///|//)\s?", "", raw_line).rstrip())
-                    elif stripped == "":
-                        if slash_lines:
+                if comment_lines:
+                    content = "\n".join(comment_lines).strip()
+            case "powershell":
+                # PowerShell: next block may be <# ... #> (non-nested) or # comment lines
+                ps_block_m = re.match(r"\s*<#((?:[^#]|#(?!>))*)#>", remainder)
+                if ps_block_m:
+                    content = ps_block_m.group(1).strip()
+                else:
+                    ps_lines: list[str] = []
+                    for raw_line in remainder.splitlines():
+                        stripped = raw_line.strip()
+                        if stripped.startswith("#"):
+                            ps_lines.append(re.sub(r"^[ \t]*#+\s?", "", raw_line).rstrip())
+                        elif stripped == "":
+                            if ps_lines:
+                                break
+                        else:
                             break
-                    else:
-                        break
-                if slash_lines:
-                    content = "\n".join(slash_lines).strip()
+                    if ps_lines:
+                        content = "\n".join(ps_lines).strip()
+            case _:
+                # JS/TS/Go/Rust: next line may be a string assignment or // comment block
+                str_m = re.match(
+                    r"\s*(?:export\s+)?(?:const|let|var)\s+\w+\s*[:=][^=][^\n]*?"
+                    r'(?:`([\s\S]*?)`|"([\s\S]*?)"|\'([\s\S]*?)\')',
+                    remainder,
+                )
+                if str_m:
+                    content = (str_m.group(1) or str_m.group(2) or str_m.group(3) or "").strip()
+                else:
+                    # Go/Rust: collect // comment lines until blank/code
+                    slash_lines: list[str] = []
+                    for raw_line in remainder.splitlines():
+                        stripped = raw_line.strip()
+                        if stripped.startswith("//"):
+                            slash_lines.append(
+                                re.sub(r"^[ \t]*(?:///|//)\s?", "", raw_line).rstrip()
+                            )
+                        elif stripped == "":
+                            if slash_lines:
+                                break
+                        else:
+                            break
+                    if slash_lines:
+                        content = "\n".join(slash_lines).strip()
 
         if content:
             entries.append(
@@ -457,6 +478,74 @@ def _extract_bash_implicit(source: str, source_file: str) -> list[DocEntry]:
                 DocEntry(
                     name=func_name,
                     lang="bash",
+                    content=content,
+                    source_file=source_file,
+                    line=line,
+                    hash=hash_content(content),
+                ),
+            )
+    return entries
+
+
+# ---------------------------------------------------------------------------
+# Fish shell implicit extraction
+# ---------------------------------------------------------------------------
+
+
+def _extract_fish_implicit(source: str, source_file: str) -> list[DocEntry]:
+    """Extract Fish shell doc comment blocks (implicit mode).
+
+    Fish functions are declared as ``function name`` (no braces, terminated
+    by ``end``).  Two kinds of blocks are extracted:
+
+    1. **Script header** — ``##`` comment block at the very top of the file
+       (after an optional shebang line).  The block must start with ``##``.
+    2. **Function comments** — consecutive ``#`` comment lines immediately
+       preceding a ``function name`` declaration.
+    """
+    entries: list[DocEntry] = []
+
+    # --- Script-level header: consecutive ## lines at file top ---------------
+    lines = source.splitlines()
+    start_idx = 1 if lines and lines[0].startswith("#!") else 0
+
+    header_lines: list[str] = []
+    for line in lines[start_idx:]:
+        stripped = line.strip()
+        if stripped.startswith("##"):
+            header_lines.append(re.sub(r"^[ \t]*#{2,}\s?", "", line).rstrip())
+        else:
+            break
+    if header_lines:
+        content = "\n".join(header_lines).strip()
+        if content:
+            entries.append(
+                DocEntry(
+                    name="script",
+                    lang="fish",
+                    content=content,
+                    source_file=source_file,
+                    line=start_idx + 1,
+                    hash=hash_content(content),
+                ),
+            )
+
+    # --- Function-level comments: # lines immediately before `function name` -
+    # Fish function syntax: `function name [--options ...]`  (no braces)
+    for m in re.finditer(
+        r"((?:^[ \t]*#[^\n]*\n)+)[ \t]*function\s+([\w\-]+)",
+        source,
+        re.MULTILINE,
+    ):
+        raw = m.group(1)
+        func_name = m.group(2)
+        content = re.sub(r"^[ \t]*#+\s?", "", raw, flags=re.MULTILINE).strip()
+        if content:
+            line = source[: m.start()].count("\n") + 1
+            entries.append(
+                DocEntry(
+                    name=func_name,
+                    lang="fish",
                     content=content,
                     source_file=source_file,
                     line=line,
@@ -613,24 +702,28 @@ def extract_docs(
             _add(e)
 
     if mode in ("implicit", "both"):
-        if lang == "python":
-            for e in _extract_python_implicit(source, source_file):
-                _add(e)
-        elif lang in ("ts", "js"):
-            for e in _extract_ts_js_implicit(source, source_file, lang):
-                _add(e)
-        elif lang == "go":
-            for e in _extract_go_implicit(source, source_file):
-                _add(e)
-        elif lang == "rust":
-            for e in _extract_rust_implicit(source, source_file):
-                _add(e)
-        elif lang == "bash":
-            for e in _extract_bash_implicit(source, source_file):
-                _add(e)
-        elif lang == "powershell":
-            for e in _extract_powershell_implicit(source, source_file):
-                _add(e)
+        match lang:
+            case "python":
+                for e in _extract_python_implicit(source, source_file):
+                    _add(e)
+            case "ts" | "js":
+                for e in _extract_ts_js_implicit(source, source_file, lang):
+                    _add(e)
+            case "go":
+                for e in _extract_go_implicit(source, source_file):
+                    _add(e)
+            case "rust":
+                for e in _extract_rust_implicit(source, source_file):
+                    _add(e)
+            case "bash":
+                for e in _extract_bash_implicit(source, source_file):
+                    _add(e)
+            case "fish":
+                for e in _extract_fish_implicit(source, source_file):
+                    _add(e)
+            case "powershell":
+                for e in _extract_powershell_implicit(source, source_file):
+                    _add(e)
 
     return entries
 
