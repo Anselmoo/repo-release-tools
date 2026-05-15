@@ -105,7 +105,7 @@ def load_hooks(root: Path | None = None) -> dict[str, str]:
 
     try:
         raw = yaml.safe_load(hook_file.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
+    except (yaml.YAMLError, OSError):
         return {}
 
     if not isinstance(raw, list):

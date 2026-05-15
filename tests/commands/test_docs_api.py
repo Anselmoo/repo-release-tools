@@ -128,15 +128,15 @@ class TestLoadHooks:
     def test_load_hooks_yaml_parse_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Should return empty dict when yaml.safe_load raises (lines 108-109)."""
+        """Should return empty dict when yaml.safe_load raises YAMLError (lines 108-109)."""
         import yaml
 
         (tmp_path / ".pre-commit-hooks.yaml").write_text("- id: hook1\n", encoding="utf-8")
-        # Patch yaml.safe_load to raise so the except block (line 108-109) is hit
+        # Patch yaml.safe_load to raise YAMLError so the except block (line 108-109) is hit
         monkeypatch.setattr(
             yaml,
             "safe_load",
-            lambda *a, **kw: (_ for _ in ()).throw(Exception("parse failed")),
+            lambda *a, **kw: (_ for _ in ()).throw(yaml.YAMLError("parse failed")),
         )
         hooks = load_hooks(tmp_path)
         assert hooks == {}
@@ -346,6 +346,19 @@ class TestRenderApiJson:
 # ---------------------------------------------------------------------------
 
 
+def _extract_json_from_output(output: str) -> list[object]:
+    """Extract and parse the JSON array from styled stdout output.
+
+    DryRunPrinter writes a styled header/footer to the same stdout stream as
+    the machine-readable JSON body.  This helper strips the surrounding noise
+    by finding the outermost ``[…]`` span.
+    """
+    json_start = output.find("[")
+    json_end = output.rfind("]") + 1
+    assert json_start >= 0, "No '[' found in stdout; JSON not written"
+    return json.loads(output[json_start:json_end])  # type: ignore[return-value]
+
+
 class TestCmdApi:
     """Integration tests for the rrt docs api sub-action."""
 
@@ -378,11 +391,7 @@ class TestCmdApi:
         rc = _cmd_api(args)
         assert rc == 0
         out = capsys.readouterr().out
-        # Extract just the JSON array from output — styled header/footer may surround it
-        json_start = out.find("[")
-        json_end = out.rfind("]") + 1
-        assert json_start >= 0, "No '[' found in stdout; JSON not written"
-        parsed = json.loads(out[json_start:json_end])
+        parsed = _extract_json_from_output(out)
         assert isinstance(parsed, list)
         assert len(parsed) > 0
 
@@ -443,10 +452,7 @@ class TestCmdApi:
         rc = cmd_docs(args)
         assert rc == 0
         out = capsys.readouterr().out
-        json_start = out.find("[")
-        json_end = out.rfind("]") + 1
-        assert json_start >= 0, "No '[' found in stdout; JSON not written"
-        parsed = json.loads(out[json_start:json_end])
+        parsed = _extract_json_from_output(out)
         assert isinstance(parsed, list)
 
     def test_cmd_api_relative_output_path(self, tmp_path: Path) -> None:

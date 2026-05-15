@@ -256,8 +256,13 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
     entries: list[DocEntry] = []
 
     for m in pattern.finditer(source):
-        # PowerShell pattern has two capture groups; try group 1 then group 2
-        name = m.group(1) or (m.group(2) if m.lastindex and m.lastindex >= 2 else None)
+        # PowerShell pattern has two capture groups (# sym: NAME and <# sym: NAME #>).
+        # One of the two alternations must match, so at least one group is set.
+        # group(1) covers '#' style; group(2) covers '<#' style.
+        if m.lastindex and m.lastindex >= 2:
+            name = m.group(1) or m.group(2)
+        else:
+            name = m.group(1)
         if not name:  # pragma: no cover — regex requires a capture group to match
             continue
         marker_end = m.end()
@@ -483,7 +488,10 @@ def _extract_powershell_implicit(source: str, source_file: str) -> list[DocEntry
     entries: list[DocEntry] = []
 
     # Pattern for a single <# ... #> block (no crossing of #> boundaries).
-    # (?:[^#]|#(?!>))* matches chars that don't close the block.
+    # (?:[^#]|#(?!>))* matches any character except an unescaped block close:
+    #   - [^#]   → any non-hash character
+    #   - #(?!>) → a hash that is NOT followed by '>' (avoids prematurely closing)
+    # This prevents the regex from spanning multiple <# ... #> blocks.
     _ps_block_re = re.compile(r"<#((?:[^#]|#(?!>))*)#>", re.MULTILINE)
 
     # Build a position-indexed list of all block matches for quick lookup
