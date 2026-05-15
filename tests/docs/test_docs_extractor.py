@@ -716,10 +716,15 @@ class TestPowerShellExtraction:
     # ── implicit extraction ────────────────────────────────────────────────
 
     def test_powershell_implicit_module_block(self, tmp_path: Path) -> None:
-        """A <# ... #> block at the top of the file should become a 'module' entry."""
+        """A <# ... #> block separated from the first function should become a 'module' entry."""
         ps_file = tmp_path / "script.ps1"
+        # Module-level block is followed by non-function code before the first function,
+        # so it is NOT immediately adjacent to the function declaration.
         ps_file.write_text(
             "<#\n.SYNOPSIS\nScript synopsis.\n.DESCRIPTION\nLong description.\n#>\n"
+            "\n"
+            "Set-Variable -Name 'MyVar' -Value 'hello'\n"
+            "\n"
             "function Invoke-Something { }\n"
         )
         config = DocsConfig(
@@ -733,6 +738,26 @@ class TestPowerShellExtraction:
         mod = next(e for e in entries if e.name == "module")
         assert ".SYNOPSIS" in mod.content
         assert mod.lang == "powershell"
+
+    def test_powershell_implicit_function_adjacent_block_not_module(
+        self, tmp_path: Path
+    ) -> None:
+        """A <# ... #> block immediately before the first (and only) function is NOT module-level."""
+        ps_file = tmp_path / "onefunc.ps1"
+        ps_file.write_text(
+            "<#\n.SYNOPSIS\nGreet a user.\n#>\n"
+            "function Invoke-Greet { }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        # Block is immediately adjacent to the function → only a function entry, no module
+        assert not any(e.name == "module" for e in entries)
+        assert any(e.name == "Invoke-Greet" for e in entries)
 
     def test_powershell_implicit_function_block(self, tmp_path: Path) -> None:
         """A <# ... #> block immediately before a function should be extracted."""

@@ -88,15 +88,14 @@ def load_hooks(root: Path | None = None) -> dict[str, str]:
 
     Reads ``.pre-commit-hooks.yaml`` from *root* (or CWD when *root* is
     ``None``).  Returns an empty dict when the file is absent or cannot be
-    parsed.
+    read.
 
     The return value maps the ``entry`` field (e.g. ``"rrt-hooks pre-commit"``)
     to the hook ``id`` (e.g. ``"rrt-branch-name"``).
+
+    Implemented as a lightweight regex parser — no PyYAML dependency required.
     """
-    try:
-        import yaml  # type: ignore[import-untyped]
-    except ImportError:  # pragma: no cover
-        return {}
+    import re as _re  # noqa: PLC0415
 
     search_root = root or Path(".")
     hook_file = search_root / ".pre-commit-hooks.yaml"
@@ -104,29 +103,45 @@ def load_hooks(root: Path | None = None) -> dict[str, str]:
         return {}
 
     try:
-        raw = yaml.safe_load(hook_file.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError):
-        return {}
-
-    if not isinstance(raw, list):
+        text = hook_file.read_text(encoding="utf-8")
+    except OSError:
         return {}
 
     result: dict[str, str] = {}
-    for item in raw:
-        if isinstance(item, dict):
-            entry = item.get("entry", "")
-            hook_id = item.get("id", "")
-            if entry and hook_id:
-                result[str(entry)] = str(hook_id)
+
+    # Each hook item starts with "- id: <id>"; find all such markers.
+    id_re = _re.compile(r"^- id:\s*(\S+)", _re.MULTILINE)
+    entry_re = _re.compile(r"^\s+entry:\s*(.+)$", _re.MULTILINE)
+
+    id_matches = list(id_re.finditer(text))
+    for i, m in enumerate(id_matches):
+        hook_id = m.group(1)
+        block_end = id_matches[i + 1].start() if i + 1 < len(id_matches) else len(text)
+        block = text[m.start() : block_end]
+        entry_m = entry_re.search(block)
+        if entry_m:
+            result[entry_m.group(1).strip()] = hook_id
+
     return result
 
 
 def _hook_id_for(name: str, hook_map: dict[str, str]) -> str | None:
-    """Return the pre-commit hook id whose entry matches *name*."""
-    for entry, hid in hook_map.items():
-        parts = entry.split()
-        if name in parts:
-            return hid
+    """Return a hook id by normalizing the full CLI command name to a slug.
+
+    *name* (e.g. ``"rrt docs check"``) is lowercased and spaces replaced with
+    hyphens to form a slug (``"rrt-docs-check"``).  The hook id table is then
+    searched for:
+
+    1. An exact match (``"rrt-docs-check"`` == ``"rrt-docs-check"``).
+    2. A prefix match  (``"rrt-branch"`` matches ``"rrt-branch-name"``).
+    """
+    slug = name.lower().replace(" ", "-")
+    hook_ids = set(hook_map.values())
+    if slug in hook_ids:
+        return slug
+    for hook_id in hook_ids:
+        if hook_id.startswith(slug + "-"):
+            return hook_id
     return None
 
 
@@ -202,7 +217,7 @@ def build_api_index(
 
     name = _prefix or prog
     args = _collect_args(parser)
-    hook_id = _hook_id_for(prog.split()[-1], hook_map) if prog else None
+    hook_id = _hook_id_for(name, hook_map) if hook_map else None
 
     # Only emit a top-level entry when there is meaningful content
     if description or args:

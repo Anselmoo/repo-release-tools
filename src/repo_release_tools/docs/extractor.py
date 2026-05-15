@@ -109,13 +109,13 @@ _EXPLICIT_PATTERNS: dict[str, re.Pattern[str]] = {
     "js": re.compile(r"^[ \t]*//\s*sym:\s*(\w+)\s*$", re.MULTILINE),
     "go": re.compile(r"^[ \t]*//\s*sym:\s*(\w+)\s*$", re.MULTILINE),
     "rust": re.compile(r"^[ \t]*//\s*sym:\s*(\w+)\s*$", re.MULTILINE),
-    # Bash/Zsh: # sym: NAME  (same as Python single-line comment)
-    "bash": re.compile(r"^[ \t]*#\s*sym:\s*(\w+)\s*$", re.MULTILINE),
-    # Fish: # sym: NAME  (Fish uses # for all comments)
-    "fish": re.compile(r"^[ \t]*#\s*sym:\s*(\w+)\s*$", re.MULTILINE),
-    # PowerShell: # sym: NAME  OR  <# sym: NAME #>
+    # Bash/Zsh: # sym: NAME  (same as Python single-line comment; hyphens allowed)
+    "bash": re.compile(r"^[ \t]*#\s*sym:\s*([\w-]+)\s*$", re.MULTILINE),
+    # Fish: # sym: NAME  (Fish uses # for all comments; hyphens are common in function names)
+    "fish": re.compile(r"^[ \t]*#\s*sym:\s*([\w-]+)\s*$", re.MULTILINE),
+    # PowerShell: # sym: NAME  OR  <# sym: NAME #>  (Verb-Noun style needs hyphens)
     "powershell": re.compile(
-        r"^[ \t]*(?:#\s*sym:\s*(\w+)|<#\s*sym:\s*(\w+)\s*#>)\s*$", re.MULTILINE
+        r"^[ \t]*(?:#\s*sym:\s*([\w-]+)|<#\s*sym:\s*([\w-]+)\s*#>)\s*$", re.MULTILINE
     ),
 }
 
@@ -583,11 +583,17 @@ def _extract_powershell_implicit(source: str, source_file: str) -> list[DocEntry
     blocks = list(_ps_block_re.finditer(source))
 
     # --- Module-level: first block before any function declaration -----------
+    # Only emit as module-level if the block is NOT immediately adjacent to the
+    # first function (a gap-less block is the function's own doc, not the module's).
     first_func_m = re.search(r"(?m)^[ \t]*function\s+\w", source)
     first_func_pos = first_func_m.start() if first_func_m else len(source)
 
     for blk in blocks:
         if blk.start() < first_func_pos:
+            gap = source[blk.end() : first_func_pos]
+            # Block is immediately before the first function → function's doc, not module's
+            if gap.strip() == "":
+                break
             content = blk.group(1).strip()
             if content:
                 line = source[: blk.start()].count("\n") + 1

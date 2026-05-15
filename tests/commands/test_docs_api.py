@@ -125,18 +125,16 @@ class TestLoadHooks:
         # Either finds hooks or empty dict — no exception
         assert isinstance(hooks, dict)
 
-    def test_load_hooks_yaml_parse_error(
+    def test_load_hooks_oserror(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Should return empty dict when yaml.safe_load raises YAMLError (lines 108-109)."""
-        import yaml
-
-        (tmp_path / ".pre-commit-hooks.yaml").write_text("- id: hook1\n", encoding="utf-8")
-        # Patch yaml.safe_load to raise YAMLError so the except block (line 108-109) is hit
+        """Should return empty dict when the hook file cannot be read (OSError)."""
+        hook_file = tmp_path / ".pre-commit-hooks.yaml"
+        hook_file.write_text("- id: hook1\n  entry: rrt-hooks test\n", encoding="utf-8")
+        # Simulate read failure
         monkeypatch.setattr(
-            yaml,
-            "safe_load",
-            lambda *a, **kw: (_ for _ in ()).throw(yaml.YAMLError("parse failed")),
+            "pathlib.Path.read_text",
+            lambda *a, **kw: (_ for _ in ()).throw(OSError("permission denied")),
         )
         hooks = load_hooks(tmp_path)
         assert hooks == {}
@@ -193,12 +191,11 @@ class TestBuildApiIndex:
         parser = argparse.ArgumentParser(prog="rrt branch", description="Branch helper.")
         entries = build_api_index(
             parser,
-            hook_map={"rrt-hooks pre-commit": "rrt-branch-name", "rrt branch": "rrt-branch-check"},
+            hook_map={"rrt-hooks pre-commit": "rrt-branch-name"},
         )
-        # The last word of 'rrt branch' is 'branch', so look for that key
-        matched = [e for e in entries if e.hook_id is not None]
-        # hook_id is resolved by last word of prog; 'branch' should match 'rrt branch'
-        assert any("branch" in e.name or e.hook_id is not None for e in entries)
+        assert len(entries) > 0
+        # "rrt branch" → slug "rrt-branch" → prefix-matches "rrt-branch-name"
+        assert entries[0].hook_id == "rrt-branch-name"
 
     def test_real_rrt_parser_produces_entries(self) -> None:
         """Smoke test: build_api_index on the real rrt parser should return >10 entries."""
@@ -420,7 +417,7 @@ class TestCmdApi:
     def test_cmd_api_dry_run_with_output(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Dry-run mode should not write the file but should print a would_write line."""
+        """Dry-run mode should not write the file and should print a would_write line."""
         from repo_release_tools.commands.docs_cmd import _cmd_api
 
         output_file = tmp_path / "api.md"
@@ -428,6 +425,8 @@ class TestCmdApi:
         rc = _cmd_api(args)
         assert rc == 0
         assert not output_file.exists()
+        out = capsys.readouterr().out
+        assert str(output_file) in out
 
     def test_cmd_api_dry_run_no_output(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Dry-run without --output should still print to stdout."""

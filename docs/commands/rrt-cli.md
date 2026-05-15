@@ -1144,6 +1144,25 @@ Options
   --variant            Generate only one visual variant (default: all three).
 ```
 
+### `rrt docs api`
+
+```text
+Usage:  rrt docs api [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help    Show this message and exit.
+  --format      Output format for the API index (default: md). Choices: md, txt, json.
+  --output FILE Write output to FILE instead of stdout.
+  --root PATH   Project root directory (default: current directory).
+  --dry-run     Print what would be written without writing files.
+```
+
 ## `rrt drift`
 
 ```text

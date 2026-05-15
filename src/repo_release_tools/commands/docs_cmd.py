@@ -123,7 +123,7 @@ from repo_release_tools.ui import DryRunPrinter
 
 DOCS_OVERVIEW = """\
 Extract inline documentation blocks from source files across
-Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell.
+Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, Fish, and PowerShell.
 
 Usage:
   rrt docs generate [--format md|txt|rich|clipboard|json|toml]
@@ -603,7 +603,13 @@ def _cmd_api(args: argparse.Namespace) -> int:
     root = Path(getattr(args, "root", ".")).resolve()
 
     p = DryRunPrinter(dry_run=dry_run)
-    p.header("rrt docs api")
+
+    # When the rendered payload goes directly to stdout, suppress the status
+    # header/footer so callers can safely pipe output (e.g. to `jq`).
+    emit_to_stdout = not output_arg
+
+    if not emit_to_stdout:
+        p.header("rrt docs api")
 
     hook_map = load_hooks(root)
     parser = build_parser()
@@ -634,7 +640,8 @@ def _cmd_api(args: argparse.Namespace) -> int:
     else:
         sys.stdout.write(rendered)
 
-    p.footer("Done.")
+    if not emit_to_stdout:
+        p.footer("Done.")
     return 0
 
 
@@ -701,7 +708,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Extract and manage source-owned documentation blocks.",
         description=(
             "Scan source files and extract inline documentation blocks\n"
-            "across Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell.\n\n"
+            "across Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, Fish, and PowerShell.\n\n"
             "Sub-actions: generate (default), check, publish, inject, suggest, api"
         ),
         epilog=DOCS_EPILOG,
