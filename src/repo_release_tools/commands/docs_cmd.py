@@ -622,7 +622,9 @@ def _cmd_api(args: argparse.Namespace) -> int:
     elif fmt == "json":
         rendered = render_api_json(entries)
     else:
-        p.line(f"Unsupported API format {fmt!r}. Use md, txt, or json.", ok=False, stream=sys.stderr)
+        p.line(
+            f"Unsupported API format {fmt!r}. Use md, txt, or json.", ok=False, stream=sys.stderr
+        )
         return 1
 
     if output_arg and not dry_run:

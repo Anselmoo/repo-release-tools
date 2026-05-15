@@ -590,7 +590,7 @@ class TestBashExtraction:
             "# Greet a user.\n"
             "# Takes one argument.\n"
             "greet() {\n"
-            "    echo \"Hello $1\"\n"
+            '    echo "Hello $1"\n'
             "}\n"
         )
         config = DocsConfig(
@@ -608,12 +608,7 @@ class TestBashExtraction:
     def test_bash_implicit_function_keyword_syntax(self, tmp_path: Path) -> None:
         """function keyword syntax should be matched for implicit extraction."""
         sh_file = tmp_path / "script.sh"
-        sh_file.write_text(
-            "# A helper function.\n"
-            "function _helper {\n"
-            "    echo helper\n"
-            "}\n"
-        )
+        sh_file.write_text("# A helper function.\nfunction _helper {\n    echo helper\n}\n")
         config = DocsConfig(
             extraction_mode="implicit",
             languages=("bash",),
@@ -681,9 +676,7 @@ class TestBashExtraction:
         """extract_docs_from_dir should pick up .sh files when bash is in languages."""
         src = tmp_path / "src"
         src.mkdir()
-        (src / "deploy.sh").write_text(
-            "# sym: deploy\n# Deploy the app.\nfunction deploy { :; }\n"
-        )
+        (src / "deploy.sh").write_text("# sym: deploy\n# Deploy the app.\nfunction deploy { :; }\n")
         config = DocsConfig(
             extraction_mode="explicit",
             languages=("bash",),
@@ -739,15 +732,10 @@ class TestPowerShellExtraction:
         assert ".SYNOPSIS" in mod.content
         assert mod.lang == "powershell"
 
-    def test_powershell_implicit_function_adjacent_block_not_module(
-        self, tmp_path: Path
-    ) -> None:
+    def test_powershell_implicit_function_adjacent_block_not_module(self, tmp_path: Path) -> None:
         """A <# ... #> block immediately before the first (and only) function is NOT module-level."""
         ps_file = tmp_path / "onefunc.ps1"
-        ps_file.write_text(
-            "<#\n.SYNOPSIS\nGreet a user.\n#>\n"
-            "function Invoke-Greet { }\n"
-        )
+        ps_file.write_text("<#\n.SYNOPSIS\nGreet a user.\n#>\nfunction Invoke-Greet { }\n")
         config = DocsConfig(
             extraction_mode="implicit",
             languages=("powershell",),
@@ -766,7 +754,7 @@ class TestPowerShellExtraction:
             "<#\n.SYNOPSIS\nGreet a user.\n.PARAMETER Name\nThe name to greet.\n#>\n"
             "function Invoke-Greet {\n"
             "    param([string]$Name)\n"
-            "    Write-Host \"Hello, $Name\"\n"
+            '    Write-Host "Hello, $Name"\n'
             "}\n"
         )
         config = DocsConfig(
@@ -803,9 +791,7 @@ class TestPowerShellExtraction:
         assert "Gets the current version." in entry.content
         assert "Returns a string." in entry.content
 
-    def test_powershell_implicit_two_functions_with_separate_blocks(
-        self, tmp_path: Path
-    ) -> None:
+    def test_powershell_implicit_two_functions_with_separate_blocks(self, tmp_path: Path) -> None:
         """Each function should be paired with its own preceding <# ... #> block."""
         ps_file = tmp_path / "multi.ps1"
         ps_file.write_text(
@@ -837,9 +823,7 @@ class TestPowerShellExtraction:
     def test_powershell_explicit_hash_marker(self, tmp_path: Path) -> None:
         """# sym: NAME marker should trigger explicit extraction for powershell."""
         ps_file = tmp_path / "script.ps1"
-        ps_file.write_text(
-            "# sym: GetFoo\n# Returns foo.\nfunction Get-Foo { return 'foo' }\n"
-        )
+        ps_file.write_text("# sym: GetFoo\n# Returns foo.\nfunction Get-Foo { return 'foo' }\n")
         config = DocsConfig(
             extraction_mode="explicit",
             languages=("powershell",),
@@ -922,6 +906,7 @@ class TestDocsConfigLanguageValidation:
     def test_invalid_language_rejected(self) -> None:
         """A truly unsupported language slug should raise ValueError via load path."""
         import pytest
+
         from repo_release_tools.config.docs_config import _load_docs_languages
 
         with pytest.raises(ValueError, match="unsupported"):
@@ -969,16 +954,12 @@ class TestExtractorCoverageGaps:
 
     # ── powershell implicit: blank lines near function, non-comment stops ───
 
-    def test_powershell_implicit_blank_line_skipped_before_comments(
-        self, tmp_path: Path
-    ) -> None:
+    def test_powershell_implicit_blank_line_skipped_before_comments(self, tmp_path: Path) -> None:
         """Blank lines between function keyword and preceding comment block
         should be skipped via the continue branch (lines 542-543)."""
         ps_file = tmp_path / "script.ps1"
         # One blank line separates function from the # doc comment
-        ps_file.write_text(
-            "# Docs for Foo.\n\nfunction Get-FooBlank { }\n"
-        )
+        ps_file.write_text("# Docs for Foo.\n\nfunction Get-FooBlank { }\n")
         config = DocsConfig(
             extraction_mode="implicit",
             languages=("powershell",),
@@ -988,15 +969,11 @@ class TestExtractorCoverageGaps:
         entries = extract_docs(ps_file, config, relative_to=tmp_path)
         assert any(e.name == "Get-FooBlank" for e in entries)
 
-    def test_powershell_implicit_non_comment_stops_collection(
-        self, tmp_path: Path
-    ) -> None:
+    def test_powershell_implicit_non_comment_stops_collection(self, tmp_path: Path) -> None:
         """A non-blank, non-comment line before the comment block should stop collection
         (lines 544-545)."""
         ps_file = tmp_path / "script.ps1"
-        ps_file.write_text(
-            "some_code = 1\n# Docs for Bar.\nfunction Get-Bar { }\n"
-        )
+        ps_file.write_text("some_code = 1\n# Docs for Bar.\nfunction Get-Bar { }\n")
         config = DocsConfig(
             extraction_mode="implicit",
             languages=("powershell",),
@@ -1088,7 +1065,7 @@ class TestFishExtraction:
             "# Greet a user.\n"
             "# Accepts one argument: the name.\n"
             "function greet\n"
-            "    echo \"Hello $argv[1]\"\n"
+            '    echo "Hello $argv[1]"\n'
             "end\n"
         )
         config = DocsConfig(
@@ -1107,12 +1084,7 @@ class TestFishExtraction:
     def test_fish_implicit_hyphenated_function_name(self, tmp_path: Path) -> None:
         """Hyphenated Fish function names (fish-style) should be extracted."""
         fish_file = tmp_path / "utils.fish"
-        fish_file.write_text(
-            "# Install a package.\n"
-            "function __fish-pkg-install\n"
-            "    true\n"
-            "end\n"
-        )
+        fish_file.write_text("# Install a package.\nfunction __fish-pkg-install\n    true\nend\n")
         config = DocsConfig(
             extraction_mode="implicit",
             languages=("fish",),
@@ -1238,4 +1210,3 @@ class TestFishExtraction:
         assert len(entries) == 1
         assert entries[0].name == "deploy"
         assert entries[0].lang == "fish"
-

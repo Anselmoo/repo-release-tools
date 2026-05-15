@@ -33,7 +33,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 
 @dataclass
@@ -49,6 +49,27 @@ class ArgInfo:
     choices: list[str] | None
 
 
+class ArgInfoDict(TypedDict):
+    """Serialized shape for :class:`ArgInfo`."""
+
+    flags: list[str]
+    dest: str
+    help: str
+    default: Any
+    required: bool
+    metavar: str | None
+    choices: list[str] | None
+
+
+class ApiEntryDict(TypedDict):
+    """Serialized shape for :class:`ApiEntry`."""
+
+    name: str
+    description: str
+    hook_id: str | None
+    arguments: list[ArgInfoDict]
+
+
 @dataclass
 class ApiEntry:
     """Metadata for a single rrt command (possibly a sub-command)."""
@@ -58,7 +79,7 @@ class ApiEntry:
     arguments: list[ArgInfo] = field(default_factory=list)
     hook_id: str | None = None
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> ApiEntryDict:
         """Serialise to a plain dict suitable for JSON output."""
         return {
             "name": self.name,
@@ -233,8 +254,12 @@ def build_api_index(
     for action in parser._actions:
         if not isinstance(action, argparse._SubParsersAction):
             continue
-        choices: dict[str, argparse.ArgumentParser] = action.choices or {}
-        for sub_name, sub_parser in choices.items():
+        raw_choices = action.choices
+        if not isinstance(raw_choices, dict):
+            continue
+        for sub_name, sub_parser in raw_choices.items():
+            if not isinstance(sub_parser, argparse.ArgumentParser):
+                continue
             full_name = f"{name} {sub_name}"
             sub_entries = build_api_index(
                 sub_parser,

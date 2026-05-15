@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -18,7 +17,6 @@ from repo_release_tools.docs.api_index import (
     render_api_md,
     render_api_txt,
 )
-
 
 # ---------------------------------------------------------------------------
 # ArgInfo + ApiEntry dataclasses
@@ -68,7 +66,9 @@ class TestApiEntry:
             metavar="VAL",
             choices=["a", "b"],
         )
-        entry = ApiEntry(name="rrt bar", description="Bar command.", arguments=[arg], hook_id="rrt-bar")
+        entry = ApiEntry(
+            name="rrt bar", description="Bar command.", arguments=[arg], hook_id="rrt-bar"
+        )
         d = entry.to_dict()
         assert d["hook_id"] == "rrt-bar"
         assert len(d["arguments"]) == 1
@@ -108,12 +108,7 @@ class TestLoadHooks:
 
     def test_load_hooks_custom_file(self, tmp_path: Path) -> None:
         """Should parse a synthetic .pre-commit-hooks.yaml correctly."""
-        content = (
-            "- id: rrt-test\n"
-            "  name: Test hook\n"
-            "  entry: rrt-hooks test\n"
-            "  language: python\n"
-        )
+        content = "- id: rrt-test\n  name: Test hook\n  entry: rrt-hooks test\n  language: python\n"
         (tmp_path / ".pre-commit-hooks.yaml").write_text(content, encoding="utf-8")
         hooks = load_hooks(tmp_path)
         assert hooks.get("rrt-hooks test") == "rrt-test"
@@ -125,9 +120,7 @@ class TestLoadHooks:
         # Either finds hooks or empty dict — no exception
         assert isinstance(hooks, dict)
 
-    def test_load_hooks_oserror(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_load_hooks_oserror(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Should return empty dict when the hook file cannot be read (OSError)."""
         hook_file = tmp_path / ".pre-commit-hooks.yaml"
         hook_file.write_text("- id: hook1\n  entry: rrt-hooks test\n", encoding="utf-8")
@@ -360,7 +353,7 @@ def _extract_json_from_output(output: str) -> list[object]:
 class TestCmdApi:
     """Integration tests for the rrt docs api sub-action."""
 
-    def _api_args(self, **overrides: object) -> SimpleNamespace:
+    def _api_args(self, **overrides: object) -> argparse.Namespace:
         defaults: dict[str, object] = {
             "docs_action": "api",
             "format": "md",
@@ -369,7 +362,7 @@ class TestCmdApi:
             "dry_run": False,
         }
         defaults.update(overrides)
-        return SimpleNamespace(**defaults)
+        return argparse.Namespace(**defaults)
 
     def test_cmd_api_stdout_md(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Should print Markdown API index to stdout."""
@@ -421,7 +414,9 @@ class TestCmdApi:
         from repo_release_tools.commands.docs_cmd import _cmd_api
 
         output_file = tmp_path / "api.md"
-        args = self._api_args(format="md", output=str(output_file), dry_run=True, root=str(tmp_path))
+        args = self._api_args(
+            format="md", output=str(output_file), dry_run=True, root=str(tmp_path)
+        )
         rc = _cmd_api(args)
         assert rc == 0
         assert not output_file.exists()
