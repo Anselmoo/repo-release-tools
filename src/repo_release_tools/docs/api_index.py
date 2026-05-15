@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -95,8 +96,6 @@ def load_hooks(root: Path | None = None) -> dict[str, str]:
 
     Implemented as a lightweight regex parser — no PyYAML dependency required.
     """
-    import re as _re  # noqa: PLC0415
-
     search_root = root or Path(".")
     hook_file = search_root / ".pre-commit-hooks.yaml"
     if not hook_file.exists():
@@ -110,8 +109,8 @@ def load_hooks(root: Path | None = None) -> dict[str, str]:
     result: dict[str, str] = {}
 
     # Each hook item starts with "- id: <id>"; find all such markers.
-    id_re = _re.compile(r"^- id:\s*(\S+)", _re.MULTILINE)
-    entry_re = _re.compile(r"^\s+entry:\s*(.+)$", _re.MULTILINE)
+    id_re = re.compile(r"^- id:\s*(\S+)", re.MULTILINE)
+    entry_re = re.compile(r"^\s+entry:\s*(.+)$", re.MULTILINE)
 
     id_matches = list(id_re.finditer(text))
     for i, m in enumerate(id_matches):

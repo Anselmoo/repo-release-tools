@@ -427,6 +427,7 @@ class TestCmdApi:
         assert not output_file.exists()
         out = capsys.readouterr().out
         assert str(output_file) in out
+        assert "would" in out.lower()
 
     def test_cmd_api_dry_run_no_output(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Dry-run without --output should still print to stdout."""
