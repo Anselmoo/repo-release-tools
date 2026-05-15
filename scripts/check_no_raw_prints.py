@@ -9,14 +9,43 @@ Allow prints in:
 Otherwise, report file:line occurrences and exit non-zero.
 """
 
-import re
 import sys
+import tokenize
+from io import StringIO
 from pathlib import Path
 
 ROOT = Path()
-PATTERN = re.compile(r"\bprint\s*\(")
 IGNORE_DIR = Path("src/repo_release_tools/ui")
 IGNORE_ASSETS_HOOKS = Path("src/repo_release_tools/assets/hooks")
+
+
+def _iter_print_call_lines(text: str) -> set[int]:
+    """Return line numbers containing real ``print(...)`` calls.
+
+    Uses Python tokenization so string literals (including docstrings) and
+    comments are ignored automatically.
+    """
+    lines: set[int] = set()
+    tokens = list(tokenize.generate_tokens(StringIO(text).readline))
+    for idx, tok in enumerate(tokens):
+        if tok.type != tokenize.NAME or tok.string != "print":
+            continue
+
+        # Look ahead to the next non-trivia token.
+        j = idx + 1
+        while j < len(tokens) and tokens[j].type in {
+            tokenize.NL,
+            tokenize.NEWLINE,
+            tokenize.INDENT,
+            tokenize.DEDENT,
+            tokenize.COMMENT,
+        }:
+            j += 1
+
+        if j < len(tokens) and tokens[j].string == "(":
+            lines.add(tok.start[0])
+    return lines
+
 
 errors = []
 for p in (ROOT / "src" / "repo_release_tools").rglob("*.py"):
@@ -31,10 +60,9 @@ for p in (ROOT / "src" / "repo_release_tools").rglob("*.py"):
     if "tests" in p.parts:
         continue
     text = p.read_text(encoding="utf-8")
-    for i, line in enumerate(text.splitlines(), start=1):
-        if PATTERN.search(line):
-            errors.append(f"{rel}:{i}: {line.strip()}")
-
+    for line_no in sorted(_iter_print_call_lines(text)):
+        source_line = text.splitlines()[line_no - 1].strip()
+        errors.append(f"{rel}:{line_no}: {source_line}")
 if errors:
     print("ERROR: Raw print(...) usage detected outside allowed UI surface:\n", file=sys.stderr)
     for e in errors:

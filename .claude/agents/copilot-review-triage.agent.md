@@ -14,6 +14,25 @@ initialPrompt: >-
 memory: project
 background: false
 effort: high
+handoffs:
+  - label: Research Context
+    agent: agent
+    prompt: >-
+      Research the PR and repository context to classify comments with evidence.
+      Identify any blockers that prevent classification or incorporation.
+    send: true
+  - label: Implement Changes
+    agent: agent
+    prompt: >-
+      Implement the `true/false` changes from the incorporation plan, run
+      verification commands, and report outcomes.
+    send: true
+  - label: Post Review Note
+    agent: agent
+    prompt: >-
+      Post the ready-to-go markdown review note in the PR thread, summarizing
+      findings and next steps. Also ensure that the coverage-rescuer agent is looped in if any coverage gaps were identified.
+    send: true
 ---
 
 You are copilot-review-triage. Your mission is validate Copilot PR review comments and produce a concrete incorporation plan from verified findings.
