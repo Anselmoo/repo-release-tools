@@ -994,9 +994,9 @@ Examples
 Usage:  rrt docs [OPTIONS] <docs_action>
 
 Scan source files and extract inline documentation blocks
-across Python, TypeScript/JavaScript, Go, and Rust.
+across Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell.
 
-Sub-actions: generate (default), check, publish, inject, suggest
+Sub-actions: generate (default), check, publish, inject, suggest, api
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -1007,6 +1007,7 @@ Arguments
   inject       Inject shared anchor blocks defined in [tool.rrt.docs.shared_blocks].
   suggest      Suggest or scaffold rich module docstrings for Python files.
   badges       Generate platform SVG badge files into docs/assets/badges/.
+  api          Emit a structured index of all rrt CLI commands and arguments.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -1025,6 +1026,8 @@ Examples:
     rrt docs check                            # exits 1 if lockfile is stale
     rrt docs suggest                          # suggest rich module docstrings
   rrt docs generate --lang python,go        # multi-language extraction
+  rrt docs api                              # emit rrt API index (Markdown)
+  rrt docs api --format json                # emit rrt API index as JSON
 ```
 
 ### `rrt docs generate`

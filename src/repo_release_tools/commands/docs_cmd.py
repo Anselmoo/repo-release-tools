@@ -3,8 +3,8 @@
 ## Overview
 
 `rrt docs` extracts inline documentation blocks from source files across
-Python, TypeScript/JavaScript, Go, and Rust using static regex analysis.
-No runtime AST parsers are required.
+Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell using
+static regex analysis.  No runtime AST parsers are required.
 
 ## Sub-actions
 
@@ -19,6 +19,7 @@ rrt docs generate --format json
 rrt docs generate --format toml   # writes .rrt/docs.lock.toml
 rrt docs suggest
 rrt docs generate --lang python,go
+rrt docs generate --lang bash,powershell
 rrt docs generate --dry-run
 ```
 
@@ -36,14 +37,38 @@ rrt docs check
 rrt docs check --lock-file .rrt/docs.lock.toml
 ```
 
+### api
+
+Emit a structured index of all rrt CLI commands and their arguments.
+
+```bash
+rrt docs api                        # Markdown to stdout
+rrt docs api --format json          # JSON to stdout
+rrt docs api --format txt           # plain text to stdout
+rrt docs api --output api-index.md  # write to file
+```
+
 ## Extraction modes
 
 Controlled by `[tool.rrt.docs] extraction_mode` in config:
 
 - `explicit` (default): only extract blocks preceded by a ``# sym: NAME``
-  (Python) or ``// sym: NAME`` (JS/TS/Go/Rust) marker.
+  (Python/Bash/PowerShell) or ``// sym: NAME`` (JS/TS/Go/Rust) marker.
+  PowerShell also supports ``<# sym: NAME #>``.
 - `implicit`: extract language-native docstrings / comment blocks.
 - `both`: explicit markers take priority; fall back to implicit.
+
+## Supported languages
+
+| Slug        | Extensions               |
+|-------------|--------------------------|
+| python      | .py                      |
+| ts          | .ts, .tsx                |
+| js          | .js, .mjs, .cjs, .jsx    |
+| go          | .go                      |
+| rust        | .rs                      |
+| bash        | .sh, .bash, .zsh         |
+| powershell  | .ps1, .psm1, .psd1       |
 
 ## Lockfile
 
@@ -58,6 +83,7 @@ hook to fail fast when docs drift from source.
 rrt docs generate --format rich            # colourised terminal preview
 rrt docs generate --format toml --dry-run  # show lock without writing
 rrt docs check                             # exits 1 if lock is stale
+rrt docs api --format json                 # machine-readable API index
 ```
 
 ## Related docs
@@ -96,7 +122,7 @@ from repo_release_tools.ui import DryRunPrinter
 
 DOCS_OVERVIEW = """\
 Extract inline documentation blocks from source files across
-Python, TypeScript/JavaScript, Go, and Rust.
+Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell.
 
 Usage:
   rrt docs generate [--format md|txt|rich|clipboard|json|toml]
@@ -555,6 +581,63 @@ def _cmd_badges(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# API index sub-action
+# ---------------------------------------------------------------------------
+
+
+def _cmd_api(args: argparse.Namespace) -> int:
+    """Emit a structured index of all rrt CLI commands and arguments."""
+    from repo_release_tools.cli import build_parser  # noqa: PLC0415
+    from repo_release_tools.docs.api_index import (  # noqa: PLC0415
+        build_api_index,
+        load_hooks,
+        render_api_json,
+        render_api_md,
+        render_api_txt,
+    )
+
+    fmt: str = getattr(args, "format", None) or "md"
+    output_arg: str | None = getattr(args, "output", None)
+    dry_run: bool = getattr(args, "dry_run", False)
+    root = Path(getattr(args, "root", ".")).resolve()
+
+    p = DryRunPrinter(dry_run=dry_run)
+    p.header("rrt docs api")
+
+    hook_map = load_hooks(root)
+    parser = build_parser()
+    entries = build_api_index(parser, hook_map=hook_map)
+
+    if fmt == "md":
+        rendered = render_api_md(entries)
+    elif fmt == "txt":
+        rendered = render_api_txt(entries)
+    elif fmt == "json":
+        rendered = render_api_json(entries)
+    else:
+        p.line(f"Unsupported API format {fmt!r}. Use md, txt, or json.", ok=False, stream=sys.stderr)
+        return 1
+
+    if output_arg and not dry_run:
+        output_path = Path(output_arg)
+        if not output_path.is_absolute():
+            output_path = root / output_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered, encoding="utf-8")
+        p.ok(f"API index written: {output_path}")
+    elif dry_run and output_arg:
+        output_path = Path(output_arg)
+        if not output_path.is_absolute():
+            output_path = root / output_path
+        p.would_write(str(output_path), detail=f"rrt API index ({fmt})")
+    else:
+        sys.stdout.write(rendered)
+
+    p.footer("Done.")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Suggest docstrings (scaffold + lint)
 # ---------------------------------------------------------------------------
 
@@ -584,6 +667,8 @@ def cmd_docs(args: argparse.Namespace) -> int:
         return _cmd_suggest(args)
     if sub == "badges":
         return _cmd_badges(args)
+    if sub == "api":
+        return _cmd_api(args)
     p = DryRunPrinter(False)
     p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
@@ -603,6 +688,8 @@ Examples:
     rrt docs check                            # exits 1 if lockfile is stale
     rrt docs suggest                          # suggest rich module docstrings
   rrt docs generate --lang python,go        # multi-language extraction
+  rrt docs api                              # emit rrt API index (Markdown)
+  rrt docs api --format json                # emit rrt API index as JSON
 """
 
 
@@ -613,8 +700,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Extract and manage source-owned documentation blocks.",
         description=(
             "Scan source files and extract inline documentation blocks\n"
-            "across Python, TypeScript/JavaScript, Go, and Rust.\n\n"
-            "Sub-actions: generate (default), check, publish, inject, suggest"
+            "across Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell.\n\n"
+            "Sub-actions: generate (default), check, publish, inject, suggest, api"
         ),
         epilog=DOCS_EPILOG,
     )
@@ -821,3 +908,34 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Generate only one visual variant (default: all three).",
     )
     bdg_p.set_defaults(handler=cmd_docs)
+
+    # ── api ───────────────────────────────────────────────────────────────
+    api_p = sub.add_parser(
+        "api",
+        help="Emit a structured index of all rrt CLI commands and arguments.",
+    )
+    api_p.add_argument(
+        "--format",
+        choices=["md", "txt", "json"],
+        default="md",
+        help="Output format for the API index (default: md).",
+    )
+    api_p.add_argument(
+        "--output",
+        default=None,
+        metavar="FILE",
+        help="Write output to FILE instead of stdout.",
+    )
+    api_p.add_argument(
+        "--root",
+        default=".",
+        metavar="PATH",
+        help="Project root directory (default: current directory).",
+    )
+    api_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print what would be written without writing files.",
+    )
+    api_p.set_defaults(handler=cmd_docs)

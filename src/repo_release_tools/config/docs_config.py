@@ -140,7 +140,7 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
 
 
 _VALID_EXTRACTION_MODES = ("explicit", "implicit", "both")
-_VALID_LANGUAGES = ("python", "ts", "js", "go", "rust")
+_VALID_LANGUAGES = ("python", "ts", "js", "go", "rust", "bash", "powershell")
 _VALID_FORMATS = ("md", "txt", "rich", "clipboard", "json", "toml")
 
 

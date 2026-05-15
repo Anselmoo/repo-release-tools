@@ -1,8 +1,8 @@
 """Multi-language doc extraction engine for rrt docs.
 
 Supports extracting named documentation blocks from source files across
-Python, TypeScript/JavaScript, Go, and Rust using static regex analysis —
-no runtime AST parsers required.
+Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, and PowerShell using
+static regex analysis — no runtime AST parsers required.
 
 Extraction modes (configured via DocsConfig.extraction_mode):
   explicit  — only grab blocks preceded by a ``# sym: NAME`` marker
@@ -60,6 +60,8 @@ _LANG_EXTENSIONS: dict[str, tuple[str, ...]] = {
     "js": (".js", ".mjs", ".cjs", ".jsx"),
     "go": (".go",),
     "rust": (".rs",),
+    "bash": (".sh", ".bash", ".zsh"),
+    "powershell": (".ps1", ".psm1", ".psd1"),
 }
 
 # Reverse map: extension → lang
@@ -89,6 +91,12 @@ _EXPLICIT_PATTERNS: dict[str, re.Pattern[str]] = {
     "js": re.compile(r"^[ \t]*//\s*sym:\s*(\w+)\s*$", re.MULTILINE),
     "go": re.compile(r"^[ \t]*//\s*sym:\s*(\w+)\s*$", re.MULTILINE),
     "rust": re.compile(r"^[ \t]*//\s*sym:\s*(\w+)\s*$", re.MULTILINE),
+    # Bash/Zsh: # sym: NAME  (same as Python single-line comment)
+    "bash": re.compile(r"^[ \t]*#\s*sym:\s*(\w+)\s*$", re.MULTILINE),
+    # PowerShell: # sym: NAME  OR  <# sym: NAME #>
+    "powershell": re.compile(
+        r"^[ \t]*(?:#\s*sym:\s*(\w+)|<#\s*sym:\s*(\w+)\s*#>)\s*$", re.MULTILINE
+    ),
 }
 
 # Python: match the content that follows the explicit marker.
@@ -248,7 +256,10 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
     entries: list[DocEntry] = []
 
     for m in pattern.finditer(source):
-        name = m.group(1)
+        # PowerShell pattern has two capture groups; try group 1 then group 2
+        name = m.group(1) or (m.group(2) if m.lastindex and m.lastindex >= 2 else None)
+        if not name:  # pragma: no cover — regex requires a capture group to match
+            continue
         marker_end = m.end()
         remainder = source[marker_end:]
         line_no = source[: m.start()].count("\n") + 2  # line after marker
@@ -260,6 +271,38 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
             string_m = _PY_STRING_AFTER_MARKER.search(remainder)
             if string_m:
                 content = (string_m.group(1) or string_m.group(2) or "").strip()
+        elif lang == "bash":
+            # Bash: collect consecutive comment lines after marker
+            comment_lines: list[str] = []
+            for raw_line in remainder.splitlines():
+                stripped = raw_line.strip()
+                if stripped.startswith("#"):
+                    comment_lines.append(re.sub(r"^[ \t]*#+\s?", "", raw_line).rstrip())
+                elif stripped == "":
+                    if comment_lines:
+                        break
+                else:
+                    break
+            if comment_lines:
+                content = "\n".join(comment_lines).strip()
+        elif lang == "powershell":
+            # PowerShell: next block may be <# ... #> (non-nested) or # comment lines
+            ps_block_m = re.match(r"\s*<#((?:[^#]|#(?!>))*)#>", remainder)
+            if ps_block_m:
+                content = ps_block_m.group(1).strip()
+            else:
+                ps_lines: list[str] = []
+                for raw_line in remainder.splitlines():
+                    stripped = raw_line.strip()
+                    if stripped.startswith("#"):
+                        ps_lines.append(re.sub(r"^[ \t]*#+\s?", "", raw_line).rstrip())
+                    elif stripped == "":
+                        if ps_lines:
+                            break
+                    else:
+                        break
+                if ps_lines:
+                    content = "\n".join(ps_lines).strip()
         else:
             # JS/TS/Go/Rust: next line may be the doc or assignment
             # Look for a string literal or comment block immediately after
@@ -273,18 +316,18 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
                 content = (str_m.group(1) or str_m.group(2) or str_m.group(3) or "").strip()
             else:
                 # Go/Rust: collect comment lines until blank/code
-                comment_lines: list[str] = []
+                slash_lines: list[str] = []
                 for raw_line in remainder.splitlines():
                     stripped = raw_line.strip()
                     if stripped.startswith("//"):
-                        comment_lines.append(re.sub(r"^[ \t]*(?:///|//)\s?", "", raw_line).rstrip())
+                        slash_lines.append(re.sub(r"^[ \t]*(?:///|//)\s?", "", raw_line).rstrip())
                     elif stripped == "":
-                        if comment_lines:
+                        if slash_lines:
                             break
                     else:
                         break
-                if comment_lines:
-                    content = "\n".join(comment_lines).strip()
+                if slash_lines:
+                    content = "\n".join(slash_lines).strip()
 
         if content:
             entries.append(
@@ -355,6 +398,169 @@ def _extract_python_module_string_vars(source: str) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Bash/Zsh implicit extraction
+# ---------------------------------------------------------------------------
+
+
+def _extract_bash_implicit(source: str, source_file: str) -> list[DocEntry]:
+    """Extract Bash/Zsh doc comment blocks (implicit mode).
+
+    Two kinds of blocks are extracted:
+
+    1. **Script header** — ``##`` comment block at the very top of the file
+       (after an optional shebang line).  The block must start with ``##``.
+    2. **Function comments** — consecutive ``#`` comment lines immediately
+       preceding ``function name {`` or ``name() {`` declarations.
+    """
+    entries: list[DocEntry] = []
+
+    # --- Script-level header: consecutive ## lines at file top ---------------
+    lines = source.splitlines()
+    start_idx = 0
+    if lines and lines[0].startswith("#!"):
+        start_idx = 1  # skip shebang
+
+    header_lines: list[str] = []
+    for line in lines[start_idx:]:
+        stripped = line.strip()
+        if stripped.startswith("##"):
+            header_lines.append(re.sub(r"^[ \t]*#{2,}\s?", "", line).rstrip())
+        else:
+            break
+    if header_lines:
+        content = "\n".join(header_lines).strip()
+        if content:
+            entries.append(
+                DocEntry(
+                    name="script",
+                    lang="bash",
+                    content=content,
+                    source_file=source_file,
+                    line=start_idx + 1,
+                    hash=hash_content(content),
+                ),
+            )
+
+    # --- Function-level comments: # lines immediately before function --------
+    for m in re.finditer(
+        r"((?:^[ \t]*#[^\n]*\n)+)[ \t]*(?:function\s+(\w+)\s*\{|(\w+)\s*\(\s*\)\s*\{)",
+        source,
+        re.MULTILINE,
+    ):
+        raw = m.group(1)
+        func_name = m.group(2) or m.group(3)
+        content = re.sub(r"^[ \t]*#+\s?", "", raw, flags=re.MULTILINE).strip()
+        if content:
+            line = source[: m.start()].count("\n") + 1
+            entries.append(
+                DocEntry(
+                    name=func_name,
+                    lang="bash",
+                    content=content,
+                    source_file=source_file,
+                    line=line,
+                    hash=hash_content(content),
+                ),
+            )
+    return entries
+
+
+# ---------------------------------------------------------------------------
+# PowerShell implicit extraction
+# ---------------------------------------------------------------------------
+
+
+def _extract_powershell_implicit(source: str, source_file: str) -> list[DocEntry]:
+    """Extract PowerShell doc comment blocks (implicit mode).
+
+    Two kinds of blocks are extracted:
+
+    1. **Module-level comment-based help** — a ``<# ... #>`` block at the top
+       of the script/module (before any ``function`` declarations).
+    2. **Function-level help** — a ``<# ... #>`` block or consecutive ``#``
+       lines immediately preceding a ``function`` declaration.
+    """
+    entries: list[DocEntry] = []
+
+    # Pattern for a single <# ... #> block (no crossing of #> boundaries).
+    # (?:[^#]|#(?!>))* matches chars that don't close the block.
+    _ps_block_re = re.compile(r"<#((?:[^#]|#(?!>))*)#>", re.MULTILINE)
+
+    # Build a position-indexed list of all block matches for quick lookup
+    blocks = list(_ps_block_re.finditer(source))
+
+    # --- Module-level: first block before any function declaration -----------
+    first_func_m = re.search(r"(?m)^[ \t]*function\s+\w", source)
+    first_func_pos = first_func_m.start() if first_func_m else len(source)
+
+    for blk in blocks:
+        if blk.start() < first_func_pos:
+            content = blk.group(1).strip()
+            if content:
+                line = source[: blk.start()].count("\n") + 1
+                entries.append(
+                    DocEntry(
+                        name="module",
+                        lang="powershell",
+                        content=content,
+                        source_file=source_file,
+                        line=line,
+                        hash=hash_content(content),
+                    ),
+                )
+            break  # only emit one module-level entry
+
+    # --- Function-level: block or # lines immediately before `function Name` -
+    for func_m in re.finditer(
+        r"(?m)^[ \t]*function\s+([\w-]+)",
+        source,
+    ):
+        func_name = func_m.group(1)
+        func_pos = func_m.start()
+        line = source[:func_pos].count("\n") + 1
+
+        # Look for the nearest block ending just before this function
+        content: str | None = None
+        for blk in reversed(blocks):
+            if blk.end() > func_pos:
+                continue
+            # Check that only whitespace separates block end from function start
+            gap = source[blk.end() : func_pos]
+            if gap.strip() == "":
+                content = blk.group(1).strip()
+                break
+            break  # nearest non-matching block → fall through to # lines
+
+        if content is None:
+            # Fall back: consecutive # lines immediately before function
+            before = source[:func_pos]
+            ps_lines: list[str] = []
+            for raw_line in reversed(before.splitlines()):
+                stripped = raw_line.strip()
+                if stripped.startswith("#"):
+                    ps_lines.insert(0, re.sub(r"^[ \t]*#+\s?", "", raw_line).rstrip())
+                elif stripped == "" and not ps_lines:
+                    continue
+                else:
+                    break
+            if ps_lines:
+                content = "\n".join(ps_lines).strip()
+
+        if content:
+            entries.append(
+                DocEntry(
+                    name=func_name,
+                    lang="powershell",
+                    content=content,
+                    source_file=source_file,
+                    line=line,
+                    hash=hash_content(content),
+                ),
+            )
+    return entries
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -414,6 +620,12 @@ def extract_docs(
                 _add(e)
         elif lang == "rust":
             for e in _extract_rust_implicit(source, source_file):
+                _add(e)
+        elif lang == "bash":
+            for e in _extract_bash_implicit(source, source_file):
+                _add(e)
+        elif lang == "powershell":
+            for e in _extract_powershell_implicit(source, source_file):
                 _add(e)
 
     return entries

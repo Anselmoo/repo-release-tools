@@ -531,3 +531,482 @@ class TestExtractPythonSourceOwned:
         source = 'MY_DOC = """some doc"""\n'
         entries = _extract_python_source_owned(source, "mod.py", {"MY_DOC": "some doc"})
         assert entries == []
+
+
+class TestBashExtraction:
+    """Tests for Bash/Zsh language doc extraction (Track 1)."""
+
+    # ── lang_for_path ──────────────────────────────────────────────────────
+
+    def test_lang_for_path_bash_sh(self) -> None:
+        """Should return 'bash' for .sh files."""
+        assert lang_for_path(Path("script.sh")) == "bash"
+
+    def test_lang_for_path_bash_bash(self) -> None:
+        """Should return 'bash' for .bash files."""
+        assert lang_for_path(Path("script.bash")) == "bash"
+
+    def test_lang_for_path_bash_zsh(self) -> None:
+        """Should return 'bash' for .zsh files."""
+        assert lang_for_path(Path("script.zsh")) == "bash"
+
+    # ── implicit extraction ────────────────────────────────────────────────
+
+    def test_bash_implicit_script_header(self, tmp_path: Path) -> None:
+        """## header lines at top of file should be extracted as 'script' entry."""
+        sh_file = tmp_path / "script.sh"
+        sh_file.write_text("#!/usr/bin/env bash\n## A bash utility.\n## Does stuff.\n\necho hi\n")
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(sh_file, config, relative_to=tmp_path)
+        assert any(e.name == "script" for e in entries)
+        script_entry = next(e for e in entries if e.name == "script")
+        assert "A bash utility." in script_entry.content
+        assert "Does stuff." in script_entry.content
+        assert script_entry.lang == "bash"
+
+    def test_bash_implicit_script_header_without_shebang(self, tmp_path: Path) -> None:
+        """## header block without shebang should still be extracted."""
+        sh_file = tmp_path / "lib.sh"
+        sh_file.write_text("## Library utilities.\n\nfoo() { :; }\n")
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(sh_file, config, relative_to=tmp_path)
+        assert any(e.name == "script" for e in entries)
+
+    def test_bash_implicit_function_comments(self, tmp_path: Path) -> None:
+        """# comment lines before function declarations should be extracted."""
+        sh_file = tmp_path / "script.sh"
+        sh_file.write_text(
+            "#!/usr/bin/env bash\n"
+            "# Greet a user.\n"
+            "# Takes one argument.\n"
+            "greet() {\n"
+            "    echo \"Hello $1\"\n"
+            "}\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(sh_file, config, relative_to=tmp_path)
+        assert any(e.name == "greet" for e in entries)
+        entry = next(e for e in entries if e.name == "greet")
+        assert "Greet a user." in entry.content
+        assert "Takes one argument." in entry.content
+
+    def test_bash_implicit_function_keyword_syntax(self, tmp_path: Path) -> None:
+        """function keyword syntax should be matched for implicit extraction."""
+        sh_file = tmp_path / "script.sh"
+        sh_file.write_text(
+            "# A helper function.\n"
+            "function _helper {\n"
+            "    echo helper\n"
+            "}\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(sh_file, config, relative_to=tmp_path)
+        assert any(e.name == "_helper" for e in entries)
+
+    def test_bash_implicit_no_header_no_functions(self, tmp_path: Path) -> None:
+        """A script with no ## header and no functions yields no entries."""
+        sh_file = tmp_path / "plain.sh"
+        sh_file.write_text("#!/usr/bin/env bash\n# ordinary comment\necho hi\n")
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(sh_file, config, relative_to=tmp_path)
+        assert entries == []
+
+    # ── explicit extraction ────────────────────────────────────────────────
+
+    def test_bash_explicit_marker(self, tmp_path: Path) -> None:
+        """# sym: NAME marker should trigger explicit doc extraction for bash."""
+        sh_file = tmp_path / "script.sh"
+        sh_file.write_text(
+            "# sym: my_func\n# Explicit documentation line.\n# Second line.\nmy_func() { :; }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(sh_file, config, relative_to=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].name == "my_func"
+        assert "Explicit documentation line." in entries[0].content
+        assert entries[0].lang == "bash"
+
+    def test_bash_both_mode(self, tmp_path: Path) -> None:
+        """'both' mode should yield explicit and implicit entries."""
+        sh_file = tmp_path / "script.sh"
+        sh_file.write_text(
+            "## Script header doc.\n\n"
+            "# sym: explicit_func\n# Explicit docs.\n"
+            "explicit_func() { :; }\n\n"
+            "# Implicit func doc.\n"
+            "implicit_func() { :; }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="both",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(sh_file, config, relative_to=tmp_path)
+        names = [e.name for e in entries]
+        assert "explicit_func" in names
+        assert "implicit_func" in names
+
+    def test_bash_from_dir(self, tmp_path: Path) -> None:
+        """extract_docs_from_dir should pick up .sh files when bash is in languages."""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "deploy.sh").write_text(
+            "# sym: deploy\n# Deploy the app.\nfunction deploy { :; }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("bash",),
+            src_dir="src",
+            formats=("json",),
+        )
+        entries = extract_docs_from_dir(tmp_path, config)
+        assert len(entries) == 1
+        assert entries[0].name == "deploy"
+        assert entries[0].lang == "bash"
+
+
+class TestPowerShellExtraction:
+    """Tests for PowerShell doc extraction (Track 1)."""
+
+    # ── lang_for_path ──────────────────────────────────────────────────────
+
+    def test_lang_for_path_ps1(self) -> None:
+        """Should return 'powershell' for .ps1 files."""
+        assert lang_for_path(Path("script.ps1")) == "powershell"
+
+    def test_lang_for_path_psm1(self) -> None:
+        """Should return 'powershell' for .psm1 files."""
+        assert lang_for_path(Path("module.psm1")) == "powershell"
+
+    def test_lang_for_path_psd1(self) -> None:
+        """Should return 'powershell' for .psd1 files."""
+        assert lang_for_path(Path("manifest.psd1")) == "powershell"
+
+    # ── implicit extraction ────────────────────────────────────────────────
+
+    def test_powershell_implicit_module_block(self, tmp_path: Path) -> None:
+        """A <# ... #> block at the top of the file should become a 'module' entry."""
+        ps_file = tmp_path / "script.ps1"
+        ps_file.write_text(
+            "<#\n.SYNOPSIS\nScript synopsis.\n.DESCRIPTION\nLong description.\n#>\n"
+            "function Invoke-Something { }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        assert any(e.name == "module" for e in entries)
+        mod = next(e for e in entries if e.name == "module")
+        assert ".SYNOPSIS" in mod.content
+        assert mod.lang == "powershell"
+
+    def test_powershell_implicit_function_block(self, tmp_path: Path) -> None:
+        """A <# ... #> block immediately before a function should be extracted."""
+        ps_file = tmp_path / "funcs.ps1"
+        ps_file.write_text(
+            "<#\n.SYNOPSIS\nGreet a user.\n.PARAMETER Name\nThe name to greet.\n#>\n"
+            "function Invoke-Greet {\n"
+            "    param([string]$Name)\n"
+            "    Write-Host \"Hello, $Name\"\n"
+            "}\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        func_entries = [e for e in entries if e.name == "Invoke-Greet"]
+        assert len(func_entries) == 1
+        assert ".SYNOPSIS" in func_entries[0].content
+        assert "Greet a user." in func_entries[0].content
+
+    def test_powershell_implicit_hash_comment_fallback(self, tmp_path: Path) -> None:
+        """Consecutive # lines before a function should work as a fallback."""
+        ps_file = tmp_path / "simple.ps1"
+        ps_file.write_text(
+            "# Gets the current version.\n"
+            "# Returns a string.\n"
+            "function Get-Version {\n"
+            "    return '1.0'\n"
+            "}\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        assert any(e.name == "Get-Version" for e in entries)
+        entry = next(e for e in entries if e.name == "Get-Version")
+        assert "Gets the current version." in entry.content
+        assert "Returns a string." in entry.content
+
+    def test_powershell_implicit_two_functions_with_separate_blocks(
+        self, tmp_path: Path
+    ) -> None:
+        """Each function should be paired with its own preceding <# ... #> block."""
+        ps_file = tmp_path / "multi.ps1"
+        ps_file.write_text(
+            "<#\nModule overview.\n#>\n"
+            "\n"
+            "<#\n.SYNOPSIS\nFirst function.\n#>\n"
+            "function Get-First { }\n"
+            "\n"
+            "<#\n.SYNOPSIS\nSecond function.\n#>\n"
+            "function Get-Second { }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        names = [e.name for e in entries]
+        assert "Get-First" in names
+        assert "Get-Second" in names
+        first = next(e for e in entries if e.name == "Get-First")
+        second = next(e for e in entries if e.name == "Get-Second")
+        assert "First function." in first.content
+        assert "Second function." in second.content
+
+    # ── explicit extraction ────────────────────────────────────────────────
+
+    def test_powershell_explicit_hash_marker(self, tmp_path: Path) -> None:
+        """# sym: NAME marker should trigger explicit extraction for powershell."""
+        ps_file = tmp_path / "script.ps1"
+        ps_file.write_text(
+            "# sym: GetFoo\n# Returns foo.\nfunction Get-Foo { return 'foo' }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].name == "GetFoo"
+        assert "Returns foo." in entries[0].content
+        assert entries[0].lang == "powershell"
+
+    def test_powershell_explicit_angle_marker(self, tmp_path: Path) -> None:
+        """<# sym: NAME #> marker should trigger explicit extraction for powershell."""
+        ps_file = tmp_path / "script.ps1"
+        ps_file.write_text(
+            "<# sym: GetBar #>\n<#\nReturns bar.\n#>\nfunction Get-Bar { return 'bar' }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].name == "GetBar"
+        assert "Returns bar." in entries[0].content
+
+    def test_powershell_from_dir(self, tmp_path: Path) -> None:
+        """extract_docs_from_dir should pick up .ps1 files when powershell is in languages."""
+        src = tmp_path / "scripts"
+        src.mkdir()
+        (src / "deploy.ps1").write_text(
+            "# sym: deploy\n# Deploy the app.\nfunction Invoke-Deploy { }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("powershell",),
+            src_dir="scripts",
+            formats=("json",),
+        )
+        entries = extract_docs_from_dir(tmp_path, config)
+        assert len(entries) == 1
+        assert entries[0].name == "deploy"
+        assert entries[0].lang == "powershell"
+
+
+class TestDocsConfigLanguageValidation:
+    """Confirm that bash and powershell are accepted as valid language values."""
+
+    def test_bash_accepted_in_config(self) -> None:
+        """DocsConfig should accept 'bash' as a language."""
+        cfg = DocsConfig(
+            extraction_mode="explicit",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        assert "bash" in cfg.languages
+
+    def test_powershell_accepted_in_config(self) -> None:
+        """DocsConfig should accept 'powershell' as a language."""
+        cfg = DocsConfig(
+            extraction_mode="explicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        assert "powershell" in cfg.languages
+
+    def test_bash_and_powershell_in_valid_languages_constant(self) -> None:
+        """Both slugs should appear in _VALID_LANGUAGES exported from docs_config."""
+        from repo_release_tools.config.docs_config import _VALID_LANGUAGES
+
+        assert "bash" in _VALID_LANGUAGES
+        assert "powershell" in _VALID_LANGUAGES
+
+    def test_invalid_language_rejected(self) -> None:
+        """A truly unsupported language slug should raise ValueError via load path."""
+        import pytest
+        from repo_release_tools.config.docs_config import _load_docs_languages
+
+        with pytest.raises(ValueError, match="unsupported"):
+            _load_docs_languages({"languages": ["cobol"]})
+
+
+class TestExtractorCoverageGaps:
+    """Targeted tests to cover remaining uncovered branches in extractor.py."""
+
+    # ── bash explicit: blank line between comment lines stops collection ────
+
+    def test_bash_explicit_blank_line_stops_collection(self, tmp_path: Path) -> None:
+        """A blank line after # comment lines should stop the collection (line 283)."""
+        sh_file = tmp_path / "script.sh"
+        sh_file.write_text(
+            "# sym: myfunc\n# Line one.\n\n# This should NOT be part of the doc.\nmyfunc() { :; }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("bash",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(sh_file, config, relative_to=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].content == "Line one."
+
+    # ── powershell explicit: blank line stops # fallback collection ─────────
+
+    def test_powershell_explicit_blank_line_stops_collection(self, tmp_path: Path) -> None:
+        """A blank line in PS explicit # fallback should stop collection (line 301)."""
+        ps_file = tmp_path / "script.ps1"
+        ps_file.write_text(
+            "# sym: MyFunc\n# First line.\n\n# Not part of doc.\nfunction My-Func { }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="explicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        assert len(entries) == 1
+        assert entries[0].content == "First line."
+
+    # ── powershell implicit: blank lines near function, non-comment stops ───
+
+    def test_powershell_implicit_blank_line_skipped_before_comments(
+        self, tmp_path: Path
+    ) -> None:
+        """Blank lines between function keyword and preceding comment block
+        should be skipped via the continue branch (lines 542-543)."""
+        ps_file = tmp_path / "script.ps1"
+        # One blank line separates function from the # doc comment
+        ps_file.write_text(
+            "# Docs for Foo.\n\nfunction Get-FooBlank { }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        assert any(e.name == "Get-FooBlank" for e in entries)
+
+    def test_powershell_implicit_non_comment_stops_collection(
+        self, tmp_path: Path
+    ) -> None:
+        """A non-blank, non-comment line before the comment block should stop collection
+        (lines 544-545)."""
+        ps_file = tmp_path / "script.ps1"
+        ps_file.write_text(
+            "some_code = 1\n# Docs for Bar.\nfunction Get-Bar { }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        # The comment IS immediately before the function so it should be collected
+        bar_entries = [e for e in entries if e.name == "Get-Bar"]
+        assert len(bar_entries) == 1
+        assert "Docs for Bar." in bar_entries[0].content
+
+    def test_powershell_implicit_block_with_nonwhitespace_gap_fallback_to_hash(
+        self, tmp_path: Path
+    ) -> None:
+        """When the nearest <# ... #> has non-whitespace before the function,
+        the # lines fallback should be used instead (line 532)."""
+        ps_file = tmp_path / "script.ps1"
+        # <# block #> is followed by code, then a # comment, then the function.
+        # The nearest <# block #> has a gap, so line 532 triggers and the
+        # # comment lines become the content instead.
+        ps_file.write_text(
+            "<#\nModule overview.\n#>\n"
+            "Set-Variable Foo 'bar'\n"
+            "# Hash doc for Get-Baz.\n"
+            "function Get-Baz { }\n"
+        )
+        config = DocsConfig(
+            extraction_mode="implicit",
+            languages=("powershell",),
+            src_dir=".",
+            formats=("json",),
+        )
+        entries = extract_docs(ps_file, config, relative_to=tmp_path)
+        baz_entries = [e for e in entries if e.name == "Get-Baz"]
+        assert len(baz_entries) == 1
+        # Should use the # comment, not the <# block #>
+        assert "Hash doc for Get-Baz." in baz_entries[0].content
+
