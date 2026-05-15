@@ -278,7 +278,7 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
     for m in pattern.finditer(source):
         # PowerShell uses two alternation groups (# sym: and <# sym: #>);
         # for all other languages there is exactly one capture group.
-        name = m.group(1) or m.group(2) if lang == "powershell" else m.group(1)
+        name = (m.group(1) or m.group(2)) if lang == "powershell" else m.group(1)
         if not name:  # pragma: no cover — regex requires a capture group to match
             continue
         marker_end = m.end()

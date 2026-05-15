@@ -356,6 +356,7 @@ def _extract_json_from_output(output: str) -> list[object]:
     json_start = output.find("[")
     json_end = output.rfind("]") + 1
     assert json_start >= 0, "No '[' found in stdout; JSON not written"
+    assert json_end > json_start, "No ']' found after '[' in stdout; JSON not complete"
     return json.loads(output[json_start:json_end])  # type: ignore[return-value]
 
 
