@@ -47,7 +47,18 @@ CONFIG_SECTION_BY_FILE: dict[str, str] = {
 # Sentinel: lock_command / generated_files not explicitly configured → auto-detect.
 _AUTO: list[str] | None = None
 
-VALID_TARGET_KINDS = frozenset({"pep621", "package_json", "python_version", "go_version"})
+VALID_TARGET_KINDS = frozenset(
+    {
+        "pep621",
+        "package_json",
+        "python_version",
+        "go_version",
+        "cargo_toml",
+        "maven_pom",
+        "gemspec",
+        "csproj",
+    }
+)
 
 # Directory names to skip when scanning for Python __version__ files.
 _IGNORE_DIR_NAMES: frozenset[str] = frozenset(
@@ -176,10 +187,9 @@ def find_changelog_file(root: Path) -> str:
     Searches ``CHANGELOG_CANDIDATES`` in order.  Falls back to
     ``DEFAULT_CHANGELOG`` when none of the candidates are found.
     """
-    for name in CHANGELOG_CANDIDATES:
-        if (root / name).exists():
-            return name
-    return DEFAULT_CHANGELOG
+    return next(
+        (name for name in CHANGELOG_CANDIDATES if (root / name).exists()), DEFAULT_CHANGELOG
+    )
 
 
 @dataclass(frozen=True)
@@ -519,6 +529,9 @@ class FolderPolicyConfig:
             seen_rule_names.add(rule.name)
 
 
+VALID_PIN_TARGET_MISSING = frozenset({"warn", "error"})
+
+
 @dataclass(frozen=True)
 class RrtConfig:
     """Loaded rrt configuration."""
@@ -533,6 +546,9 @@ class RrtConfig:
     eol: EolConfig | None = None
     docs: DocsConfig | None = None
     folders: FolderPolicyConfig | None = None
+    pin_target_missing: str = "error"
+    extra_commit_types: tuple[str, ...] = ()
+    extra_section_map: dict[str, str] = field(default_factory=dict)
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""

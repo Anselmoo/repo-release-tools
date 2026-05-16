@@ -27,17 +27,21 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help       Show this message and exit.
-  --version        Show version and exit.
-  --format FORMAT  Output format. Defaults to text.
-  --no-color       Disable all ANSI color output.
+  -h, --help                   Show this message and exit.
+  --version                    Show version and exit.
+  --format FORMAT              Output format. Defaults to text.
+  --no-color                   Disable all ANSI color output.
+  --generate-completion SHELL  Print shell completion script for SHELL and exit.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Version & Release
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   bump        Bump project version using [tool.rrt] config.
+  changelog   Commands for working with the project changelog.
   ci-version  Compute and apply CI pre-release versions (PEP 440 / SemVer).
   release     Release-specific workflows and checks.
+  workspace   Apply a unified version bump to every listed package.
+  tag         Create annotated git tags from the current configured version, or check that existing tags follow the naming convention.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Repository Health
@@ -159,35 +163,36 @@ Bump project version using [tool.rrt] config.
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  <bump>                 major | minor | patch | <semver>  — bump kind or explicit version
+  <bump>                  major | minor | patch | alpha | beta | rc | pre-release | calver | <version>  — bump kind or explicit version
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help             Show this message and exit.
+  -h, --help              Show this message and exit.
+  --calver-scheme SCHEME  CalVer scheme to use when bump=calver (YYYY.MM | YYYY.MM.DD | YYYY.M.D).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Release control
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  --dry-run              Preview changes without writing to disk.
-  --force                Reset the release branch if it already exists.
-  --no-commit            Skip the git commit step.
-  --no-verify            Pass --no-verify to git commit (bypass pre-commit hooks).
+  --dry-run               Preview changes without writing to disk.
+  --force                 Reset the release branch if it already exists.
+  --no-commit             Skip the git commit step.
+  --no-verify             Pass --no-verify to git commit (bypass pre-commit hooks).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Content
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  --no-changelog         Do not update the changelog file.
-  --no-pin-sync          Skip dependency pin synchronisation.
-  --no-update            Skip the lockfile update step.
-  --include-maintenance  Include maintenance commits in changelog.
-  --changelog-mode MODE  How to write changelog entries (auto | promote | generate).
+  --no-changelog          Do not update the changelog file.
+  --no-pin-sync           Skip dependency pin synchronisation.
+  --no-update             Skip the lockfile update step.
+  --include-maintenance   Include maintenance commits in changelog.
+  --changelog-mode MODE   How to write changelog entries (auto | promote | generate).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Git
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  --base-branch BRANCH   Branch to base the release on.
-  --group GROUP          Version group to bump when multiple groups are configured.
+  --base-branch BRANCH    Branch to base the release on.
+  --group GROUP           Version group to bump when multiple groups are configured.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -196,6 +201,73 @@ Examples
   $ rrt bump minor --dry-run
   $ rrt bump 2.1.0 --no-changelog --no-commit
   $ rrt bump major --base-branch develop
+```
+
+## `rrt changelog`
+
+```text
+Usage:  rrt changelog [OPTIONS] <changelog_command>
+
+Commands for working with the project changelog.
+
+Subcommands:
+  compare  Diff two named release sections.
+  lint     Lint entries for style consistency.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  compare     Compare two release sections in the changelog.
+  lint        Lint changelog entries for style consistency.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt changelog compare`
+
+```text
+Usage:  rrt changelog compare [OPTIONS] <from> <to>
+
+Parse and diff two named release sections from the configured changelog file.
+
+Each entry is classified as only-in-FROM, common, or only-in-TO.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <from>        Release label to compare from.
+  <to>          Release label to compare to.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help    Show this message and exit.
+  --format      Output format (default: text).
+  --group NAME  Version group name.
+```
+
+### `rrt changelog lint`
+
+```text
+Usage:  rrt changelog lint [OPTIONS]
+
+Validate entries in [Unreleased] (or a named release) for style rules:
+sentence case, no trailing period, max length, and no duplicates.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help         Show this message and exit.
+  --release VERSION  Lint a specific named release section instead of [Unreleased].
+  --no-fail          Report violations without exiting non-zero.
+  --group NAME       Version group name.
 ```
 
 ## `rrt ci-version`
@@ -369,6 +441,7 @@ Use `rrt release check` to validate version targets, pin targets, and changelog 
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   check       Validate version targets, pin targets, and changelog files.
+  notes       Emit the [Unreleased] changelog section as a formatted release body.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -396,6 +469,160 @@ Options
 Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt release check
+```
+
+### `rrt release notes`
+
+```text
+Usage:  rrt release notes [OPTIONS]
+
+Extract the current [Unreleased] section from the configured changelog and emit it as a formatted release body ready for GitHub, GitLab, or any markdown editor.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --format FORMAT  Output format: md (default) or gh-release.
+  --group GROUP    Version group to read from when multiple groups are configured.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt release notes
+  $ rrt release notes --format gh-release
+  $ rrt release notes --format md > RELEASE_BODY.md
+```
+
+## `rrt workspace`
+
+```text
+Usage:  rrt workspace [OPTIONS] <workspace_command>
+
+Apply a unified version bump to every listed package.
+
+Each package must have its own [tool.rrt] configuration. All configs are validated before any file is written.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  bump        Bump versions across all listed packages.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt workspace bump`
+
+```text
+Usage:  rrt workspace bump [OPTIONS] <bump>
+
+Apply the same version bump to every package listed in --packages.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <bump>            major | minor | patch | pre-release | calver | <version>
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --packages PATHS  Comma-separated list of package directories to bump.
+  --dry-run         Preview changes without writing to disk.
+  --no-changelog    Skip changelog updates.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt workspace bump minor --packages api,sdk,docs
+  $ rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
+  $ rrt workspace bump patch --dry-run --packages api,sdk
+```
+
+## `rrt tag`
+
+```text
+Usage:  rrt tag [OPTIONS] <tag_command>
+
+Create annotated git tags from the current configured version, or check that existing tags follow the naming convention.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  create      Create an annotated git tag for the current version.
+  check       Validate existing tags against the configured version.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt tag create`
+
+```text
+Usage:  rrt tag create [OPTIONS]
+
+Create an annotated git tag matching the current configured version.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --prefix PREFIX  Tag prefix (default: 'v'). Pass empty string for no prefix.
+  --message MSG    Annotation message. Defaults to 'Release <tag>'.
+  --push           Push the tag to origin after creating it.
+  --force          Delete and recreate the tag if it already exists.
+  --dry-run        Preview what would happen without making changes.
+  --group GROUP    Version group to read when multiple groups are configured.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt tag create
+  $ rrt tag create --push
+  $ rrt tag create --prefix '' --message 'Release 1.2.3'
+  $ rrt tag check
+  $ rrt tag check --strict
+```
+
+### `rrt tag check`
+
+```text
+Usage:  rrt tag check [OPTIONS]
+
+Check that existing git tags follow the naming convention.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --prefix PREFIX  Expected tag prefix (default: 'v').
+  --strict         Fail if the expected tag for the current version is missing.
+  --group GROUP    Version group to read when multiple groups are configured.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt tag create
+  $ rrt tag create --push
+  $ rrt tag create --prefix '' --message 'Release 1.2.3'
+  $ rrt tag check
+  $ rrt tag check --strict
 ```
 
 ## `rrt doctor`
@@ -480,7 +707,9 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help  Show this message and exit.
+  -h, --help     Show this message and exit.
+  --fix          Auto-repair fixable issues (e.g. missing [Unreleased] changelog section).
+  --fix-dry-run  Preview what --fix would change without writing files.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -535,6 +764,17 @@ output.
 This is useful when you want to inspect the exact TOML/text content that rrt
 loaded, rather than the resolved structure.
 
+### Validate mode
+
+`--validate` runs every config check and reports pass/fail for each validation
+step.  Exits non-zero on any failure.
+
+### Schema mode
+
+`--schema` prints the bundled JSON Schema for `[tool.rrt]` to stdout.  Redirect
+the output to a file and reference it from your TOML language server settings to
+enable IDE completion and inline validation.
+
 ### Failure behavior
 
 The command exits with a non-zero status when:
@@ -551,6 +791,8 @@ In these cases, the command writes the error or discovery guidance to stderr.
 ```bash
 rrt config
 rrt config --raw
+rrt config --validate
+rrt config --schema > rrt-config.schema.json
 ```
 
 ### Caveats
@@ -575,12 +817,16 @@ Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help  Show this message and exit.
   --raw       Show the raw config file with syntax highlighting instead of the tree view.
+  --validate  Validate the config and report pass/fail for each check.
+  --schema    Print the JSON Schema for [tool.rrt] to stdout.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt config
   $ rrt config --raw
+  $ rrt config --validate
+  $ rrt config --schema
 ```
 
 ## `rrt env`

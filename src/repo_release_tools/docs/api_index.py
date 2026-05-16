@@ -135,12 +135,12 @@ def load_hooks(root: Path | None = None) -> dict[str, str]:
 
     id_matches = list(id_re.finditer(text))
     for i, m in enumerate(id_matches):
-        hook_id = m.group(1)
+        hook_id = m[1]
         block_end = id_matches[i + 1].start() if i + 1 < len(id_matches) else len(text)
         block = text[m.start() : block_end]
         entry_m = entry_re.search(block)
         if entry_m:
-            result[entry_m.group(1).strip()] = hook_id
+            result[entry_m[1].strip()] = hook_id
 
     return result
 
@@ -159,10 +159,7 @@ def _hook_id_for(name: str, hook_map: dict[str, str]) -> str | None:
     hook_ids = set(hook_map.values())
     if slug in hook_ids:
         return slug
-    for hook_id in hook_ids:
-        if hook_id.startswith(slug + "-"):
-            return hook_id
-    return None
+    return next((hid for hid in hook_ids if hid.startswith(slug + "-")), None)
 
 
 # ---------------------------------------------------------------------------

@@ -2862,3 +2862,100 @@ def test_docs_config_validate_invalid_badge_variant() -> None:
     bad = dc_replace(DocsConfig(), badge_variant="neon")
     with pytest.raises(ValueError, match="badge_variant"):
         bad.validate()
+
+
+# ---------------------------------------------------------------------------
+# _load_extra_commit_types error paths
+# ---------------------------------------------------------------------------
+
+
+def test_load_extra_commit_types_non_list_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    with pytest.raises(ValueError, match="list of strings"):
+        _load_extra_commit_types("not-a-list")
+
+
+def test_load_extra_commit_types_non_string_item_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    with pytest.raises(ValueError, match="list of strings"):
+        _load_extra_commit_types([1, 2, 3])
+
+
+def test_load_extra_commit_types_invalid_identifier_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    with pytest.raises(ValueError, match="valid identifier"):
+        _load_extra_commit_types(["1invalid"])
+
+
+def test_load_extra_commit_types_empty_string_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    with pytest.raises(ValueError, match="valid identifier"):
+        _load_extra_commit_types([""])
+
+
+def test_load_extra_commit_types_valid() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    result = _load_extra_commit_types(["hotfix", "spike"])
+    assert result == ("hotfix", "spike")
+
+
+# ---------------------------------------------------------------------------
+# _load_extra_section_map error paths
+# ---------------------------------------------------------------------------
+
+
+def test_load_extra_section_map_non_dict_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_section_map
+
+    with pytest.raises(ValueError, match="table mapping"):
+        _load_extra_section_map("not-a-dict")
+
+
+def test_load_extra_section_map_non_string_key_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_section_map
+
+    with pytest.raises(ValueError, match="keys and values must be strings"):
+        _load_extra_section_map({1: "Added"})
+
+
+def test_load_extra_section_map_valid() -> None:
+    from repo_release_tools.config.core import _load_extra_section_map
+
+    result = _load_extra_section_map({"hotfix": "Fixed"})
+    assert result == {"hotfix": "Fixed"}
+
+
+# ---------------------------------------------------------------------------
+# _load_pin_target_missing error paths
+# ---------------------------------------------------------------------------
+
+
+def test_load_pin_target_missing_non_string_raises() -> None:
+    from repo_release_tools.config.core import _load_pin_target_missing
+
+    with pytest.raises(ValueError, match="must be a string"):
+        _load_pin_target_missing(42)
+
+
+def test_load_pin_target_missing_invalid_value_raises() -> None:
+    from repo_release_tools.config.core import _load_pin_target_missing
+
+    with pytest.raises(ValueError, match="must be one of"):
+        _load_pin_target_missing("ignore")
+
+
+def test_load_pin_target_missing_none_returns_error() -> None:
+    from repo_release_tools.config.core import _load_pin_target_missing
+
+    assert _load_pin_target_missing(None) == "error"
+
+
+def test_load_pin_target_missing_valid() -> None:
+    from repo_release_tools.config.core import _load_pin_target_missing
+
+    assert _load_pin_target_missing("warn") == "warn"

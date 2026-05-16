@@ -31,6 +31,7 @@ from .model import (
     RUST_TOOL_RRT_EXAMPLE,
     VALID_CHANGELOG_WORKFLOWS,
     VALID_CI_FORMATS,
+    VALID_PIN_TARGET_MISSING,
     VALID_TARGET_KINDS,
     DocsConfig,
     EolConfig,
@@ -197,8 +198,9 @@ def format_missing_tool_rrt_guidance(root: Path, checked_files: list[Path] | Non
             "If none of those exist, add rrt config using the appropriate section for your project file:",
         ],
     )
-    for name in CONFIG_FILE_CANDIDATES:
-        lines.append(f"  - {name} \u2192 {CONFIG_SECTION_BY_FILE[name]}")
+    lines.extend(
+        f"  - {name} \u2192 {CONFIG_SECTION_BY_FILE[name]}" for name in CONFIG_FILE_CANDIDATES
+    )
 
     lines.extend(
         [
@@ -307,9 +309,10 @@ def _autodetect_version_targets(root: Path) -> list[VersionTarget]:
     has_python = any(t.kind == "pep621" or t.section == "tool.poetry" for t in targets)
     if has_python:
         for py_file in _find_python_version_files(root):
-            if any(t.path == py_file for t in targets):
-                continue
-            targets.append(VersionTarget(path=py_file, kind="python_version", ci_format="pep440"))
+            if not any(t.path == py_file for t in targets):
+                targets.append(
+                    VersionTarget(path=py_file, kind="python_version", ci_format="pep440")
+                )
 
     return targets
 
@@ -682,6 +685,9 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         eol=_load_eol_config(raw.get("eol")),
         docs=_load_docs_config(raw.get("docs"), root=root),
         folders=_load_folders_config(raw.get("folders")),
+        pin_target_missing=_load_pin_target_missing(raw.get("pin_target_missing")),
+        extra_commit_types=_load_extra_commit_types(raw.get("extra_commit_types", [])),
+        extra_section_map=_load_extra_section_map(raw.get("extra_section_map", {})),
     )
 
 
@@ -694,9 +700,7 @@ def _default_lock_command(config_file: Path) -> list[str] | None:
 
 def _default_generated_files(config_file: Path) -> list[str] | None:
     """Return default generated files, or None to trigger auto-detection."""
-    if config_file.name == "pyproject.toml":
-        return ["uv.lock"]
-    return _AUTO
+    return ["uv.lock"] if config_file.name == "pyproject.toml" else _AUTO
 
 
 def _detect_lock_and_files(
@@ -921,6 +925,48 @@ def _load_cargo_toml_config(config_file: Path) -> dict[str, object]:
     raise MissingRrtConfigError(
         "Missing [package.metadata.rrt] or [workspace.metadata.rrt] configuration in Cargo.toml",
     )
+
+
+def _load_extra_commit_types(raw: object) -> tuple[str, ...]:
+    """Parse and validate extra_commit_types."""
+    if not isinstance(raw, list):
+        raise ValueError("extra_commit_types must be a list of strings")
+    normalized_items: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            raise ValueError("extra_commit_types must be a list of strings")
+        normalized = item.strip().lower()
+        if not normalized or not _BRANCH_TYPE_IDENTIFIER_RE.fullmatch(normalized):
+            raise ValueError(
+                f"extra_commit_types entry {item!r} is not a valid identifier "
+                "(use lowercase letters, digits, hyphens, or underscores, starting with a letter)"
+            )
+        normalized_items.append(normalized)
+    return tuple(normalized_items)
+
+
+def _load_extra_section_map(raw: object) -> dict[str, str]:
+    """Parse and validate extra_section_map."""
+    if not isinstance(raw, dict):
+        raise ValueError("extra_section_map must be a table mapping commit types to section names")
+    result: dict[str, str] = {}
+    for k, v in raw.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise ValueError("extra_section_map keys and values must be strings")
+        result[k.strip().lower()] = v.strip()
+    return result
+
+
+def _load_pin_target_missing(value: object) -> str:
+    """Parse and validate the pin_target_missing setting."""
+    if value is None:
+        return "error"
+    if not isinstance(value, str):
+        raise ValueError("pin_target_missing must be a string")
+    if value not in VALID_PIN_TARGET_MISSING:
+        allowed = ", ".join(sorted(VALID_PIN_TARGET_MISSING))
+        raise ValueError(f"pin_target_missing must be one of {allowed}, got {value!r}")
+    return value
 
 
 def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:

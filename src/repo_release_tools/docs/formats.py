@@ -44,13 +44,14 @@ def _render_structured_txt(content: str) -> str:
             level = line.level - shallowest + 1
             if parts and parts[-1] != "":
                 parts.append("")
-            if level == 1:
-                parts.extend([line.text.upper(), "=" * len(line.text)])
-            elif level == 2:
-                parts.extend([line.text, "-" * len(line.text)])
-            else:
-                indent = "  " * max(level - 3, 0)
-                parts.append(f"{indent}* {line.text}")
+            match level:
+                case 1:
+                    parts.extend([line.text.upper(), "=" * len(line.text)])
+                case 2:
+                    parts.extend([line.text, "-" * len(line.text)])
+                case _:
+                    indent = "  " * max(level - 3, 0)
+                    parts.append(f"{indent}* {line.text}")
             continue
         parts.append(line.text)
     return "\n".join(parts).strip()
@@ -70,12 +71,13 @@ def _render_structured_rich(content: str) -> str:
         if line.kind == "heading" and line.level is not None:
             level = line.level - shallowest + 1
             indent = "  " + ("  " * max(level - 1, 0))
-            if level == 1:
-                parts.append(heading(f"{indent}{line.text}"))
-            elif level == 2:
-                parts.append(bold(f"{indent}{line.text}"))
-            else:
-                parts.append(bold(f"{indent}• {line.text}"))
+            match level:
+                case 1:
+                    parts.append(heading(f"{indent}{line.text}"))
+                case 2:
+                    parts.append(bold(f"{indent}{line.text}"))
+                case _:
+                    parts.append(bold(f"{indent}• {line.text}"))
             continue
         if line.text == "":
             parts.append("")

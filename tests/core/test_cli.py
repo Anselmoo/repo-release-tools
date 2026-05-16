@@ -240,6 +240,9 @@ def test_args_file_missing_file_shows_help_and_exits_with_code_2(tmp_path: Path)
 
 def test_main_dispatches_to_selected_handler(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeParser:
+        def parse_known_args(self) -> tuple[argparse.Namespace, list[str]]:
+            return argparse.Namespace(), []
+
         def parse_args(self) -> argparse.Namespace:
             return argparse.Namespace(handler=lambda args: 7)
 
@@ -259,6 +262,9 @@ def test_main_renders_handler_value_error_as_cli_error(
         raise ValueError("boom")
 
     class _FakeParser:
+        def parse_known_args(self) -> tuple[argparse.Namespace, list[str]]:
+            return argparse.Namespace(), []
+
         def parse_args(self) -> argparse.Namespace:
             return argparse.Namespace(handler=_raise_value_error, no_color=False)
 
@@ -350,6 +356,11 @@ def test_package_module_executes_main(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_cli_module_main_block_exits_with_handler_code(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         argparse.ArgumentParser,
+        "parse_known_args",
+        lambda self: (argparse.Namespace(), []),
+    )
+    monkeypatch.setattr(
+        argparse.ArgumentParser,
         "parse_args",
         lambda self: argparse.Namespace(handler=lambda args: 9),
     )
@@ -415,6 +426,11 @@ def test_global_flag_no_color_defaults_to_false() -> None:
 
 def test_global_flag_no_color_sets_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(
+        argparse.ArgumentParser,
+        "parse_known_args",
+        lambda self: (argparse.Namespace(), []),
+    )
     monkeypatch.setattr(
         argparse.ArgumentParser,
         "parse_args",
@@ -1207,3 +1223,68 @@ def test_grouped_epilog_uses_chrome_rules_and_heading_style(
     assert not re.search(rf"{ANSI_RE_PREFIX}[0-9;]*4[m;]", epilog), (
         "unexpected underline in grouped epilog headings"
     )
+
+
+# ---------------------------------------------------------------------------
+# Shell completion script generation
+# ---------------------------------------------------------------------------
+
+
+def test_generate_completion_bash_contains_rrt_completions() -> None:
+    from repo_release_tools.cli import _generate_completion, build_parser
+
+    parser = build_parser()
+    script = _generate_completion("bash", parser)
+    assert "_rrt_completions" in script
+    assert "complete -F _rrt_completions rrt" in script
+
+
+def test_generate_completion_zsh_contains_compdef() -> None:
+    from repo_release_tools.cli import _generate_completion, build_parser
+
+    parser = build_parser()
+    script = _generate_completion("zsh", parser)
+    assert "#compdef rrt" in script
+    assert "_rrt" in script
+
+
+def test_generate_completion_fish_contains_complete() -> None:
+    from repo_release_tools.cli import _generate_completion, build_parser
+
+    parser = build_parser()
+    script = _generate_completion("fish", parser)
+    assert "complete -c rrt" in script
+    assert "rrt fish completion" in script
+
+
+def test_bash_completion_includes_subcommands(monkeypatch: pytest.MonkeyPatch) -> None:
+    from repo_release_tools.cli import _generate_completion, build_parser
+
+    parser = build_parser()
+    script = _generate_completion("bash", parser)
+    # At least one known subcommand should appear
+    assert "bump" in script or "branch" in script
+
+
+def test_main_generate_completion_exits_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import argparse
+
+    from repo_release_tools import cli
+
+    original_build = cli.build_parser
+
+    def _patched_build() -> argparse.ArgumentParser:
+        parser = original_build()
+        fake_args = argparse.Namespace(generate_completion="bash", no_color=False)
+        monkeypatch.setattr(parser, "parse_known_args", lambda args=None: (fake_args, []))
+        return parser
+
+    monkeypatch.setattr(cli, "build_parser", _patched_build)
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main()
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "_rrt_completions" in out

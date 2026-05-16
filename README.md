@@ -1,5 +1,10 @@
 # repo-release-tools
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.png">
+  <img alt="REPO-RELEASE-TOOLS pipeline banner" src="docs/assets/banner.png">
+</picture>
+
 `repo-release-tools` keeps release policy boring in the best possible way.
 
 Use it from **GitHub Marketplace** when you want CI to validate branch names,
@@ -87,13 +92,17 @@ lock commands, generated files, and custom patterns.
 
 ## Changelog workflows
 
-The same project can be used in two release styles. Pick the one that matches
-how your repository actually lands changes.
+Pick the style that matches how your repository lands changes.
 
-| Workflow | Best for | Hook behavior | Action `changelog-strategy: auto` | `rrt bump` default |
-|---|---|---|---|---|
-| `incremental` *(default)* | teams that maintain changelog entries during development | `rrt-update-unreleased` and `rrt-changelog` stay active | resolves to `per-commit` | `auto` |
-| `squash` | repositories that squash many commits into one PR merge | changelog write/check hooks skip changelog enforcement | resolves to `release-only` | `generate` |
+**`incremental` (default)** — for teams that maintain changelog entries during development.
+- `rrt-update-unreleased` and `rrt-changelog` hooks stay active.
+- The GitHub Action resolves `changelog-strategy: auto` to `per-commit`.
+- `rrt bump` defaults to `auto`.
+
+**`squash`** — for repositories that squash many commits into one PR merge.
+- Changelog write and check hooks skip enforcement.
+- The GitHub Action resolves `changelog-strategy: auto` to `release-only`.
+- `rrt bump` defaults to `generate`.
 
 Minimal config:
 
@@ -145,5 +154,3 @@ Some workflow ideas were initially inspired by
 [`joseluisq/gitnow`](https://github.com/joseluisq/gitnow), but the `rrt git`
 surface is intentionally narrower and reshaped around conventional branching,
 safe commits, and release automation.
-
-Built with ❤️ for safe, simple release automation.

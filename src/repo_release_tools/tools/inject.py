@@ -1,13 +1,20 @@
-"""Anchor-based block replacement and doc-write helpers for Markdown files.
+"""Anchor-based block replacement and doc-write helpers for Markdown and RST files.
 
-Anchor markers are HTML comments (invisible in rendered output) that surround a
-block of generated content inside a larger document:
+Anchor markers surround a block of generated content inside a larger document.
 
-.. code-block:: markdown
+For Markdown (``.md`` files), markers are invisible HTML comments::
 
     <!-- rrt:auto:start:my-anchor -->
     ...generated content replaced on every run...
     <!-- rrt:auto:end:my-anchor -->
+
+For reStructuredText (``.rst`` / ``.txt`` files), markers use RST comment syntax::
+
+    .. rrt:auto:start:my-anchor
+
+    ...generated content replaced on every run...
+
+    .. rrt:auto:end:my-anchor
 
 Any text before or after the anchors is preserved unchanged.
 
@@ -18,6 +25,11 @@ and the ``rrt tree --inject`` command.
 
 An anchor ID must start with an ASCII letter or digit followed by any
 combination of ASCII letters, digits, dots, underscores, or hyphens.
+
+## Format detection
+
+The format is inferred automatically from the file extension:
+``rst`` and ``txt`` → RST; everything else → Markdown.
 """
 
 from __future__ import annotations
@@ -28,7 +40,28 @@ from typing import Protocol
 
 ANCHOR_START_TOKEN: str = "rrt:auto:start:"
 ANCHOR_END_TOKEN: str = "rrt:auto:end:"
+RST_ANCHOR_START_TOKEN: str = ".. rrt:auto:start:"
+RST_ANCHOR_END_TOKEN: str = ".. rrt:auto:end:"
 _ANCHOR_ID_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_RST_EXTENSIONS: frozenset[str] = frozenset({".rst", ".txt"})
+
+
+def _detect_inject_format(path: Path | str) -> str:
+    """Return ``'rst'`` for ``.rst``/``.txt`` files, ``'md'`` otherwise."""
+    suffix = Path(path).suffix.lower()
+    return "rst" if suffix in _RST_EXTENSIONS else "md"
+
+
+def _anchor_comment_pattern(token: str, anchor_id: str) -> re.Pattern[str]:
+    """Return a strict marker matcher for ``<!-- <token><anchor_id> -->``."""
+    marker = re.escape(f"{token}{anchor_id}")
+    return re.compile(rf"^\s*<!--\s*{marker}\s*-->\s*$")
+
+
+def _anchor_rst_pattern(token: str, anchor_id: str) -> re.Pattern[str]:
+    """Return a strict RST comment marker matcher for ``.. <token><anchor_id>``."""
+    marker = re.escape(f"{token}{anchor_id}")
+    return re.compile(rf"^\s*{marker}\s*$")
 
 
 class SupportsWrite(Protocol):
@@ -38,13 +71,9 @@ class SupportsWrite(Protocol):
         """Write text to the underlying stream-like object."""
 
 
-def _anchor_comment_pattern(token: str, anchor_id: str) -> re.Pattern[str]:
-    """Return a strict marker matcher for ``<!-- <token><anchor_id> -->``."""
-    marker = re.escape(f"{token}{anchor_id}")
-    return re.compile(rf"^\s*<!--\s*{marker}\s*-->\s*$")
-
-
-def replace_anchored_block(existing: str, *, anchor_id: str, content: str) -> str | None:
+def replace_anchored_block(
+    existing: str, *, anchor_id: str, content: str, fmt: str = "md"
+) -> str | None:
     """Replace the body between matching anchor markers in *existing*.
 
     Args:
@@ -53,6 +82,8 @@ def replace_anchored_block(existing: str, *, anchor_id: str, content: str) -> st
             ``[A-Za-z0-9][A-Za-z0-9._-]*``.
         content: New content to place between the markers. Trailing newline is
             normalised automatically.
+        fmt: ``'md'`` for Markdown HTML-comment anchors (default), ``'rst'`` for
+            reStructuredText comment anchors.
 
     Returns:
         Updated file text with the block replaced, or ``None`` when the start
@@ -66,8 +97,15 @@ def replace_anchored_block(existing: str, *, anchor_id: str, content: str) -> st
         raise ValueError(f"Invalid anchor id: {anchor_id!r}")
 
     lines = existing.splitlines(keepends=True)
-    start_re = _anchor_comment_pattern(ANCHOR_START_TOKEN, anchor_id)
-    end_re = _anchor_comment_pattern(ANCHOR_END_TOKEN, anchor_id)
+
+    if fmt == "rst":
+        start_re = _anchor_rst_pattern(RST_ANCHOR_START_TOKEN, anchor_id)
+        end_re = _anchor_rst_pattern(RST_ANCHOR_END_TOKEN, anchor_id)
+        end_token_display = f"{RST_ANCHOR_END_TOKEN}{anchor_id}"
+    else:
+        start_re = _anchor_comment_pattern(ANCHOR_START_TOKEN, anchor_id)
+        end_re = _anchor_comment_pattern(ANCHOR_END_TOKEN, anchor_id)
+        end_token_display = f"{ANCHOR_END_TOKEN}{anchor_id}"
 
     start_idx = next(
         (idx for idx, line in enumerate(lines) if start_re.match(line.rstrip("\r\n"))),
@@ -85,7 +123,7 @@ def replace_anchored_block(existing: str, *, anchor_id: str, content: str) -> st
         None,
     )
     if end_idx is None:
-        raise ValueError(f"Missing end anchor for {anchor_id!r} ({ANCHOR_END_TOKEN}{anchor_id})")
+        raise ValueError(f"Missing end anchor for {anchor_id!r} ({end_token_display})")
 
     block = content.rstrip("\n")
     body = f"{block}\n" if block else ""
@@ -127,18 +165,28 @@ def apply_generated_docs(
     """
     current = output_path.read_text(encoding="utf-8") if output_path.exists() else None
     desired = content
+    inject_fmt = _detect_inject_format(output_path)
 
     if anchor_id is not None:
+        if inject_fmt == "rst":
+            start_token_display = f"{RST_ANCHOR_START_TOKEN}{anchor_id}"
+            end_token_display = f"{RST_ANCHOR_END_TOKEN}{anchor_id}"
+        else:
+            start_token_display = f"{ANCHOR_START_TOKEN}{anchor_id}"
+            end_token_display = f"{ANCHOR_END_TOKEN}{anchor_id}"
+
         if current is None:
             stderr.write(
-                f"{output_path} missing required anchor block ({ANCHOR_START_TOKEN}{anchor_id}).\n",
+                f"{output_path} missing required anchor block ({start_token_display}).\n",
             )
             return 1
-        replaced = replace_anchored_block(current, anchor_id=anchor_id, content=content)
+        replaced = replace_anchored_block(
+            current, anchor_id=anchor_id, content=content, fmt=inject_fmt
+        )
         if replaced is None:
             stderr.write(
                 f"{output_path} is missing required anchors "
-                f"{ANCHOR_START_TOKEN}{anchor_id} / {ANCHOR_END_TOKEN}{anchor_id}.\n",
+                f"{start_token_display} / {end_token_display}.\n",
             )
             return 1
         desired = replaced

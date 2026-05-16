@@ -51,6 +51,7 @@ headers = ".github/hooks"
 
 [dependency-groups]
 dev = [
+    "pillow>=11.0",
     "poethepoet>=0.45.0",
     "pytest>=8.0",
     "pytest-cov>=7.1.0",
@@ -84,6 +85,14 @@ sequence = ["docs-generate", "docs-inject", "docs-check", "docs-inject-check"]
 [tool.poe.groups.docs.tasks.sync-assets]
 help = "Validate source-owned skill and agent assets are present (no copy needed)."
 cmd = "python -c \"from pathlib import Path; req=[Path('.github/skills/rrt-user-bootstrap/SKILL.md'), Path('.github/skills/rrt-user-versioning/SKILL.md'), Path('.github/skills/rrt-user-release-flow/SKILL.md'), Path('.github/skills/rrt-user-branch-strategy/SKILL.md'), Path('.github/skills/rrt-user-commit-quality/SKILL.md'), Path('.github/skills/rrt-user-changelog-automation/SKILL.md'), Path('.github/skills/rrt-user-docs-consistency/SKILL.md'), Path('.github/skills/rrt-user-config-safety/SKILL.md'), Path('.github/skills/rrt-user-ci-readiness/SKILL.md'), Path('.github/skills/rrt-user-migration-uvx-to-installed/SKILL.md'), Path('.github/agents/rrt-user-bootstrap.agent.md'), Path('.github/agents/rrt-user-version-planner.agent.md'), Path('.github/agents/rrt-user-release-readiness.agent.md'), Path('.github/agents/rrt-user-branch-guard.agent.md'), Path('.github/agents/rrt-user-commit-lint-triage.agent.md'), Path('.github/agents/rrt-user-changelog-curator.agent.md'), Path('.github/agents/rrt-user-config-validator.agent.md'), Path('.github/agents/rrt-user-docs-sync-auditor.agent.md'), Path('.github/agents/rrt-user-ci-failure-triage.agent.md'), Path('.github/agents/rrt-user-upgrade-assistant.agent.md'), Path('.github/hooks/rrt_user_branch_policy.py'), Path('.github/hooks/rrt_user_commit_policy.py'), Path('.github/hooks/rrt_user_changelog_policy.py'), Path('.github/hooks/rrt_user_release_readiness.py'), Path('.github/hooks/rrt_user_config_sanity.py'), Path('.github/hooks/rrt_user_docs_sync_hint.py'), Path('.github/hooks/rrt_user_dirty_tree_guard.py'), Path('.github/hooks/rrt_user_version_drift_guard.py'), Path('.github/hooks/rrt_user_ci_local_preflight.py'), Path('.github/hooks/rrt_user_security_hygiene_hint.py')]; missing=[str(p) for p in req if not p.exists()]; print('source-owned assets verified' if not missing else 'missing assets: '+', '.join(missing)); raise SystemExit(0 if not missing else 1)\""
+
+[tool.poe.groups.docs.tasks.banner-export]
+help = "Render the Unicode banner to docs/assets/banner.png."
+cmd  = "python -m repo_release_tools.assets.banner docs/assets/banner.png unicode"
+
+[tool.poe.groups.docs.tasks.banner-export-windows]
+help = "Render the Windows-safe ASCII banner to docs/assets/banner-windows.png."
+cmd  = "python -m repo_release_tools.assets.banner docs/assets/banner-windows.png ascii"
 
 [tool.rrt]
 

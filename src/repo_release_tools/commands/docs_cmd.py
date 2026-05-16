@@ -218,18 +218,17 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
     output = render(fmt, entries, config, root=cwd)
 
-    if fmt in ("md", "txt", "json", "toml"):
-        # Write to a sensible default output file or stdout
-        if fmt == "toml":
+    match fmt:
+        case "toml":
             lock_path = docs_lock_path(cwd, config.lock_file)
             p.ok(f"Lockfile written: {lock_path}")
-        else:
+        case "md" | "txt" | "json":
             sys.stdout.write(output)
-    elif fmt == "rich":
-        sys.stdout.write(output + "\n")
-    elif fmt == "clipboard":
-        sys.stdout.write(output)
-        p.ok("Output written to stdout (pipe to clipboard utility if needed)")
+        case "rich":
+            sys.stdout.write(output + "\n")
+        case "clipboard":
+            sys.stdout.write(output)
+            p.ok("Output written to stdout (pipe to clipboard utility if needed)")
 
     p.footer("Done.")
     return 0
@@ -502,11 +501,7 @@ def _prepend_anchor_if_missing(path: Path, anchor_id: str) -> None:
     # Check for YAML front matter: starts with ---, ends with ---
     if existing.startswith("---\n"):
         lines = existing.split("\n")
-        close_idx = -1
-        for i in range(1, len(lines)):
-            if lines[i] == "---":
-                close_idx = i
-                break
+        close_idx = next((i for i in range(1, len(lines)) if lines[i] == "---"), -1)
         if close_idx > 0:
             # Insert anchor after front matter
             before = "\n".join(lines[: close_idx + 1])
@@ -615,17 +610,20 @@ def _cmd_api(args: argparse.Namespace) -> int:
     parser = build_parser()
     entries = build_api_index(parser, hook_map=hook_map)
 
-    if fmt == "md":
-        rendered = render_api_md(entries)
-    elif fmt == "txt":
-        rendered = render_api_txt(entries)
-    elif fmt == "json":
-        rendered = render_api_json(entries)
-    else:
-        p.line(
-            f"Unsupported API format {fmt!r}. Use md, txt, or json.", ok=False, stream=sys.stderr
-        )
-        return 1
+    match fmt:
+        case "md":
+            rendered = render_api_md(entries)
+        case "txt":
+            rendered = render_api_txt(entries)
+        case "json":
+            rendered = render_api_json(entries)
+        case _:
+            p.line(
+                f"Unsupported API format {fmt!r}. Use md, txt, or json.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
 
     if output_arg and not dry_run:
         output_path = Path(output_arg)

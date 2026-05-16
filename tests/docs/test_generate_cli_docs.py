@@ -886,3 +886,123 @@ targets = ["docs/**/*.md"]
         exit_code = docs.task_inject_shared_blocks()
     assert exit_code == 0
     assert "legacy footer" in (tmp_path / "docs" / "guide.md").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# RST anchor injection tests (F7)
+# ---------------------------------------------------------------------------
+
+
+def test_replace_anchored_block_rst_updates_between_markers() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = (
+        "Intro\n"
+        "\n"
+        ".. rrt:auto:start:my-anchor\n"
+        "\n"
+        "old content\n"
+        "\n"
+        ".. rrt:auto:end:my-anchor\n"
+        "\n"
+        "Footer\n"
+    )
+
+    updated = replace_anchored_block(
+        existing, anchor_id="my-anchor", content="new content", fmt="rst"
+    )
+
+    assert updated is not None
+    assert "old content" not in updated
+    assert "new content" in updated
+    assert "Intro" in updated and "Footer" in updated
+
+
+def test_replace_anchored_block_rst_returns_none_when_marker_absent() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = "plain RST text\nno markers here\n"
+
+    updated = replace_anchored_block(existing, anchor_id="missing", content="x", fmt="rst")
+
+    assert updated is None
+
+
+def test_replace_anchored_block_rst_raises_for_missing_end_marker() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = ".. rrt:auto:start:broken\n\ncontent\n"
+
+    with pytest.raises(ValueError, match="Missing end anchor"):
+        replace_anchored_block(existing, anchor_id="broken", content="x", fmt="rst")
+
+
+def test_apply_generated_docs_rst_anchor_mode_replaces_block(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "target.rst"
+    output_path.write_text(
+        "Before\n\n.. rrt:auto:start:block\n\nold\n\n.. rrt:auto:end:block\n\nAfter\n",
+        encoding="utf-8",
+    )
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new content",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    assert exit_code == 0
+    result = output_path.read_text(encoding="utf-8")
+    assert "old" not in result
+    assert "new content" in result
+    assert "Before" in result and "After" in result
+
+
+def test_apply_generated_docs_rst_missing_anchor_returns_error(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "target.rst"
+    output_path.write_text("no anchors here\n", encoding="utf-8")
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "content",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    assert exit_code == 1
+    assert "rrt:auto:start:block" in stderr.getvalue()
+
+
+def test_apply_generated_docs_rst_missing_file_with_anchor_returns_error(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "nonexistent.rst"
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "content",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    assert exit_code == 1
+    assert "missing" in stderr.getvalue().lower()

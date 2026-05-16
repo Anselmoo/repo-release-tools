@@ -103,7 +103,10 @@ def read_commit_subject(message_file: Path) -> str:
     return ""
 
 
-def validate_commit_subject(subject: str) -> str | None:
+def validate_commit_subject(
+    subject: str,
+    extra_types: tuple[str, ...] = (),
+) -> str | None:
     """Validate a commit subject against the project's conventional commit rules."""
     if not subject:
         return "Commit message is empty."
@@ -113,32 +116,42 @@ def validate_commit_subject(subject: str) -> str | None:
 
     if subject.startswith(("fixup! ", "squash! ")):
         _, _, rewritten = subject.partition(" ")
-        if parse_conventional_commit(rewritten) is not None:
+        if parse_conventional_commit(rewritten, extra_types) is not None:
             return None
 
-    if parse_conventional_commit(subject) is not None:
+    if parse_conventional_commit(subject, extra_types) is not None:
         return None
 
-    allowed = ", ".join((*CONVENTIONAL_TYPES, "deps"))
+    allowed_types = (*CONVENTIONAL_TYPES, "deps", *extra_types)
+    allowed = ", ".join(allowed_types)
     return (
         "Commit subject must follow Conventional Commits, for example "
         f"'feat(cli): add hook installer'. Allowed types: {allowed}."
     )
 
 
-def _parse_subject_for_changelog(subject: str) -> ParsedCommit | None:
+def _parse_subject_for_changelog(
+    subject: str,
+    extra_types: tuple[str, ...] = (),
+) -> ParsedCommit | None:
     """Parse a commit subject while tolerating fixup and squash prefixes."""
     candidate = subject
     if candidate.startswith(("fixup! ", "squash! ")):
         _, _, candidate = candidate.partition(" ")
-    return parse_conventional_commit(candidate)
+    return parse_conventional_commit(candidate, extra_types)
 
 
-def commit_type_requires_changelog(commit_type: str, *, breaking: bool = False) -> bool:
+def commit_type_requires_changelog(
+    commit_type: str,
+    *,
+    breaking: bool = False,
+    extra_section_map: dict[str, str] | None = None,
+) -> bool:
     """Return whether a conventional commit type should update the changelog."""
     if breaking:
         return True
-    section = SECTION_MAP.get(commit_type.lower())
+    merged_map = {**SECTION_MAP, **(extra_section_map or {})}
+    section = merged_map.get(commit_type.lower())
     return section is not None and section != "Maintenance"
 
 
@@ -383,17 +396,31 @@ def dedup_changelog_entries(added_lines: list[str]) -> list[str]:
         for i in bullet_indices
         if i not in duplicate_indices
     ]
+    # Detect cancelling pairs — O(n) via verb-keyed lookup instead of O(n²) pairs.
+    # Maps (scope, verb, suffix) → original line index for bullets not yet cancelled.
+    bullet_lookup: dict[tuple[str | None, str, str], int] = {}
     cancelled_indices: set[int] = set()
-    for pos_a, (i, desc_a) in enumerate(remaining_bullets):
-        if i in cancelled_indices:
-            continue
-        for j, desc_b in remaining_bullets[pos_a + 1 :]:
-            if j in cancelled_indices:
-                continue
-            if _entries_cancel_out(desc_a, desc_b):
-                cancelled_indices.add(i)
-                cancelled_indices.add(j)
+    for i, desc in remaining_bullets:
+        scope, rest = _split_scope(desc)
+        rest_lower = rest.lower()
+        cancelled = False
+        for v1, v2 in _OPPOSITE_VERB_PAIRS:
+            for own_verb, opp_verb in ((v1, v2), (v2, v1)):
+                if not rest_lower.startswith(own_verb):
+                    continue
+                suffix = rest_lower[len(own_verb) :]
+                j = bullet_lookup.get((scope, opp_verb, suffix))
+                if j is not None and j not in cancelled_indices:
+                    cancelled_indices.update((i, j))
+                    cancelled = True
+                    break
+            if cancelled:
                 break
+        if not cancelled:
+            for v1, v2 in _OPPOSITE_VERB_PAIRS:
+                for verb in (v1, v2):
+                    if rest_lower.startswith(verb):
+                        bullet_lookup.setdefault((scope, verb, rest_lower[len(verb) :]), i)
 
     remove_indices = duplicate_indices | cancelled_indices
 

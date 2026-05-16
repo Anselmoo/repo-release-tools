@@ -152,15 +152,15 @@ def box(
     """
     lines = (content.splitlines() if isinstance(content, str) else list(content)) or [""]
 
-    if style == "rounded":
-        g = GLYPHS.rounded_box
-    elif style == "bold":
-        g = GLYPHS.bold_box
-    elif style == "ascii":
-        # Explicit ASCII fallback regardless of terminal support.
-        g = ASCII_BOX
-    else:
-        g = GLYPHS.box
+    match style:
+        case "rounded":
+            g = GLYPHS.rounded_box
+        case "bold":
+            g = GLYPHS.bold_box
+        case "ascii":
+            g = ASCII_BOX
+        case _:
+            g = GLYPHS.box
 
     content_max = max(display_width(line) for line in lines)
     if width is not None:

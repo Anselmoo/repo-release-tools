@@ -15,6 +15,7 @@ from repo_release_tools.commands import (
     agents_cmd,
     branch,
     bump,
+    changelog_cmd,
     ci_version,
     config_cmd,
     docs_cmd,
@@ -29,8 +30,10 @@ from repo_release_tools.commands import (
     install_cmd,
     release_cmd,
     skill,
+    tag,
     toc,
     tree,
+    workspace,
 )
 from repo_release_tools.commands.action_cmd import register as action_register
 from repo_release_tools.ui import (
@@ -102,7 +105,7 @@ def _compute_col_width(actions: list[argparse.Action], width: int | None = None)
 
 
 COMMAND_GROUPS: dict[str, list[str]] = {
-    "Version & Release": ["bump", "ci-version", "release"],
+    "Version & Release": ["bump", "changelog", "ci-version", "release", "workspace", "tag"],
     "Repository Health": [
         "doctor",
         "config",
@@ -159,6 +162,7 @@ COMMAND_REGISTRARS = (
     agents_cmd.register,
     branch.register,
     bump.register,
+    changelog_cmd.register,
     ci_version.register,
     action_register,
     config_cmd.register,
@@ -173,9 +177,11 @@ COMMAND_REGISTRARS = (
     install_cmd.register,
     release_cmd.register,
     skill.register,
+    tag.register,
     toc.register,
     tree.register,
     docs_cmd.register,
+    workspace.register,
 )
 
 
@@ -540,6 +546,150 @@ StyledHelpFormatter = RrtHelpFormatter
 FriendlyArgumentParser = RrtArgumentParser
 
 
+def _generate_completion(shell: str, parser: argparse.ArgumentParser) -> str:
+    """Generate a shell completion script for the given shell."""
+    subparsers_action = next(
+        (a for a in parser._actions if isinstance(a, argparse._SubParsersAction)),
+        None,
+    )
+    subcommands: list[str] = []
+    global_opts: list[str] = []
+    subcommand_opts: dict[str, list[str]] = {}
+
+    for action in parser._actions:
+        for opt in getattr(action, "option_strings", []):
+            global_opts.append(opt)
+
+    if subparsers_action is not None:
+        for name, sub in (subparsers_action.choices or {}).items():
+            subcommands.append(name)
+            opts: list[str] = []
+            for action in sub._actions:
+                for opt in getattr(action, "option_strings", []):
+                    opts.append(opt)
+            subcommand_opts[name] = opts
+
+    if shell == "bash":
+        return _bash_completion(subcommands, global_opts, subcommand_opts)
+    if shell == "zsh":
+        return _zsh_completion(subcommands, global_opts, subcommand_opts)
+    return _fish_completion(subcommands, global_opts, subcommand_opts)
+
+
+def _bash_completion(
+    subcommands: list[str],
+    global_opts: list[str],
+    subcommand_opts: dict[str, list[str]],
+) -> str:
+    cmds = " ".join(subcommands)
+    global_flags = " ".join(global_opts)
+    sub_cases = "\n".join(
+        f"            {cmd})\n                opts='{' '.join(opts)}'\n                ;;"
+        for cmd, opts in subcommand_opts.items()
+    )
+    return f"""\
+# rrt bash completion
+# Source this file or add to ~/.bash_completion.d/
+_rrt_completions() {{
+    local cur prev commands
+    cur="${{COMP_WORDS[COMP_CWORD]}}"
+    prev="${{COMP_WORDS[COMP_CWORD-1]}}"
+    commands="{cmds}"
+
+    if [[ $COMP_CWORD -eq 1 ]]; then
+        COMPREPLY=( $(compgen -W "$commands {global_flags}" -- "$cur") )
+        return
+    fi
+
+    local subcommand="${{COMP_WORDS[1]}}"
+    local opts="{global_flags}"
+    case "$subcommand" in
+{sub_cases}
+    esac
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+}}
+complete -F _rrt_completions rrt
+"""
+
+
+def _zsh_completion(
+    subcommands: list[str],
+    global_opts: list[str],
+    subcommand_opts: dict[str, list[str]],
+) -> str:
+    cmd_list = "\n".join(f"    '{cmd}'" for cmd in subcommands)
+    sub_cases = "\n".join(
+        f"        ({cmd})\n            _arguments {' '.join(repr(o) for o in opts)}\n            ;;"
+        for cmd, opts in subcommand_opts.items()
+    )
+    return f"""\
+#compdef rrt
+# rrt zsh completion
+# Place in a directory listed in $fpath, e.g. ~/.zsh/completions/_rrt
+
+_rrt() {{
+    local -a commands
+    commands=(
+{cmd_list}
+    )
+
+    _arguments -C \\
+        '(-h --help)'{"{"}'-h[Show help]','--help[Show help]'{"}"} \\
+        '(--version)--version[Show version]' \\
+        '(--no-color)--no-color[Disable color output]' \\
+        '(--format)--format=[Output format]:format:(text json)' \\
+        '1:command:->command' \\
+        '*::args:->args'
+
+    case $state in
+        command)
+            _describe 'rrt subcommand' commands
+            ;;
+        args)
+            case $words[1] in
+{sub_cases}
+            esac
+            ;;
+    esac
+}}
+
+_rrt "$@"
+"""
+
+
+def _fish_completion(
+    subcommands: list[str],
+    global_opts: list[str],
+    subcommand_opts: dict[str, list[str]],
+) -> str:
+    lines = [
+        "# rrt fish completion",
+        "# Place in ~/.config/fish/completions/rrt.fish",
+        "",
+        "# Disable file completion by default",
+        "complete -c rrt -f",
+        "",
+        "# Global options",
+    ]
+    for opt in global_opts:
+        long = opt.lstrip("-")
+        lines.append(f"complete -c rrt -l {long} -d 'option'")
+
+    lines.append("")
+    lines.append("# Subcommands")
+    for cmd in subcommands:
+        lines.append(f"complete -c rrt -n '__fish_use_subcommand' -a {cmd}")
+
+    for cmd, opts in subcommand_opts.items():
+        for opt in opts:
+            long = opt.lstrip("-")
+            lines.append(
+                f"complete -c rrt -n '__fish_seen_subcommand_from {cmd}' -l {long} -d 'option'"
+            )
+
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the root parser."""
 
@@ -576,6 +726,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Disable all ANSI color output.",
     )
+    parser.add_argument(
+        "--generate-completion",
+        choices=["bash", "zsh", "fish"],
+        default=None,
+        metavar="SHELL",
+        help="Print shell completion script for SHELL and exit.",
+    )
 
     subparsers = parser.add_subparsers(
         dest="command",
@@ -594,6 +751,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """Program entrypoint."""
     parser = build_parser()
+    args, _ = parser.parse_known_args()
+    if getattr(args, "generate_completion", None):
+        sys.stdout.write(_generate_completion(args.generate_completion, parser))
+        raise SystemExit(0)
     args = parser.parse_args()
     if getattr(args, "no_color", False):
         os.environ.setdefault("NO_COLOR", "1")

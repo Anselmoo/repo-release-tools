@@ -24,6 +24,42 @@ GO_VERSION_PATTERN = re.compile(
     r"\s*(?:const|var)\s*\(\s*.*?^\s*Version\s*=\s*\""
     r')([^"]+)(")',
 )
+# Rust Cargo.toml: [package] section, version field.
+CARGO_TOML_PATTERN = re.compile(r'(?ms)(^\[package\]\s.*?^version\s*=\s*")([^"]+)(")')
+# Java Maven pom.xml: first <version> tag (project-level).
+MAVEN_POM_PATTERN = re.compile(r"(<version>)([^<]+)(</version>)")
+# Ruby gemspec: spec.version = "..." or s.version = "...".
+GEMSPEC_VERSION_PATTERN = re.compile(r'(?m)^(\s*\w+\.version\s*=\s*)(["\'])([^"\']+)\2')
+# .NET .csproj: <Version>...</Version> tag.
+CSPROJ_VERSION_PATTERN = re.compile(r"(<Version>)([^<]+)(</Version>)")
+
+
+def _compute_updated_content(target: VersionTarget, text: str, new_version: str) -> str:
+    """Compute the updated file content for a version target without writing to disk."""
+    if target.kind == "pep621":
+        return PEP621_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+    if target.kind == "package_json":
+        return replace_package_json_version(text, new_version)
+    if target.kind == "python_version":
+        return PYTHON_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
+    if target.kind == "go_version":
+        return GO_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+    if target.kind == "cargo_toml":
+        return CARGO_TOML_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+    if target.kind == "maven_pom":
+        return MAVEN_POM_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+    if target.kind == "gemspec":
+        return GEMSPEC_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
+    if target.kind == "csproj":
+        return CSPROJ_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+    if target.pattern:
+        return replace_pattern_version(text, target.pattern, new_version)
+    return replace_toml_field(
+        text,
+        new_version,
+        section=target.section or "",
+        field=target.field or "",
+    )
 
 
 def replace_version_in_file(
@@ -40,23 +76,7 @@ def replace_version_in_file(
     if current_version == new_version:
         raise RuntimeError(f"{path} version replacement had no effect")
 
-    if target.kind == "pep621":
-        updated = PEP621_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-    elif target.kind == "package_json":
-        updated = replace_package_json_version(text, new_version)
-    elif target.kind == "python_version":
-        updated = PYTHON_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
-    elif target.kind == "go_version":
-        updated = GO_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-    elif target.pattern:
-        updated = replace_pattern_version(text, target.pattern, new_version)
-    else:
-        updated = replace_toml_field(
-            text,
-            new_version,
-            section=target.section or "",
-            field=target.field or "",
-        )
+    updated = _compute_updated_content(target, text, new_version)
 
     if dry_run:
         p = DryRunPrinter(dry_run=True)
@@ -67,6 +87,53 @@ def replace_version_in_file(
     msg = f'{path}  {GLYPHS.arrow.right}  version = "{new_version}"'
     p = DryRunPrinter(dry_run=False)
     p.ok(msg)
+
+
+def replace_all_versions_atomic(
+    targets: list[VersionTarget],
+    new_version: str,
+    *,
+    dry_run: bool,
+) -> None:
+    """Update all version targets atomically: validate all substitutions first, then flush.
+
+    If any target fails to produce a valid substitution, no files are written and
+    the original content of any already-written files is restored.
+    """
+    if dry_run:
+        for target in targets:
+            p = DryRunPrinter(dry_run=True)
+            p.would_write(str(target.path), detail=f'version = "{new_version}"')
+        return
+
+    # Phase 1: compute all updates in memory before touching disk.
+    pending: list[tuple[Path, str, str]] = []  # (path, old_content, new_content)
+    for target in targets:
+        path = target.path
+        text = path.read_text(encoding="utf-8")
+        current_version = read_version_string(target)
+        if current_version == new_version:
+            raise RuntimeError(f"{path} version replacement had no effect")
+        updated = _compute_updated_content(target, text, new_version)
+        pending.append((path, text, updated))
+
+    # Phase 2: flush all files; roll back on any failure.
+    written: list[tuple[Path, str]] = []
+    try:
+        for path, _old, new_content in pending:
+            path.write_text(new_content, encoding="utf-8")
+            written.append((path, _old))
+    except Exception:
+        for path, original in written:
+            try:
+                path.write_text(original, encoding="utf-8")
+            except OSError:
+                pass
+        raise
+
+    p = DryRunPrinter(dry_run=False)
+    for path, _, _ in pending:
+        p.ok(f'{path}  {GLYPHS.arrow.right}  version = "{new_version}"')
 
 
 def read_current_version(config: RrtConfig) -> Version:
@@ -125,6 +192,26 @@ def read_version_string(target: VersionTarget) -> str:
         match = GO_VERSION_PATTERN.search(text)
         if match is None:
             raise RuntimeError(f"Could not find Version constant/variable in {target.path}")
+        return match.group(2)
+    if target.kind == "cargo_toml":
+        match = CARGO_TOML_PATTERN.search(text)
+        if match is None:
+            raise RuntimeError(f"Could not find [package].version in {target.path}")
+        return match.group(2)
+    if target.kind == "maven_pom":
+        match = MAVEN_POM_PATTERN.search(text)
+        if match is None:
+            raise RuntimeError(f"Could not find <version> in {target.path}")
+        return match.group(2)
+    if target.kind == "gemspec":
+        match = GEMSPEC_VERSION_PATTERN.search(text)
+        if match is None:
+            raise RuntimeError(f"Could not find .version in {target.path}")
+        return match.group(3)
+    if target.kind == "csproj":
+        match = CSPROJ_VERSION_PATTERN.search(text)
+        if match is None:
+            raise RuntimeError(f"Could not find <Version> in {target.path}")
         return match.group(2)
 
     if target.pattern:
@@ -248,12 +335,13 @@ def replace_pin_in_file(
     new_version: str,
     *,
     dry_run: bool,
+    pin_target_missing: str = "error",
 ) -> None:
     """Update a single doc/CI pin reference to ``new_version``.
 
-    Unlike :func:`replace_version_in_file`, this function is lenient:
-    - A non-matching pattern prints a warning and returns without error.
-    - A version already equal to ``new_version`` prints a note and returns.
+    *pin_target_missing* controls what happens when the pattern does not match:
+    - ``"warn"`` (legacy): print a warning and continue without error.
+    - ``"error"`` (default): raise ``RuntimeError``.
     """
     path = target.path
     text = path.read_text(encoding="utf-8")
@@ -261,8 +349,13 @@ def replace_pin_in_file(
     match = search_pattern(text, target.pattern)
     if match is None:
         p = DryRunPrinter(dry_run=dry_run)
-        p.warn(f"Pin pattern did not match in {path} — skipping")
-        return
+        if pin_target_missing == "warn":
+            p.warn(f"Pin pattern did not match in {path} — skipping")
+            return
+        raise RuntimeError(
+            f"Pin pattern did not match in {path}. "
+            'Set pin_target_missing = "warn" in [tool.rrt] to downgrade to a warning.'
+        )
 
     current = match.group(2)
     if current == new_version:

@@ -187,14 +187,9 @@ _VERSION_RE = re.compile(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?")
 
 def _parse_cycle(version_string: str) -> str | None:
     """Extract the major.minor cycle string from a version string."""
-    match = _VERSION_RE.search(version_string)
-    if not match:
+    if not (match := _VERSION_RE.search(version_string)):
         return None
-    major = match.group(1)
-    minor = match.group(2)
-    if minor is not None:
-        return f"{major}.{minor}"
-    return major
+    return f"{match[1]}.{match[2]}" if match[2] is not None else match[1]
 
 
 def resolve_override_eol(
@@ -218,14 +213,10 @@ def resolve_override_eol(
 
 def _find_record(cycle: str, records: list[EolRecord]) -> EolRecord | None:
     """Find the best matching EolRecord for *cycle*."""
-    for record in records:
-        if record.cycle == cycle:
-            return record
     parts = cycle.split(".")
-    for record in records:
-        if record.cycle == parts[0]:
-            return record
-    return None
+    return next((r for r in records if r.cycle == cycle), None) or next(
+        (r for r in records if r.cycle == parts[0]), None
+    )
 
 
 def _rust_lag_position(cycle: str, records: list[EolRecord]) -> int:
@@ -234,10 +225,7 @@ def _rust_lag_position(cycle: str, records: list[EolRecord]) -> int:
         (i for i, record in enumerate(records) if not record.is_eol and record.eol_date is None),
         0,
     )
-    for index, record in enumerate(records):
-        if record.cycle == cycle:
-            return index - latest_idx
-    return len(records)
+    return next((i - latest_idx for i, r in enumerate(records) if r.cycle == cycle), len(records))
 
 
 def check_eol_status(

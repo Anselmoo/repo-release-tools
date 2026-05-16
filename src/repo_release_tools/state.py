@@ -24,9 +24,7 @@ def docs_lock_path(root: Path, lock_file: str = _DOCS_LOCK_NAME) -> Path:
     p = Path(lock_file)
     if p.is_absolute():
         return p
-    if p.parts[0] == _RRT_DIR:
-        return root / p
-    return root / _RRT_DIR / p
+    return root / p if p.parts[0] == _RRT_DIR else root / _RRT_DIR / p
 
 
 def hash_content(content: str) -> str:
@@ -103,7 +101,7 @@ def lock_is_current(lock_path: Path, sources: list[dict[str, Any]]) -> tuple[boo
         if key not in seen_keys:
             drifted.append(f"Source removed but still in lockfile: {key}")
 
-    return (len(drifted) == 0, drifted)
+    return (not drifted, drifted)
 
 
 # ---------------------------------------------------------------------------
@@ -112,19 +110,21 @@ def lock_is_current(lock_path: Path, sources: list[dict[str, Any]]) -> tuple[boo
 
 
 def _toml_value(v: Any) -> str:
-    if isinstance(v, bool):
-        return "true" if v else "false"
-    if isinstance(v, int):
-        return str(v)
-    if isinstance(v, float):
-        return repr(v)
-    if isinstance(v, str):
-        escaped = v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-        return f'"{escaped}"'
-    if isinstance(v, list):
-        items = ", ".join(_toml_value(i) for i in v)
-        return f"[{items}]"
-    raise TypeError(f"Unsupported TOML value type: {type(v)!r}")
+    match v:
+        case bool():
+            return "true" if v else "false"
+        case int():
+            return str(v)
+        case float():
+            return repr(v)
+        case str():
+            escaped = v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+            return f'"{escaped}"'
+        case list():
+            items = ", ".join(_toml_value(i) for i in v)
+            return f"[{items}]"
+        case _:
+            raise TypeError(f"Unsupported TOML value type: {type(v)!r}")
 
 
 def _dict_to_toml(d: dict[str, Any], _prefix: str = "") -> str:

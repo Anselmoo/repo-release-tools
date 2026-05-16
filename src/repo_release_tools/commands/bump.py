@@ -83,13 +83,15 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
+from repo_release_tools.preflight import PreflightError, run_preflight
 from repo_release_tools.ui import (
     GLYPHS,
     DryRunPrinter,
     ProgressLine,
     spinner_lines,
 )
-from repo_release_tools.version.semver import Version
+from repo_release_tools.version.calver import CALVER_SCHEMES, CalVersion
+from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, Version
 from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
     read_group_current_version,
@@ -264,15 +266,30 @@ def cmd_bump(args: argparse.Namespace) -> int:
         return 1
 
     current = read_group_current_version(group)
-    if args.bump in {"major", "minor", "patch"}:
-        new = current.bump(args.bump)
+    _BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
+    if args.bump == "calver":
+        calver_scheme = getattr(args, "calver_scheme", "YYYY.MM.DD")
+        try:
+            current_calver = CalVersion.parse(str(current))
+        except ValueError:
+            current_calver = CalVersion.today(calver_scheme)
+            # treat any non-calver current as a fresh start
+            new_str = str(current_calver)
+        else:
+            new_str = str(current_calver.bump())
+        new = new_str  # type: ignore[assignment]
+    elif args.bump in _BUMP_KINDS:
+        new = current.bump(args.bump)  # type: ignore[assignment]
     else:
         try:
-            new = Version.parse(args.bump)
-        except ValueError as exc:
-            p = DryRunPrinter(False)
-            p.line(str(exc), ok=False, stream=sys.stderr)
-            return 1
+            new = Version.parse(args.bump)  # type: ignore[assignment]
+        except ValueError:
+            try:
+                new = CalVersion.parse(args.bump)  # type: ignore[assignment]
+            except ValueError:
+                p = DryRunPrinter(False)
+                p.line(f"Invalid bump value: {args.bump!r}", ok=False, stream=sys.stderr)
+                return 1
 
     branch_name = group.release_branch.format(version=new)
     current_branch = "<current>" if args.dry_run else git.current_branch(root)
@@ -288,15 +305,14 @@ def cmd_bump(args: argparse.Namespace) -> int:
     )
 
     branch_exists = False
+    try:
+        run_preflight(config, dry_run=args.dry_run, group=group)
+    except PreflightError as exc:
+        p = DryRunPrinter(False)
+        p.line(str(exc), ok=False, stream=sys.stderr)
+        return 1
+
     if not args.dry_run:
-        if not git.working_tree_clean(root):
-            p = DryRunPrinter(False)
-            p.line(
-                "Working tree has uncommitted changes. Commit or stash them first, or use --dry-run.",
-                ok=False,
-                stream=sys.stderr,
-            )
-            return 1
         branch_exists = git.branch_exists(root, branch_name)
         if branch_exists and not force:
             p = DryRunPrinter(False)
@@ -340,7 +356,9 @@ def cmd_bump(args: argparse.Namespace) -> int:
         for i, pin in enumerate(unique_pins, 1):
             if total_pins > 1 and i > 1:
                 pin_progress.clear()
-            replace_pin_in_file(pin, str(new), dry_run=args.dry_run)
+            replace_pin_in_file(
+                pin, str(new), dry_run=args.dry_run, pin_target_missing=config.pin_target_missing
+            )
             if total_pins > 1:
                 pin_progress.update_bar(i / total_pins)
         if total_pins > 1:
@@ -453,7 +471,17 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument(
         "bump",
         metavar="<bump>",
-        help="major | minor | patch | <semver>  \u2014 bump kind or explicit version",
+        help=(
+            "major | minor | patch | alpha | beta | rc | pre-release | calver | <version>  "
+            "\u2014 bump kind or explicit version"
+        ),
+    )
+    parser.add_argument(
+        "--calver-scheme",
+        choices=list(CALVER_SCHEMES),
+        default="YYYY.MM.DD",
+        metavar="SCHEME",
+        help="CalVer scheme to use when bump=calver (YYYY.MM | YYYY.MM.DD | YYYY.M.D).",
     )
 
     release_grp = parser.add_argument_group("Release control")
