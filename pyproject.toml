@@ -68,7 +68,7 @@ cmd = "rrt docs publish"
 
 [tool.poe.groups.docs.tasks.docs-inject]
 help = "Inject shared anchor blocks (headers/footers) into doc files."
-cmd = "rrt docs inject"
+cmd = "rrt docs inject --add-anchors"
 
 [tool.poe.groups.docs.tasks.docs-inject-check]
 help = "Verify all shared anchor blocks are up to date."
@@ -80,7 +80,7 @@ cmd = "rrt docs publish --check"
 
 [tool.poe.groups.docs.tasks.docs]
 help = "Regenerate generated docs and confirm they are current."
-sequence = ["docs-generate", "docs-inject", "docs-check", "docs-inject-check"]
+sequence = ["docs-generate", "docs-check", "docs-inject", "docs-inject-check"]
 
 [tool.poe.groups.docs.tasks.sync-assets]
 help = "Validate source-owned skill and agent assets are present (no copy needed)."
@@ -350,10 +350,12 @@ stubs = [
     "commands/init",
 ]
 
-# Shared-block anchor id used by injected doc footer content.
 [[tool.rrt.docs.shared_blocks]]
-anchor_id = "page-header"
-content = """{platform_badge}
+anchor_id = "doc-footer"
+content = """
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub]({repo_url})
 """
 targets = [
     "docs/index.md",
@@ -363,11 +365,8 @@ targets = [
 ]
 
 [[tool.rrt.docs.shared_blocks]]
-anchor_id = "doc-footer"
-content = """
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub]({repo_url})
+anchor_id = "page-header"
+content = """{platform_badge}
 """
 targets = [
     "docs/index.md",

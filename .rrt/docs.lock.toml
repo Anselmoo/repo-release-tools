@@ -1,27 +1,33 @@
 [meta]
-generated_at = "2026-05-13T20:06:00+00:00"
+generated_at = "2026-05-16T20:03:25+00:00"
 rrt_version = "1.5.0"
 
 [sources."src/repo_release_tools/commands/branch.py"]
 hash = "sha256:a27d9766948e29a58a0b8ed370c35606ceb6aee6582eb1c14cef1b4d38fb43fa"
 symbols = ["SEMANTIC_BRANCHES_DOC"]
 lang = "python"
-updated_at = "2026-05-13T20:06:00+00:00"
+updated_at = "2026-05-16T20:03:25+00:00"
+
+[sources."src/repo_release_tools/commands/docs_cmd.py"]
+hash = "sha256:e409030727f18d44e88d170541cb47c1030f57fcaac1afd17810f47c9f6a3d3d"
+symbols = ["DOCS_OVERVIEW"]
+lang = "python"
+updated_at = "2026-05-16T20:03:25+00:00"
 
 [sources."src/repo_release_tools/commands/tree.py"]
 hash = "sha256:32e3691319770165a19daa355261333adaaa85cdcae902c87d398112f0c7fe2d"
 symbols = ["TREE_DOC"]
 lang = "python"
-updated_at = "2026-05-13T20:06:00+00:00"
+updated_at = "2026-05-16T20:03:25+00:00"
 
 [sources."src/repo_release_tools/workflow/git.py"]
 hash = "sha256:748cace397d7f0c9507a64599c7f6956ddebbae018888784beae11aac261dd8b"
 symbols = ["GIT_DOC"]
 lang = "python"
-updated_at = "2026-05-13T20:06:00+00:00"
+updated_at = "2026-05-16T20:03:25+00:00"
 
 [sources."src/repo_release_tools/workflow/hooks.py"]
 hash = "sha256:5e6446c7fce26ebbe2fffa7ba94a2975401c1d623b97aeee564d75ba634453b0"
 symbols = ["PRE_COMMIT_DOC", "AGENT_INSTRUCTIONS_DOC"]
 lang = "python"
-updated_at = "2026-05-13T20:06:00+00:00"
+updated_at = "2026-05-16T20:03:25+00:00"
