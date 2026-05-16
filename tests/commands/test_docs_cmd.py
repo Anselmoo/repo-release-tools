@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -20,11 +21,13 @@ from repo_release_tools.commands.docs_cmd import (
     _config_for_cwd,
     _effective_platform,
     _effective_source_url_template,
+    _embed_shared_blocks_in_content,
     _expand_platform_vars,
     _prepend_anchor_if_missing,
+    _restore_shared_block_stubs,
     cmd_docs,
 )
-from repo_release_tools.config import DocsConfig, SharedBlock
+from repo_release_tools.config import DocsConfig, RrtConfig, SharedBlock
 from repo_release_tools.docs.extractor import DocEntry
 from repo_release_tools.state import hash_content
 
@@ -606,6 +609,197 @@ class TestCmdPublish:
 
         assert _cmd_publish(args) == 1
         assert "missing top-level H1" in capsys.readouterr().err
+
+    def test_cmd_publish_continues_when_load_config_raises(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Publish should not fail when config loading raises (cfg remains None)."""
+        from repo_release_tools.docs import publisher as docs_publisher
+
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: (_ for _ in ()).throw(FileNotFoundError),
+        )
+        target = docs_publisher.DocTarget(
+            tmp_path / "docs" / "branch.md",
+            lambda: '---\ntitle: "branch"\n---\n\n# branch\n',
+            anchor_id="readme-links",
+        )
+        monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter([target]))
+        monkeypatch.setattr(docs_publisher, "validate_generated_pages", list)
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.apply_generated_docs",
+            lambda *a, **kw: 0,
+        )
+
+        args = argparse.Namespace(
+            root=str(tmp_path), check=False, dry_run=False, fail_on_change=False
+        )
+        assert _cmd_publish(args) == 0
+
+
+class TestEmbedSharedBlocksInContent:
+    """Tests for _embed_shared_blocks_in_content."""
+
+    def test_returns_unchanged_when_no_shared_blocks(self, tmp_path: Path) -> None:
+        """Content is returned as-is when cfg has no shared_blocks."""
+        cfg = SimpleNamespace(docs=SimpleNamespace(shared_blocks=[]))
+        result = _embed_shared_blocks_in_content(
+            "# Hello\n", Path("docs/branch.md"), tmp_path, cast(RrtConfig, cfg)
+        )
+        assert result == "# Hello\n"
+
+    def test_returns_unchanged_when_cfg_is_none(self, tmp_path: Path) -> None:
+        result = _embed_shared_blocks_in_content(
+            "# Hello\n", Path("docs/branch.md"), tmp_path, None
+        )
+        assert result == "# Hello\n"
+
+    def test_embeds_matching_block_with_anchor_stub_and_content(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A matching shared block should be inserted and filled in the content."""
+        from repo_release_tools.config import SharedBlock
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "branch.md").write_text('---\ntitle: "branch"\n---\n\n# branch\n')
+
+        block = SharedBlock(
+            anchor_id="page-header",
+            content="badge-content",
+            targets=("docs/*.md",),
+            position="prepend",
+            before_blank_lines=0,
+            after_blank_lines=1,
+        )
+        cfg = SimpleNamespace(
+            docs=SimpleNamespace(
+                shared_blocks=[block],
+                source_repo_url="https://example.com",
+            )
+        )
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd._expand_platform_vars",
+            lambda content, docs, *, root, target_path: content,
+        )
+
+        base = '---\ntitle: "branch"\n---\n\n# branch\n'
+        result = _embed_shared_blocks_in_content(
+            base, Path("docs/branch.md"), tmp_path, cast(RrtConfig, cfg)
+        )
+
+        assert "<!-- rrt:auto:start:page-header -->" in result
+        assert "badge-content" in result
+        assert "<!-- rrt:auto:end:page-header -->" in result
+        assert result.startswith("---\ntitle")
+
+    def test_skips_non_matching_block(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A block whose glob does not match the target path is skipped."""
+        from repo_release_tools.config import SharedBlock
+
+        block = SharedBlock(
+            anchor_id="page-header",
+            content="badge",
+            targets=("other/*.md",),
+            position="prepend",
+            before_blank_lines=0,
+            after_blank_lines=1,
+        )
+        cfg = SimpleNamespace(docs=SimpleNamespace(shared_blocks=[block], source_repo_url=""))
+        result = _embed_shared_blocks_in_content(
+            "# Hello\n", Path("docs/branch.md"), tmp_path, cast(RrtConfig, cfg)
+        )
+        assert "rrt:auto" not in result
+
+
+class TestRestoreSharedBlockStubs:
+    """Tests for _restore_shared_block_stubs."""
+
+    def test_skips_when_load_config_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """FileNotFoundError from load_config should be silently ignored."""
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: (_ for _ in ()).throw(FileNotFoundError),
+        )
+        _restore_shared_block_stubs(tmp_path, [])
+
+    def test_skips_when_no_shared_blocks(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Config without shared_blocks should be a no-op."""
+        cfg = SimpleNamespace(docs=SimpleNamespace(shared_blocks=[]))
+        monkeypatch.setattr("repo_release_tools.commands.docs_cmd.load_config", lambda root: cfg)
+        _restore_shared_block_stubs(tmp_path, [])
+
+    def test_skips_anchor_injection_targets(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Targets with anchor_id set should be skipped (they preserve existing content)."""
+        from repo_release_tools.config import SharedBlock
+        from repo_release_tools.docs import publisher as docs_publisher
+
+        stub_calls: list[str] = []
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd._prepend_anchor_if_missing",
+            lambda path, anchor_id, **_: stub_calls.append(anchor_id),
+        )
+        block = SharedBlock(
+            anchor_id="page-header",
+            content="badge",
+            targets=(str(tmp_path / "*.md"),),
+            position="prepend",
+            before_blank_lines=0,
+            after_blank_lines=1,
+        )
+        cfg = SimpleNamespace(docs=SimpleNamespace(shared_blocks=[block]))
+        monkeypatch.setattr("repo_release_tools.commands.docs_cmd.load_config", lambda root: cfg)
+
+        target = docs_publisher.DocTarget(
+            tmp_path / "index.md",
+            lambda: "content",
+            anchor_id="index-topic-links",
+        )
+        _restore_shared_block_stubs(tmp_path, [(target, "content")])
+        assert stub_calls == []
+
+    def test_adds_stubs_for_matching_full_replacement_targets(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Full-replacement targets that match a shared block should get anchor stubs."""
+        from repo_release_tools.config import SharedBlock
+        from repo_release_tools.docs import publisher as docs_publisher
+
+        doc_file = tmp_path / "docs" / "branch.md"
+        doc_file.parent.mkdir(parents=True)
+        doc_file.write_text('---\ntitle: "branch"\n---\n\n# branch\n')
+
+        stub_calls: list[tuple] = []
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd._prepend_anchor_if_missing",
+            lambda path, anchor_id, **kwargs: stub_calls.append((path, anchor_id, kwargs)),
+        )
+        block = SharedBlock(
+            anchor_id="page-header",
+            content="badge",
+            targets=("docs/*.md",),
+            position="prepend",
+            before_blank_lines=0,
+            after_blank_lines=1,
+        )
+        cfg = SimpleNamespace(docs=SimpleNamespace(shared_blocks=[block]))
+        monkeypatch.setattr("repo_release_tools.commands.docs_cmd.load_config", lambda root: cfg)
+
+        target = docs_publisher.DocTarget(Path("docs/branch.md"), lambda: "content")
+        _restore_shared_block_stubs(tmp_path, [(target, "content")])
+        assert len(stub_calls) == 1
+        assert stub_calls[0][1] == "page-header"
 
 
 class TestCmdInject:

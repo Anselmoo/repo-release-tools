@@ -1006,3 +1006,24 @@ def test_apply_generated_docs_rst_missing_file_with_anchor_returns_error(tmp_pat
 
     assert exit_code == 1
     assert "missing" in stderr.getvalue().lower()
+
+
+def test_insert_anchor_stub_str_rejects_invalid_position() -> None:
+    from repo_release_tools.tools.inject import insert_anchor_stub_str
+
+    with pytest.raises(ValueError, match="Unsupported anchor position"):
+        insert_anchor_stub_str("content", "my-anchor", position="invalid")
+
+
+def test_insert_anchor_stub_str_rejects_negative_before_blank_lines() -> None:
+    from repo_release_tools.tools.inject import insert_anchor_stub_str
+
+    with pytest.raises(ValueError, match="before_blank_lines must be >= 0"):
+        insert_anchor_stub_str("content", "my-anchor", before_blank_lines=-1)
+
+
+def test_insert_anchor_stub_str_rejects_negative_after_blank_lines() -> None:
+    from repo_release_tools.tools.inject import insert_anchor_stub_str
+
+    with pytest.raises(ValueError, match="after_blank_lines must be >= 0"):
+        insert_anchor_stub_str("content", "my-anchor", after_blank_lines=-1)

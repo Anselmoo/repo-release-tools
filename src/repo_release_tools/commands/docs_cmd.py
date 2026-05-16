@@ -103,13 +103,19 @@ from pathlib import Path
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.config import (
     DocsConfig,
+    RrtConfig,
     is_missing_tool_rrt_error,
     load_config,
 )
 from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs.formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
-from repo_release_tools.tools.inject import apply_generated_docs, ensure_anchor_stub
+from repo_release_tools.tools.inject import (
+    apply_generated_docs,
+    ensure_anchor_stub,
+    insert_anchor_stub_str,
+    replace_anchored_block,
+)
 from repo_release_tools.tools.platform import (
     PLATFORM_URL_TEMPLATES,
     detect_platform,
@@ -279,6 +285,13 @@ def _cmd_publish(args: argparse.Namespace) -> int:
     check: bool = getattr(args, "check", False)
     dry_run: bool = getattr(args, "dry_run", False)
     fail_on_change: bool = getattr(args, "fail_on_change", False)
+    root = Path(getattr(args, "root", ".")).resolve()
+
+    cfg = None
+    try:
+        cfg = load_config(root)
+    except (FileNotFoundError, ValueError):
+        pass
 
     rendered_targets: list[tuple[docs_publisher.DocTarget, str]] = []
     consistency_issues: list[str] = []
@@ -300,10 +313,15 @@ def _cmd_publish(args: argparse.Namespace) -> int:
 
     exit_code = 0
     for target, content in rendered_targets:
+        full_content = (
+            _embed_shared_blocks_in_content(content, target.output_path, root, cfg)
+            if target.anchor_id is None
+            else content
+        )
         exit_code = max(
             exit_code,
             apply_generated_docs(
-                content,
+                full_content,
                 output_path=target.output_path,
                 check=check,
                 write=not check,
@@ -486,6 +504,79 @@ def _cmd_inject(args: argparse.Namespace) -> int:
         return exit_code
 
     return 0
+
+
+def _embed_shared_blocks_in_content(
+    content: str,
+    target_output_path: Path,
+    root: Path,
+    cfg: RrtConfig | None,
+) -> str:
+    """Return *content* with all matching shared blocks embedded in-memory.
+
+    For each shared block whose target glob matches *target_output_path*, an
+    anchor stub is inserted and immediately filled with the expanded block
+    content.  This lets ``rrt docs publish`` produce the complete expected file
+    state — including header/footer regions — so that ``publish --check`` and
+    a subsequent ``rrt docs inject`` are both consistent.
+    """
+    from repo_release_tools import __version__ as rrt_version  # noqa: PLC0415
+
+    if not (cfg and cfg.docs and cfg.docs.shared_blocks):
+        return content
+
+    repo_url = cfg.docs.source_repo_url or ""
+    abs_target = (root / target_output_path).resolve()
+
+    for block in cfg.docs.shared_blocks:
+        matched = {p.resolve() for pattern in block.targets for p in root.glob(pattern)}
+        if abs_target not in matched:
+            continue
+
+        block_content = block.content.rstrip("\n")
+        block_content = block_content.replace("{version}", rrt_version)
+        block_content = block_content.replace("{repo_url}", repo_url)
+        block_content = _expand_platform_vars(
+            block_content, cfg.docs, root=root, target_path=abs_target
+        )
+
+        content = insert_anchor_stub_str(
+            content,
+            block.anchor_id,
+            position=block.position,
+            before_blank_lines=block.before_blank_lines,
+            after_blank_lines=block.after_blank_lines,
+        )
+        replaced = replace_anchored_block(content, anchor_id=block.anchor_id, content=block_content)
+        if replaced is not None:
+            content = replaced
+
+    return content
+
+
+def _restore_shared_block_stubs(root: Path, rendered_targets: list) -> None:
+    """Re-add anchor stubs for full-replacement targets after publish."""
+    cfg = None
+    try:
+        cfg = load_config(root)
+    except (FileNotFoundError, ValueError):
+        return
+    if not (cfg and cfg.docs and cfg.docs.shared_blocks):
+        return
+    for target, _content in rendered_targets:
+        if target.anchor_id is not None:
+            continue
+        abs_target = (root / target.output_path).resolve()
+        for block in cfg.docs.shared_blocks:
+            matched = {p.resolve() for pattern in block.targets for p in root.glob(pattern)}
+            if abs_target in matched:
+                _prepend_anchor_if_missing(
+                    abs_target,
+                    block.anchor_id,
+                    position=block.position,
+                    before_blank_lines=block.before_blank_lines,
+                    after_blank_lines=block.after_blank_lines,
+                )
 
 
 def _prepend_anchor_if_missing(

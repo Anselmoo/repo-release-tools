@@ -71,6 +71,52 @@ class SupportsWrite(Protocol):
         """Write text to the underlying stream-like object."""
 
 
+def insert_anchor_stub_str(
+    content: str,
+    anchor_id: str,
+    *,
+    position: str = "prepend",
+    before_blank_lines: int = 0,
+    after_blank_lines: int = 1,
+) -> str:
+    """Return *content* with an empty anchor pair inserted if *anchor_id* is absent.
+
+    Mirrors the placement logic of :func:`ensure_anchor_stub` but operates on a
+    string rather than a file path, making it suitable for in-memory content
+    generation.
+    """
+    if position not in {"prepend", "append"}:
+        raise ValueError(f"Unsupported anchor position: {position!r}")
+    if before_blank_lines < 0:
+        raise ValueError("before_blank_lines must be >= 0")
+    if after_blank_lines < 0:
+        raise ValueError("after_blank_lines must be >= 0")
+
+    start = f"<!-- rrt:auto:start:{anchor_id} -->"
+    if start in content:
+        return content
+
+    end = f"<!-- rrt:auto:end:{anchor_id} -->"
+    newline = "\r\n" if "\r\n" in content else "\n"
+    anchor_lines = [newline for _ in range(before_blank_lines)]
+    anchor_lines.extend([f"{start}{newline}", f"{end}{newline}"])
+    anchor_lines.extend([newline for _ in range(after_blank_lines)])
+
+    lines = content.splitlines(keepends=True)
+    insert_at = len(lines)
+
+    if position == "prepend":
+        if content.startswith("---\n") or content.startswith("---\r\n"):
+            close_idx = next(
+                (i for i in range(1, len(lines)) if lines[i].rstrip("\r\n") == "---"), -1
+            )
+            insert_at = close_idx + 1 if close_idx > 0 else 0
+        else:
+            insert_at = 0
+
+    return "".join(lines[:insert_at] + anchor_lines + lines[insert_at:])
+
+
 def ensure_anchor_stub(
     path: Path,
     anchor_id: str,
@@ -93,35 +139,16 @@ def ensure_anchor_stub(
         raise ValueError("after_blank_lines must be >= 0")
     if not path.exists():
         return
-
     existing = path.read_text(encoding="utf-8")
-    start = f"<!-- rrt:auto:start:{anchor_id} -->"
-    if start in existing:
-        return
-
-    end = f"<!-- rrt:auto:end:{anchor_id} -->"
-    newline = "\r\n" if "\r\n" in existing else "\n"
-    anchor_lines = [newline for _ in range(before_blank_lines)]
-    anchor_lines.extend([f"{start}{newline}", f"{end}{newline}"])
-    anchor_lines.extend([newline for _ in range(after_blank_lines)])
-
-    lines = existing.splitlines(keepends=True)
-
-    insert_at = len(lines)
-    if position == "prepend":
-        if existing.startswith("---\n") or existing.startswith("---\r\n"):
-            close_idx = next(
-                (i for i in range(1, len(lines)) if lines[i].rstrip("\r\n") == "---"), -1
-            )
-            if close_idx > 0:
-                insert_at = close_idx + 1
-            else:
-                insert_at = 0
-        else:
-            insert_at = 0
-
-    updated = "".join(lines[:insert_at] + anchor_lines + lines[insert_at:])
-    path.write_text(updated, encoding="utf-8")
+    updated = insert_anchor_stub_str(
+        existing,
+        anchor_id,
+        position=position,
+        before_blank_lines=before_blank_lines,
+        after_blank_lines=after_blank_lines,
+    )
+    if updated != existing:
+        path.write_text(updated, encoding="utf-8")
 
 
 def replace_anchored_block(
