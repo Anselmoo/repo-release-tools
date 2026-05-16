@@ -60,7 +60,7 @@ from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, Version
 from repo_release_tools.version.targets import (
     read_group_current_version,
-    replace_version_in_file,
+    replace_all_versions_atomic,
 )
 
 
@@ -194,8 +194,7 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
         current = read_group_current_version(group)
         pr.section(f"{pkg_path.name}: {current} {GLYPHS.arrow.right} {new}")
 
-        for target in group.version_targets:
-            replace_version_in_file(target, str(new), dry_run=dry_run)
+        replace_all_versions_atomic(group.version_targets, str(new), dry_run=dry_run)
 
         if not no_changelog:
             group_config = RrtConfig(

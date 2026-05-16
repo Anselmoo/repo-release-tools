@@ -298,9 +298,19 @@ kind = "package_json"
         lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    version_calls: list[tuple[list[VersionTarget], str, bool]] = []
+
+    def fake_replace_all_versions_atomic(
+        targets: list[VersionTarget],
+        new_version: str,
+        *,
+        dry_run: bool,
+    ) -> None:
+        version_calls.append((targets, new_version, dry_run))
+
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
-        lambda *a, **k: None,
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
+        fake_replace_all_versions_atomic,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
 
@@ -331,6 +341,10 @@ kind = "package_json"
     )
 
     assert result == 0
+    assert len(version_calls) == 1
+    assert version_calls[0][1] == "0.2.0"
+    assert version_calls[0][2] is False
+    assert version_calls[0][0][0].path.name == "package.json"
     assert ["git", "checkout", "-b", "release/v0.2.0"] in calls
     assert ["git", "add", "package.json", "CHANGELOG.md"] in calls
     assert ["git", "add", "-u"] in calls
@@ -369,7 +383,7 @@ kind = "package_json"
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
         lambda *a, **k: None,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
@@ -1735,7 +1749,7 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
         lambda grp: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
         lambda target, version, dry_run: None,
     )
     monkeypatch.setattr(
@@ -2062,7 +2076,7 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
         lambda grp: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
         lambda target, version, dry_run: None,
     )
     monkeypatch.setattr(
@@ -2285,8 +2299,14 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
         default_group_name="default",
     )
 
-    def fake_replace_version(target: VersionTarget, new_version: str, *, dry_run: bool) -> None:  # noqa: ARG001
-        print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
+    def fake_replace_version(
+        targets: list[VersionTarget],
+        new_version: str,
+        *,
+        dry_run: bool,
+    ) -> None:  # noqa: ARG001
+        for target in targets:
+            print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.load_or_autodetect_config",
@@ -2297,7 +2317,7 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
         lambda grp: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
         fake_replace_version,
     )
     monkeypatch.setattr(

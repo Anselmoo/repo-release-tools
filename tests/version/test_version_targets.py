@@ -460,6 +460,17 @@ def test_replace_pattern_version_no_match_raises() -> None:
         replace_pattern_version("x", r"^(v)(\d+\.\d+\.\d+)()$", "1.2.3")
 
 
+def test_replace_pattern_target_atomic_updates_file(tmp_path: Path) -> None:
+    """Atomic version replacement should handle regex-based targets too."""
+    f = tmp_path / "README.md"
+    f.write_text("version: v1.2.3", encoding="utf-8")
+    target = VersionTarget(path=f, pattern=r"^(version: v)(\d+\.\d+\.\d+)(.*)$")
+
+    replace_all_versions_atomic([target], "2.0.0", dry_run=False)
+
+    assert f.read_text(encoding="utf-8") == "version: v2.0.0"
+
+
 def test_detect_json_indent_tab() -> None:
     text = '{\n\t"version": "1.0.0"\n}\n'
     assert _detect_json_indent(text) == "\t"
@@ -684,6 +695,7 @@ def test_update_version_targets_atomic_rollback_on_failure(tmp_path: Path) -> No
 
     # f1 should be rolled back to original content
     assert "1.0.0" in f1.read_text()
+    assert "1.0.0" in f2.read_text()
 
 
 # ---------------------------------------------------------------------------

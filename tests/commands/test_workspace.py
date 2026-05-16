@@ -209,6 +209,44 @@ def test_workspace_bump_updates_version_targets(
     assert "1.1.0" in conf_b.version_groups[0].version_targets[0].path.read_text()
 
 
+def test_workspace_bump_uses_atomic_version_updates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Workspace bumps update version targets via the atomic helper."""
+    monkeypatch.chdir(tmp_path)
+
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    conf = _make_pkg_config(pkg, "1.0.0")
+    calls: list[tuple[list[VersionTarget], str, bool]] = []
+
+    def fake_replace_all_versions_atomic(
+        targets: list[VersionTarget],
+        new_version: str,
+        *,
+        dry_run: bool,
+    ) -> None:
+        calls.append((targets, new_version, dry_run))
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.workspace.load_or_autodetect_config",
+        lambda _: conf,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.workspace.replace_all_versions_atomic",
+        fake_replace_all_versions_atomic,
+    )
+
+    rc = cmd_workspace_bump(_args(packages="api", no_changelog=True))
+
+    assert rc == 0
+    assert len(calls) == 1
+    assert calls[0][1] == "1.1.0"
+    assert calls[0][2] is False
+    assert calls[0][0][0].path.name == "__init__.py"
+
+
 def test_workspace_bump_promotes_unreleased_changelog(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

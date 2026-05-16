@@ -95,8 +95,8 @@ from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, Version
 from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
     read_group_current_version,
+    replace_all_versions_atomic,
     replace_pin_in_file,
-    replace_version_in_file,
 )
 from repo_release_tools.workflow import git
 
@@ -332,14 +332,14 @@ def cmd_bump(args: argparse.Namespace) -> int:
     version_progress = ProgressLine(file=sys.stdout)
     p.section("Updating version strings")
     total_targets = len(group.version_targets)
-    for i, target in enumerate(group.version_targets, 1):
+    for i, _target in enumerate(group.version_targets, 1):
         if total_targets > 1 and i > 1:
             version_progress.clear()
-        replace_version_in_file(target, str(new), dry_run=args.dry_run)
         if total_targets > 1:
             version_progress.update_bar(i / total_targets)
     if total_targets > 1:
         version_progress.clear()
+    replace_all_versions_atomic(group.version_targets, str(new), dry_run=args.dry_run)
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins and not getattr(args, "no_pin_sync", False):
