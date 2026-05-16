@@ -2,6 +2,10 @@
 title: "rrt hooks"
 permalink: "/commands/hooks/"
 ---
+<!-- rrt:auto:start:page-header -->
+[![GitHub](../assets/badges/github.svg)](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:page-header -->
+
 
 # rrt hooks
 
@@ -235,3 +239,9 @@ pre-commit:
 | Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` |
 | Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-hooks pre-commit` |
 | Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --strategy unreleased` |
+
+<!-- rrt:auto:start:doc-footer -->
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:doc-footer -->
