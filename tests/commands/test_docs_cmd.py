@@ -978,6 +978,39 @@ class TestPrependAnchorIfMissing:
         content = f.read_text(encoding="utf-8")
         assert content.startswith("<!-- rrt:auto:start:page-header -->")
 
+    def test_appends_stub_with_whitespace_context(self, tmp_path: Path) -> None:
+        f = tmp_path / "README.md"
+        f.write_text("---\ntitle: Test\n---\n# Hello\n", encoding="utf-8")
+        _prepend_anchor_if_missing(
+            f,
+            "doc-footer",
+            position="append",
+            before_blank_lines=1,
+            after_blank_lines=1,
+        )
+        content = f.read_text(encoding="utf-8")
+        assert "# Hello\n\n<!-- rrt:auto:start:doc-footer -->" in content
+        assert content.endswith("<!-- rrt:auto:end:doc-footer -->\n\n")
+
+    def test_rejects_invalid_position(self, tmp_path: Path) -> None:
+        f = tmp_path / "README.md"
+        with pytest.raises(ValueError, match="Unsupported anchor position"):
+            _prepend_anchor_if_missing(f, "page-header", position="middle")
+
+    def test_rejects_negative_blank_lines(self, tmp_path: Path) -> None:
+        f = tmp_path / "README.md"
+        with pytest.raises(ValueError, match="before_blank_lines must be >= 0"):
+            _prepend_anchor_if_missing(f, "page-header", before_blank_lines=-1)
+        with pytest.raises(ValueError, match="after_blank_lines must be >= 0"):
+            _prepend_anchor_if_missing(f, "page-header", after_blank_lines=-1)
+
+    def test_prepends_stub_at_top_when_front_matter_is_unclosed(self, tmp_path: Path) -> None:
+        f = tmp_path / "README.md"
+        f.write_text("---\ntitle: Test\n# Hello\n", encoding="utf-8")
+        _prepend_anchor_if_missing(f, "page-header")
+        content = f.read_text(encoding="utf-8")
+        assert content.startswith("<!-- rrt:auto:start:page-header -->")
+
     def test_idempotent_when_anchor_already_present(self, tmp_path: Path) -> None:
         f = tmp_path / "README.md"
         f.write_text(
@@ -1018,3 +1051,29 @@ class TestCmdInjectAddAnchors:
         content = readme.read_text(encoding="utf-8")
         assert "<!-- rrt:auto:start:page-header -->" in content
         assert "badge content" in content
+
+    def test_inject_add_anchors_appends_footer_stub(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        readme = tmp_path / "README.md"
+        readme.write_text("# Existing Content\n", encoding="utf-8")
+        block = SharedBlock(
+            anchor_id="doc-footer",
+            content="footer content",
+            position="append",
+            before_blank_lines=1,
+            after_blank_lines=1,
+            targets=("README.md",),
+        )
+        monkeypatch.setattr(
+            "repo_release_tools.commands.docs_cmd.load_config",
+            lambda root: SimpleNamespace(docs=DocsConfig(shared_blocks=(block,))),
+        )
+        args = argparse.Namespace(root=str(tmp_path), check=False, dry_run=False, add_anchors=True)
+        assert _cmd_inject(args) == 0
+        content = readme.read_text(encoding="utf-8")
+        assert content.startswith("# Existing Content\n")
+        assert "# Existing Content\n\n<!-- rrt:auto:start:doc-footer -->" in content
+        assert content.endswith("<!-- rrt:auto:end:doc-footer -->\n\n")

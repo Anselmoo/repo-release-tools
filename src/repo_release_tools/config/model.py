@@ -335,6 +335,9 @@ class SharedBlock:
 
     anchor_id: str
     content: str  # inline Markdown/HTML content from pyproject.toml or .rrt.toml
+    position: str = "prepend"
+    before_blank_lines: int = 0
+    after_blank_lines: int = 1
     targets: tuple[str, ...] = ()  # glob patterns relative to the project root
 
     def validate(self) -> None:
@@ -343,6 +346,18 @@ class SharedBlock:
             raise ValueError("shared_blocks anchor_id must be a non-empty string")
         if self.content is None:
             raise ValueError(f"shared_blocks entry {self.anchor_id!r} must define 'content'")
+        if self.position not in {"prepend", "append"}:
+            raise ValueError(
+                f"shared_blocks entry {self.anchor_id!r} position must be 'prepend' or 'append'",
+            )
+        if self.before_blank_lines < 0:
+            raise ValueError(
+                f"shared_blocks entry {self.anchor_id!r} before_blank_lines must be >= 0",
+            )
+        if self.after_blank_lines < 0:
+            raise ValueError(
+                f"shared_blocks entry {self.anchor_id!r} after_blank_lines must be >= 0",
+            )
         if not self.targets:
             raise ValueError(
                 f"shared_blocks entry {self.anchor_id!r} must define at least one target glob",

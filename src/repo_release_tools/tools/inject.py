@@ -71,6 +71,59 @@ class SupportsWrite(Protocol):
         """Write text to the underlying stream-like object."""
 
 
+def ensure_anchor_stub(
+    path: Path,
+    anchor_id: str,
+    *,
+    position: str = "prepend",
+    before_blank_lines: int = 0,
+    after_blank_lines: int = 1,
+) -> None:
+    """Insert an empty anchor pair when *anchor_id* is missing from *path*.
+
+    The stub is placed either after YAML front matter (``position='prepend'``)
+    or at the end of the file (``position='append'``), with configurable blank
+    lines before and after the marker pair.
+    """
+    if position not in {"prepend", "append"}:
+        raise ValueError(f"Unsupported anchor position: {position!r}")
+    if before_blank_lines < 0:
+        raise ValueError("before_blank_lines must be >= 0")
+    if after_blank_lines < 0:
+        raise ValueError("after_blank_lines must be >= 0")
+    if not path.exists():
+        return
+
+    existing = path.read_text(encoding="utf-8")
+    start = f"<!-- rrt:auto:start:{anchor_id} -->"
+    if start in existing:
+        return
+
+    end = f"<!-- rrt:auto:end:{anchor_id} -->"
+    newline = "\r\n" if "\r\n" in existing else "\n"
+    anchor_lines = [newline for _ in range(before_blank_lines)]
+    anchor_lines.extend([f"{start}{newline}", f"{end}{newline}"])
+    anchor_lines.extend([newline for _ in range(after_blank_lines)])
+
+    lines = existing.splitlines(keepends=True)
+
+    insert_at = len(lines)
+    if position == "prepend":
+        if existing.startswith("---\n") or existing.startswith("---\r\n"):
+            close_idx = next(
+                (i for i in range(1, len(lines)) if lines[i].rstrip("\r\n") == "---"), -1
+            )
+            if close_idx > 0:
+                insert_at = close_idx + 1
+            else:
+                insert_at = 0
+        else:
+            insert_at = 0
+
+    updated = "".join(lines[:insert_at] + anchor_lines + lines[insert_at:])
+    path.write_text(updated, encoding="utf-8")
+
+
 def replace_anchored_block(
     existing: str, *, anchor_id: str, content: str, fmt: str = "md"
 ) -> str | None:

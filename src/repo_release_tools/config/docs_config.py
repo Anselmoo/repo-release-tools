@@ -320,9 +320,33 @@ def _load_shared_blocks(
         raw_targets = item.get("targets")
         if not isinstance(raw_targets, list) or not all(isinstance(t, str) for t in raw_targets):
             raise ValueError(f"tool.rrt.docs.shared_blocks[{i}].targets must be a list of strings")
+        raw_position = item.get("position")
+        position = "prepend" if raw_position is None else raw_position
+        if not isinstance(position, str) or position not in {"prepend", "append"}:
+            raise ValueError(
+                f"tool.rrt.docs.shared_blocks[{i}].position must be 'prepend' or 'append'",
+            )
+
+        raw_before = item.get("before_blank_lines")
+        before_blank_lines = 0 if raw_before is None else raw_before
+        if not isinstance(before_blank_lines, int) or before_blank_lines < 0:
+            raise ValueError(
+                f"tool.rrt.docs.shared_blocks[{i}].before_blank_lines must be a non-negative integer",
+            )
+
+        raw_after = item.get("after_blank_lines")
+        after_blank_lines = 1 if raw_after is None else raw_after
+        if not isinstance(after_blank_lines, int) or after_blank_lines < 0:
+            raise ValueError(
+                f"tool.rrt.docs.shared_blocks[{i}].after_blank_lines must be a non-negative integer",
+            )
+
         block = SharedBlock(
             anchor_id=anchor_id.strip(),
             content=content,
+            position=position,
+            before_blank_lines=before_blank_lines,
+            after_blank_lines=after_blank_lines,
             targets=tuple(cast("list[str]", raw_targets)),
         )
         block.validate()

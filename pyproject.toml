@@ -351,12 +351,11 @@ stubs = [
 ]
 
 [[tool.rrt.docs.shared_blocks]]
-anchor_id = "doc-footer"
-content = """
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub]({repo_url})
+anchor_id = "page-header"
+content = """{platform_badge}
 """
+before_blank_lines = 0
+after_blank_lines = 1
 targets = [
     "docs/index.md",
     "docs/action.md",
@@ -365,9 +364,15 @@ targets = [
 ]
 
 [[tool.rrt.docs.shared_blocks]]
-anchor_id = "page-header"
-content = """{platform_badge}
+anchor_id = "doc-footer"
+position = "append"
+content = """
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub]({repo_url})
 """
+before_blank_lines = 1
+after_blank_lines = 0
 targets = [
     "docs/index.md",
     "docs/action.md",

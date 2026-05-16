@@ -109,7 +109,7 @@ from repo_release_tools.config import (
 from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs.formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
-from repo_release_tools.tools.inject import apply_generated_docs
+from repo_release_tools.tools.inject import apply_generated_docs, ensure_anchor_stub
 from repo_release_tools.tools.platform import (
     PLATFORM_URL_TEMPLATES,
     detect_platform,
@@ -461,7 +461,13 @@ def _cmd_inject(args: argparse.Namespace) -> int:
                         target_path=target_path,
                     )
                 if add_anchors:
-                    _prepend_anchor_if_missing(target_path, block.anchor_id)
+                    _prepend_anchor_if_missing(
+                        target_path,
+                        block.anchor_id,
+                        position=block.position,
+                        before_blank_lines=block.before_blank_lines,
+                        after_blank_lines=block.after_blank_lines,
+                    )
                 exit_code = max(
                     exit_code,
                     apply_generated_docs(
@@ -482,35 +488,22 @@ def _cmd_inject(args: argparse.Namespace) -> int:
     return 0
 
 
-def _prepend_anchor_if_missing(path: Path, anchor_id: str) -> None:
-    """Prepend empty anchor pair to *path* if the start marker is absent.
-
-    If the file starts with YAML front matter (lines between ---), insert
-    the anchor after the closing --- marker.
-    """
-    start = f"<!-- rrt:auto:start:{anchor_id} -->"
-    if not path.exists():
-        return
-    existing = path.read_text(encoding="utf-8")
-    if start in existing:
-        return
-
-    end = f"<!-- rrt:auto:end:{anchor_id} -->"
-    anchor_block = f"{start}\n{end}\n\n"
-
-    # Check for YAML front matter: starts with ---, ends with ---
-    if existing.startswith("---\n"):
-        lines = existing.split("\n")
-        close_idx = next((i for i in range(1, len(lines)) if lines[i] == "---"), -1)
-        if close_idx > 0:
-            # Insert anchor after front matter
-            before = "\n".join(lines[: close_idx + 1])
-            after = "\n".join(lines[close_idx + 1 :])
-            path.write_text(f"{before}\n{anchor_block}{after}", encoding="utf-8")
-            return
-
-    # No front matter: prepend at top
-    path.write_text(f"{anchor_block}{existing}", encoding="utf-8")
+def _prepend_anchor_if_missing(
+    path: Path,
+    anchor_id: str,
+    *,
+    position: str = "prepend",
+    before_blank_lines: int = 0,
+    after_blank_lines: int = 1,
+) -> None:
+    """Ensure an empty anchor pair exists using the requested placement."""
+    ensure_anchor_stub(
+        path,
+        anchor_id,
+        position=position,
+        before_blank_lines=before_blank_lines,
+        after_blank_lines=after_blank_lines,
+    )
 
 
 # ---------------------------------------------------------------------------
