@@ -72,6 +72,27 @@ def test_export_banner_png_fallback_font(tmp_path: Path) -> None:
     assert out.exists()
 
 
+def test_export_banner_png_retries_candidates_before_succeeding(tmp_path: Path) -> None:
+    from repo_release_tools.assets import banner as banner_mod
+
+    out = tmp_path / "banner_retry.png"
+    fake_font = object()
+    with (
+        patch.object(banner_mod, "_MONOSPACE_CANDIDATES", new=["missing-one", "present-two"]),
+        patch("PIL.ImageFont.truetype", side_effect=[OSError("missing"), fake_font]) as truetype,
+        patch("PIL.ImageDraw.ImageDraw.textbbox", return_value=(0, 0, 8, 12)) as textbbox,
+        patch("PIL.ImageDraw.ImageDraw.text") as draw_text,
+    ):
+        banner_mod.export_banner_png("retry", out)
+
+    assert out.exists()
+    assert truetype.call_count == 2
+    assert truetype.call_args_list[0].args[0] == "missing-one"
+    assert truetype.call_args_list[1].args[0] == "present-two"
+    assert textbbox.called
+    assert draw_text.called
+
+
 def test_main_writes_unicode_banner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     out = tmp_path / "out.png"
     monkeypatch.setattr(sys, "argv", ["banner", str(out), "unicode"])
