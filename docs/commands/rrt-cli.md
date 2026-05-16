@@ -6,12 +6,6 @@ permalink: "/commands/rrt-cli/"
 [![GitHub](../assets/badges/github.svg)](https://github.com/Anselmoo/repo-release-tools)
 <!-- rrt:auto:end:page-header -->
 
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->
-
 
 # rrt CLI
 
@@ -2633,3 +2627,9 @@ Examples
   $ rrt hooks install --target codex-global
   $ rrt hooks install --target copilot-local
 ```
+
+<!-- rrt:auto:start:doc-footer -->
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:doc-footer -->

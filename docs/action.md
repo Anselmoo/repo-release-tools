@@ -6,12 +6,6 @@ permalink: "/action/"
 [![GitHub](assets/badges/github.svg)](https://github.com/Anselmoo/repo-release-tools)
 <!-- rrt:auto:end:page-header -->
 
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->
-
 
 # GitHub Action
 
@@ -132,3 +126,9 @@ hook and CI integration surfaces.
 targets, pin targets, and changelog files in repo config are reachable and
 well-formed. It is the better release gate when your repository relies on
 config-driven version updates.
+
+<!-- rrt:auto:start:doc-footer -->
+---
+
+[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
+<!-- rrt:auto:end:doc-footer -->
