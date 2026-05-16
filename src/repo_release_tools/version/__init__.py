@@ -1,5 +1,6 @@
 """Version-related helpers for repo-release-tools."""
 
+from .calver import CALVER_SCHEMES, CalVersion
 from .semver import Version
 from .targets import (
     check_autodetected_version_consistency,
@@ -12,6 +13,8 @@ from .targets import (
 )
 
 __all__ = [
+    "CALVER_SCHEMES",
+    "CalVersion",
     "Version",
     "check_autodetected_version_consistency",
     "read_current_version",

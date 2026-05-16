@@ -79,9 +79,7 @@ class HelpSection:
     @property
     def title(self) -> str:
         """Return a display title for the section."""
-        if not self.argv:
-            return "Global help"
-        return "`rrt " + " ".join(self.argv) + "`"
+        return "Global help" if not self.argv else f"`rrt {' '.join(self.argv)}`"
 
 
 @dataclass(frozen=True)
@@ -455,7 +453,7 @@ TITLE_OVERRIDES: dict[str, str] = {
 def _extract_first_h1(text: str) -> str | None:
     """Return the first top-level heading text from *text*, or ``None``."""
     m = re.search(r"(?m)^\s*#\s+(.+)$", text)
-    return m.group(1).strip() if m else None
+    return m[1].strip() if m else None
 
 
 def _compute_permalink_for_output(output_path: Path) -> str:

@@ -14,8 +14,7 @@ from .data import _EOL_API_SLUG
 def _canonical_slug(language: str) -> str:
     """Normalise a user-supplied language name to the endoflife.date slug."""
     key = language.lower().strip()
-    slug = _EOL_API_SLUG.get(key, key)
-    return slug
+    return _EOL_API_SLUG.get(key, key)
 
 
 def detect_host_version(language: str) -> str | None:
@@ -45,23 +44,20 @@ def detect_host_version(language: str) -> str | None:
         if result.returncode != 0:
             return None
         return _extract_version(result.stdout.strip(), slug)
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+    except (subprocess.TimeoutExpired, OSError):
         return None
 
 
 def _extract_version(output: str, slug: str) -> str | None:
     """Extract the version string from command output for the given slug."""
     if slug == "nodejs":
-        match = re.match(r"v?(\d+\.\d+\.\d+)", output)
-        return match.group(1) if match else None
+        return m[1] if (m := re.match(r"v?(\d+\.\d+\.\d+)", output)) else None
 
     if slug == "go":
-        match = re.search(r"go(\d+\.\d+(?:\.\d+)?)", output)
-        return match.group(1) if match else None
+        return m[1] if (m := re.search(r"go(\d+\.\d+(?:\.\d+)?)", output)) else None
 
     if slug == "rust":
-        match = re.search(r"rustc (\d+\.\d+\.\d+)", output)
-        return match.group(1) if match else None
+        return m[1] if (m := re.search(r"rustc (\d+\.\d+\.\d+)", output)) else None
 
     return None
 
@@ -94,8 +90,7 @@ def _detect_python_minimum(root: Path) -> str | None:
         raw: object = data.get("project", {}).get("requires-python")
         if not isinstance(raw, str):
             return None
-        match = re.search(r"(\d+\.\d+(?:\.\d+)?)", raw)
-        return match.group(1) if match else None
+        return m[1] if (m := re.search(r"(\d+\.\d+(?:\.\d+)?)", raw)) else None
     except Exception:  # noqa: BLE001
         return None
 
@@ -107,8 +102,11 @@ def _detect_go_minimum(root: Path) -> str | None:
         return None
     try:
         text = gomod.read_text(encoding="utf-8")
-        match = re.search(r"^\s*go\s+(\d+\.\d+(?:\.\d+)?)\s*$", text, re.MULTILINE)
-        return match.group(1) if match else None
+        return (
+            m[1]
+            if (m := re.search(r"^\s*go\s+(\d+\.\d+(?:\.\d+)?)\s*$", text, re.MULTILINE))
+            else None
+        )
     except OSError:
         return None
 
@@ -123,8 +121,7 @@ def _detect_node_minimum(root: Path) -> str | None:
         raw: object = data.get("engines", {}).get("node")
         if not isinstance(raw, str):
             return None
-        match = re.search(r"(\d+\.\d+(?:\.\d+)?)", raw)
-        return match.group(1) if match else None
+        return m[1] if (m := re.search(r"(\d+\.\d+(?:\.\d+)?)", raw)) else None
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -142,7 +139,6 @@ def _detect_rust_minimum(root: Path) -> str | None:
         raw: object = data.get("package", {}).get("rust-version")
         if not isinstance(raw, str):
             return None
-        match = re.search(r"(\d+\.\d+(?:\.\d+)?)", raw)
-        return match.group(1) if match else None
+        return m[1] if (m := re.search(r"(\d+\.\d+(?:\.\d+)?)", raw)) else None
     except Exception:  # noqa: BLE001
         return None

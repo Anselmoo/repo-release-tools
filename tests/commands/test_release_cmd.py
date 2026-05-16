@@ -8,6 +8,11 @@ from pathlib import Path
 import pytest
 
 from repo_release_tools.commands import release_cmd
+from repo_release_tools.commands.release_notes import (
+    _format_gh_release,
+    _git_contributors,
+    cmd_release_notes,
+)
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 
 _ARGS = argparse.Namespace()
@@ -276,3 +281,215 @@ def test_release_check_global_pins_deduplicated(
 
     out = capsys.readouterr().out
     assert out.count("page.md") == 1
+
+
+# ---------------------------------------------------------------------------
+# release notes tests
+# ---------------------------------------------------------------------------
+
+_UNRELEASED_CONTENT = """\
+# Changelog
+
+## [Unreleased]
+
+### Added
+- new feature
+
+### Fixed
+- some bug
+
+## [1.0.0] - 2026-01-01
+- old stuff
+"""
+
+
+def _make_notes_config(tmp_path: Path) -> RrtConfig:
+    target = VersionTarget(
+        path=tmp_path / "src" / "pkg" / "__init__.py",
+        kind="python_version",
+    )
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        pin_targets=[],
+    )
+    return RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+
+def test_release_notes_md_format(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 0 and emits the [Unreleased] body in md format."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_notes_config(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text(_UNRELEASED_CONTENT, encoding="utf-8")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes.load_or_autodetect_config", lambda _: conf
+    )
+
+    rc = cmd_release_notes(argparse.Namespace(notes_format="md", group=None))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "### Added" in out
+    assert "new feature" in out
+    assert "### Fixed" in out
+    assert "some bug" in out
+    assert "[Unreleased]" not in out
+
+
+def test_release_notes_gh_release_format(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 0 and wraps output in GitHub release header for gh-release format."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_notes_config(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text(_UNRELEASED_CONTENT, encoding="utf-8")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes.load_or_autodetect_config", lambda _: conf
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes._git_contributors", lambda _: ["Alice", "Bob"]
+    )
+
+    rc = cmd_release_notes(argparse.Namespace(notes_format="gh-release", group=None))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "## What's Changed" in out
+    assert "new feature" in out
+    assert "## Contributors" in out
+    assert "- Alice" in out
+    assert "- Bob" in out
+
+
+def test_release_notes_no_unreleased_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when changelog has no [Unreleased] section."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_notes_config(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [1.0.0] - 2026-01-01\n- old\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes.load_or_autodetect_config", lambda _: conf
+    )
+
+    rc = cmd_release_notes(argparse.Namespace(notes_format="md", group=None))
+
+    assert rc == 1
+    assert "No [Unreleased]" in capsys.readouterr().err
+
+
+def test_release_notes_empty_unreleased_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when [Unreleased] section exists but is empty."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_notes_config(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n- old\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes.load_or_autodetect_config", lambda _: conf
+    )
+
+    rc = cmd_release_notes(argparse.Namespace(notes_format="md", group=None))
+
+    assert rc == 1
+    assert "empty" in capsys.readouterr().err
+
+
+def test_release_notes_missing_changelog_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when the changelog file does not exist."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_notes_config(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes.load_or_autodetect_config", lambda _: conf
+    )
+
+    rc = cmd_release_notes(argparse.Namespace(notes_format="md", group=None))
+
+    assert rc == 1
+    assert "not found" in capsys.readouterr().err
+
+
+def test_release_notes_no_config_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when no config file is found."""
+    monkeypatch.chdir(tmp_path)
+
+    rc = cmd_release_notes(argparse.Namespace(notes_format="md", group=None))
+
+    assert rc == 1
+    assert capsys.readouterr().err
+
+
+def test_release_notes_runtime_error_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """RuntimeError from config loading is reported and returns 1."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes.load_or_autodetect_config",
+        lambda _: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    rc = cmd_release_notes(argparse.Namespace(notes_format="md", group=None))
+
+    assert rc == 1
+    assert "boom" in capsys.readouterr().err
+
+
+def test_format_gh_release_no_contributors() -> None:
+    """gh-release format with no contributors omits the Contributors section."""
+    out = _format_gh_release("- one\n- two", [])
+    assert "## What's Changed" in out
+    assert "- one" in out
+    assert "Contributors" not in out
+
+
+def test_format_gh_release_with_contributors() -> None:
+    """gh-release format appends a Contributors section."""
+    out = _format_gh_release("- one", ["Alice", "Bob"])
+    assert "## Contributors" in out
+    assert "- Alice" in out
+    assert "- Bob" in out
+
+
+def test_git_contributors_handles_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """_git_contributors returns [] when git is not available or fails."""
+    import subprocess
+
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError())
+    )
+    assert _git_contributors(tmp_path) == []

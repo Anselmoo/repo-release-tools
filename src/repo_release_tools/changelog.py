@@ -8,13 +8,25 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-CONVENTIONAL_COMMIT_RE = re.compile(
-    r"^(?P<type>feat|fix|docs|style|refactor|perf|test|build|ci|chore|deps)"
-    r"(?:\((?P<scope>[^)]+)\))?"
-    r"(?P<breaking>!)?"
-    r"\s*:\s*(?P<desc>.+)$",
-    re.IGNORECASE,
-)
+
+def _build_commit_re(extra_types: tuple[str, ...] = ()) -> re.Pattern[str]:
+    """Build the conventional commit regex, optionally extending with extra types."""
+    base_types = "feat|fix|docs|style|refactor|perf|test|build|ci|chore|deps"
+    if extra_types:
+        joined = "|".join(re.escape(t) for t in extra_types)
+        type_pattern = f"{base_types}|{joined}"
+    else:
+        type_pattern = base_types
+    return re.compile(
+        rf"^(?P<type>{type_pattern})"
+        r"(?:\((?P<scope>[^)]+)\))?"
+        r"(?P<breaking>!)?"
+        r"\s*:\s*(?P<desc>.+)$",
+        re.IGNORECASE,
+    )
+
+
+CONVENTIONAL_COMMIT_RE = _build_commit_re()
 
 SECTION_MAP = {
     "feat": "Added",
@@ -50,11 +62,18 @@ class ParsedCommit:
     breaking: bool = False
 
 
-def parse_conventional_commit(subject: str) -> ParsedCommit | None:
-    """Parse a commit subject."""
+def parse_conventional_commit(
+    subject: str,
+    extra_types: tuple[str, ...] = (),
+) -> ParsedCommit | None:
+    """Parse a commit subject.
+
+    *extra_types* allows project-specific types beyond the standard set.
+    """
     if subject.startswith("Merge ") or subject.lower().startswith("release:"):
         return None
-    match = CONVENTIONAL_COMMIT_RE.match(subject)
+    regex = _build_commit_re(extra_types) if extra_types else CONVENTIONAL_COMMIT_RE
+    match = regex.match(subject)
     if match is None:
         return None
     return ParsedCommit(
@@ -211,6 +230,32 @@ def has_unreleased_section(
     return bool(_UNRELEASED_HEADER_RE.search(content))
 
 
+def get_unreleased_section_body(
+    content: str,
+    fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
+) -> str:
+    """Return the text block under the ``[Unreleased]`` section (header line excluded).
+
+    Returns an empty string when no ``[Unreleased]`` section exists.
+    The returned text is stripped of leading and trailing whitespace.
+    """
+    if fmt == ChangelogFormat.RST:
+        m = _RST_UNRELEASED_HEADER_RE.search(content)
+        if not m:
+            return ""
+        section_start = m.end()
+        next_section = _RST_SECTION_BOUNDARY_RE.search(content, section_start)
+    else:
+        m = _UNRELEASED_HEADER_RE.search(content)
+        if not m:
+            return ""
+        section_start = m.end()
+        next_section = _SECTION_HEADER_RE.search(content, section_start)
+
+    body = content[section_start : next_section.start() if next_section else len(content)]
+    return body.strip()
+
+
 def get_unreleased_entries(
     content: str,
     fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
@@ -310,8 +355,7 @@ def append_to_unreleased(
 
         return content[:insert_pos] + new_body + content[section_body_end:]
     new_section = f"## [Unreleased]\n\n### {section}\n{bullet}\n"
-    title_m = _CHANGELOG_TITLE_RE.match(content)
-    if title_m:
+    if title_m := _CHANGELOG_TITLE_RE.match(content):
         insert_pos = title_m.end()
         remainder = content[insert_pos:]
         # Avoid a double blank line: if the existing content already starts

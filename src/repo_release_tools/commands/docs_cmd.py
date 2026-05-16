@@ -103,13 +103,19 @@ from pathlib import Path
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.config import (
     DocsConfig,
+    RrtConfig,
     is_missing_tool_rrt_error,
     load_config,
 )
 from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs.formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
-from repo_release_tools.tools.inject import apply_generated_docs
+from repo_release_tools.tools.inject import (
+    apply_generated_docs,
+    ensure_anchor_stub,
+    insert_anchor_stub_str,
+    replace_anchored_block,
+)
 from repo_release_tools.tools.platform import (
     PLATFORM_URL_TEMPLATES,
     detect_platform,
@@ -218,18 +224,17 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
     output = render(fmt, entries, config, root=cwd)
 
-    if fmt in ("md", "txt", "json", "toml"):
-        # Write to a sensible default output file or stdout
-        if fmt == "toml":
+    match fmt:
+        case "toml":
             lock_path = docs_lock_path(cwd, config.lock_file)
             p.ok(f"Lockfile written: {lock_path}")
-        else:
+        case "md" | "txt" | "json":
             sys.stdout.write(output)
-    elif fmt == "rich":
-        sys.stdout.write(output + "\n")
-    elif fmt == "clipboard":
-        sys.stdout.write(output)
-        p.ok("Output written to stdout (pipe to clipboard utility if needed)")
+        case "rich":
+            sys.stdout.write(output + "\n")
+        case "clipboard":
+            sys.stdout.write(output)
+            p.ok("Output written to stdout (pipe to clipboard utility if needed)")
 
     p.footer("Done.")
     return 0
@@ -280,6 +285,13 @@ def _cmd_publish(args: argparse.Namespace) -> int:
     check: bool = getattr(args, "check", False)
     dry_run: bool = getattr(args, "dry_run", False)
     fail_on_change: bool = getattr(args, "fail_on_change", False)
+    root = Path(getattr(args, "root", ".")).resolve()
+
+    cfg = None
+    try:
+        cfg = load_config(root)
+    except (FileNotFoundError, ValueError):
+        pass
 
     rendered_targets: list[tuple[docs_publisher.DocTarget, str]] = []
     consistency_issues: list[str] = []
@@ -301,10 +313,15 @@ def _cmd_publish(args: argparse.Namespace) -> int:
 
     exit_code = 0
     for target, content in rendered_targets:
+        full_content = (
+            _embed_shared_blocks_in_content(content, target.output_path, root, cfg)
+            if target.anchor_id is None
+            else content
+        )
         exit_code = max(
             exit_code,
             apply_generated_docs(
-                content,
+                full_content,
                 output_path=target.output_path,
                 check=check,
                 write=not check,
@@ -462,7 +479,13 @@ def _cmd_inject(args: argparse.Namespace) -> int:
                         target_path=target_path,
                     )
                 if add_anchors:
-                    _prepend_anchor_if_missing(target_path, block.anchor_id)
+                    _prepend_anchor_if_missing(
+                        target_path,
+                        block.anchor_id,
+                        position=block.position,
+                        before_blank_lines=block.before_blank_lines,
+                        after_blank_lines=block.after_blank_lines,
+                    )
                 exit_code = max(
                     exit_code,
                     apply_generated_docs(
@@ -483,39 +506,95 @@ def _cmd_inject(args: argparse.Namespace) -> int:
     return 0
 
 
-def _prepend_anchor_if_missing(path: Path, anchor_id: str) -> None:
-    """Prepend empty anchor pair to *path* if the start marker is absent.
+def _embed_shared_blocks_in_content(
+    content: str,
+    target_output_path: Path,
+    root: Path,
+    cfg: RrtConfig | None,
+) -> str:
+    """Return *content* with all matching shared blocks embedded in-memory.
 
-    If the file starts with YAML front matter (lines between ---), insert
-    the anchor after the closing --- marker.
+    For each shared block whose target glob matches *target_output_path*, an
+    anchor stub is inserted and immediately filled with the expanded block
+    content.  This lets ``rrt docs publish`` produce the complete expected file
+    state — including header/footer regions — so that ``publish --check`` and
+    a subsequent ``rrt docs inject`` are both consistent.
     """
-    start = f"<!-- rrt:auto:start:{anchor_id} -->"
-    if not path.exists():
+    from repo_release_tools import __version__ as rrt_version  # noqa: PLC0415
+
+    if not (cfg and cfg.docs and cfg.docs.shared_blocks):
+        return content
+
+    repo_url = cfg.docs.source_repo_url or ""
+    abs_target = (root / target_output_path).resolve()
+
+    for block in cfg.docs.shared_blocks:
+        matched = {p.resolve() for pattern in block.targets for p in root.glob(pattern)}
+        if abs_target not in matched:
+            continue
+
+        block_content = block.content.rstrip("\n")
+        block_content = block_content.replace("{version}", rrt_version)
+        block_content = block_content.replace("{repo_url}", repo_url)
+        block_content = _expand_platform_vars(
+            block_content, cfg.docs, root=root, target_path=abs_target
+        )
+
+        content = insert_anchor_stub_str(
+            content,
+            block.anchor_id,
+            position=block.position,
+            before_blank_lines=block.before_blank_lines,
+            after_blank_lines=block.after_blank_lines,
+        )
+        replaced = replace_anchored_block(content, anchor_id=block.anchor_id, content=block_content)
+        if replaced is not None:
+            content = replaced
+
+    return content
+
+
+def _restore_shared_block_stubs(root: Path, rendered_targets: list) -> None:
+    """Re-add anchor stubs for full-replacement targets after publish."""
+    cfg = None
+    try:
+        cfg = load_config(root)
+    except (FileNotFoundError, ValueError):
         return
-    existing = path.read_text(encoding="utf-8")
-    if start in existing:
+    if not (cfg and cfg.docs and cfg.docs.shared_blocks):
         return
+    for target, _content in rendered_targets:
+        if target.anchor_id is not None:
+            continue
+        abs_target = (root / target.output_path).resolve()
+        for block in cfg.docs.shared_blocks:
+            matched = {p.resolve() for pattern in block.targets for p in root.glob(pattern)}
+            if abs_target in matched:
+                _prepend_anchor_if_missing(
+                    abs_target,
+                    block.anchor_id,
+                    position=block.position,
+                    before_blank_lines=block.before_blank_lines,
+                    after_blank_lines=block.after_blank_lines,
+                )
 
-    end = f"<!-- rrt:auto:end:{anchor_id} -->"
-    anchor_block = f"{start}\n{end}\n\n"
 
-    # Check for YAML front matter: starts with ---, ends with ---
-    if existing.startswith("---\n"):
-        lines = existing.split("\n")
-        close_idx = -1
-        for i in range(1, len(lines)):
-            if lines[i] == "---":
-                close_idx = i
-                break
-        if close_idx > 0:
-            # Insert anchor after front matter
-            before = "\n".join(lines[: close_idx + 1])
-            after = "\n".join(lines[close_idx + 1 :])
-            path.write_text(f"{before}\n{anchor_block}{after}", encoding="utf-8")
-            return
-
-    # No front matter: prepend at top
-    path.write_text(f"{anchor_block}{existing}", encoding="utf-8")
+def _prepend_anchor_if_missing(
+    path: Path,
+    anchor_id: str,
+    *,
+    position: str = "prepend",
+    before_blank_lines: int = 0,
+    after_blank_lines: int = 1,
+) -> None:
+    """Ensure an empty anchor pair exists using the requested placement."""
+    ensure_anchor_stub(
+        path,
+        anchor_id,
+        position=position,
+        before_blank_lines=before_blank_lines,
+        after_blank_lines=after_blank_lines,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -615,17 +694,20 @@ def _cmd_api(args: argparse.Namespace) -> int:
     parser = build_parser()
     entries = build_api_index(parser, hook_map=hook_map)
 
-    if fmt == "md":
-        rendered = render_api_md(entries)
-    elif fmt == "txt":
-        rendered = render_api_txt(entries)
-    elif fmt == "json":
-        rendered = render_api_json(entries)
-    else:
-        p.line(
-            f"Unsupported API format {fmt!r}. Use md, txt, or json.", ok=False, stream=sys.stderr
-        )
-        return 1
+    match fmt:
+        case "md":
+            rendered = render_api_md(entries)
+        case "txt":
+            rendered = render_api_txt(entries)
+        case "json":
+            rendered = render_api_json(entries)
+        case _:
+            p.line(
+                f"Unsupported API format {fmt!r}. Use md, txt, or json.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
 
     if output_arg and not dry_run:
         output_path = Path(output_arg)

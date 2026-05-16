@@ -298,9 +298,19 @@ kind = "package_json"
         lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    version_calls: list[tuple[list[VersionTarget], str, bool]] = []
+
+    def fake_replace_all_versions_atomic(
+        targets: list[VersionTarget],
+        new_version: str,
+        *,
+        dry_run: bool,
+    ) -> None:
+        version_calls.append((targets, new_version, dry_run))
+
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
-        lambda *a, **k: None,
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
+        fake_replace_all_versions_atomic,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
 
@@ -331,6 +341,10 @@ kind = "package_json"
     )
 
     assert result == 0
+    assert len(version_calls) == 1
+    assert version_calls[0][1] == "0.2.0"
+    assert version_calls[0][2] is False
+    assert version_calls[0][0][0].path.name == "package.json"
     assert ["git", "checkout", "-b", "release/v0.2.0"] in calls
     assert ["git", "add", "package.json", "CHANGELOG.md"] in calls
     assert ["git", "add", "-u"] in calls
@@ -369,7 +383,7 @@ kind = "package_json"
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
         lambda *a, **k: None,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
@@ -920,7 +934,7 @@ kind = "package_json"
     )
 
     assert result == 1
-    assert "Invalid semver" in capsys.readouterr().err
+    assert "Invalid bump value" in capsys.readouterr().err
 
 
 def test_cmd_bump_refuses_dirty_working_tree(
@@ -1735,7 +1749,7 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
         lambda grp: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
         lambda target, version, dry_run: None,
     )
     monkeypatch.setattr(
@@ -1753,6 +1767,10 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
         lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.run_preflight",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git.run",
         lambda cmd, root, *, dry_run, label: "",
@@ -2058,12 +2076,14 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
         lambda grp: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
         lambda target, version, dry_run: None,
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_pin_in_file",
-        lambda pin, version, dry_run: pin_updates.append((pin.path, version, dry_run)),
+        lambda pin, version, dry_run, pin_target_missing="error": pin_updates.append(
+            (pin.path, version, dry_run)
+        ),
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git.working_tree_clean",
@@ -2077,6 +2097,10 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git.run",
         lambda cmd, root, *, dry_run, label: git_calls.append(cmd),
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.run_preflight",
+        lambda *args, **kwargs: None,
     )
 
     result = cmd_bump(
@@ -2204,6 +2228,10 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     monkeypatch.setattr("repo_release_tools.commands.bump.ProgressLine", _FakeProgressLine)
     monkeypatch.setattr("repo_release_tools.commands.bump.spinner_lines", fake_spinner_lines)
     monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_git_run)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.run_preflight",
+        lambda *args, **kwargs: None,
+    )
 
     result = cmd_bump(
         Namespace(
@@ -2271,8 +2299,14 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
         default_group_name="default",
     )
 
-    def fake_replace_version(target: VersionTarget, new_version: str, *, dry_run: bool) -> None:  # noqa: ARG001
-        print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
+    def fake_replace_version(
+        targets: list[VersionTarget],
+        new_version: str,
+        *,
+        dry_run: bool,
+    ) -> None:  # noqa: ARG001
+        for target in targets:
+            print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.load_or_autodetect_config",
@@ -2283,7 +2317,7 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
         lambda grp: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_version_in_file",
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
         fake_replace_version,
     )
     monkeypatch.setattr(
@@ -2296,6 +2330,10 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr("repo_release_tools.commands.bump.git.run", lambda *a, **kw: "")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.run_preflight",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.chdir(tmp_path)
     # Route all stdout to the TTY buffer so ProgressLine and print() in bump.py
     # both write to the same captured stream.
@@ -2352,3 +2390,103 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
     assert raw.count("\r\x1b[2K") == 4, (
         f"Expected 4 clear sequences, found {raw.count(chr(13) + chr(27) + '[2K')}"
     )
+
+
+# ---------------------------------------------------------------------------
+# CalVer bump path in cmd_bump
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_bump_calver_from_semver_version(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """bump calver from a semver-style current version uses CalVersion.today()."""
+    init_file = tmp_path / "src" / "pkg" / "__init__.py"
+    init_file.parent.mkdir(parents=True)
+    init_file.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\nversion = "1.0.0"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="calver",
+            calver_scheme="YYYY.MM.DD",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+
+    assert result == 0
+    # The version file should now contain a calver-style version
+    new_content = init_file.read_text(encoding="utf-8")
+    import re
+
+    assert re.search(r"\d{4}\.\d{2}\.\d{2}", new_content), f"CalVer not found in {new_content!r}"
+
+
+def test_cmd_bump_calver_from_calver_version(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """bump calver from a calver-style current version calls .bump() (else branch)."""
+    init_file = tmp_path / "src" / "pkg" / "__init__.py"
+    init_file.parent.mkdir(parents=True)
+    init_file.write_text('__version__ = "2026.5.1"\n', encoding="utf-8")
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "pkg"\nversion = "2026.5.1"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run", lambda cmd, root, *, dry_run, label: ""
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="calver",
+            calver_scheme="YYYY.M.D",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+
+    assert result == 0
+    new_content = init_file.read_text(encoding="utf-8")
+    import re
+
+    assert re.search(r"\d{4}\.\d+\.\d+", new_content), f"CalVer not found in {new_content!r}"

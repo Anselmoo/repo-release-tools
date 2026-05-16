@@ -71,6 +71,13 @@ import argparse
 import sys
 from pathlib import Path
 
+from repo_release_tools.changelog import (
+    RST_UNRELEASED_PLACEHOLDER,
+    UNRELEASED_PLACEHOLDER,
+    ChangelogFormat,
+    detect_changelog_format,
+    has_unreleased_section,
+)
 from repo_release_tools.config import (
     format_autodetected_config_notice,
     format_missing_tool_rrt_guidance,
@@ -155,9 +162,47 @@ def _check_github_workflows(root: Path) -> tuple[str, bool, str]:
     )
 
 
-def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
+def _fix_missing_unreleased(root: Path, config: object, *, dry_run: bool) -> list[str]:
+    """Add a missing [Unreleased] section to each group's changelog.
+
+    Returns a list of human-readable messages describing what was (or would be) changed.
+    """
+    changes: list[str] = []
+    from repo_release_tools.config import RrtConfig
+
+    if not isinstance(config, RrtConfig):
+        return changes
+
+    for group in config.version_groups:
+        changelog = group.changelog_file
+        if not changelog.exists():
+            continue
+        content = changelog.read_text(encoding="utf-8")
+        fmt = detect_changelog_format(changelog)
+        if has_unreleased_section(content, fmt=fmt):
+            continue
+
+        if fmt == ChangelogFormat.RST:
+            placeholder = RST_UNRELEASED_PLACEHOLDER
+        else:
+            placeholder = UNRELEASED_PLACEHOLDER
+
+        rel = changelog.relative_to(root) if changelog.is_relative_to(root) else changelog
+        if dry_run:
+            changes.append(f"Would insert [Unreleased] section into {rel}")
+        else:
+            updated = f"{placeholder}\n{content}"
+            changelog.write_text(updated, encoding="utf-8")
+            changes.append(f"Inserted [Unreleased] section into {rel}")
+
+    return changes
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
     """Check the health of the rrt configuration."""
     root = Path.cwd()
+    fix: bool = getattr(args, "fix", False)
+    fix_dry_run: bool = getattr(args, "fix_dry_run", False)
 
     try:
         config = load_or_autodetect_config(root)
@@ -246,6 +291,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
     if config.eol is not None:
         p.action("Run 'rrt eol' for runtime support and end-of-life policy checks.")
 
+    if fix or fix_dry_run:
+        fixes = _fix_missing_unreleased(root, config, dry_run=fix_dry_run)
+        if fixes:
+            p.blank_line()
+            p.section("Auto-fix results")
+            for msg in fixes:
+                p.ok(f"  {msg}")
+        else:
+            p.blank_line()
+            p.ok("Nothing to fix — all auto-fixable issues are already resolved.")
+
     return 0 if all_ok else 1
 
 
@@ -262,3 +318,16 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         epilog=DOCTOR_EPILOG,
     )
     parser.set_defaults(handler=cmd_doctor)
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        default=False,
+        help="Auto-repair fixable issues (e.g. missing [Unreleased] changelog section).",
+    )
+    parser.add_argument(
+        "--fix-dry-run",
+        dest="fix_dry_run",
+        action="store_true",
+        default=False,
+        help="Preview what --fix would change without writing files.",
+    )

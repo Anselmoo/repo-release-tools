@@ -403,8 +403,7 @@ def _build_entries(
             continue
 
         child_nodes: list[TreeEntry] | None = None
-        can_descend = is_dir and not is_symlink and (max_depth is None or depth < max_depth)
-        if can_descend:
+        if is_dir and not is_symlink and (max_depth is None or depth < max_depth):
             child_nodes = _build_entries(
                 child,
                 root=root,
@@ -463,19 +462,20 @@ def cmd_tree(args: argparse.Namespace) -> int:
 
     fmt = args.format
     rendered: str
-    if fmt == "ascii":
-        rendered = _render_ascii_tree(entries)
-    elif fmt == "markdown":
-        rendered = _render_markdown_tree(entries)
-    elif fmt == "rich":
-        rich_rendered = _render_rich_tree(entries)
-        if rich_rendered is None:
-            p.warn("Rich format requested but Rich is unavailable; falling back to classic.")
+    match fmt:
+        case "ascii":
+            rendered = _render_ascii_tree(entries)
+        case "markdown":
+            rendered = _render_markdown_tree(entries)
+        case "rich":
+            rich_rendered = _render_rich_tree(entries)
+            if rich_rendered is None:
+                p.warn("Rich format requested but Rich is unavailable; falling back to classic.")
+                rendered = GLYPHS.tree.render(entries)
+            else:
+                rendered = rich_rendered
+        case _:
             rendered = GLYPHS.tree.render(entries)
-        else:
-            rendered = rich_rendered
-    else:
-        rendered = GLYPHS.tree.render(entries)
 
     # --- inject mode: replace anchored block in a target file ---
     if inject_file and anchor_id:

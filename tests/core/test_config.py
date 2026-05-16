@@ -1905,6 +1905,61 @@ def test_load_config_docs_shared_blocks_with_inline_content(tmp_path: Path) -> N
     assert '<iframe src="https://example.test/embed"></iframe>' in block.content
 
 
+def test_load_config_docs_shared_blocks_with_position_and_whitespace_context(
+    tmp_path: Path,
+) -> None:
+    """Shared block placement and whitespace context are parsed correctly."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\nposition = "append"\nbefore_blank_lines = 1\nafter_blank_lines = 2\n'
+        'content = "footer"\ntargets = ["docs/**/*.md"]\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    block = cfg.docs.shared_blocks[0]
+    assert block.position == "append"
+    assert block.before_blank_lines == 1
+    assert block.after_blank_lines == 2
+
+
+def test_load_config_docs_shared_blocks_rejects_invalid_position(tmp_path: Path) -> None:
+    """Shared blocks reject unsupported position values."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\nposition = "middle"\ncontent = "footer"\ntargets = ["docs/**/*.md"]\n',
+    )
+    with pytest.raises(ValueError, match="position must be 'prepend' or 'append'"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_rejects_negative_before_blank_lines(
+    tmp_path: Path,
+) -> None:
+    """Shared blocks reject negative leading blank-line counts."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\nbefore_blank_lines = -1\ncontent = "footer"\ntargets = ["docs/**/*.md"]\n',
+    )
+    with pytest.raises(ValueError, match="before_blank_lines must be a non-negative integer"):
+        load_config(tmp_path)
+
+
+def test_load_config_docs_shared_blocks_rejects_negative_after_blank_lines(
+    tmp_path: Path,
+) -> None:
+    """Shared blocks reject negative trailing blank-line counts."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs]\n\n[[tool.rrt.docs.shared_blocks]]\n"
+        'anchor_id = "doc-footer"\nafter_blank_lines = -1\ncontent = "footer"\ntargets = ["docs/**/*.md"]\n',
+    )
+    with pytest.raises(ValueError, match="after_blank_lines must be a non-negative integer"):
+        load_config(tmp_path)
+
+
 def test_load_config_docs_shared_blocks_not_array(tmp_path: Path) -> None:
     """shared_blocks must be an array."""
     _write_docs_cfg(
@@ -2023,6 +2078,43 @@ def test_shared_block_validate_rejects_missing_content() -> None:
         anchor_id="doc-footer", content=cast("str", None), targets=("docs/**/*.md",)
     )
     with pytest.raises(ValueError, match=r"must define 'content'"):
+        block.validate()
+
+
+def test_shared_block_validate_rejects_invalid_position() -> None:
+    """SharedBlock.validate raises ValueError for an unsupported position."""
+    block = SharedBlock(
+        anchor_id="doc-footer",
+        content="footer",
+        position="middle",
+        targets=("docs/**/*.md",),
+    )
+    with pytest.raises(ValueError, match="position must be 'prepend' or 'append'"):
+        block.validate()
+
+
+def test_shared_block_validate_rejects_negative_blank_lines() -> None:
+    """SharedBlock.validate raises ValueError for negative blank-line counts."""
+    block = SharedBlock(
+        anchor_id="doc-footer",
+        content="footer",
+        before_blank_lines=-1,
+        after_blank_lines=-2,
+        targets=("docs/**/*.md",),
+    )
+    with pytest.raises(ValueError, match="before_blank_lines must be >= 0"):
+        block.validate()
+
+
+def test_shared_block_validate_rejects_negative_trailing_blank_lines() -> None:
+    """SharedBlock.validate raises ValueError for negative trailing blank lines."""
+    block = SharedBlock(
+        anchor_id="doc-footer",
+        content="footer",
+        after_blank_lines=-1,
+        targets=("docs/**/*.md",),
+    )
+    with pytest.raises(ValueError, match="after_blank_lines must be >= 0"):
         block.validate()
 
 
@@ -2862,3 +2954,100 @@ def test_docs_config_validate_invalid_badge_variant() -> None:
     bad = dc_replace(DocsConfig(), badge_variant="neon")
     with pytest.raises(ValueError, match="badge_variant"):
         bad.validate()
+
+
+# ---------------------------------------------------------------------------
+# _load_extra_commit_types error paths
+# ---------------------------------------------------------------------------
+
+
+def test_load_extra_commit_types_non_list_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    with pytest.raises(ValueError, match="list of strings"):
+        _load_extra_commit_types("not-a-list")
+
+
+def test_load_extra_commit_types_non_string_item_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    with pytest.raises(ValueError, match="list of strings"):
+        _load_extra_commit_types([1, 2, 3])
+
+
+def test_load_extra_commit_types_invalid_identifier_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    with pytest.raises(ValueError, match="valid identifier"):
+        _load_extra_commit_types(["1invalid"])
+
+
+def test_load_extra_commit_types_empty_string_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    with pytest.raises(ValueError, match="valid identifier"):
+        _load_extra_commit_types([""])
+
+
+def test_load_extra_commit_types_valid() -> None:
+    from repo_release_tools.config.core import _load_extra_commit_types
+
+    result = _load_extra_commit_types(["hotfix", "spike"])
+    assert result == ("hotfix", "spike")
+
+
+# ---------------------------------------------------------------------------
+# _load_extra_section_map error paths
+# ---------------------------------------------------------------------------
+
+
+def test_load_extra_section_map_non_dict_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_section_map
+
+    with pytest.raises(ValueError, match="table mapping"):
+        _load_extra_section_map("not-a-dict")
+
+
+def test_load_extra_section_map_non_string_key_raises() -> None:
+    from repo_release_tools.config.core import _load_extra_section_map
+
+    with pytest.raises(ValueError, match="keys and values must be strings"):
+        _load_extra_section_map({1: "Added"})
+
+
+def test_load_extra_section_map_valid() -> None:
+    from repo_release_tools.config.core import _load_extra_section_map
+
+    result = _load_extra_section_map({"hotfix": "Fixed"})
+    assert result == {"hotfix": "Fixed"}
+
+
+# ---------------------------------------------------------------------------
+# _load_pin_target_missing error paths
+# ---------------------------------------------------------------------------
+
+
+def test_load_pin_target_missing_non_string_raises() -> None:
+    from repo_release_tools.config.core import _load_pin_target_missing
+
+    with pytest.raises(ValueError, match="must be a string"):
+        _load_pin_target_missing(42)
+
+
+def test_load_pin_target_missing_invalid_value_raises() -> None:
+    from repo_release_tools.config.core import _load_pin_target_missing
+
+    with pytest.raises(ValueError, match="must be one of"):
+        _load_pin_target_missing("ignore")
+
+
+def test_load_pin_target_missing_none_returns_error() -> None:
+    from repo_release_tools.config.core import _load_pin_target_missing
+
+    assert _load_pin_target_missing(None) == "error"
+
+
+def test_load_pin_target_missing_valid() -> None:
+    from repo_release_tools.config.core import _load_pin_target_missing
+
+    assert _load_pin_target_missing("warn") == "warn"

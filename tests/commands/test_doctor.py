@@ -379,3 +379,139 @@ def test_doctor_feature_specific_hints_follow_config(
     out = capsys.readouterr().out
     assert "rrt docs check" in out
     assert "rrt eol" in out
+
+
+# ---------------------------------------------------------------------------
+# --fix and --fix-dry-run tests
+# ---------------------------------------------------------------------------
+
+
+def _args_fix(*, fix: bool = False, fix_dry_run: bool = False) -> argparse.Namespace:
+    return argparse.Namespace(fix=fix, fix_dry_run=fix_dry_run)
+
+
+def test_doctor_fix_inserts_missing_unreleased(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--fix adds [Unreleased] section when changelog exists but is missing it."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    changelog = conf.resolve_group().changelog_file
+    changelog.write_text("## [1.0.0] - 2025-01-01\n\n### Added\n- initial\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_args_fix(fix=True))
+
+    assert rc == 0
+    result = changelog.read_text(encoding="utf-8")
+    assert "## [Unreleased]" in result
+    out = capsys.readouterr().out
+    assert "Inserted" in out
+
+
+def test_doctor_fix_dry_run_does_not_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--fix-dry-run reports what would change without writing files."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    changelog = conf.resolve_group().changelog_file
+    original = "## [1.0.0] - 2025-01-01\n\n### Added\n- initial\n"
+    changelog.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_args_fix(fix_dry_run=True))
+
+    assert rc == 0
+    assert changelog.read_text(encoding="utf-8") == original
+    out = capsys.readouterr().out
+    assert "Would insert" in out
+
+
+def test_doctor_fix_nothing_to_fix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--fix reports 'nothing to fix' when everything is already correct."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    changelog = conf.resolve_group().changelog_file
+    changelog.write_text("## [Unreleased]\n\n## [1.0.0] - 2025-01-01\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_args_fix(fix=True))
+
+    assert rc == 0
+    assert "Nothing to fix" in capsys.readouterr().out
+
+
+def test_doctor_fix_no_changelog_file_skips_gracefully(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--fix silently skips groups whose changelog file does not exist."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    # Changelog file intentionally not created
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_args_fix(fix=True))
+
+    assert rc == 0
+    assert "Nothing to fix" in capsys.readouterr().out
+
+
+def test_fix_missing_unreleased_ignores_non_rrt_config(tmp_path: Path) -> None:
+    """_fix_missing_unreleased returns empty list for non-RrtConfig input."""
+    from repo_release_tools.commands.doctor import _fix_missing_unreleased
+
+    result = _fix_missing_unreleased(tmp_path, object(), dry_run=False)
+    assert result == []
+
+
+def test_doctor_fix_rst_changelog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--fix inserts RST-format Unreleased section into .rst changelogs."""
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.config import VersionGroup, VersionTarget
+
+    init_file = tmp_path / "src" / "__init__.py"
+    init_file.parent.mkdir(parents=True, exist_ok=True)
+    init_file.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+    changelog = tmp_path / "CHANGELOG.rst"
+    changelog.write_text("1.0.0\n-----\n\n- initial\n", encoding="utf-8")
+
+    from repo_release_tools.config import RrtConfig
+
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=changelog,
+        lock_command=[],
+        generated_files=[],
+        version_targets=[VersionTarget(path=init_file, kind="python_version")],
+        pin_targets=[],
+    )
+    conf = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_args_fix(fix=True))
+
+    assert rc == 0
+    result = changelog.read_text(encoding="utf-8")
+    assert "Unreleased" in result
+    assert "--------" in result

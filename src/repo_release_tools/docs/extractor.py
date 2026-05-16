@@ -150,7 +150,7 @@ def _extract_python_implicit(source: str, source_file: str) -> list[DocEntry]:
         source,
     )
     if module_doc:
-        content = (module_doc.group(1) or module_doc.group(2) or "").strip()
+        content = (module_doc[1] or module_doc[2] or "").strip()
         if content:
             entries.append(
                 DocEntry(
@@ -170,12 +170,12 @@ def _extract_python_implicit(source: str, source_file: str) -> list[DocEntry]:
         source,
         re.MULTILINE,
     ):
-        content = (m.group(2) or m.group(3) or "").strip()
+        content = (m[2] or m[3] or "").strip()
         if content:
             line = source[: m.start()].count("\n") + 1
             entries.append(
                 DocEntry(
-                    name=m.group(1),
+                    name=m[1],
                     lang="python",
                     content=content,
                     source_file=source_file,
@@ -194,14 +194,14 @@ def _extract_ts_js_implicit(source: str, source_file: str, lang: str) -> list[Do
         source,
         re.MULTILINE,
     ):
-        raw = m.group(1)
+        raw = m[1]
         # Strip leading * on each line
         content = re.sub(r"^\s*\*\s?", "", raw, flags=re.MULTILINE).strip()
         if content:
             line = source[: m.start()].count("\n") + 1
             entries.append(
                 DocEntry(
-                    name=m.group(2),
+                    name=m[2],
                     lang=lang,
                     content=content,
                     source_file=source_file,
@@ -220,13 +220,13 @@ def _extract_go_implicit(source: str, source_file: str) -> list[DocEntry]:
         source,
         re.MULTILINE,
     ):
-        raw = m.group(1)
+        raw = m[1]
         content = re.sub(r"^[ \t]*//\s?", "", raw, flags=re.MULTILINE).strip()
         if content:
             line = source[: m.start()].count("\n") + 1
             entries.append(
                 DocEntry(
-                    name=m.group(2),
+                    name=m[2],
                     lang="go",
                     content=content,
                     source_file=source_file,
@@ -245,13 +245,13 @@ def _extract_rust_implicit(source: str, source_file: str) -> list[DocEntry]:
         source,
         re.MULTILINE,
     ):
-        raw = m.group(1)
+        raw = m[1]
         content = re.sub(r"^[ \t]*///\s?", "", raw, flags=re.MULTILINE).strip()
         if content:
             line = source[: m.start()].count("\n") + 1
             entries.append(
                 DocEntry(
-                    name=m.group(2),
+                    name=m[2],
                     lang="rust",
                     content=content,
                     source_file=source_file,
@@ -278,7 +278,7 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
     for m in pattern.finditer(source):
         # PowerShell uses two alternation groups (# sym: and <# sym: #>);
         # for all other languages there is exactly one capture group.
-        name = (m.group(1) or m.group(2)) if lang == "powershell" else m.group(1)
+        name = (m[1] or m[2]) if lang == "powershell" else m[1]
         if not name:  # pragma: no cover — regex requires a capture group to match
             continue
         marker_end = m.end()
@@ -292,7 +292,7 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
                 # Find the next triple-quoted string assignment
                 string_m = _PY_STRING_AFTER_MARKER.search(remainder)
                 if string_m:
-                    content = (string_m.group(1) or string_m.group(2) or "").strip()
+                    content = (string_m[1] or string_m[2] or "").strip()
             case "bash" | "fish":
                 # Bash/Fish: collect consecutive # comment lines after marker
                 comment_lines: list[str] = []
@@ -311,7 +311,7 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
                 # PowerShell: next block may be <# ... #> (non-nested) or # comment lines
                 ps_block_m = re.match(r"\s*<#((?:[^#]|#(?!>))*)#>", remainder)
                 if ps_block_m:
-                    content = ps_block_m.group(1).strip()
+                    content = ps_block_m[1].strip()
                 else:
                     ps_lines: list[str] = []
                     for raw_line in remainder.splitlines():
@@ -333,7 +333,7 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
                     remainder,
                 )
                 if str_m:
-                    content = (str_m.group(1) or str_m.group(2) or str_m.group(3) or "").strip()
+                    content = (str_m[1] or str_m[2] or str_m[3] or "").strip()
                 else:
                     # Go/Rust: collect // comment lines until blank/code
                     slash_lines: list[str] = []
@@ -381,13 +381,13 @@ def _extract_python_source_owned(
     m = _PY_SOURCE_OWNED.search(source)
     if not m:
         return entries
-    tuple_body = m.group(1)
+    tuple_body = m[1]
     for entry_m in _PY_TUPLE_ENTRY.finditer(tuple_body):
-        slug = entry_m.group(0)
+        slug = entry_m[0]
         # get the variable name that follows the slug string
-        var_name_m = re.search(r'\(\s*"[^"]+"\s*,\s*([A-Z_][A-Z0-9_]*)\s*\)', entry_m.group(0))
+        var_name_m = re.search(r'\(\s*"[^"]+"\s*,\s*([A-Z_][A-Z0-9_]*)\s*\)', entry_m[0])
         if var_name_m:
-            var_name = var_name_m.group(1)
+            var_name = var_name_m[1]
             content = module_vars.get(var_name, "")
             if content:
                 line = source[: m.start()].count("\n") + 1
@@ -414,8 +414,8 @@ def _extract_python_module_string_vars(source: str) -> dict[str, str]:
         source,
         re.MULTILINE,
     ):
-        content = (m.group(2) or m.group(3) or "").strip()
-        result[m.group(1)] = content
+        content = (m[2] or m[3] or "").strip()
+        result[m[1]] = content
     return result
 
 
@@ -469,8 +469,8 @@ def _extract_bash_implicit(source: str, source_file: str) -> list[DocEntry]:
         source,
         re.MULTILINE,
     ):
-        raw = m.group(1)
-        func_name = m.group(2) or m.group(3)
+        raw = m[1]
+        func_name = m[2] or m[3]
         content = re.sub(r"^[ \t]*#+\s?", "", raw, flags=re.MULTILINE).strip()
         if content:
             line = source[: m.start()].count("\n") + 1
@@ -537,8 +537,8 @@ def _extract_fish_implicit(source: str, source_file: str) -> list[DocEntry]:
         source,
         re.MULTILINE,
     ):
-        raw = m.group(1)
-        func_name = m.group(2)
+        raw = m[1]
+        func_name = m[2]
         content = re.sub(r"^[ \t]*#+\s?", "", raw, flags=re.MULTILINE).strip()
         if content:
             line = source[: m.start()].count("\n") + 1
@@ -594,7 +594,7 @@ def _extract_powershell_implicit(source: str, source_file: str) -> list[DocEntry
             # Block is immediately before the first function → function's doc, not module's
             if gap.strip() == "":
                 break
-            content = blk.group(1).strip()
+            content = blk[1].strip()
             if content:
                 line = source[: blk.start()].count("\n") + 1
                 entries.append(
@@ -614,7 +614,7 @@ def _extract_powershell_implicit(source: str, source_file: str) -> list[DocEntry
         r"(?m)^[ \t]*function\s+([\w-]+)",
         source,
     ):
-        func_name = func_m.group(1)
+        func_name = func_m[1]
         func_pos = func_m.start()
         line = source[:func_pos].count("\n") + 1
 
@@ -626,7 +626,7 @@ def _extract_powershell_implicit(source: str, source_file: str) -> list[DocEntry
             # Check that only whitespace separates block end from function start
             gap = source[blk.end() : func_pos]
             if gap.strip() == "":
-                content = blk.group(1).strip()
+                content = blk[1].strip()
                 break
             break  # nearest non-matching block → fall through to # lines
 

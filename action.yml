@@ -62,6 +62,17 @@ inputs:
       .rrt/docs.lock.toml.
     default: "false"
 
+outputs:
+  detected-version:
+    description: The current project version detected from the rrt configuration
+    value: ${{ steps.detect-version.outputs.detected_version }}
+  changelog-status:
+    description: Changelog status — one of 'clean', 'dirty', or 'missing'
+    value: ${{ steps.detect-version.outputs.changelog_status }}
+  health-summary:
+    description: JSON object summarising the policy check results
+    value: ${{ steps.detect-version.outputs.health_summary }}
+
 runs:
   using: composite
   steps:
@@ -74,6 +85,40 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
       run: python -m pip install .
+
+    - name: Detect project version and changelog status
+      id: detect-version
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        detected_version=""
+        changelog_status="missing"
+
+        if detected_version=$(rrt ci-version 2>/dev/null); then
+          detected_version="${detected_version//[$'\n\r']}"
+        fi
+
+        changelog_file="${{ inputs.changelog-file }}"
+        if [[ -f "$changelog_file" ]]; then
+          if grep -q '^\[Unreleased\]' "$changelog_file" 2>/dev/null; then
+            # Count non-empty lines under [Unreleased]
+            entries=$(awk '/^\[Unreleased\]/{p=1;next} /^\[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
+            if [[ "$entries" -gt 0 ]]; then
+              changelog_status="dirty"
+            else
+              changelog_status="clean"
+            fi
+          else
+            changelog_status="clean"
+          fi
+        fi
+
+        health_summary="{\"version\":\"${detected_version}\",\"changelog_status\":\"${changelog_status}\"}"
+
+        echo "detected_version=${detected_version}" >> "$GITHUB_OUTPUT"
+        echo "changelog_status=${changelog_status}" >> "$GITHUB_OUTPUT"
+        echo "health_summary=${health_summary}" >> "$GITHUB_OUTPUT"
 
     - name: Validate branch name
       if: inputs.check-branch-name == 'true'
@@ -93,7 +138,8 @@ runs:
           exit 0
         fi
         branch_name="${INPUT_BRANCH_NAME:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}"
-        rrt-hooks check-branch-name --branch "$branch_name"
+        rrt-hooks check-branch-name --branch "$branch_name" || \
+          (echo "::error::Branch name policy violation: $branch_name" && exit 1)
 
     - name: Validate commit subject
       if: inputs.check-commit-subject == 'true'
@@ -104,7 +150,8 @@ runs:
       run: |
         set -euo pipefail
         commit_subject="${INPUT_COMMIT_SUBJECT:-$(git log -1 --pretty=%s)}"
-        rrt-hooks check-commit-subject --subject "$commit_subject"
+        rrt-hooks check-commit-subject --subject "$commit_subject" || \
+          (echo "::error::Commit subject policy violation: $commit_subject" && exit 1)
 
     - name: Validate changelog update
       if: inputs.check-changelog == 'true' && inputs.changelog-strategy != 'release-only'
@@ -126,7 +173,8 @@ runs:
           --changelog-file "$INPUT_CHANGELOG_FILE" \
           --strategy "${INPUT_CHANGELOG_STRATEGY:-auto}" \
           --branch "$branch_name" \
-          --ref HEAD
+          --ref HEAD || \
+          (echo "::error::Changelog policy violation — see output above for details." && exit 1)
 
     - name: Validate clean working tree
       if: inputs.check-dirty-tree == 'true'
@@ -134,7 +182,8 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt-hooks check-dirty-tree
+        rrt-hooks check-dirty-tree || \
+          (echo "::error::Working tree is dirty. Commit or stash changes before merging." && exit 1)
 
     - name: Run rrt doctor health checks
       if: inputs.check-doctor == 'true'
@@ -142,7 +191,8 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt-hooks doctor
+        rrt-hooks doctor || \
+          (echo "::error::rrt doctor reported automation health issues — see output above." && exit 1)
 
     - name: Run rrt release health checks
       if: inputs.check-release-health == 'true' || inputs.check-doctor == 'true'
@@ -150,7 +200,8 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt release check
+        rrt release check || \
+          (echo "::error::rrt release check found issues — version targets or changelog may be misconfigured." && exit 1)
 
     - name: Check runtime EOL status
       if: inputs.check-eol == 'true'
@@ -158,7 +209,8 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt-hooks check-eol
+        rrt-hooks check-eol || \
+          (echo "::warning::Runtime EOL check detected end-of-life or near-EOL dependencies." && exit 1)
 
     - name: Check docs lockfile consistency
       if: inputs.check-docs == 'true'
@@ -166,4 +218,5 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt-hooks check-docs
+        rrt-hooks check-docs || \
+          (echo "::error::Docs lockfile is out of sync. Run 'rrt docs build' to regenerate." && exit 1)

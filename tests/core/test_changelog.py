@@ -767,3 +767,54 @@ def test_build_changelog_section_markdown_renders_subheaders() -> None:
         include_maintenance=True,
     )
     assert "### Fixed" in rendered
+
+
+# ---------------------------------------------------------------------------
+# _build_commit_re with extra commit types
+# ---------------------------------------------------------------------------
+
+
+def test_build_commit_re_with_extra_types_matches_custom() -> None:
+    from repo_release_tools.changelog import _build_commit_re
+
+    pattern = _build_commit_re(("hotfix", "spike"))
+    m = pattern.match("hotfix: fix the thing")
+    assert m is not None
+    assert m.group("type").lower() == "hotfix"
+
+
+def test_build_commit_re_with_extra_types_still_matches_base() -> None:
+    from repo_release_tools.changelog import _build_commit_re
+
+    pattern = _build_commit_re(("hotfix",))
+    m = pattern.match("feat: new feature")
+    assert m is not None
+
+
+# ---------------------------------------------------------------------------
+# get_unreleased_section_body — RST and MD no-match paths
+# ---------------------------------------------------------------------------
+
+
+def test_get_unreleased_section_body_rst_no_match_returns_empty() -> None:
+    from repo_release_tools.changelog import ChangelogFormat, get_unreleased_section_body
+
+    content = "1.0.0\n-----\n\n- Some entry\n"
+    result = get_unreleased_section_body(content, fmt=ChangelogFormat.RST)
+    assert result == ""
+
+
+def test_get_unreleased_section_body_md_no_match_returns_empty() -> None:
+    from repo_release_tools.changelog import ChangelogFormat, get_unreleased_section_body
+
+    content = "## [1.0.0] - 2024-01-01\n\n- Some entry\n"
+    result = get_unreleased_section_body(content, fmt=ChangelogFormat.MARKDOWN)
+    assert result == ""
+
+
+def test_get_unreleased_section_body_rst_with_entries() -> None:
+    """Returns the body when an RST unreleased section exists with entries."""
+    from repo_release_tools.changelog import ChangelogFormat, get_unreleased_section_body
+
+    result = get_unreleased_section_body(_RST_UNRELEASED_WITH_ENTRIES, fmt=ChangelogFormat.RST)
+    assert "fix connection timeout" in result
