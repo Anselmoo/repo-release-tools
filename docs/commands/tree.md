@@ -9,22 +9,63 @@ permalink: "/commands/tree/"
 
 # rrt tree
 
-`rrt tree` renders a deterministic project tree with Git-aware filtering and
-multiple output modes for terminal use, docs, and copy/paste workflows.
+Render a project tree with gitignore-aware filtering.
 
-## Formats
+## Overview
 
-- `classic` — platform-aware tree connectors
-- `ascii` — forced ASCII connectors
-- `markdown` — nested markdown bullets
-- `rich` — Rich rendering with fallback to classic
+`rrt tree` prints a repository or directory tree suitable for terminal review,
+docs snippets, and quick project orientation.
 
-## Typical usage
+The command is read-only and intentionally deterministic:
 
-```text
+- stable ordering (directories first, then files)
+- optional depth limiting for large repositories
+- optional hidden-file inclusion
+- optional directories-only mode
+
+## Ignore behavior
+
+When the selected root is inside a Git repository, ignore checks use Git's own
+exclude engine via `git check-ignore`, so matching follows active repository
+rules and precedence semantics.
+
+When the root is not in a Git worktree, the command falls back to a conservative
+local skip list for well-known transient directories (for example `.git`,
+`node_modules`, `.venv`) while still honoring explicit CLI flags.
+
+## Output formats
+
+- `classic` (default): platform-aware tree connectors through `GLYPHS.tree`
+- `ascii`: forced ASCII connectors for paste-safe logs or legacy terminals
+- `markdown`: nested bullet output for Markdown docs and issue comments
+- `rich`: Rich tree rendering when the optional package is installed; falls
+    back to `classic` with a warning when Rich is unavailable
+
+## Common options
+
+- `--root PATH` selects the traversal root
+- `--max-depth N` limits recursion depth (unlimited by default)
+- `--dirs-only` suppresses files
+- `--show-hidden` includes dotfiles and dot-directories
+
+## Failure behavior
+
+The command exits non-zero when:
+
+- the root path does not exist
+- the root path is not a directory
+
+Unreadable subdirectories are reported as warnings and do not fail the command.
+
+## Examples
+
+```bash
 rrt tree
+rrt tree --format ascii
 rrt tree --format markdown --max-depth 3
-rrt tree --dirs-only --root src/repo_release_tools
+rrt tree --root src/repo_release_tools --dirs-only
+rrt tree --format markdown --inject README.md --anchor project-tree
+rrt tree --format markdown --inject README.md --anchor project-tree --dry-run
 ```
 
 ## Embedding a tree into a Markdown file
@@ -54,12 +95,6 @@ rrt tree --format markdown --inject README.md --anchor project-tree
 Only the content between the markers is replaced; everything else in the file
 stays untouched.
 
-**Preview without writing (dry-run)**:
-
-```bash
-rrt tree --format markdown --inject README.md --anchor project-tree --dry-run
-```
-
 ### Anchor ID rules
 
 An anchor ID must start with an ASCII letter or digit followed by any
@@ -67,12 +102,17 @@ combination of ASCII letters, digits, dots, underscores, or hyphens.
 
 Valid examples: `project-tree`, `src.layout`, `tree_v2`
 
-## Notes
+## Caveats
 
-- In Git repos, ignore behavior follows Git via `git check-ignore`.
-- Outside Git repos, fallback ignore filtering skips common transient dirs.
-- Hidden files are excluded unless `--show-hidden` is provided.
-- `--inject` and `--anchor` must always be used together.
+- Symlinked directories are listed but not recursively traversed.
+- The root itself is not printed as a tree node; output begins with its
+    children.
+- Rich formatting is optional and never required for baseline output.
+
+## Related docs
+
+- [Generated CLI reference](rrt-cli.md)
+- [rrt git](git_cmd.md)
 
 <!-- rrt:auto:start:doc-footer -->
 ---

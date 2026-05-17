@@ -22,6 +22,8 @@ from repo_release_tools.commands.branch import (
     SLUG_MAX,
     normalize_commit_type,
 )
+from repo_release_tools.commands.docs_cmd import cmd_docs
+from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.release_cmd import cmd_release_check
@@ -1017,6 +1019,22 @@ def main(argv: list[str] | None = None) -> int:
         "check-eol",
         help="Check host runtimes and project minimums against EOL dates.",
     )
+    subparsers.add_parser(
+        "docs-generate",
+        help="Regenerate the source-owned docs lockfile.",
+    )
+    subparsers.add_parser(
+        "docs-publish",
+        help="Regenerate CLI reference documentation.",
+    )
+    subparsers.add_parser(
+        "docs-inject",
+        help="Synchronize shared anchor blocks across documentation.",
+    )
+    subparsers.add_parser(
+        "docstring-suggest",
+        help="Apply scaffolded docstrings to missing or thin module docstrings.",
+    )
     changelog_subparsers = changelog_parser.add_subparsers(
         dest="changelog_command",
         required=True,
@@ -1070,6 +1088,37 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_release_check(parsed)
     if parsed.command == "check-eol":
         return cmd_eol_check(parsed)
+    if parsed.command == "docs-generate":
+        parsed.docs_action = "generate"
+        parsed.format = "toml"
+        parsed.lang = None
+        parsed.root = "."
+        parsed.dry_run = False
+        return cmd_docs(parsed)
+    if parsed.command == "docs-publish":
+        parsed.docs_action = "publish"
+        parsed.format = None
+        parsed.lang = None
+        parsed.root = "."
+        parsed.check = False
+        parsed.dry_run = False
+        parsed.fail_on_change = False
+        return cmd_docs(parsed)
+    if parsed.command == "docs-inject":
+        parsed.docs_action = "inject"
+        parsed.format = None
+        parsed.lang = None
+        parsed.root = "."
+        parsed.check = False
+        parsed.dry_run = False
+        parsed.add_anchors = True
+        return cmd_docs(parsed)
+    if parsed.command == "docstring-suggest":
+        parsed.root = "."
+        parsed.paths = []
+        parsed.min_chars = None
+        parsed.apply = True
+        return cmd_docs_suggest(parsed)
     if parsed.command == "update-unreleased":
         if parsed.message_file is not None:
             # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
@@ -1198,6 +1247,10 @@ Pair it with:
 | `rrt-dirty-tree` | pre-push / manual | Fail on uncommitted changes |
 | `rrt-doctor` | manual | Run `rrt doctor` core automation checks on `rrt` config |
 | `rrt-release-check` | manual | Run `rrt release check` for version targets, pin targets, and changelog files |
+| `rrt-docs-lock` | manual | Regenerate the source-owned docs lockfile (`.rrt/docs.lock.toml`) |
+| `rrt-docs-publish` | manual | Regenerate CLI reference documentation and topic pages |
+| `rrt-docs-inject` | manual | Synchronize shared anchor blocks across documentation |
+| `rrt-docstring-suggest` | manual | Apply scaffolded docstrings to missing or thin module docstrings |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
 incremental workflow. You usually want one or the other, not both.

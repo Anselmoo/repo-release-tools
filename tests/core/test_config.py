@@ -1630,7 +1630,7 @@ def test_load_config_docs_defaults(tmp_path: Path) -> None:
     assert isinstance(cfg.docs, DocsConfig)
     assert cfg.docs.mirror_src_tree is False
     assert cfg.docs.docs_dir == "docs"
-    assert cfg.docs.src_dir == "src/repo_release_tools"
+    assert cfg.docs.src_dir == "."
     assert cfg.docs.stubs == ()
 
 
@@ -2913,6 +2913,30 @@ def test_load_badge_assets_dir_valid() -> None:
     from repo_release_tools.config.docs_config import _load_badge_assets_dir
 
     assert _load_badge_assets_dir({"badge_assets_dir": " assets/icons "}) == "assets/icons"
+
+
+def test_load_optional_docs_int_invalid() -> None:
+    """_load_optional_docs_int raises when provided a non-integer."""
+    from repo_release_tools.config.docs_config import _load_optional_docs_int
+
+    with pytest.raises(ValueError, match="must be an integer"):
+        _load_optional_docs_int({"suggest_min_chars": "oops"}, "suggest_min_chars")
+
+
+def test_load_docs_suggest_roots_invalid() -> None:
+    """_load_docs_suggest_roots raises when roots are not all strings."""
+    from repo_release_tools.config.docs_config import _load_docs_suggest_roots
+
+    with pytest.raises(ValueError, match="suggest_roots"):
+        _load_docs_suggest_roots({"suggest_roots": ["src", 1]})
+
+
+def test_load_docs_suggest_exempt_invalid() -> None:
+    """_load_docs_suggest_exempt raises when exempt entries are not all strings."""
+    from repo_release_tools.config.docs_config import _load_docs_suggest_exempt
+
+    with pytest.raises(ValueError, match="suggest_exempt"):
+        _load_docs_suggest_exempt({"suggest_exempt": ["skip.py", 1]})
 
 
 def test_load_source_link_badge_invalid(tmp_path: Path) -> None:

@@ -114,7 +114,7 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
         raise ValueError("tool.rrt.docs.docs_dir must be a non-empty string")
 
     raw_src_dir = d.get("src_dir")
-    src_dir = "src/repo_release_tools" if raw_src_dir is None else raw_src_dir
+    src_dir = "." if raw_src_dir is None else raw_src_dir
     if not isinstance(src_dir, str) or not src_dir:
         raise ValueError("tool.rrt.docs.src_dir must be a non-empty string")
 
@@ -151,6 +151,9 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
         badge_assets_dir=_load_badge_assets_dir(d),
         badge_variant=_load_badge_variant(d),
         source_link_badge=_load_source_link_badge(d),
+        suggest_roots=_load_docs_suggest_roots(d),
+        suggest_exempt=_load_docs_suggest_exempt(d),
+        suggest_min_chars=_load_optional_docs_int(d, "suggest_min_chars"),
     )
 
 
@@ -222,6 +225,15 @@ def _load_optional_docs_string(d: dict[str, object], key: str) -> str | None:
     return value
 
 
+def _load_optional_docs_int(d: dict[str, object], key: str) -> int | None:
+    raw = d.get(key)
+    if raw is None:
+        return None
+    if not isinstance(raw, int):
+        raise ValueError(f"tool.rrt.docs.{key} must be an integer when provided")
+    return raw
+
+
 def _load_badge_style(d: dict[str, object]) -> str:
     raw = d.get("badge_style")
     if raw is None:
@@ -260,6 +272,24 @@ def _load_badge_variant(d: dict[str, object]) -> str:
             f"tool.rrt.docs.badge_variant must be one of {sorted(VALID_BADGE_VARIANTS)}, got {raw!r}",
         )
     return str(raw)
+
+
+def _load_docs_suggest_roots(d: dict[str, object]) -> tuple[str, ...]:
+    raw = d.get("suggest_roots")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise ValueError("tool.rrt.docs.suggest_roots must be a list of strings")
+    return tuple(cast("list[str]", raw))
+
+
+def _load_docs_suggest_exempt(d: dict[str, object]) -> tuple[str, ...]:
+    raw = d.get("suggest_exempt")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise ValueError("tool.rrt.docs.suggest_exempt must be a list of strings")
+    return tuple(cast("list[str]", raw))
 
 
 def _load_shared_blocks(

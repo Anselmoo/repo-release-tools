@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import os
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -37,8 +38,7 @@ from textwrap import dedent
 from repo_release_tools.ui import DryRunPrinter
 
 DEFAULT_MIN_CHARS = 150
-DEFAULT_ROOT = Path("src") / "repo_release_tools" / "commands"
-EXEMPT_FILES = {"__init__.py", "__main__.py"}
+EXEMPT_FILES = frozenset({"__init__.py", "__main__.py"})
 
 
 @dataclass(frozen=True)
@@ -49,14 +49,26 @@ class _DocstringFinding:
 
 
 def _iter_targets(paths: Iterable[Path]) -> list[Path]:
-    """Return the Python files to inspect."""
+    """Return the Python files to inspect.
+
+    Recursively scans directories while skipping well-known transient/system
+    directories defined in the project's ignore list.
+    """
+    from repo_release_tools.config import ignore_dir_names
+
     targets: list[Path] = []
+    ignored_dirs = ignore_dir_names()
     for path in paths:
         if path.is_dir():
-            targets.extend(sorted(path.rglob("*.py")))
+            for root, dirs, files in os.walk(path):
+                # Prune ignored directories in-place to prevent traversal.
+                dirs[:] = [d for d in dirs if d not in ignored_dirs]
+                for file in files:
+                    if file.endswith(".py"):
+                        targets.append(Path(root) / file)
         elif path.is_file() and path.suffix == ".py":
             targets.append(path)
-    return targets
+    return sorted(targets)
 
 
 def _resolve_target_path(path: Path, root: Path) -> Path:
@@ -64,9 +76,11 @@ def _resolve_target_path(path: Path, root: Path) -> Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-def _should_exempt(path: Path, text: str) -> bool:
+def _should_exempt(path: Path, text: str, exempt_files: set[str]) -> bool:
     """Return whether *path* should be skipped by the scanner."""
-    return path.name in EXEMPT_FILES or "rrt:docs-exempt" in text
+    if path.name in exempt_files:
+        return True
+    return "rrt:docs-exempt" in text
 
 
 def _command_slug(path: Path) -> str:
@@ -150,12 +164,25 @@ def _insert_or_replace_docstring(path: Path, scaffold: str) -> bool:
     return True
 
 
-def scan(paths: Iterable[Path], *, min_chars: int = DEFAULT_MIN_CHARS) -> list[_DocstringFinding]:
+def scan(
+    paths: Iterable[Path],
+    *,
+    min_chars: int = DEFAULT_MIN_CHARS,
+    exempt_files: set[str] | None = None,
+) -> list[_DocstringFinding]:
     """Find files whose module docstrings should be expanded."""
+    effective_exempt_files = set(EXEMPT_FILES)
+    if exempt_files:
+        effective_exempt_files.update(exempt_files)
+
     findings: list[_DocstringFinding] = []
     for path in _iter_targets(paths):
-        text = path.read_text(encoding="utf-8")
-        if _should_exempt(path, text):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+
+        if _should_exempt(path, text, exempt_files=effective_exempt_files):
             continue
 
         docstring = _read_module_docstring(path)
@@ -171,18 +198,44 @@ def scan(paths: Iterable[Path], *, min_chars: int = DEFAULT_MIN_CHARS) -> list[_
 
 def cmd_docs_suggest(args: argparse.Namespace) -> int:
     """Suggest or apply rich module docstrings for command modules."""
+    from repo_release_tools.config import load_config
+
     root = Path(getattr(args, "root", ".")).resolve()
+
+    # Load config to get suggest settings
+    cfg = None
+    try:
+        cfg = load_config(root)
+    except (FileNotFoundError, ValueError):
+        pass
+
+    # Default to scanning the source directory or current directory if not specified
+    suggest_roots_list: list[str] = ["."]
+    exempt_files: set[str] | None = None
+    arg_min_chars = getattr(args, "min_chars", None)
+    min_chars = DEFAULT_MIN_CHARS if arg_min_chars is None else int(arg_min_chars)
+
+    if cfg and cfg.docs:
+        if cfg.docs.suggest_roots:
+            suggest_roots_list = list(cfg.docs.suggest_roots)
+        elif cfg.docs.src_dir:
+            suggest_roots_list = [cfg.docs.src_dir]
+
+        if cfg.docs.suggest_exempt:
+            exempt_files = set(cfg.docs.suggest_exempt)
+        if cfg.docs.suggest_min_chars is not None and arg_min_chars is None:
+            min_chars = cfg.docs.suggest_min_chars
+
     raw_paths = list(getattr(args, "paths", ()) or ())
     paths = (
         [_resolve_target_path(Path(p), root) for p in raw_paths]
         if raw_paths
-        else [root / DEFAULT_ROOT]
+        else [_resolve_target_path(Path(p), root) for p in suggest_roots_list]
     )
-    min_chars = int(getattr(args, "min_chars", DEFAULT_MIN_CHARS))
     apply = bool(getattr(args, "apply", False))
 
     p = DryRunPrinter(dry_run=False)
-    findings = scan(paths, min_chars=min_chars)
+    findings = scan(paths, min_chars=min_chars, exempt_files=exempt_files)
 
     if not findings:
         p.ok("No docstring scaffolds needed.")

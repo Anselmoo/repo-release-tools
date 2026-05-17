@@ -2,29 +2,47 @@
 
 ## Overview
 
-`rrt init` writes a starter configuration for the current repository. It can
-either create a standalone `.rrt.toml` file or merge an rrt section into an
-existing project manifest.
+`rrt init` provides a streamlined onboarding experience for new repositories.
+It generates a recommended starter configuration tailored to the project's
+language and structure, allowing developers to quickly adopt standard release
+and documentation workflows.
 
-The command is designed to be safe by default: it refuses to overwrite
-existing config unless `--force` is used, and `--dry-run` shows the exact
-output without touching files.
+The command can either create a standalone `.rrt.toml` file—which is the
+preferred method for most projects—or merge the configuration into existing
+project manifests like `pyproject.toml`, `Cargo.toml`, or `package.json`.
 
-## Target surfaces
+## Responsibilities
 
-- `.rrt.toml` (default)
-- `pyproject.toml` -> `[tool.rrt]`
-- `Cargo.toml` -> `[package.metadata.rrt]`
-- `package.json` -> `"rrt"` key
-- `.rrt.toml` with Go-oriented recommendations (`--target go`)
+- discover the repository root and identify the primary project language
+- generate high-quality, documented starter configurations for multiple targets
+- provide language-specific recommendations (e.g., Python, Node.js, Go, Rust)
+- ensure safe initialization with dry-run and overwrite protections
+- guide the user through the configuration discovery process
+
+## Target Surfaces
+
+- **.rrt.toml** (default): Creates a new, standalone configuration file with
+  rich comments and recommended defaults for generic or multi-language projects.
+- **pyproject.toml**: Appends a `[tool.rrt]` section to the Python project
+  manifest.
+- **Cargo.toml**: Appends a `[package.metadata.rrt]` section to the Rust
+  crate manifest.
+- **package.json**: Merges an `"rrt"` key into the Node.js project manifest.
+- **go**: Generates a `.rrt.toml` file pre-configured with Go-oriented
+  version targets and release patterns.
 
 ## Behavior
 
-- Detects an existing explicit config discovered by repo-release-tools and
-  warns when a new `.rrt.toml` would lose precedence.
-- Refuses to append duplicate rrt sections to TOML manifests.
-- Validates that `package.json` contains a top-level object before merging.
-- Prints a rendered preview in dry-run mode.
+- **Safety**: Refuses to overwrite an existing configuration unless `--force`
+  is explicitly provided.
+- **Discovery**: Warns the user if an existing configuration is found in a
+  different location (e.g., if `.rrt.toml` is created but `pyproject.toml`
+  already has an `rrt` section).
+- **Templates**: Uses internal recommendation engines to populate the starter
+  config with sensible `version_targets`, `changelog_file`, and `release_branch`
+  patterns.
+- **Preview**: Supports `--dry-run` to show the exact content and target path
+  before any changes are made.
 
 ## Examples
 
@@ -33,14 +51,14 @@ output without touching files.
 - `rrt init --target pyproject`
 - `rrt init --target node --force`
 - `rrt init --target go`
+- `rrt init --target cargo --dry-run`
 
 ## Caveats
 
-- `--target pyproject` and `--target cargo` append to an existing file only;
-  they do not create missing manifests.
-- `--target node` replaces the top-level `"rrt"` key in `package.json`.
-- `--target go` keeps the `.rrt.toml` filename but uses Go-oriented
-  recommendations.
+- For `pyproject.toml` and `Cargo.toml`, the command only appends to existing
+  files; it will not create the manifest if it is missing.
+- Standalone `.rrt.toml` files take precedence over manifest-embedded
+  configurations during standard tool discovery.
 """
 
 from __future__ import annotations

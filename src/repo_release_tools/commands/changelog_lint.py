@@ -1,22 +1,40 @@
 """Lint changelog entries for style consistency.
 
-`rrt changelog lint` validates entries in the ``[Unreleased]`` section (or a
-named release) of the configured changelog file.
+## Overview
+
+`rrt changelog lint` provides automated style enforcement for the project's
+changelog. By validating entries in the `[Unreleased]` section (or a specific
+past release), it ensures that the change history remains readable,
+professional, and consistent across different contributors and time periods.
+
+The command is designed to be used both as a developer tool during local work
+and as a CI gate to prevent non-conforming entries from being merged into
+the main branch.
+
+## Responsibilities
+
+- parse release sections from Markdown and RST changelogs
+- extract individual bullet points for validation
+- apply a configurable suite of style rules to each entry
+- report violations with clear line-by-line feedback
+- provide non-zero exit codes for CI integration
 
 ## Rules
 
 The following rules are applied to each entry bullet by default:
 
-- **sentence-case**: Entry must start with an uppercase letter.
-- **no-trailing-period**: Entry must not end with a period.
-- **max-length**: Entry must not exceed the configured character limit
-  (default 120).
+- **sentence-case**: Each entry must start with an uppercase letter to ensure
+  grammatical consistency.
+- **no-trailing-period**: Entries must not end with a period, following common
+  shorthand style for changelogs.
+- **max-length**: Entries must not exceed a specific character limit (default
+  120) to maintain readability in narrow displays.
 - **no-duplicates**: No two entries in the same section may be identical
-  after normalisation (case-fold + strip).
+  after normalization, preventing redundant information.
 
 ## Configuration
 
-All rules can be disabled or tuned in ``[tool.rrt.changelog_lint]``:
+Rules can be toggled and tuned in the project's `pyproject.toml` or `.rrt.toml`:
 
 ```toml
 [tool.rrt.changelog_lint]
@@ -26,13 +44,28 @@ max_length = 120            # default 120 (0 = disabled)
 no_duplicates = true        # default true
 ```
 
+## Behavior
+
+- **Targeting**: Lints the `[Unreleased]` section by default, but can target
+  any past release via `--release <version>`.
+- **Validation**: Scans all bullets (`-` or `*`) within the selected section.
+- **Error Handling**: Exits with code 1 if violations are found, unless
+  `--no-fail` is specified.
+- **Integration**: Designed to run after `rrt bump` or as part of a pre-commit
+  hook.
+
 ## Examples
 
-```bash
-rrt changelog lint
-rrt changelog lint --release v1.3.0
-rrt changelog lint --no-fail
-```
+- `rrt changelog lint`
+- `rrt changelog lint --release v1.3.0`
+- `rrt changelog lint --no-fail --group backend`
+- `rrt changelog lint --release 2.0.0`
+
+## Caveats
+
+- Relies on the standard bulleted list format for entry discovery.
+- Normalization for duplicate checking ignores casing and leading/trailing
+  whitespace.
 """
 
 from __future__ import annotations

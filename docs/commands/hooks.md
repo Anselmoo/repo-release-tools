@@ -85,6 +85,10 @@ Pair it with:
 | `rrt-dirty-tree` | pre-push / manual | Fail on uncommitted changes |
 | `rrt-doctor` | manual | Run `rrt doctor` core automation checks on `rrt` config |
 | `rrt-release-check` | manual | Run `rrt release check` for version targets, pin targets, and changelog files |
+| `rrt-docs-lock` | manual | Regenerate the source-owned docs lockfile (`.rrt/docs.lock.toml`) |
+| `rrt-docs-publish` | manual | Regenerate CLI reference documentation and topic pages |
+| `rrt-docs-inject` | manual | Synchronize shared anchor blocks across documentation |
+| `rrt-docstring-suggest` | manual | Apply scaffolded docstrings to missing or thin module docstrings |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
 incremental workflow. You usually want one or the other, not both.

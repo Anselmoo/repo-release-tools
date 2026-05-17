@@ -1137,27 +1137,66 @@ Examples
 
 ## `rrt tree`
 
-### rrt tree
+Render a project tree with gitignore-aware filtering.
 
-`rrt tree` renders a deterministic project tree with Git-aware filtering and
-multiple output modes for terminal use, docs, and copy/paste workflows.
+### Overview
 
-#### Formats
+`rrt tree` prints a repository or directory tree suitable for terminal review,
+docs snippets, and quick project orientation.
 
-- `classic` — platform-aware tree connectors
-- `ascii` — forced ASCII connectors
-- `markdown` — nested markdown bullets
-- `rich` — Rich rendering with fallback to classic
+The command is read-only and intentionally deterministic:
 
-#### Typical usage
+- stable ordering (directories first, then files)
+- optional depth limiting for large repositories
+- optional hidden-file inclusion
+- optional directories-only mode
 
-```text
+### Ignore behavior
+
+When the selected root is inside a Git repository, ignore checks use Git's own
+exclude engine via `git check-ignore`, so matching follows active repository
+rules and precedence semantics.
+
+When the root is not in a Git worktree, the command falls back to a conservative
+local skip list for well-known transient directories (for example `.git`,
+`node_modules`, `.venv`) while still honoring explicit CLI flags.
+
+### Output formats
+
+- `classic` (default): platform-aware tree connectors through `GLYPHS.tree`
+- `ascii`: forced ASCII connectors for paste-safe logs or legacy terminals
+- `markdown`: nested bullet output for Markdown docs and issue comments
+- `rich`: Rich tree rendering when the optional package is installed; falls
+    back to `classic` with a warning when Rich is unavailable
+
+### Common options
+
+- `--root PATH` selects the traversal root
+- `--max-depth N` limits recursion depth (unlimited by default)
+- `--dirs-only` suppresses files
+- `--show-hidden` includes dotfiles and dot-directories
+
+### Failure behavior
+
+The command exits non-zero when:
+
+- the root path does not exist
+- the root path is not a directory
+
+Unreadable subdirectories are reported as warnings and do not fail the command.
+
+### Examples
+
+```bash
 rrt tree
+rrt tree --format ascii
 rrt tree --format markdown --max-depth 3
-rrt tree --dirs-only --root src/repo_release_tools
+rrt tree --root src/repo_release_tools --dirs-only
+rrt tree --format markdown --inject README.md --anchor project-tree
+rrt tree --format markdown --inject README.md --anchor project-tree --dry-run
 ```
 
-#### Embedding a tree into a Markdown file
+### Embedding a tree into a Markdown file
 
 Use `--inject` and `--anchor` to automatically update a block inside any
 Markdown document without touching the surrounding prose.
@@ -1184,25 +1223,24 @@ rrt tree --format markdown --inject README.md --anchor project-tree
 Only the content between the markers is replaced; everything else in the file
 stays untouched.
 
-**Preview without writing (dry-run)**:
-
-```bash
-rrt tree --format markdown --inject README.md --anchor project-tree --dry-run
-```
-
-##### Anchor ID rules
+#### Anchor ID rules
 
 An anchor ID must start with an ASCII letter or digit followed by any
 combination of ASCII letters, digits, dots, underscores, or hyphens.
 
 Valid examples: `project-tree`, `src.layout`, `tree_v2`
 
-#### Notes
+### Caveats
 
-- In Git repos, ignore behavior follows Git via `git check-ignore`.
-- Outside Git repos, fallback ignore filtering skips common transient dirs.
-- Hidden files are excluded unless `--show-hidden` is provided.
-- `--inject` and `--anchor` must always be used together.
+- Symlinked directories are listed but not recursively traversed.
+- The root itself is not printed as a tree node; output begins with its
+    children.
+- Rich formatting is optional and never required for baseline output.
+
+### Related docs
+
+- [Generated CLI reference](rrt-cli.md)
+- [rrt git](git_cmd.md)
 
 ```text
 Usage:  rrt tree [OPTIONS]
@@ -1368,7 +1406,7 @@ Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help     Show this message and exit.
   --root PATH    Project root directory (default: current directory).
-  --min-chars N  Minimum docstring length to accept (default: 150).
+  --min-chars N  Minimum docstring length to accept (default: config or 150).
   --apply        Write scaffold docstrings back into the target files.
 ```
 
@@ -1627,21 +1665,35 @@ Examples
 
 ### rrt branch
 
-`repo-release-tools` uses conventional branches to keep trunk-based publishing
-predictable for humans, hooks, and automation.
+Branch command helpers and utilities for conventional branches.
 
-This page is generated from `repo_release_tools.commands.branch.SEMANTIC_BRANCHES_DOC`.
-The canonical command reference is [docs/commands/rrt-cli.md](rrt-cli.md). This page
-summarizes the naming rules that the CLI and hooks enforce.
+#### Overview
 
-#### Standard format
+The `rrt branch` command family provides a suite of helpers for managing
+semantic, conventionally-named Git branches. By enforcing a consistent naming
+structure—such as `feat/add-parser` or `fix/config-loader`—the tool ensures
+that the repository's branch history remains searchable, readable, and
+aligned with standard `conventional-commits` policies.
+
+These helpers are particularly useful for teams practicing trunk-based
+development, where branch names often serve as the primary signal for
+automated release notes and CI workflow routing.
+
+#### Responsibilities
+
+- validate branch names against project-specific prefix and slug rules
+- scaffold new branches using the canonical `<type>/<kebab-slug>` format
+- automate the renaming of branches while preserving description context
+- "rescue" uncommitted work or divergent commits into new, semantic branches
+- provide actionable suggestions when a branch name violates repository policy
+
+#### Standard Format
 
 ```text
-<type>/<kebab-case-description>
+<type>/[<scope>-]<kebab-case-description>
 ```
 
-Examples:
-
+Example branches:
 - `feat/add-config-discovery`
 - `fix/handle-tag-workflows`
 - `docs/split-readme-into-docs`
@@ -1649,73 +1701,40 @@ Examples:
 #### Built-in branch types
 
 Conventional branch types are accepted out of the box:
-
-- `feat`
-- `fix`
-- `chore`
-- `docs`
-- `refactor`
-- `test`
-- `ci`
-- `perf`
-- `style`
-- `build`
+- `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `style`, `build`
 
 #### Special names
 
 These branch names are also valid:
+- `main`, `master`, `develop`
+- `release/v<semver>` (validated as a semver-aware special case)
 
-- `main`
-- `master`
-- `develop`
-- `release/v<semver>`
+#### AI helper and Bot branches
 
-`release/v<semver>` is validated as a semver-aware special case, not as a free
-form `type/slug` branch.
+Branches created by assistant-driven workflows or dependency bots are accepted with these prefixes:
+- `claude/...`, `codex/...`, `copilot/...`
+- `dependabot/...`, `renovate/...`
 
-#### AI helper branches
+Custom prefixes can be added via the `extra_branch_types` config key.
 
-Branches created by assistant-driven workflows are accepted with these prefixes:
+#### Behavior
 
-- `claude/...`
-- `codex/...`
-- `copilot/...`
+- **new**: Creates and switches to a new branch. Moves dirty changes if requested.
+- **rename**: Rebuilds the current branch name based on new type, scope, or description.
+- **rescue**: Moves commits ahead of upstream to a fresh semantic branch.
+- **dry-run**: Previews all Git operations without modifying the repository.
 
-They still use normal slug validation, so the suffix should stay lowercase and
-kebab-cased.
+#### Examples
 
-#### Bot and custom branches
+- `rrt branch new feat "add parser"`
+- `rrt branch new fix "repair config loader" --scope api`
+- `rrt branch rename --type fix --scope api "fix config loader"`
+- `rrt branch rescue feat "rescue work in progress"`
 
-Branches created by dependency bots are accepted too:
+#### Caveats
 
-- `dependabot/...`
-- `renovate/...`
-
-Custom prefixes can be added through configuration:
-
-```toml
-[tool.rrt]
-extra_branch_types = ["greenkeeper", "snyk"]
-```
-
-Bot and custom prefixes are treated as passthrough types. Their suffixes are
-only required to be non-empty, because upstream tools often generate slugs with
-slashes or underscores.
-
-#### Why the rules matter
-
-- branch names stay readable in review queues
-- commit subjects and branch types stay aligned
-- release automation can distinguish ordinary work from release branches
-- hooks and CI can apply one consistent policy across local and remote checks
-
-#### Related commands
-
-- `rrt branch new`
-- `rrt branch rescue`
-- `rrt branch rename`
-- `rrt git commit`
-- `rrt git doctor`
+- Branch slugs are limited to 60 characters by default.
+- Custom branch types can be added via configuration.
 
 ```text
 Usage:  rrt branch [OPTIONS] <branch_command>
@@ -1836,59 +1855,52 @@ Examples
 
 ### rrt git
 
-`repo-release-tools` ships a small set of opinionated Git workflows for branch
-health, commit drafting, sync, and history repair.
+Git workflow helpers for repository status, commit, sync, and history operations.
 
-This page is generated from `repo_release_tools.workflow.git.GIT_DOC`.
-This page stays workflow-oriented. For the full command surface and option
-details, see [docs/commands/rrt-cli.md](rrt-cli.md).
+#### Overview
+
+`repo-release-tools` ships a small set of opinionated Git workflows for branch
+health, commit drafting, sync, and history repair. The tool group favors compact,
+human-readable summaries with explicit safety checks before any destructive
+operation.
+
+Most commands are designed to run from a Git work tree and emit a short
+summary first, followed by the details needed to act on the result.
 
 #### Workflow map
 
-- **Inspect** — `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
+- **Inspect**: `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
   `check-dirty-tree`
-- **Draft commits** — `rrt git commit`, `commit-all`, `squash-local`
-- **Move and sync** — `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
-- **Branch workflows** — `rrt branch new`, `rescue`, `rename`
+- **Draft commits**: `rrt git commit`, `commit-all`, `squash-local`
+- **Move and sync**: `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
+- **Branch workflows**: `rrt branch new`, `rescue`, `rename`
 
-#### What the Git helpers optimize for
+#### Responsibilities
 
-- compact, human-readable summaries first
-- explicit safety checks before destructive actions
-- conventional commit subjects and conventional branch names when possible
-- reuse across local CLI, hooks, and CI
+- provide a high-level API for common Git operations used in release flows
+- enforce repository policies during commit drafting and branch management
+- automate repetitive tasks like auto-stashing during branch switches
+- generate human-friendly summaries of repository state and history
+- ensure safe operation through dry-run modes and state validation
 
 #### Notable behavior
 
-- `rrt git commit` infers the commit type from the current branch only when the
-  branch is a conventional `type/slug` branch.
-- Branches named `main`, `master`, `develop`, `release/v<semver>`, AI helper
-  branches, bot branches, and custom branch prefixes are treated as special
-  cases and may require `--type` for commit drafting.
-- `sync` and `move` auto-stash local changes when needed.
-- `undo-safe` and `rebootstrap` can rewrite history; `rebootstrap` also
-  requires explicit confirmation before it destroys the current repository
-  history.
-- Commands that support `--dry-run` preview git operations without changing the
-  worktree.
+- **Commit Drafting**: `rrt git commit` infers the commit type from the current
+  branch only when the branch follows the conventional `type/slug` format.
+- **State Management**: `sync` and `move` automatically stash local changes
+  before execution and restore them afterward.
+- **History Repair**: `undo-safe` and `rebootstrap` provide controlled ways to
+  rewrite history, with `rebootstrap` requiring explicit confirmation.
+- **Validation**: Refuses to continue in unsafe states, such as unresolved
+  conflicts or in-progress merges.
 
-#### Current command surface
+#### Examples
 
-```text
-rrt git status
-rrt git diff
-rrt git log
-rrt git doctor
-rrt git sync-status
-rrt git check-dirty-tree
-rrt git commit "handle empty config"
-rrt git commit-all "snapshot parser cleanup"
-rrt git sync
-rrt git move feat/new-parser
-rrt git squash-local "ship parser cleanup"
-rrt git undo-safe --keep-staged
-rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
-```
+- `rrt git status`
+- `rrt git commit "refresh help examples"`
+- `rrt git sync --dry-run`
+- `rrt git squash-local --base-ref origin/main "ship parser"`
+- `rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run`
 
 #### See also
 
@@ -2302,26 +2314,60 @@ Install bundled rrt user workflow surfaces into local/global tool roots.
 
 ### Overview
 
-`rrt install` is a unified entrypoint for the existing installer surfaces:
+`rrt install` provides a unified, top-level entrypoint for the existing
+specialized installer surfaces:
 
 - `skill install`
 - `agents install`
 - `hooks install`
 
-Use `--surface` to limit which surface(s) are installed, or omit it to install
-all surfaces.
+It is designed to simplify the initial setup and maintenance of the agentic
+workflow tools by allowing users to install all (or a subset of) surfaces
+into one or more target destinations in a single operation.
+
+### Responsibilities
+
+- coordinate the installation of multiple surface types (skills, agents, hooks)
+- validate target compatibility across all requested surfaces
+- provide a consistent dry-run experience for multi-surface installation
+- manage local and global tool root discovery
 
 ### Target roots
 
-Supported local/global roots are:
+Supported local/global roots include:
 
-- Claude: `./.claude` and `~/.claude`
-- Codex: `./.codex` and `~/.codex`
-- Copilot: `./.github` and `~/.copilot`
-- Gemini: `./.gemini` and `~/.gemini`
+- **Claude**: `./.claude` (local) and `~/.claude` (global)
+- **Codex**: `./.codex` (local) and `~/.codex` (global)
+- **Copilot**: `./.github` (local) and `~/.copilot` (global)
+- **Gemini**: `./.gemini` (local) and `~/.gemini` (global)
 
-Each surface appends its own subdirectory (for example `skills`, `agents`, or
-`hooks`) using the existing per-surface installer logic.
+Each surface appends its own standardized subdirectory (e.g., `skills`,
+`agents`, or `hooks`) using the internal per-surface logic.
+
+### Behavior
+
+- If `--surface` is omitted, all bundled surfaces are installed.
+- Accepts multiple `--target` values to support parallel installation into
+  different tools or both local and global roots.
+- Respects `--force` to overwrite existing files across all selected surfaces.
+- Supports `--dry-run` to preview the entire installation plan without modifying
+  any files.
+- Exits with an error if any requested target is unsupported by a selected
+  surface.
+
+### Examples
+
+- `rrt install --target claude-local`
+- `rrt install --surface skill --target copilot-local`
+- `rrt install --surface agents --surface hooks --target codex-global --dry-run`
+- `rrt install --target gemini-local --target gemini-global --force`
+
+### Caveats
+
+- Without `--target`, the command prints available destinations in dry-run
+  mode and otherwise fails.
+- The installation is additive by default; existing files are only replaced
+  when `--force` is explicitly passed.
 
 ```text
 Usage:  rrt install [OPTIONS]
@@ -2355,29 +2401,47 @@ Initialize repo-release-tools configuration for a repository.
 
 ### Overview
 
-`rrt init` writes a starter configuration for the current repository. It can
-either create a standalone `.rrt.toml` file or merge an rrt section into an
-existing project manifest.
+`rrt init` provides a streamlined onboarding experience for new repositories.
+It generates a recommended starter configuration tailored to the project's
+language and structure, allowing developers to quickly adopt standard release
+and documentation workflows.
 
-The command is designed to be safe by default: it refuses to overwrite
-existing config unless `--force` is used, and `--dry-run` shows the exact
-output without touching files.
+The command can either create a standalone `.rrt.toml` file—which is the
+preferred method for most projects—or merge the configuration into existing
+project manifests like `pyproject.toml`, `Cargo.toml`, or `package.json`.
 
-### Target surfaces
+### Responsibilities
 
-- `.rrt.toml` (default)
-- `pyproject.toml` -> `[tool.rrt]`
-- `Cargo.toml` -> `[package.metadata.rrt]`
-- `package.json` -> `"rrt"` key
-- `.rrt.toml` with Go-oriented recommendations (`--target go`)
+- discover the repository root and identify the primary project language
+- generate high-quality, documented starter configurations for multiple targets
+- provide language-specific recommendations (e.g., Python, Node.js, Go, Rust)
+- ensure safe initialization with dry-run and overwrite protections
+- guide the user through the configuration discovery process
+
+### Target Surfaces
+
+- **.rrt.toml** (default): Creates a new, standalone configuration file with
+  rich comments and recommended defaults for generic or multi-language projects.
+- **pyproject.toml**: Appends a `[tool.rrt]` section to the Python project
+  manifest.
+- **Cargo.toml**: Appends a `[package.metadata.rrt]` section to the Rust
+  crate manifest.
+- **package.json**: Merges an `"rrt"` key into the Node.js project manifest.
+- **go**: Generates a `.rrt.toml` file pre-configured with Go-oriented
+  version targets and release patterns.
 
 ### Behavior
 
-- Detects an existing explicit config discovered by repo-release-tools and
-  warns when a new `.rrt.toml` would lose precedence.
-- Refuses to append duplicate rrt sections to TOML manifests.
-- Validates that `package.json` contains a top-level object before merging.
-- Prints a rendered preview in dry-run mode.
+- **Safety**: Refuses to overwrite an existing configuration unless `--force`
+  is explicitly provided.
+- **Discovery**: Warns the user if an existing configuration is found in a
+  different location (e.g., if `.rrt.toml` is created but `pyproject.toml`
+  already has an `rrt` section).
+- **Templates**: Uses internal recommendation engines to populate the starter
+  config with sensible `version_targets`, `changelog_file`, and `release_branch`
+  patterns.
+- **Preview**: Supports `--dry-run` to show the exact content and target path
+  before any changes are made.
 
 ### Examples
 
@@ -2386,14 +2450,14 @@ output without touching files.
 - `rrt init --target pyproject`
 - `rrt init --target node --force`
 - `rrt init --target go`
+- `rrt init --target cargo --dry-run`
 
 ### Caveats
 
-- `--target pyproject` and `--target cargo` append to an existing file only;
-  they do not create missing manifests.
-- `--target node` replaces the top-level `"rrt"` key in `package.json`.
-- `--target go` keeps the `.rrt.toml` filename but uses Go-oriented
-  recommendations.
+- For `pyproject.toml` and `Cargo.toml`, the command only appends to existing
+  files; it will not create the manifest if it is missing.
+- Standalone `.rrt.toml` files take precedence over manifest-embedded
+  configurations during standard tool discovery.
 
 ```text
 Usage:  rrt init [OPTIONS]
@@ -2431,6 +2495,18 @@ Install bundled rrt user workflow skills.
 
 `rrt skill` manages installation of the packaged user-facing `rrt` skills into
 tool-specific skill directories. The only implemented subcommand is `install`.
+
+This repository bundles ten user workflow skills:
+- `rrt-user-bootstrap`
+- `rrt-user-versioning`
+- `rrt-user-release-flow`
+- `rrt-user-branch-strategy`
+- `rrt-user-commit-quality`
+- `rrt-user-changelog-automation`
+- `rrt-user-docs-consistency`
+- `rrt-user-config-safety`
+- `rrt-user-ci-readiness`
+- `rrt-user-migration-uvx-to-installed`
 
 ### Target surfaces
 

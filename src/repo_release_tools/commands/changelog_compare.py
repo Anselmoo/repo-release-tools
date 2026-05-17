@@ -1,15 +1,58 @@
 """Compare two named changelog release sections.
 
-`rrt changelog compare <from> <to>` parses both release sections and emits a
-structured diff: entries unique to *from*, entries in common, and entries unique
-to *to*.  Useful for release auditing and PR review.
+## Overview
+
+`rrt changelog compare` provides a specialized diffing tool for auditing
+changes between two release versions in the project changelog. It parses the
+selected sections, identifies individual bulleted entries, and classifies them
+to show what was added, what was removed, and what remains common between
+the two releases.
+
+This is particularly useful during PR reviews, release auditing, and when
+verifying that a release branch correctly captures the intended set of changes.
+
+## Responsibilities
+
+- parse release sections from both Markdown and RST changelogs
+- identify and extract individual bulleted entries within subsections
+- compute a structured diff (added, removed, common) between two versions
+- emit the comparison in human-readable (terminal) or machine-readable (JSON) formats
+
+## Comparison Logic
+
+The command follows these steps to produce the diff:
+
+1. **Section Extraction**: Locates the headers for the `<from>` and `<to>`
+   versions and extracts all text until the next version header.
+2. **Subsection Parsing**: Breaks down the text into subsections (e.g., Added,
+   Fixed, Changed) based on level-3 headers (`###` or `~~~`).
+3. **Bullet Normalization**: Extracts individual bullet points (`-` or `*`) and
+   normalizes them for comparison.
+4. **Set Intersection**: Computes the set differences and intersections for each
+   subsection to determine the classification of each entry.
+
+## Behavior
+
+- Supports both "v"-prefixed (e.g., `v1.2.3`) and raw (e.g., `1.2.3`) version
+  labels.
+- Automatically handles subsection grouping; entries not under a specific
+  header are grouped into a "General" category.
+- Provides colored terminal output: green for additions, red for removals, and
+  standard color for common entries.
+- JSON output includes the full diff structure for each subsection.
 
 ## Examples
 
-```bash
-rrt changelog compare v1.2.0 v1.3.0
-rrt changelog compare v1.2.0 v1.3.0 --format json
-```
+- `rrt changelog compare v1.2.0 v1.3.0`
+- `rrt changelog compare v1.2.0 v1.3.0 --format json`
+- `rrt changelog compare 1.0.0 2.0.0 --group backend`
+
+## Caveats
+
+- Requires that both version labels exist in the configured changelog file.
+- Relies on standard heading and bullet syntax to correctly identify entries.
+- The comparison is based on the string content of the bullets after stripping
+  leading markers and trailing whitespace.
 """
 
 from __future__ import annotations

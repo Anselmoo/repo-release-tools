@@ -93,6 +93,11 @@ def load_extra_branch_types(cwd: Path) -> tuple[str, ...]:
         raise ValueError(f"Failed to load extra_branch_types configuration: {exc}") from exc
 
 
+def ignore_dir_names() -> frozenset[str]:
+    """Return directory names skipped during recursive source scanning."""
+    return _IGNORE_DIR_NAMES
+
+
 def find_config_file(root: Path) -> Path:
     """Find the first supported config file that contains [tool.rrt]."""
     return load_config(root).config_file
@@ -1192,6 +1197,7 @@ __all__ = [
     "find_explicit_config_file",
     "format_autodetected_config_notice",
     "format_missing_tool_rrt_guidance",
+    "ignore_dir_names",
     "is_missing_tool_rrt_error",
     "iter_config_files",
     "load_config",

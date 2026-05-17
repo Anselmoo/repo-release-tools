@@ -1,10 +1,59 @@
 """Lock and check agent-surface drift for repo-release-tools.
 
-`rrt drift` tracks source-owned agent-facing files (hooks, instructions,
-skills, and agent definitions) and stores hash snapshots in a lockfile under
-`.rrt/`. The `generate` subcommand writes or previews lockfile updates, while
-`check` validates current repository state against the lock and reports drift
-with actionable follow-up guidance.
+## Overview
+
+`rrt drift` provides a mechanism for tracking the integrity of "agent-facing"
+surfaces—files that define the behavior, skills, and instructions for LLM-based
+agents within the repository. It creates a cryptographic lockfile that records
+the state of these surfaces, allowing developers and CI to detect when
+sensitive agent configurations have drifted from their approved state.
+
+This is critical for ensuring that automated hooks, agent prompts, and shared
+skill documentation remain consistent and haven't been modified without a
+corresponding lockfile update.
+
+## Responsibilities
+
+- scan for agent-facing surface files across multiple tool directories
+- compute stable cryptographic hashes for each tracked file
+- generate and maintain a `drift.lock.toml` file in the `.rrt/` directory
+- validate current repository state against the lock to detect drift
+- provide actionable guidance for resolving detected inconsistencies
+
+## Tracked Surfaces
+
+The command tracks a variety of sensitive agentic surfaces, including:
+
+- **Claude**: `.claude/settings.json`, `.claude/hooks/*.py`
+- **Copilot**: `.github/copilot-instructions.md`, `.github/instructions/*.md`
+- **Skills**: `.github/skills/*/SKILL.md`
+- **Agent Definitions**: `.github/agents/*.agent.md`
+
+## Behavior
+
+- **generate**: Scans the repository for all recognized agent surfaces,
+  computes their hashes, and writes the `drift.lock.toml` file. Supports
+  `--dry-run` to preview the lock content.
+- **check**: Compares the current hashes of the tracked surfaces against the
+  values stored in the lockfile. Exits with a non-zero status if any drift is
+  detected (missing files, extra files, or modified content).
+- Filtering: Automatically ignores files matched by the project's `.gitignore`
+  rules.
+
+## Examples
+
+- `rrt drift generate`
+- `rrt drift generate --dry-run`
+- `rrt drift check`
+- `rrt drift check --root ./some-other-repo`
+
+## Caveats
+
+- The lockfile itself should be committed to the repository to serve as the
+  ground truth for CI checks.
+- Changes to agent surfaces must be accompanied by a `rrt drift generate`
+  call to update the lock.
+- Only files matching the predefined surface patterns are tracked.
 """
 
 from __future__ import annotations

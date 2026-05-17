@@ -1,10 +1,53 @@
 """Scaffold GitHub Actions workflows for repo-release-tools.
 
-This command group currently exposes `rrt action init`, which writes a starter
-workflow under `.github/workflows/rrt.yml` using the currently installed
-`repo-release-tools` version pin. It supports dry-run previews, safe refusal to
-overwrite existing workflows unless `--force` is passed, and formatted output
-through the shared UI layer.
+## Overview
+
+`rrt action` manages the bootstrapping of GitHub Actions workflows to automate
+repository policy checks. It centralizes the creation of standard CI
+configurations, ensuring that `repo-release-tools` is correctly integrated into
+the project's development lifecycle.
+
+The primary subcommand is `init`, which writes a pre-configured workflow file
+that performs branch naming, commit subject, and changelog verification on
+every push and pull request.
+
+## Responsibilities
+
+- generate starter GitHub Actions workflows using the current `rrt` version
+- automate the integration of `repo-release-tools` into the project's CI
+- provide safe file operations with dry-run and force-overwrite protections
+- emit high-signal, formatted feedback during the scaffolding process
+
+## Workflow Content
+
+The generated workflow (`.github/workflows/rrt.yml`) includes:
+
+- **Triggers**: Runs on `push` to the main branch and on all `pull_request` events.
+- **Environment**: Executes on the latest Ubuntu runner.
+- **Steps**:
+    - Full history checkout (`fetch-depth: 0`) to support git-based checks.
+    - Execution of `Anselmoo/repo-release-tools` with standard policy flags
+      (branch name, commit subject, and changelog checks).
+
+## Behavior
+
+- Writes to `.github/workflows/rrt.yml` relative to the current working directory.
+- Refuses to overwrite an existing workflow unless `--force` is provided.
+- Supports `--dry-run` to preview the generated YAML in the terminal without
+  writing to disk.
+- Uses syntax highlighting when displaying the workflow preview in dry-run mode.
+
+## Examples
+
+- `rrt action init`
+- `rrt action init --dry-run`
+- `rrt action init --force`
+
+## Caveats
+
+- Requires a Git repository with a `.github/workflows` directory structure
+  (automatically created if missing).
+- The generated version pin matches the version of `rrt` currently in use.
 """
 
 from __future__ import annotations
