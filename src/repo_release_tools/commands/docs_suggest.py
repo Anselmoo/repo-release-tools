@@ -76,9 +76,9 @@ def _resolve_target_path(path: Path, root: Path) -> Path:
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-def _should_exempt(path: Path, text: str, exempt_files: set[str] | None = None) -> bool:
+def _should_exempt(path: Path, text: str, exempt_files: set[str]) -> bool:
     """Return whether *path* should be skipped by the scanner."""
-    if path.name in (exempt_files or EXEMPT_FILES):
+    if path.name in exempt_files:
         return True
     return "rrt:docs-exempt" in text
 
@@ -171,6 +171,10 @@ def scan(
     exempt_files: set[str] | None = None,
 ) -> list[_DocstringFinding]:
     """Find files whose module docstrings should be expanded."""
+    effective_exempt_files = set(EXEMPT_FILES)
+    if exempt_files:
+        effective_exempt_files.update(exempt_files)
+
     findings: list[_DocstringFinding] = []
     for path in _iter_targets(paths):
         try:
@@ -178,7 +182,7 @@ def scan(
         except OSError:
             continue
 
-        if _should_exempt(path, text, exempt_files=exempt_files):
+        if _should_exempt(path, text, exempt_files=effective_exempt_files):
             continue
 
         docstring = _read_module_docstring(path)
@@ -207,7 +211,7 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
 
     # Default to scanning the source directory or current directory if not specified
     suggest_roots_list: list[str] = ["."]
-    exempt_files: set[str] = set(EXEMPT_FILES)
+    exempt_files: set[str] | None = None
     arg_min_chars = getattr(args, "min_chars", None)
     min_chars = DEFAULT_MIN_CHARS if arg_min_chars is None else int(arg_min_chars)
 
@@ -218,7 +222,7 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
             suggest_roots_list = [cfg.docs.src_dir]
 
         if cfg.docs.suggest_exempt:
-            exempt_files.update(cfg.docs.suggest_exempt)
+            exempt_files = set(cfg.docs.suggest_exempt)
         if cfg.docs.suggest_min_chars is not None and arg_min_chars is None:
             min_chars = cfg.docs.suggest_min_chars
 

@@ -668,6 +668,7 @@ def test_main_docs_hook_commands_set_explicit_defaults(monkeypatch: pytest.Monke
         lambda parsed: suggest_calls.append(parsed) or 32,
     )
 
+    # Order in docs_calls: docs-generate, docs-publish, docs-inject.
     assert hooks.main(["docs-generate"]) == 31
     assert hooks.main(["docs-publish"]) == 31
     assert hooks.main(["docs-inject"]) == 31

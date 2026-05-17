@@ -244,7 +244,10 @@ def test_cmd_docs_suggest_uses_config_min_chars_when_arg_missing(
         ),
     )
     target = tmp_path / "example.py"
-    target.write_text('"""tiny\n\nbody"""\nVALUE = 1\n', encoding="utf-8")
+    target.write_text(
+        '"""Short docstring with enough chars for config.\n\nbody"""\nVALUE = 1\n',
+        encoding="utf-8",
+    )
     args = argparse.Namespace(root=str(tmp_path), paths=[str(target)], min_chars=None, apply=False)
 
     result = cmd_docs_suggest(args)
