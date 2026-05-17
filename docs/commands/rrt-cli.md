@@ -1406,7 +1406,7 @@ Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help     Show this message and exit.
   --root PATH    Project root directory (default: current directory).
-  --min-chars N  Minimum docstring length to accept (default: 150).
+  --min-chars N  Minimum docstring length to accept (default: config or 150).
   --apply        Write scaffold docstrings back into the target files.
 ```
 
@@ -1663,9 +1663,11 @@ Examples
 
 ## `rrt branch`
 
-Branch command helpers and utilities.
+### rrt branch
 
-### Overview
+Branch command helpers and utilities for conventional branches.
+
+#### Overview
 
 The `rrt branch` command family provides a suite of helpers for managing
 semantic, conventionally-named Git branches. By enforcing a consistent naming
@@ -1677,7 +1679,7 @@ These helpers are particularly useful for teams practicing trunk-based
 development, where branch names often serve as the primary signal for
 automated release notes and CI workflow routing.
 
-### Responsibilities
+#### Responsibilities
 
 - validate branch names against project-specific prefix and slug rules
 - scaffold new branches using the canonical `<type>/<kebab-slug>` format
@@ -1685,7 +1687,7 @@ automated release notes and CI workflow routing.
 - "rescue" uncommitted work or divergent commits into new, semantic branches
 - provide actionable suggestions when a branch name violates repository policy
 
-### Standard Format
+#### Standard Format
 
 ```text
 <type>/[<scope>-]<kebab-case-description>
@@ -1696,18 +1698,18 @@ Example branches:
 - `fix/handle-tag-workflows`
 - `docs/split-readme-into-docs`
 
-### Built-in branch types
+#### Built-in branch types
 
 Conventional branch types are accepted out of the box:
 - `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `style`, `build`
 
-### Special names
+#### Special names
 
 These branch names are also valid:
 - `main`, `master`, `develop`
 - `release/v<semver>` (validated as a semver-aware special case)
 
-### AI helper and Bot branches
+#### AI helper and Bot branches
 
 Branches created by assistant-driven workflows or dependency bots are accepted with these prefixes:
 - `claude/...`, `codex/...`, `copilot/...`
@@ -1715,21 +1717,21 @@ Branches created by assistant-driven workflows or dependency bots are accepted w
 
 Custom prefixes can be added via the `extra_branch_types` config key.
 
-### Behavior
+#### Behavior
 
 - **new**: Creates and switches to a new branch. Moves dirty changes if requested.
 - **rename**: Rebuilds the current branch name based on new type, scope, or description.
 - **rescue**: Moves commits ahead of upstream to a fresh semantic branch.
 - **dry-run**: Previews all Git operations without modifying the repository.
 
-### Examples
+#### Examples
 
 - `rrt branch new feat "add parser"`
 - `rrt branch new fix "repair config loader" --scope api`
 - `rrt branch rename --type fix --scope api "fix config loader"`
 - `rrt branch rescue feat "rescue work in progress"`
 
-### Caveats
+#### Caveats
 
 - Branch slugs are limited to 60 characters by default.
 - Custom branch types can be added via configuration.
@@ -1851,9 +1853,11 @@ Examples
 
 ## `rrt git`
 
-Git helpers for repo-release-tools.
+### rrt git
 
-### Overview
+Git workflow helpers for repository status, commit, sync, and history operations.
+
+#### Overview
 
 `repo-release-tools` ships a small set of opinionated Git workflows for branch
 health, commit drafting, sync, and history repair. The tool group favors compact,
@@ -1863,7 +1867,7 @@ operation.
 Most commands are designed to run from a Git work tree and emit a short
 summary first, followed by the details needed to act on the result.
 
-### Workflow map
+#### Workflow map
 
 - **Inspect**: `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
   `check-dirty-tree`
@@ -1871,7 +1875,7 @@ summary first, followed by the details needed to act on the result.
 - **Move and sync**: `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
 - **Branch workflows**: `rrt branch new`, `rescue`, `rename`
 
-### Responsibilities
+#### Responsibilities
 
 - provide a high-level API for common Git operations used in release flows
 - enforce repository policies during commit drafting and branch management
@@ -1879,7 +1883,7 @@ summary first, followed by the details needed to act on the result.
 - generate human-friendly summaries of repository state and history
 - ensure safe operation through dry-run modes and state validation
 
-### Notable behavior
+#### Notable behavior
 
 - **Commit Drafting**: `rrt git commit` infers the commit type from the current
   branch only when the branch follows the conventional `type/slug` format.
@@ -1890,7 +1894,7 @@ summary first, followed by the details needed to act on the result.
 - **Validation**: Refuses to continue in unsafe states, such as unresolved
   conflicts or in-progress merges.
 
-### Examples
+#### Examples
 
 - `rrt git status`
 - `rrt git commit "refresh help examples"`
@@ -1898,7 +1902,7 @@ summary first, followed by the details needed to act on the result.
 - `rrt git squash-local --base-ref origin/main "ship parser"`
 - `rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run`
 
-### See also
+#### See also
 
 - [Conventional branches](branch.md)
 - [Generated CLI reference](rrt-cli.md)

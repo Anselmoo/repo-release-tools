@@ -1,4 +1,4 @@
-"""Branch command helpers and utilities.
+"""Branch command helpers and utilities for conventional branches.
 
 ## Overview
 
@@ -81,8 +81,16 @@ from pathlib import Path
 from repo_release_tools.ui import GLYPHS, DryRunPrinter
 from repo_release_tools.workflow import git
 
+SEMANTIC_BRANCHES_DOC = (
+    "# rrt branch\n\n"
+    "Branch command helpers and utilities for conventional branches.\n\n"
+    f"{(__doc__ or '').split('\n\n', 1)[1]}"
+    if __doc__ and "\n\n" in __doc__
+    else (__doc__ or "")
+)
+
 # Ordered source-owned topic docs for future generic docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("branch", __doc__ or ""),)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("branch", SEMANTIC_BRANCHES_DOC),)
 
 CONVENTIONAL_TYPES = (
     "feat",

@@ -9,7 +9,7 @@ permalink: "/commands/branch/"
 
 # rrt branch
 
-Branch command helpers and utilities.
+Branch command helpers and utilities for conventional branches.
 
 ## Overview
 

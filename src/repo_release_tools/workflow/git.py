@@ -1,4 +1,4 @@
-"""Git helpers for repo-release-tools.
+"""Git workflow helpers for repository status, commit, sync, and history operations.
 
 ## Overview
 
@@ -59,7 +59,15 @@ from pathlib import Path
 from repo_release_tools.ui import DryRunPrinter
 
 # Ordered source-owned topic docs for future generic docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", __doc__ or ""),)
+GIT_DOC = (
+    "# rrt git\n\n"
+    "Git workflow helpers for repository status, commit, sync, and history operations.\n\n"
+    f"{(__doc__ or '').split('\n\n', 1)[1]}"
+    if __doc__ and "\n\n" in __doc__
+    else (__doc__ or "")
+)
+
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", GIT_DOC),)
 
 
 def run(

@@ -9,7 +9,7 @@ permalink: "/commands/git_cmd/"
 
 # rrt git
 
-Git helpers for repo-release-tools.
+Git workflow helpers for repository status, commit, sync, and history operations.
 
 ## Overview
 
