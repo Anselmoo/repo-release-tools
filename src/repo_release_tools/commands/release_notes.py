@@ -2,26 +2,60 @@
 
 ## Overview
 
-`rrt release notes` extracts the current ``[Unreleased]`` section from the
-configured changelog and emits it as a formatted release body.  The output is
-ready to paste into a GitHub Release, GitLab Release, or any markdown editor.
+`rrt release notes` provides a utility for extracting and formatting the current
+work-in-progress changelog entries into a polished release body. It targets the
+`[Unreleased]` section of the configured changelog file, making it easy to
+generate content for GitHub Releases, GitLab Releases, or internal release
+announcements.
 
-## Formats
+By automating the extraction and contributor discovery, the command ensures
+that release notes are accurate, consistent, and reflect the actual changes
+captured in the project history.
 
-* ``md`` (default) — the raw changelog body stripped of the ``[Unreleased]``
-  header line.
-* ``gh-release`` — GitHub-flavored release body with a ``## What's Changed``
-  header, the changelog bullets, and an automatically generated
-  ``## Contributors`` section built from ``git log`` author names since the
-  most recent tag.
+## Responsibilities
+
+- parse the `[Unreleased]` section from Markdown or RST changelog files
+- extract and clean individual bullet points for use in the release body
+- discover unique contributors from the Git history since the last release tag
+- format the output using standard Markdown or GitHub-flavored styles
+- support multi-group configurations to target specific package changelogs
+
+## Output Formats
+
+- **md** (default): Emits the raw, cleaned bullet points from the changelog.
+  The `[Unreleased]` header is removed, and the content is presented as a
+  simple Markdown list.
+- **gh-release**: Emits a rich, GitHub-flavored release body. It includes a
+  `## What's Changed` header followed by the changelog entries, and an
+  automatically generated `## Contributors` section listing the names of
+  everyone who committed since the most recent tag.
+
+## Behavior
+
+- **Detection**: Automatically identifies the changelog format based on the
+  file extension.
+- **Git Integration**: Uses `git tag` to find the most recent release and
+  `git log` to identify contributors for the `gh-release` format.
+- **Validation**: Refuses to emit notes if the `[Unreleased]` section is
+  missing or empty.
+- **Output**: Writes the formatted content directly to standard output,
+  allowing for easy piping to files or other tools.
 
 ## Examples
 
-```bash
-rrt release notes
-rrt release notes --format gh-release
-rrt release notes --format md > RELEASE_BODY.md
-```
+- `rrt release notes`
+- `rrt release notes --format gh-release`
+- `rrt release notes --format md > RELEASE_BODY.md`
+- `rrt release notes --group api --format gh-release`
+
+## Caveats
+
+- Relies on the presence of a standard `[Unreleased]` placeholder in the
+  changelog.
+- Contributor discovery requires a Git history and assumes that release tags
+  follow a detectable versioning pattern.
+- The command targets only the unreleased changes; for comparing previous
+  releases, see `rrt changelog compare`.
 """
 
 from __future__ import annotations

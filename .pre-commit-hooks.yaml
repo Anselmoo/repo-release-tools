@@ -88,3 +88,43 @@
   always_run: true
   stages: [pre-commit]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-docs-lock
+  name: repo-release-tools docs lock
+  description: Regenerate the source-owned docs lockfile (.rrt/docs.lock.toml)
+  entry: rrt-hooks docs-generate
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-docs-publish
+  name: repo-release-tools docs publish
+  description: Regenerate CLI reference documentation and topic pages
+  entry: rrt-hooks docs-publish
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-docs-inject
+  name: repo-release-tools docs inject
+  description: Synchronize shared anchor blocks (headers/footers) across documentation
+  entry: rrt-hooks docs-inject
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-docstring-suggest
+  name: repo-release-tools docstring suggest
+  description: Apply scaffolded docstrings to missing or thin module docstrings
+  entry: rrt-hooks docstring-suggest
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"

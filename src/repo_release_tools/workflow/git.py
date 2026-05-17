@@ -1,4 +1,55 @@
-"""Git helpers for repo-release-tools."""
+"""Git helpers for repo-release-tools.
+
+## Overview
+
+`repo-release-tools` ships a small set of opinionated Git workflows for branch
+health, commit drafting, sync, and history repair. The tool group favors compact,
+human-readable summaries with explicit safety checks before any destructive
+operation.
+
+Most commands are designed to run from a Git work tree and emit a short
+summary first, followed by the details needed to act on the result.
+
+## Workflow map
+
+- **Inspect**: `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
+  `check-dirty-tree`
+- **Draft commits**: `rrt git commit`, `commit-all`, `squash-local`
+- **Move and sync**: `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
+- **Branch workflows**: `rrt branch new`, `rescue`, `rename`
+
+## Responsibilities
+
+- provide a high-level API for common Git operations used in release flows
+- enforce repository policies during commit drafting and branch management
+- automate repetitive tasks like auto-stashing during branch switches
+- generate human-friendly summaries of repository state and history
+- ensure safe operation through dry-run modes and state validation
+
+## Notable behavior
+
+- **Commit Drafting**: `rrt git commit` infers the commit type from the current
+  branch only when the branch follows the conventional `type/slug` format.
+- **State Management**: `sync` and `move` automatically stash local changes
+  before execution and restore them afterward.
+- **History Repair**: `undo-safe` and `rebootstrap` provide controlled ways to
+  rewrite history, with `rebootstrap` requiring explicit confirmation.
+- **Validation**: Refuses to continue in unsafe states, such as unresolved
+  conflicts or in-progress merges.
+
+## Examples
+
+- `rrt git status`
+- `rrt git commit "refresh help examples"`
+- `rrt git sync --dry-run`
+- `rrt git squash-local --base-ref origin/main "ship parser"`
+- `rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run`
+
+## See also
+
+- [Conventional branches](branch.md)
+- [Generated CLI reference](rrt-cli.md)
+"""
 
 from __future__ import annotations
 
@@ -7,70 +58,8 @@ from pathlib import Path
 
 from repo_release_tools.ui import DryRunPrinter
 
-GIT_DOC = """# rrt git
-
-`repo-release-tools` ships a small set of opinionated Git workflows for branch
-health, commit drafting, sync, and history repair.
-
-This page is generated from `repo_release_tools.workflow.git.GIT_DOC`.
-This page stays workflow-oriented. For the full command surface and option
-details, see [docs/commands/rrt-cli.md](rrt-cli.md).
-
-## Workflow map
-
-- **Inspect** — `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
-  `check-dirty-tree`
-- **Draft commits** — `rrt git commit`, `commit-all`, `squash-local`
-- **Move and sync** — `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
-- **Branch workflows** — `rrt branch new`, `rescue`, `rename`
-
-## What the Git helpers optimize for
-
-- compact, human-readable summaries first
-- explicit safety checks before destructive actions
-- conventional commit subjects and conventional branch names when possible
-- reuse across local CLI, hooks, and CI
-
-## Notable behavior
-
-- `rrt git commit` infers the commit type from the current branch only when the
-  branch is a conventional `type/slug` branch.
-- Branches named `main`, `master`, `develop`, `release/v<semver>`, AI helper
-  branches, bot branches, and custom branch prefixes are treated as special
-  cases and may require `--type` for commit drafting.
-- `sync` and `move` auto-stash local changes when needed.
-- `undo-safe` and `rebootstrap` can rewrite history; `rebootstrap` also
-  requires explicit confirmation before it destroys the current repository
-  history.
-- Commands that support `--dry-run` preview git operations without changing the
-  worktree.
-
-## Current command surface
-
-```text
-rrt git status
-rrt git diff
-rrt git log
-rrt git doctor
-rrt git sync-status
-rrt git check-dirty-tree
-rrt git commit "handle empty config"
-rrt git commit-all "snapshot parser cleanup"
-rrt git sync
-rrt git move feat/new-parser
-rrt git squash-local "ship parser cleanup"
-rrt git undo-safe --keep-staged
-rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
-```
-
-## See also
-
-- [Conventional branches](branch.md)
-- [Generated CLI reference](rrt-cli.md)
-"""
-
 # Ordered source-owned topic docs for future generic docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", GIT_DOC),)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", __doc__ or ""),)
 
 
 def run(

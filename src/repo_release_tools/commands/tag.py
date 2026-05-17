@@ -2,27 +2,60 @@
 
 ## Overview
 
-``rrt tag`` provides two subcommands:
+`rrt tag` centralizes the management of Git release tags, ensuring that the
+repository's version history remains consistent with its configuration. It
+automates the creation of annotated tags and provides validation tools to
+verify that existing tags align with the project's versioning policy.
 
-* ``rrt tag create`` — create an annotated git tag matching the current version
-  read from the rrt configuration.
-* ``rrt tag check`` — validate that existing tags follow the configured naming
-  convention and that the most recent tag matches the current configured version.
+The command supports both manual release tagging and automated verification in
+CI pipelines, helping to maintain a clean and reliable release record.
 
-## Tag format
+## Responsibilities
 
-By default tags are prefixed with ``v`` (e.g. ``v1.2.3``).  The prefix can be
-changed with ``--prefix`` or removed entirely with ``--no-prefix``.
+- create annotated Git tags matching the current configured version
+- support custom tag prefixes and annotation messages
+- validate that existing tags follow the expected naming convention
+- verify that the expected tag for the current version is present
+- optionally push newly created tags to the remote repository
+
+## Tag Format
+
+By default, tags are created with a `v` prefix (e.g., `v1.2.3`) as is standard
+for many version control and release automation tools.
+
+- The prefix can be customized using `--prefix <string>`.
+- The prefix can be removed entirely using `--prefix ""`.
+- Tag names are derived directly from the current version read from the
+  active `[tool.rrt]` configuration group.
+
+## Behavior
+
+- **create**: Reads the current version from config, builds the tag name and
+  message, and executes `git tag -a`. Refuses to overwrite existing tags
+  unless `--force` is used.
+- **check**: Scans all repository tags, identifies those that don't match the
+  requested prefix, and verifies the presence of the tag corresponding to the
+  current version.
+- **push**: When `--push` is used with `create`, the command executes
+  `git push origin <tag>` after a successful local tag creation.
+- **dry-run**: Previews the `git` commands that would be executed without
+  modifying the repository.
 
 ## Examples
 
-```bash
-rrt tag create
-rrt tag create --push
-rrt tag create --prefix "" --message "Release 1.2.3"
-rrt tag check
-rrt tag check --strict
-```
+- `rrt tag create`
+- `rrt tag create --push --message "Production release v1.5.0"`
+- `rrt tag create --prefix "" --force`
+- `rrt tag check`
+- `rrt tag check --strict --prefix "rel-"`
+
+## Caveats
+
+- Requires a valid Git repository and `repo-release-tools` configuration.
+- Annotated tags are used to ensure that metadata (author, date, message) is
+  correctly captured in the Git history.
+- The `check --strict` mode is recommended for CI pipelines to ensure that a
+  tag was correctly created before a release proceeds.
 """
 
 from __future__ import annotations

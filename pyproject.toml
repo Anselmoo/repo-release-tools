@@ -341,6 +341,9 @@ error_days = 0
 mirror_src_tree = true
 docs_dir = "docs"
 src_dir = "src/repo_release_tools"
+suggest_roots = ["src/repo_release_tools/commands"]
+suggest_exempt = ["__init__.py", "__main__.py"]
+suggest_min_chars = 2500
 
 # Source-link settings used by docs exporters to build file/line URLs.
 source_repo_url = "https://github.com/Anselmoo/repo-release-tools"

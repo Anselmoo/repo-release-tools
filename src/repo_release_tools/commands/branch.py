@@ -1,26 +1,73 @@
 """Branch command helpers and utilities.
 
-Overview
+## Overview
 
-The `rrt branch` command family provides helpers for creating and validating
-semantic branch names that align with the repository's conventional-commit
-policy. It assists in creating feature/fix branches using the configured
-types (for example `feat/`, `fix/`, `chore/`), enforcing naming rules, and
-emitting helpful guidance to contributors and automation.
+The `rrt branch` command family provides a suite of helpers for managing
+semantic, conventionally-named Git branches. By enforcing a consistent naming
+structure—such as `feat/add-parser` or `fix/config-loader`—the tool ensures
+that the repository's branch history remains searchable, readable, and
+aligned with standard `conventional-commits` policies.
 
-Primary behaviors:
+These helpers are particularly useful for teams practicing trunk-based
+development, where branch names often serve as the primary signal for
+automated release notes and CI workflow routing.
 
-- Validate branch names against the project's allowed prefixes and slug rules.
-- Create new branches with the canonical `<type>/<kebab-slug>` form.
-- Provide suggestions and error messages when a branch name does not conform.
+## Responsibilities
 
-Examples:
-    rrt branch new feat/add-widget
-    rrt branch validate fix/my-bugfix
+- validate branch names against project-specific prefix and slug rules
+- scaffold new branches using the canonical `<type>/<kebab-slug>` format
+- automate the renaming of branches while preserving description context
+- "rescue" uncommitted work or divergent commits into new, semantic branches
+- provide actionable suggestions when a branch name violates repository policy
 
-This module implements the command handlers and helpers used by the
-top-level CLI surface; maintain a clear, multi-line module docstring so that
-automated checks and documentation generators can rely on it.
+## Standard Format
+
+```text
+<type>/[<scope>-]<kebab-case-description>
+```
+
+Example branches:
+- `feat/add-config-discovery`
+- `fix/handle-tag-workflows`
+- `docs/split-readme-into-docs`
+
+## Built-in branch types
+
+Conventional branch types are accepted out of the box:
+- `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `style`, `build`
+
+## Special names
+
+These branch names are also valid:
+- `main`, `master`, `develop`
+- `release/v<semver>` (validated as a semver-aware special case)
+
+## AI helper and Bot branches
+
+Branches created by assistant-driven workflows or dependency bots are accepted with these prefixes:
+- `claude/...`, `codex/...`, `copilot/...`
+- `dependabot/...`, `renovate/...`
+
+Custom prefixes can be added via the `extra_branch_types` config key.
+
+## Behavior
+
+- **new**: Creates and switches to a new branch. Moves dirty changes if requested.
+- **rename**: Rebuilds the current branch name based on new type, scope, or description.
+- **rescue**: Moves commits ahead of upstream to a fresh semantic branch.
+- **dry-run**: Previews all Git operations without modifying the repository.
+
+## Examples
+
+- `rrt branch new feat "add parser"`
+- `rrt branch new fix "repair config loader" --scope api`
+- `rrt branch rename --type fix --scope api "fix config loader"`
+- `rrt branch rescue feat "rescue work in progress"`
+
+## Caveats
+
+- Branch slugs are limited to 60 characters by default.
+- Custom branch types can be added via configuration.
 """
 
 from __future__ import annotations
@@ -34,101 +81,8 @@ from pathlib import Path
 from repo_release_tools.ui import GLYPHS, DryRunPrinter
 from repo_release_tools.workflow import git
 
-SEMANTIC_BRANCHES_DOC = """# rrt branch
-
-`repo-release-tools` uses conventional branches to keep trunk-based publishing
-predictable for humans, hooks, and automation.
-
-This page is generated from `repo_release_tools.commands.branch.SEMANTIC_BRANCHES_DOC`.
-The canonical command reference is [docs/commands/rrt-cli.md](rrt-cli.md). This page
-summarizes the naming rules that the CLI and hooks enforce.
-
-## Standard format
-
-```text
-<type>/<kebab-case-description>
-```
-
-Examples:
-
-- `feat/add-config-discovery`
-- `fix/handle-tag-workflows`
-- `docs/split-readme-into-docs`
-
-## Built-in branch types
-
-Conventional branch types are accepted out of the box:
-
-- `feat`
-- `fix`
-- `chore`
-- `docs`
-- `refactor`
-- `test`
-- `ci`
-- `perf`
-- `style`
-- `build`
-
-## Special names
-
-These branch names are also valid:
-
-- `main`
-- `master`
-- `develop`
-- `release/v<semver>`
-
-`release/v<semver>` is validated as a semver-aware special case, not as a free
-form `type/slug` branch.
-
-## AI helper branches
-
-Branches created by assistant-driven workflows are accepted with these prefixes:
-
-- `claude/...`
-- `codex/...`
-- `copilot/...`
-
-They still use normal slug validation, so the suffix should stay lowercase and
-kebab-cased.
-
-## Bot and custom branches
-
-Branches created by dependency bots are accepted too:
-
-- `dependabot/...`
-- `renovate/...`
-
-Custom prefixes can be added through configuration:
-
-```toml
-[tool.rrt]
-extra_branch_types = ["greenkeeper", "snyk"]
-```
-
-Bot and custom prefixes are treated as passthrough types. Their suffixes are
-only required to be non-empty, because upstream tools often generate slugs with
-slashes or underscores.
-
-## Why the rules matter
-
-- branch names stay readable in review queues
-- commit subjects and branch types stay aligned
-- release automation can distinguish ordinary work from release branches
-- hooks and CI can apply one consistent policy across local and remote checks
-
-## Related commands
-
-- `rrt branch new`
-- `rrt branch rescue`
-- `rrt branch rename`
-- `rrt git commit`
-- `rrt git doctor`
-"""
-
 # Ordered source-owned topic docs for future generic docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("branch", SEMANTIC_BRANCHES_DOC),)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("branch", __doc__ or ""),)
 
 CONVENTIONAL_TYPES = (
     "feat",

@@ -9,8 +9,14 @@ permalink: "/commands/skill/"
 
 # rrt skill
 
-This repository bundles ten user workflow skills:
+Install bundled rrt user workflow skills.
 
+## Overview
+
+`rrt skill` manages installation of the packaged user-facing `rrt` skills into
+tool-specific skill directories. The only implemented subcommand is `install`.
+
+This repository bundles ten user workflow skills:
 - `rrt-user-bootstrap`
 - `rrt-user-versioning`
 - `rrt-user-release-flow`
@@ -22,56 +28,41 @@ This repository bundles ten user workflow skills:
 - `rrt-user-ci-readiness`
 - `rrt-user-migration-uvx-to-installed`
 
-If you need the exact CLI syntax for branch, Git, or skill commands, use the
-[rrt CLI reference](rrt-cli.md) first.
+## Target surfaces
 
-## What the skill bundle covers
+The install command can write to local or global skill roots for:
 
-Use this bundle when you want shipped help for setup, versioning, release flow,
-branch naming, commit quality, changelog automation, docs consistency, config
-safety, CI readiness, and migration from `uvx` to installed workflows.
+- Claude: `.claude/skills`
+- Codex: `.codex/skills`
+- Copilot: `.github/skills` (local), `~/.copilot/skills` (global)
+- Gemini: `.gemini/skills`
 
-## Installing the bundled user skills
+Each target receives one directory per bundled skill, each containing a
+`SKILL.md`.
 
-Install into one or more agent skill locations with:
+## Behavior
 
-```bash
-rrt skill install --target copilot-local
-rrt skill install --target claude-local --target codex-local
-rrt skill install --target copilot-global --dry-run
-rrt skill install --target codex-global --force
-```
+- Accepts one or more `--target` values; duplicates are ignored after first use.
+- Resolves local targets relative to the current working directory and global
+  targets relative to the home directory.
+- Refuses to overwrite an existing skill directory unless `--force` is provided.
+- Supports `--dry-run` previews that show the resolved destination paths
+  without writing files.
 
-Supported targets:
+## Examples
 
-| Target | Directory |
-|---|---|
-| `copilot-local` | `.github/skills` |
-| `claude-local` | `.claude/skills` |
-| `codex-local` | `.codex/skills` |
-| `copilot-global` | `~/.copilot/skills` |
-| `claude-global` | `~/.claude/skills` |
-| `codex-global` | `~/.codex/skills` |
-| `gemini-local` | `.gemini/skills` |
-| `gemini-global` | `~/.gemini/skills` |
+- `rrt skill install --target copilot-local`
+- `rrt skill install --target claude-local --target codex-local`
+- `rrt skill install --target gemini-local`
+- `rrt skill install --target copilot-global --force --dry-run`
 
-The installer writes one directory per bundled skill. It refuses to overwrite an
-existing skill directory unless you pass `--force`. Use `--dry-run` to preview
-the destination paths first.
+## Caveats
 
-## Related docs
-
-- [rrt CLI](rrt-cli.md)
-- [pre-commit / lefthook](hooks.md)
-- [GitHub Action](action.md)
-- [rrt git](git_cmd.md)
-
-## Install surfaces
-
-- Claude: `./.claude/skills` and `~/.claude/skills`
-- Codex: `./.codex/skills` and `~/.codex/skills`
-- Gemini: `./.gemini/skills` and `~/.gemini/skills`
-- Copilot: `./.github/skills` and `~/.copilot/skills`
+- `rrt skill` requires a subcommand; use `rrt skill install ...`.
+- Without `--target`, the command prints available destinations in dry-run
+  mode and otherwise fails.
+- Existing symlinks, files, or directories at the destination are replaced
+  only when `--force` is used.
 
 <!-- rrt:auto:start:doc-footer -->
 ---

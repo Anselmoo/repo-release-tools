@@ -5,6 +5,18 @@
 `rrt skill` manages installation of the packaged user-facing `rrt` skills into
 tool-specific skill directories. The only implemented subcommand is `install`.
 
+This repository bundles ten user workflow skills:
+- `rrt-user-bootstrap`
+- `rrt-user-versioning`
+- `rrt-user-release-flow`
+- `rrt-user-branch-strategy`
+- `rrt-user-commit-quality`
+- `rrt-user-changelog-automation`
+- `rrt-user-docs-consistency`
+- `rrt-user-config-safety`
+- `rrt-user-ci-readiness`
+- `rrt-user-migration-uvx-to-installed`
+
 ## Target surfaces
 
 The install command can write to local or global skill roots for:
@@ -79,75 +91,8 @@ SKILL_INSTALL_EXAMPLES = (
     "  $ rrt skill install --target gemini-global"
 )
 
-SKILLS_DOC = """# rrt skill
-
-This repository bundles ten user workflow skills:
-
-- `rrt-user-bootstrap`
-- `rrt-user-versioning`
-- `rrt-user-release-flow`
-- `rrt-user-branch-strategy`
-- `rrt-user-commit-quality`
-- `rrt-user-changelog-automation`
-- `rrt-user-docs-consistency`
-- `rrt-user-config-safety`
-- `rrt-user-ci-readiness`
-- `rrt-user-migration-uvx-to-installed`
-
-If you need the exact CLI syntax for branch, Git, or skill commands, use the
-[rrt CLI reference](rrt-cli.md) first.
-
-## What the skill bundle covers
-
-Use this bundle when you want shipped help for setup, versioning, release flow,
-branch naming, commit quality, changelog automation, docs consistency, config
-safety, CI readiness, and migration from `uvx` to installed workflows.
-
-## Installing the bundled user skills
-
-Install into one or more agent skill locations with:
-
-```bash
-rrt skill install --target copilot-local
-rrt skill install --target claude-local --target codex-local
-rrt skill install --target copilot-global --dry-run
-rrt skill install --target codex-global --force
-```
-
-Supported targets:
-
-| Target | Directory |
-|---|---|
-| `copilot-local` | `.github/skills` |
-| `claude-local` | `.claude/skills` |
-| `codex-local` | `.codex/skills` |
-| `copilot-global` | `~/.copilot/skills` |
-| `claude-global` | `~/.claude/skills` |
-| `codex-global` | `~/.codex/skills` |
-| `gemini-local` | `.gemini/skills` |
-| `gemini-global` | `~/.gemini/skills` |
-
-The installer writes one directory per bundled skill. It refuses to overwrite an
-existing skill directory unless you pass `--force`. Use `--dry-run` to preview
-the destination paths first.
-
-## Related docs
-
-- [rrt CLI](rrt-cli.md)
-- [pre-commit / lefthook](hooks.md)
-- [GitHub Action](action.md)
-- [rrt git](git_cmd.md)
-
-## Install surfaces
-
-- Claude: `./.claude/skills` and `~/.claude/skills`
-- Codex: `./.codex/skills` and `~/.codex/skills`
-- Gemini: `./.gemini/skills` and `~/.gemini/skills`
-- Copilot: `./.github/skills` and `~/.copilot/skills`
-"""
-
 # Ordered source-owned topic docs for docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("skill", SKILLS_DOC),)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("skill", __doc__ or ""),)
 
 
 def _dedupe_targets(targets: Iterable[str]) -> list[str]:

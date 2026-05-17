@@ -2,51 +2,38 @@
 
 ## Overview
 
-`rrt docs` extracts inline documentation blocks from source files across
-Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, Fish, and PowerShell using
-static regex analysis.  No runtime AST parsers are required.
+`rrt docs` provides a specialized toolset for managing documentation that lives
+directly within the source code. By extracting inline blocks from multiple
+programming languages and verifying them against a cryptographic lockfile, the
+tool ensures that your documentation stays accurate, up-to-date, and tightly
+coupled with the implementation.
+
+It supports a variety of languages including Python, TypeScript, Go, Rust, and
+several shell dialects, using regex-based extraction that doesn't require
+heavyweight AST parsers.
+
+## Responsibilities
+
+- extract inline documentation blocks from source files recursively
+- generate documentation in multiple formats (Markdown, JSON, TOML, Rich)
+- maintain a documentation lockfile (`docs.lock.toml`) to detect drift in CI
+- emit machine-readable indices of CLI commands and arguments
+- suggest or scaffold missing module docstrings for project alignment
 
 ## Sub-actions
 
-### generate
-
-Scan source files and emit documentation in the requested format.
-
-```bash
-rrt docs generate
-rrt docs generate --format md
-rrt docs generate --format json
-rrt docs generate --format toml   # writes .rrt/docs.lock.toml
-rrt docs suggest
-rrt docs generate --lang python,go
-rrt docs generate --lang bash,fish,powershell
-rrt docs generate --dry-run
-```
-
-### check
-
-Verify the lockfile is current with the source tree. Exits 1 if stale.
-Detects three lifecycle events that cause drift:
-
-- **file added** — a source file has no entry in the lockfile
-- **file deleted** — the lockfile references a file that no longer exists on disk
-- **content modified** — a source file's hash does not match its lockfile entry
-
-```bash
-rrt docs check
-rrt docs check --lock-file .rrt/docs.lock.toml
-```
-
-### api
-
-Emit a structured index of all rrt CLI commands and their arguments.
-
-```bash
-rrt docs api                        # Markdown to stdout
-rrt docs api --format json          # JSON to stdout
-rrt docs api --format txt           # plain text to stdout
-rrt docs api --output api-index.md  # write to file
-```
+- **generate**: Scans the source tree and emits documentation. Use `--format toml`
+  to write or update the documentation lockfile.
+- **check**: Validates that the current documentation lockfile matches the
+  source tree. Exits with a non-zero status if drift is detected.
+- **publish**: Generates the complete Markdown reference documentation from
+  the live CLI parser.
+- **inject**: Synchronizes shared anchor blocks (headers, footers) across
+  multiple Markdown files.
+- **suggest**: Analyzes Python modules for missing or thin docstrings and
+  provides scaffolded improvements.
+- **api**: Emits a structured index of all `rrt` commands for use in
+  external tooling.
 
 ## Extraction modes
 
@@ -127,16 +114,7 @@ from repo_release_tools.ui import DryRunPrinter
 # Source-owned topic docs
 # ---------------------------------------------------------------------------
 
-DOCS_OVERVIEW = """\
-Extract inline documentation blocks from source files across
-Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, Fish, and PowerShell.
-
-Usage:
-  rrt docs generate [--format md|txt|rich|clipboard|json|toml]
-  rrt docs check
-"""
-
-SOURCE_OWNED_TOPIC_DOCS = (("docs", DOCS_OVERVIEW),)
+SOURCE_OWNED_TOPIC_DOCS = (("docs", __doc__ or ""),)
 
 
 # ---------------------------------------------------------------------------

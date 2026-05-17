@@ -370,7 +370,7 @@ class DocsConfig:
 
     mirror_src_tree: bool = False
     docs_dir: str = "docs"
-    src_dir: str = "src/repo_release_tools"
+    src_dir: str = "."
     stubs: tuple[str, ...] = ()
     # Multi-language doc extraction settings
     extraction_mode: str = "explicit"  # "explicit" | "implicit" | "both"
@@ -387,6 +387,10 @@ class DocsConfig:
     badge_assets_dir: str = "docs/assets/badges"
     badge_variant: str = "color"  # "color" | "dark" | "light"
     source_link_badge: bool = False  # prefix per-file source links with a badge
+    # suggest settings
+    suggest_roots: tuple[str, ...] = ()
+    suggest_exempt: tuple[str, ...] = ()
+    suggest_min_chars: int | None = None
 
     def validate(self) -> None:
         """Validate badge_style and badge_variant values."""

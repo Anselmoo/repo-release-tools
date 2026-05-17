@@ -55,7 +55,8 @@ def test_scan_ignores_exempt_init_files(tmp_path: Path) -> None:
     target = tmp_path / "__init__.py"
     target.write_text("VALUE = 1\n", encoding="utf-8")
 
-    findings = scan([tmp_path])
+    # Now requires explicit exempt_files or configuration
+    findings = scan([tmp_path], exempt_files={"__init__.py"})
 
     assert findings == []
 
