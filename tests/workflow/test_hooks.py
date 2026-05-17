@@ -653,6 +653,57 @@ def test_read_commit_subject_skips_blank_lines(tmp_path: Path) -> None:
     assert hooks.read_commit_subject(message_file) == "feat: add parser"
 
 
+def test_main_docs_hook_commands_set_explicit_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    docs_calls: list[SimpleNamespace] = []
+    suggest_calls: list[SimpleNamespace] = []
+
+    monkeypatch.setattr(
+        hooks,
+        "cmd_docs",
+        lambda parsed: docs_calls.append(parsed) or 31,
+    )
+    monkeypatch.setattr(
+        hooks,
+        "cmd_docs_suggest",
+        lambda parsed: suggest_calls.append(parsed) or 32,
+    )
+
+    assert hooks.main(["docs-generate"]) == 31
+    assert hooks.main(["docs-publish"]) == 31
+    assert hooks.main(["docs-inject"]) == 31
+    assert hooks.main(["docstring-suggest"]) == 32
+
+    generate_args, publish_args, inject_args = docs_calls
+    suggest_args = suggest_calls[0]
+
+    assert generate_args.docs_action == "generate"
+    assert generate_args.format == "toml"
+    assert generate_args.lang is None
+    assert generate_args.root == "."
+    assert generate_args.dry_run is False
+
+    assert publish_args.docs_action == "publish"
+    assert publish_args.format is None
+    assert publish_args.lang is None
+    assert publish_args.root == "."
+    assert publish_args.check is False
+    assert publish_args.dry_run is False
+    assert publish_args.fail_on_change is False
+
+    assert inject_args.docs_action == "inject"
+    assert inject_args.format is None
+    assert inject_args.lang is None
+    assert inject_args.root == "."
+    assert inject_args.check is False
+    assert inject_args.dry_run is False
+    assert inject_args.add_anchors is True
+
+    assert suggest_args.root == "."
+    assert suggest_args.paths == []
+    assert suggest_args.min_chars is None
+    assert suggest_args.apply is True
+
+
 def test_detect_changelog_workflow_falls_back_and_raises(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

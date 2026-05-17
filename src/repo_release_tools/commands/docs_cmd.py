@@ -918,9 +918,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     sug_p.add_argument(
         "--min-chars",
         type=int,
-        default=150,
+        default=None,
         metavar="N",
-        help="Minimum docstring length to accept (default: 150).",
+        help="Minimum docstring length to accept (default: config or 150).",
     )
     sug_p.add_argument(
         "--apply",

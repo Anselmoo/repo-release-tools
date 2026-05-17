@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -55,8 +56,7 @@ def test_scan_ignores_exempt_init_files(tmp_path: Path) -> None:
     target = tmp_path / "__init__.py"
     target.write_text("VALUE = 1\n", encoding="utf-8")
 
-    # Now requires explicit exempt_files or configuration
-    findings = scan([tmp_path], exempt_files={"__init__.py"})
+    findings = scan([tmp_path])
 
     assert findings == []
 
@@ -225,6 +225,33 @@ def test_cmd_docs_suggest_no_findings(tmp_path: Path) -> None:
 
     assert result == 0
     assert target.read_text(encoding="utf-8").startswith('"""')
+
+
+def test_cmd_docs_suggest_uses_config_min_chars_when_arg_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "repo_release_tools.config.load_config",
+        lambda root: SimpleNamespace(
+            docs=SimpleNamespace(
+                suggest_roots=(),
+                src_dir=".",
+                suggest_exempt=(),
+                suggest_min_chars=10,
+            ),
+        ),
+    )
+    target = tmp_path / "example.py"
+    target.write_text('"""tiny\n\nbody"""\nVALUE = 1\n', encoding="utf-8")
+    args = argparse.Namespace(root=str(tmp_path), paths=[str(target)], min_chars=None, apply=False)
+
+    result = cmd_docs_suggest(args)
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "No docstring scaffolds needed." in captured.out
 
 
 def test_load_min_chars_rejects_invalid_env(monkeypatch: pytest.MonkeyPatch) -> None:

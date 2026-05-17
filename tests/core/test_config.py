@@ -1630,7 +1630,7 @@ def test_load_config_docs_defaults(tmp_path: Path) -> None:
     assert isinstance(cfg.docs, DocsConfig)
     assert cfg.docs.mirror_src_tree is False
     assert cfg.docs.docs_dir == "docs"
-    assert cfg.docs.src_dir == "src/repo_release_tools"
+    assert cfg.docs.src_dir == "."
     assert cfg.docs.stubs == ()
 
 

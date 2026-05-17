@@ -38,6 +38,7 @@ from textwrap import dedent
 from repo_release_tools.ui import DryRunPrinter
 
 DEFAULT_MIN_CHARS = 150
+EXEMPT_FILES = frozenset({"__init__.py", "__main__.py"})
 
 
 @dataclass(frozen=True)
@@ -53,14 +54,15 @@ def _iter_targets(paths: Iterable[Path]) -> list[Path]:
     Recursively scans directories while skipping well-known transient/system
     directories defined in the project's ignore list.
     """
-    from repo_release_tools.config.model import _IGNORE_DIR_NAMES
+    from repo_release_tools.config import ignore_dir_names
 
     targets: list[Path] = []
+    ignored_dirs = ignore_dir_names()
     for path in paths:
         if path.is_dir():
             for root, dirs, files in os.walk(path):
                 # Prune ignored directories in-place to prevent traversal.
-                dirs[:] = [d for d in dirs if d not in _IGNORE_DIR_NAMES]
+                dirs[:] = [d for d in dirs if d not in ignored_dirs]
                 for file in files:
                     if file.endswith(".py"):
                         targets.append(Path(root) / file)
@@ -76,7 +78,7 @@ def _resolve_target_path(path: Path, root: Path) -> Path:
 
 def _should_exempt(path: Path, text: str, exempt_files: set[str] | None = None) -> bool:
     """Return whether *path* should be skipped by the scanner."""
-    if exempt_files is not None and path.name in exempt_files:
+    if path.name in (exempt_files or EXEMPT_FILES):
         return True
     return "rrt:docs-exempt" in text
 
@@ -205,8 +207,9 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
 
     # Default to scanning the source directory or current directory if not specified
     suggest_roots_list: list[str] = ["."]
-    exempt_files: set[str] | None = None
-    min_chars = int(getattr(args, "min_chars", DEFAULT_MIN_CHARS))
+    exempt_files: set[str] = set(EXEMPT_FILES)
+    arg_min_chars = getattr(args, "min_chars", None)
+    min_chars = DEFAULT_MIN_CHARS if arg_min_chars is None else int(arg_min_chars)
 
     if cfg and cfg.docs:
         if cfg.docs.suggest_roots:
@@ -215,8 +218,8 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
             suggest_roots_list = [cfg.docs.src_dir]
 
         if cfg.docs.suggest_exempt:
-            exempt_files = set(cfg.docs.suggest_exempt)
-        if cfg.docs.suggest_min_chars is not None and not getattr(args, "min_chars", None):
+            exempt_files.update(cfg.docs.suggest_exempt)
+        if cfg.docs.suggest_min_chars is not None and arg_min_chars is None:
             min_chars = cfg.docs.suggest_min_chars
 
     raw_paths = list(getattr(args, "paths", ()) or ())

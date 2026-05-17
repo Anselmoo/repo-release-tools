@@ -1091,11 +1091,14 @@ def main(argv: list[str] | None = None) -> int:
     if parsed.command == "docs-generate":
         parsed.docs_action = "generate"
         parsed.format = "toml"
+        parsed.lang = None
         parsed.root = "."
         parsed.dry_run = False
         return cmd_docs(parsed)
     if parsed.command == "docs-publish":
         parsed.docs_action = "publish"
+        parsed.format = None
+        parsed.lang = None
         parsed.root = "."
         parsed.check = False
         parsed.dry_run = False
@@ -1103,6 +1106,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_docs(parsed)
     if parsed.command == "docs-inject":
         parsed.docs_action = "inject"
+        parsed.format = None
+        parsed.lang = None
         parsed.root = "."
         parsed.check = False
         parsed.dry_run = False
@@ -1111,7 +1116,7 @@ def main(argv: list[str] | None = None) -> int:
     if parsed.command == "docstring-suggest":
         parsed.root = "."
         parsed.paths = []
-        parsed.min_chars = 0  # 0 means use config
+        parsed.min_chars = None
         parsed.apply = True
         return cmd_docs_suggest(parsed)
     if parsed.command == "update-unreleased":
