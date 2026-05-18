@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+## [1.6.0] - 2026-05-18
+
+### Added
+- enhance documentation and tests for branch and git command helpers
+- Enhance documentation generation and management features
+- expand release workflow tooling (#63)
+- **docs**: shell-language extraction (bash/fish/powershell), API index command, and extractor refactors (#62)
+
+### Fixed
+- refine docs suggest defaults and hook arg wiring
+- address docs suggest and hooks review feedback
+
+### Documentation
+- repo injector (#61)
+
 ## [1.5.0] - 2026-05-13
 
 ### Added
