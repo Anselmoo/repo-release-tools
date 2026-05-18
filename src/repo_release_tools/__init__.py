@@ -1,6 +1,6 @@
 """repo-release-tools package."""
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 INDEX_DOC = """# repo-release-tools
 
