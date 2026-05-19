@@ -496,7 +496,9 @@ def _compose_crt_monitor(
     outer_margin = 28 * scale
     inner_margin = 60 * scale
     # Monitor bezel takes most of the upper area
-    monitor_h = (content_img.height + 120 * scale) if fixed_size is None else (work_h * 0.65)
+    monitor_h = int(
+        content_img.height + 120 * scale if fixed_size is None else round(work_h * 0.65)
+    )
     corner_r = 14 * scale
 
     # 1. MONITOR BEZEL
@@ -670,8 +672,10 @@ def _compose_crt_monitor(
         current_x = row_margin + key_gap
         for key_unit in layout:
             kw = unit_w * key_unit
+            key_left = int(round(current_x))
+            key_right = int(round(current_x + kw))
             draw.rounded_rectangle(
-                (current_x, row_y, current_x + kw, row_y + key_h),
+                (key_left, row_y, key_right, row_y + key_h),
                 radius=2 * scale,
                 fill=bezel_inner,
                 outline=screen_outline,
