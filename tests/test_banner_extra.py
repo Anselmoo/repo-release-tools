@@ -114,3 +114,29 @@ def test_compose_crt_monitor_scale_gt_one_resizes_output() -> None:
     # scale=2 path downsamples before returning; output should be smaller.
     assert out_scale_2.size[0] < out_scale_1.size[0]
     assert out_scale_2.size[1] < out_scale_1.size[1]
+
+
+def test_compose_crt_monitor_uses_integer_rounded_rectangle_coords(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from PIL import Image, ImageDraw
+
+    import repo_release_tools.assets.banner as bmod
+
+    content = Image.new("RGBA", (900, 520), (0, 0, 0, 0))
+    recorded_boxes: list[tuple[float, ...]] = []
+
+    def _capture_rounded_rectangle(
+        _self: ImageDraw.ImageDraw,
+        xy: tuple[float, float, float, float],
+        *_args: object,
+        **_kwargs: object,
+    ) -> None:
+        recorded_boxes.append(tuple(xy))
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "rounded_rectangle", _capture_rounded_rectangle)
+
+    bmod._compose_crt_monitor(content, theme="dark", fixed_size=(1280, 640), scale=1)
+
+    assert recorded_boxes
+    assert all(all(isinstance(value, int) for value in box) for box in recorded_boxes)
