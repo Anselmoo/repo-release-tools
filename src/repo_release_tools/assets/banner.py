@@ -5,12 +5,12 @@ from __future__ import annotations
 import os
 import sys
 from contextlib import suppress
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from repo_release_tools import __version__
-from repo_release_tools.ui import align
-from repo_release_tools.ui.glyphs import display_width, pad_right
+from repo_release_tools.ui import align, display_width, pad_right
 
 if TYPE_CHECKING:
     from typing import LiteralString
@@ -313,9 +313,23 @@ def _apply_ascii_fallbacks(s: str) -> str:
 # template maintenance.
 
 
-# Legacy constants for compatibility with existing code/tests
-BANNER_UNICODE = get_banner("unicode")
-BANNER_ASCII = get_banner("ascii")
+@lru_cache(maxsize=8)
+def get_cached_banner(variant: str = "unicode", version: str = __version__) -> str:
+    """Return a cached rendered banner to avoid repeated metric scans."""
+    return get_banner(variant, version)
+
+
+def __getattr__(name: str) -> str:
+    """Provide lazy legacy banner constants for compatibility.
+
+    This keeps ``BANNER_UNICODE``/``BANNER_ASCII`` import-compatible without
+    performing expensive metric collection during module import.
+    """
+    if name == "BANNER_UNICODE":
+        return get_cached_banner("unicode")
+    if name == "BANNER_ASCII":
+        return get_cached_banner("ascii")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def export_banner_png(
@@ -356,8 +370,6 @@ def _render_banner_image(
         raise RuntimeError(
             "Pillow is required for PNG export. Install it with: pip install pillow"
         ) from exc
-
-    from repo_release_tools.ui.glyphs import display_width
 
     lines = banner_str.splitlines()
 
@@ -426,7 +438,9 @@ def _render_banner_image(
                 else _PNG_SAFE_FALLBACKS.get(char, char)
             )
 
-            cell_count = display_width(char)
+            cell_count = display_width(safe_char)
+            if cell_count <= 0:
+                continue
             cell_w = char_w * cell_count
 
             # Render each character into its own cell image to prevent negative

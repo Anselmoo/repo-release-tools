@@ -1209,7 +1209,6 @@ __all__ = [
     "FolderRule",
     "FolderScaffoldFile",
     "FolderTemplate",
-    GeneratedAsset,
     "GeneratedAsset",
     "MissingRrtConfigError",
     "PinTarget",

@@ -444,15 +444,15 @@ class GitGlyphs:
 
 @dataclass(frozen=True)
 class GamingGlyphs:
-    """Retro gaming-inspired glyphs for status and flair."""
+    """Retro gaming-inspired, terminal-stable non-emoji glyphs."""
 
-    mushroom: Glyph = field(default_factory=lambda: Glyph(_g("(M)", "🍄"), "mushroom"))
-    star: Glyph = field(default_factory=lambda: Glyph(_g("(*)", "⭐"), "star"))
-    coin: Glyph = field(default_factory=lambda: Glyph(_g("(C)", "🪙"), "coin"))
-    brick: Glyph = field(default_factory=lambda: Glyph(_g("[#]", "🧱"), "brick"))
-    question: Glyph = field(default_factory=lambda: Glyph(_g("(?)", "❓"), "question"))
-    heart: Glyph = field(default_factory=lambda: Glyph(_g("<3", "❤️"), "heart"))
-    joystick: Glyph = field(default_factory=lambda: Glyph(_g("[J]", "🕹️"), "joystick"))
+    mushroom: Glyph = field(default_factory=lambda: Glyph("(M)", "mushroom"))
+    star: Glyph = field(default_factory=lambda: Glyph(_g("(*)", "★"), "star"))
+    coin: Glyph = field(default_factory=lambda: Glyph(_g("(C)", "○"), "coin"))
+    brick: Glyph = field(default_factory=lambda: Glyph(_g("[#]", "▦"), "brick"))
+    question: Glyph = field(default_factory=lambda: Glyph("(?)", "question"))
+    heart: Glyph = field(default_factory=lambda: Glyph(_g("<3", "♥"), "heart"))
+    joystick: Glyph = field(default_factory=lambda: Glyph("[J]", "joystick"))
 
 
 @dataclass(frozen=True)
@@ -486,7 +486,6 @@ class GlyphSet:
     typography: TypographyGlyphs = field(default_factory=TypographyGlyphs)
     diff: DiffGlyphs = field(default_factory=DiffGlyphs)
     git: GitGlyphs = field(default_factory=GitGlyphs)
-    gaming: GamingGlyphs = field(default_factory=GamingGlyphs)
     retro: RetroGlyphs = field(default_factory=RetroGlyphs)
 
 

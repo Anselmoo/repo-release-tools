@@ -224,3 +224,32 @@ def test_main_default_args(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert (tmp_path / "docs" / "assets" / "banner-light.png").exists()
     assert (tmp_path / "docs" / "assets" / "banner-windows.png").exists()
     assert (tmp_path / "docs" / "assets" / "social-card.png").exists()
+
+
+def test_legacy_banner_constants_are_lazy_and_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    from repo_release_tools import __version__
+    from repo_release_tools.assets import banner as banner_mod
+
+    calls = {"count": 0}
+
+    def fake_get_banner(variant: str = "unicode", version: str = __version__) -> str:
+        calls["count"] += 1
+        return f"{variant}:{version}"
+
+    banner_mod.get_cached_banner.cache_clear()
+    monkeypatch.setattr(banner_mod, "get_banner", fake_get_banner)
+
+    first = getattr(banner_mod, "BANNER_ASCII")
+    second = getattr(banner_mod, "BANNER_ASCII")
+
+    assert first == second
+    assert calls["count"] == 1
+
+
+def test_render_banner_image_skips_zero_width_cells() -> None:
+    from repo_release_tools.assets import banner as banner_mod
+
+    # Combining marks have display width 0 and must not create 0-width cell images.
+    image = banner_mod._render_banner_image("\u0301", font_size=14, padding=2)
+    assert image.width > 0
+    assert image.height > 0

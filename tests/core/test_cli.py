@@ -75,6 +75,18 @@ def test_startup_banner_matches_terminal_mode(monkeypatch: pytest.MonkeyPatch) -
     assert cli_mod._startup_banner() == BANNER_UNICODE
 
 
+def test_startup_banner_uses_cached_banner(monkeypatch: pytest.MonkeyPatch) -> None:
+    from repo_release_tools import cli as cli_mod
+
+    monkeypatch.setattr(cli_mod, "get_cached_banner", lambda variant: f"banner:{variant}")
+
+    monkeypatch.setattr(cli_mod, "IS_LEGACY_TERMINAL", False)
+    assert cli_mod._startup_banner() == "banner:unicode"
+
+    monkeypatch.setattr(cli_mod, "IS_LEGACY_TERMINAL", True)
+    assert cli_mod._startup_banner() == "banner:ascii"
+
+
 def test_branch_new_missing_args_shows_help_and_exits_with_code_2() -> None:
     """Test that running 'branch new' with missing args shows help and exits with code 2."""
     result = subprocess.run(
@@ -268,6 +280,29 @@ def test_main_dispatches_to_selected_handler(monkeypatch: pytest.MonkeyPatch) ->
         cli.main()
 
     assert exc.value.code == 7
+
+
+def test_main_prints_startup_banner_when_no_args(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class _FakeParser:
+        def parse_known_args(self) -> tuple[argparse.Namespace, list[str]]:
+            return argparse.Namespace(), []
+
+        def parse_args(self) -> argparse.Namespace:
+            return argparse.Namespace(handler=lambda args: 0, no_color=False)
+
+    monkeypatch.setattr(cli, "build_parser", lambda: _FakeParser())
+    monkeypatch.setattr(cli, "_startup_banner", lambda: "BANNER")
+    monkeypatch.setattr(sys, "argv", ["rrt"])
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    captured = capsys.readouterr()
+    assert exc.value.code == 0
+    assert captured.out.startswith("BANNER\n")
 
 
 def test_main_renders_handler_value_error_as_cli_error(

@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable, Iterable
 from typing import IO, Any, NoReturn, cast
 
-from repo_release_tools.assets.banner import BANNER_ASCII, BANNER_UNICODE
+from repo_release_tools.assets.banner import get_cached_banner
 from repo_release_tools.commands import (
     agents_cmd,
     branch,
@@ -753,7 +753,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _startup_banner() -> str:
     """Return the platform-appropriate startup banner for bare ``rrt`` runs."""
-    return BANNER_ASCII if IS_LEGACY_TERMINAL else BANNER_UNICODE
+    variant = "ascii" if IS_LEGACY_TERMINAL else "unicode"
+    return get_cached_banner(variant)
 
 
 def main() -> None:
