@@ -1,9 +1,9 @@
 # repo-release-tools
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner.png?raw=true">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-dark.png?raw=true">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-light.png?raw=true">
-  <img alt="REPO-RELEASE-TOOLS pipeline banner" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner.png?raw=true">
+  <img alt="REPO-RELEASE-TOOLS pipeline banner" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-dark.png?raw=true">
 </picture>
 
 `repo-release-tools` keeps release policy boring in the best possible way.
@@ -43,7 +43,7 @@ drifts from your release policy.
   with:
     fetch-depth: 0
 
-- uses: Anselmoo/repo-release-tools@v1.6.0
+- uses: Anselmoo/repo-release-tools@v1.6.1
   with:
     check-branch-name: "true"
     check-commit-subject: "true"
