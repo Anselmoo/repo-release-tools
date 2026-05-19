@@ -15,8 +15,8 @@ import pytest
 from repo_release_tools import cli
 from repo_release_tools.ui import OutputContext, color
 
-ANSI_PREFIX = chr(27) + "["
-ANSI_RESET = ANSI_PREFIX + "0m"
+ANSI_PREFIX = f"{chr(27)}["
+ANSI_RESET = f"{ANSI_PREFIX}0m"
 ANSI_RE_PREFIX = re.escape(ANSI_PREFIX)
 
 
@@ -50,6 +50,11 @@ def test_module_no_args_shows_help_and_exits_with_code_2() -> None:
     )
 
     assert result.returncode == 2
+    from repo_release_tools.assets.banner import BANNER_ASCII, BANNER_UNICODE
+    from repo_release_tools.ui import IS_LEGACY_TERMINAL
+
+    expected_banner = BANNER_ASCII if IS_LEGACY_TERMINAL else BANNER_UNICODE
+    assert expected_banner.splitlines()[0] in result.stdout
     # Accept either legacy '[ERROR]' prefix or new styled error; check core message
     assert "the following arguments are required" in result.stderr
     assert "<command>" in result.stderr
@@ -57,6 +62,29 @@ def test_module_no_args_shows_help_and_exits_with_code_2() -> None:
     assert "for usage and examples." in result.stderr
     assert "rrt --help" in result.stderr
     assert "repo-release-tools: branch, commit, and version helpers" not in result.stderr
+
+
+def test_startup_banner_matches_terminal_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    from repo_release_tools import cli as cli_mod
+    from repo_release_tools.assets.banner import BANNER_ASCII, BANNER_UNICODE
+
+    monkeypatch.setattr(cli_mod, "IS_LEGACY_TERMINAL", True)
+    assert cli_mod._startup_banner() == BANNER_ASCII
+
+    monkeypatch.setattr(cli_mod, "IS_LEGACY_TERMINAL", False)
+    assert cli_mod._startup_banner() == BANNER_UNICODE
+
+
+def test_startup_banner_uses_cached_banner(monkeypatch: pytest.MonkeyPatch) -> None:
+    from repo_release_tools import cli as cli_mod
+
+    monkeypatch.setattr(cli_mod, "get_cached_banner", lambda variant: f"banner:{variant}")
+
+    monkeypatch.setattr(cli_mod, "IS_LEGACY_TERMINAL", False)
+    assert cli_mod._startup_banner() == "banner:unicode"
+
+    monkeypatch.setattr(cli_mod, "IS_LEGACY_TERMINAL", True)
+    assert cli_mod._startup_banner() == "banner:ascii"
 
 
 def test_branch_new_missing_args_shows_help_and_exits_with_code_2() -> None:
@@ -252,6 +280,29 @@ def test_main_dispatches_to_selected_handler(monkeypatch: pytest.MonkeyPatch) ->
         cli.main()
 
     assert exc.value.code == 7
+
+
+def test_main_prints_startup_banner_when_no_args(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class _FakeParser:
+        def parse_known_args(self) -> tuple[argparse.Namespace, list[str]]:
+            return argparse.Namespace(), []
+
+        def parse_args(self) -> argparse.Namespace:
+            return argparse.Namespace(handler=lambda args: 0, no_color=False)
+
+    monkeypatch.setattr(cli, "build_parser", lambda: _FakeParser())
+    monkeypatch.setattr(cli, "_startup_banner", lambda: "BANNER")
+    monkeypatch.setattr(sys, "argv", ["rrt"])
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    captured = capsys.readouterr()
+    assert exc.value.code == 0
+    assert captured.out.startswith("BANNER\n")
 
 
 def test_main_renders_handler_value_error_as_cli_error(
@@ -999,7 +1050,6 @@ def test_bump_help_column_alignment_with_color(
 
 
 def test_help_formatter_decolor_strips_ansi_sequences() -> None:
-
     assert cli._strip_ansi(f"{ANSI_PREFIX}31mrrt{ANSI_RESET}") == "rrt"
 
 

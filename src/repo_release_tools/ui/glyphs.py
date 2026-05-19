@@ -443,6 +443,36 @@ class GitGlyphs:
 
 
 @dataclass(frozen=True)
+class GamingGlyphs:
+    """Retro gaming-inspired, terminal-stable non-emoji glyphs."""
+
+    mushroom: Glyph = field(default_factory=lambda: Glyph("(M)", "mushroom"))
+    star: Glyph = field(default_factory=lambda: Glyph(_g("(*)", "★"), "star"))
+    coin: Glyph = field(default_factory=lambda: Glyph(_g("(C)", "○"), "coin"))
+    brick: Glyph = field(default_factory=lambda: Glyph(_g("[#]", "▦"), "brick"))
+    question: Glyph = field(default_factory=lambda: Glyph("(?)", "question"))
+    heart: Glyph = field(default_factory=lambda: Glyph(_g("<3", "♥"), "heart"))
+    joystick: Glyph = field(default_factory=lambda: Glyph("[J]", "joystick"))
+
+
+@dataclass(frozen=True)
+class RetroGlyphs:
+    """High-fidelity retro gaming-inspired glyphs using block elements and standard symbols."""
+
+    pipe_rim_l: Glyph = field(default_factory=lambda: Glyph(_g("▛", "▛"), "pipe_rim_l"))
+    pipe_rim_r: Glyph = field(default_factory=lambda: Glyph(_g("▜", "▜"), "pipe_rim_r"))
+    pipe_body: Glyph = field(default_factory=lambda: Glyph(_g("▌", "▌"), "pipe_body"))
+    block_q: Glyph = field(default_factory=lambda: Glyph(_g("▚", "▚"), "block_q"))
+    flag: Glyph = field(default_factory=lambda: Glyph(_g("⚑", "⚑"), "flag"))
+    home: Glyph = field(default_factory=lambda: Glyph(_g("(H)", "⌂"), "home"))
+    star: Glyph = field(default_factory=lambda: Glyph(_g("(*)", "★"), "star"))
+    coin: Glyph = field(default_factory=lambda: Glyph(_g("(C)", "○"), "coin"))
+    cloud: Glyph = field(default_factory=lambda: Glyph(_g("~~", "░░"), "cloud"))
+    ground: Glyph = field(default_factory=lambda: Glyph(_g("#", "▓"), "ground"))
+    shadow: Glyph = field(default_factory=lambda: Glyph(_g(".", "▒"), "shadow"))
+
+
+@dataclass(frozen=True)
 class GlyphSet:
     """Shared glyph registry for terminal output."""
 
@@ -456,6 +486,7 @@ class GlyphSet:
     typography: TypographyGlyphs = field(default_factory=TypographyGlyphs)
     diff: DiffGlyphs = field(default_factory=DiffGlyphs)
     git: GitGlyphs = field(default_factory=GitGlyphs)
+    retro: RetroGlyphs = field(default_factory=RetroGlyphs)
 
 
 GLYPHS = GlyphSet()

@@ -403,6 +403,45 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 suppress_announce=True,
             )
 
+    if group.generated_assets and not args.no_update:
+        p.section("Refreshing generated assets")
+        for asset in group.generated_assets:
+            command_preview = " ".join(asset.command)
+            spinner = (
+                contextlib.nullcontext()
+                if args.dry_run
+                else spinner_lines(
+                    "Running generated asset command…",
+                    detail=f"$ {command_preview}",
+                    file=sys.stdout,
+                )
+            )
+            try:
+                with spinner:
+                    git.run(
+                        asset.command,
+                        root,
+                        dry_run=args.dry_run,
+                        label=f"generated asset command ({asset.path.relative_to(root)})",
+                        suppress_announce=True,
+                    )
+            except RuntimeError as exc:
+                if args.dry_run:
+                    p.warn(
+                        f"Generated asset command for {asset.path.relative_to(root)} failed in dry-run: {exc}",
+                    )
+                    continue
+                p.line(str(exc), ok=False, stream=sys.stderr)
+                return 1
+
+            if not asset.path.exists():
+                message = f"Generated asset {asset.path.relative_to(root)} not found after refresh command"
+                if args.dry_run:
+                    p.warn(message)
+                else:
+                    p.line(message, ok=False, stream=sys.stderr)
+                    return 1
+
     p.section("Git")
     create_flag = "-B" if force else "-b"
     git.run(
@@ -416,6 +455,9 @@ def cmd_bump(args: argparse.Namespace) -> int:
     for path in group.generated_files:
         if path.exists():
             files_to_stage.append(str(path.relative_to(root)))
+    for asset in group.generated_assets:
+        if asset.path.exists():
+            files_to_stage.append(str(asset.path.relative_to(root)))
     if group.changelog_file.exists() and not args.no_changelog:
         files_to_stage.append(str(group.changelog_file.relative_to(root)))
     if not getattr(args, "no_pin_sync", False):

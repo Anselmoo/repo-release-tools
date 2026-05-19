@@ -1,8 +1,9 @@
 # repo-release-tools
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.png">
-  <img alt="REPO-RELEASE-TOOLS pipeline banner" src="docs/assets/banner.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner.png?raw=true">
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-light.png?raw=true">
+  <img alt="REPO-RELEASE-TOOLS pipeline banner" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner.png?raw=true">
 </picture>
 
 `repo-release-tools` keeps release policy boring in the best possible way.

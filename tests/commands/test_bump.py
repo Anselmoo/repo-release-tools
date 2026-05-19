@@ -591,6 +591,253 @@ kind = "package_json"
     assert not any("uv.lock" in cmd for cmd in add_calls)
 
 
+def test_cmd_bump_runs_generated_asset_commands_and_stages_outputs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.generated_assets]]
+path = "docs/assets/banner.png"
+command = ["generate", "banner"]
+
+[[tool.rrt.generated_assets]]
+path = "docs/assets/banner-windows.png"
+command = ["generate", "banner-windows"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
+    )
+
+    calls: list[list[str]] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+
+    def fake_run(
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
+    ) -> str:
+        calls.append(cmd)
+        if label.startswith("generated asset command"):
+            if "banner-windows.png" in label:
+                out = tmp_path / "docs" / "assets" / "banner-windows.png"
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_text("windows", encoding="utf-8")
+            if "banner.png" in label and "windows" not in label:
+                out = tmp_path / "docs" / "assets" / "banner.png"
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_text("unicode", encoding="utf-8")
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=False,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+
+    add_calls = [cmd for cmd in calls if cmd[:2] == ["git", "add"]]
+    assert result == 0
+    assert ["generate", "banner"] in calls
+    assert ["generate", "banner-windows"] in calls
+    assert add_calls
+    assert "docs/assets/banner.png" in add_calls[-1]
+    assert "docs/assets/banner-windows.png" in add_calls[-1]
+
+
+def test_cmd_bump_generated_asset_failure_policy(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.generated_assets]]
+path = "docs/assets/banner.png"
+command = ["generate", "banner"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+
+    def fake_run(
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
+    ) -> str:
+        if label.startswith("generated asset command"):
+            raise RuntimeError("asset generation failed")
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    dry_run_result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=True,
+            no_commit=True,
+            no_changelog=True,
+            no_update=False,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+    dry_run_output = capsys.readouterr().out
+    assert dry_run_result == 0
+    assert "failed in dry-run" in dry_run_output
+
+    real_run_result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=False,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+    real_run_err = capsys.readouterr().err
+    assert real_run_result == 1
+    assert "asset generation failed" in real_run_err
+
+
+def test_cmd_bump_generated_asset_missing_output_policy(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+lock_command = []
+
+[[tool.rrt.generated_assets]]
+path = "docs/assets/banner.png"
+command = ["generate", "banner"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label, suppress_announce=False: "",
+    )
+
+    dry_run_result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=True,
+            no_commit=True,
+            no_changelog=True,
+            no_update=False,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+    dry_run_output = capsys.readouterr().out
+    assert dry_run_result == 0
+    assert "not found after refresh command" in dry_run_output
+
+    real_run_result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=True,
+            no_changelog=True,
+            no_update=False,
+            no_pin_sync=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+    real_run_err = capsys.readouterr().err
+    assert real_run_result == 1
+    assert "not found after refresh command" in real_run_err
+
+
 def test_cmd_bump_refuses_existing_release_branch_without_force(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

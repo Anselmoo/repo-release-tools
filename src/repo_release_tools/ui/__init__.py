@@ -24,7 +24,7 @@ from repo_release_tools.ui.color import (
 from repo_release_tools.ui.color import success as fmt_version
 from repo_release_tools.ui.context import OutputContext
 from repo_release_tools.ui.font import Emphasis, bold, emphasize, italic, underline
-from repo_release_tools.ui.glyphs import GLYPHS, IS_LEGACY_TERMINAL
+from repo_release_tools.ui.glyphs import GLYPHS, IS_LEGACY_TERMINAL, display_width, pad_right
 from repo_release_tools.ui.layout import (
     align,
     banner,
@@ -90,6 +90,7 @@ __all__ = [
     "confirm",
     "detect_color_level",
     "diff_highlight",
+    "display_width",
     "emphasize",
     "error",
     "fmt_cmd",
@@ -102,6 +103,7 @@ __all__ = [
     "italic",
     "json_highlight",
     "panel",
+    "pad_right",
     "pretty_print",
     "progress_bar",
     "render_action",
