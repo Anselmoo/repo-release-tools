@@ -78,6 +78,7 @@ When working in `repo-release-tools`, follow these rules:
 - Prefer `match` for closed-set dispatch helpers such as hook surface selection or managed config-path resolution; keep simple guard clauses for validation and command flow.
 - In `src/repo_release_tools/docs/publisher.py`, never add YAML frontmatter to content rendered for targets that use `anchor_id` (for example `docs/index.md` and `README.md`); anchored targets must render body-only fragments.
 - Author docs shared blocks inline in `[tool.rrt.docs.shared_blocks].content` under `pyproject.toml` or `.rrt.toml`; do not add new scripts or template files for doc footers, headers, or shared text fragments.
+- When adjusting banner or other fixed-width UI art, validate the final rendered string and normalize every line to a shared display width before asserting geometry; do not compare the raw template lines directly.
 - Use `fetch_webpage` and `mcp_github_search_code` when researching external examples, issue comments, or PR context before changing behavior.
 - Avoid proposing or creating PRs that lower test coverage; if a change is necessary and coverage drops, explain the coverage gap and add tests to restore it.
 - The repo currently reports low coverage in `src/repo_release_tools/ui/syntax.py`.

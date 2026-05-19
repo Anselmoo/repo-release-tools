@@ -11,6 +11,7 @@ import sys
 from collections.abc import Callable, Iterable
 from typing import IO, Any, NoReturn, cast
 
+from repo_release_tools.assets.banner import BANNER_ASCII, BANNER_UNICODE
 from repo_release_tools.commands import (
     agents_cmd,
     branch,
@@ -37,6 +38,7 @@ from repo_release_tools.commands import (
 )
 from repo_release_tools.commands.action_cmd import register as action_register
 from repo_release_tools.ui import (
+    IS_LEGACY_TERMINAL,
     DryRunPrinter,
     Style,
     apply_style,
@@ -557,16 +559,14 @@ def _generate_completion(shell: str, parser: argparse.ArgumentParser) -> str:
     subcommand_opts: dict[str, list[str]] = {}
 
     for action in parser._actions:
-        for opt in getattr(action, "option_strings", []):
-            global_opts.append(opt)
+        global_opts.extend(getattr(action, "option_strings", []))
 
     if subparsers_action is not None:
         for name, sub in (subparsers_action.choices or {}).items():
             subcommands.append(name)
             opts: list[str] = []
             for action in sub._actions:
-                for opt in getattr(action, "option_strings", []):
-                    opts.append(opt)
+                opts.extend(getattr(action, "option_strings", []))
             subcommand_opts[name] = opts
 
     if shell == "bash":
@@ -675,10 +675,13 @@ def _fish_completion(
         long = opt.lstrip("-")
         lines.append(f"complete -c rrt -l {long} -d 'option'")
 
-    lines.append("")
-    lines.append("# Subcommands")
-    for cmd in subcommands:
-        lines.append(f"complete -c rrt -n '__fish_use_subcommand' -a {cmd}")
+    lines.extend(
+        [
+            "",
+            "# Subcommands",
+        ]
+    )
+    lines.extend(f"complete -c rrt -n '__fish_use_subcommand' -a {cmd}" for cmd in subcommands)
 
     for cmd, opts in subcommand_opts.items():
         for opt in opts:
@@ -748,8 +751,15 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _startup_banner() -> str:
+    """Return the platform-appropriate startup banner for bare ``rrt`` runs."""
+    return BANNER_ASCII if IS_LEGACY_TERMINAL else BANNER_UNICODE
+
+
 def main() -> None:
     """Program entrypoint."""
+    if len(sys.argv) == 1:
+        sys.stdout.write(_startup_banner() + "\n")
     parser = build_parser()
     args, _ = parser.parse_known_args()
     if getattr(args, "generate_completion", None):

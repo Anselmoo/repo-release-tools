@@ -15,8 +15,8 @@ import pytest
 from repo_release_tools import cli
 from repo_release_tools.ui import OutputContext, color
 
-ANSI_PREFIX = chr(27) + "["
-ANSI_RESET = ANSI_PREFIX + "0m"
+ANSI_PREFIX = f"{chr(27)}["
+ANSI_RESET = f"{ANSI_PREFIX}0m"
 ANSI_RE_PREFIX = re.escape(ANSI_PREFIX)
 
 
@@ -50,6 +50,11 @@ def test_module_no_args_shows_help_and_exits_with_code_2() -> None:
     )
 
     assert result.returncode == 2
+    from repo_release_tools.assets.banner import BANNER_ASCII, BANNER_UNICODE
+    from repo_release_tools.ui import IS_LEGACY_TERMINAL
+
+    expected_banner = BANNER_ASCII if IS_LEGACY_TERMINAL else BANNER_UNICODE
+    assert expected_banner.splitlines()[0] in result.stdout
     # Accept either legacy '[ERROR]' prefix or new styled error; check core message
     assert "the following arguments are required" in result.stderr
     assert "<command>" in result.stderr
@@ -57,6 +62,17 @@ def test_module_no_args_shows_help_and_exits_with_code_2() -> None:
     assert "for usage and examples." in result.stderr
     assert "rrt --help" in result.stderr
     assert "repo-release-tools: branch, commit, and version helpers" not in result.stderr
+
+
+def test_startup_banner_matches_terminal_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    from repo_release_tools import cli as cli_mod
+    from repo_release_tools.assets.banner import BANNER_ASCII, BANNER_UNICODE
+
+    monkeypatch.setattr(cli_mod, "IS_LEGACY_TERMINAL", True)
+    assert cli_mod._startup_banner() == BANNER_ASCII
+
+    monkeypatch.setattr(cli_mod, "IS_LEGACY_TERMINAL", False)
+    assert cli_mod._startup_banner() == BANNER_UNICODE
 
 
 def test_branch_new_missing_args_shows_help_and_exits_with_code_2() -> None:
@@ -999,7 +1015,6 @@ def test_bump_help_column_alignment_with_color(
 
 
 def test_help_formatter_decolor_strips_ansi_sequences() -> None:
-
     assert cli._strip_ansi(f"{ANSI_PREFIX}31mrrt{ANSI_RESET}") == "rrt"
 
 

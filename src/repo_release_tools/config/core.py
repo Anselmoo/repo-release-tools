@@ -40,6 +40,7 @@ from .model import (
     FolderRule,
     FolderScaffoldFile,
     FolderTemplate,
+    GeneratedAsset,
     MissingRrtConfigError,
     PinTarget,
     RrtConfig,
@@ -635,6 +636,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         "changelog_workflow": raw.get("changelog_workflow", DEFAULT_CHANGELOG_WORKFLOW),
         "lock_command": raw.get("lock_command", _default_lock_command(config_file)),
         "generated_files": raw.get("generated_files", _default_generated_files(config_file)),
+        "generated_assets": raw.get("generated_assets", []),
     }
 
     if raw_groups is None:
@@ -1040,6 +1042,36 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
     return pins
 
 
+def _load_generated_assets(root: Path, raw_assets: object) -> list[GeneratedAsset]:
+    """Parse a list of generated asset tables into ``GeneratedAsset`` objects."""
+    if not isinstance(raw_assets, list):
+        raise ValueError("generated_assets must be an array of tables")
+
+    assets: list[GeneratedAsset] = []
+    for item in raw_assets:
+        if not isinstance(item, dict):
+            raise ValueError("Each generated_assets entry must be a table")
+        typed_item = cast("dict[str, object]", item)
+        raw_path = typed_item.get("path")
+        raw_command = typed_item.get("command")
+
+        if not isinstance(raw_path, str) or not raw_path:
+            raise ValueError("Each generated_assets entry must have a non-empty 'path' string")
+        if not isinstance(raw_command, list) or not all(
+            isinstance(part, str) and part for part in raw_command
+        ):
+            raise ValueError(
+                "Each generated_assets entry must have a non-empty 'command' list of strings",
+            )
+
+        asset = GeneratedAsset(path=Path(raw_path), command=cast("list[str]", raw_command))
+        asset.validate()
+        assets.append(
+            GeneratedAsset(path=root / asset.path, command=asset.command),
+        )
+    return assets
+
+
 def _load_version_group(
     root: Path,
     *,
@@ -1126,6 +1158,9 @@ def _load_version_group(
     else:
         generated_files = cast("list[str]", generated_files_raw)
 
+    generated_assets_raw = raw_group.get("generated_assets", defaults["generated_assets"])
+    generated_assets = _load_generated_assets(root, generated_assets_raw)
+
     raw_version_source = raw_group.get("version_source")
     if raw_version_source is not None and not isinstance(raw_version_source, str):
         raise ValueError("version_source must be a string when provided")
@@ -1142,6 +1177,7 @@ def _load_version_group(
         lock_command=lock_command,
         generated_files=[root / path for path in generated_files],
         version_targets=targets,
+        generated_assets=generated_assets,
         version_source=version_source,
         pin_targets=_load_pin_targets(root, raw_group.get("pin_targets", [])),
         changelog_workflow=changelog_workflow,
@@ -1173,6 +1209,8 @@ __all__ = [
     "FolderRule",
     "FolderScaffoldFile",
     "FolderTemplate",
+    GeneratedAsset,
+    "GeneratedAsset",
     "MissingRrtConfigError",
     "PinTarget",
     "RrtConfig",

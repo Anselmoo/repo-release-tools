@@ -210,6 +210,49 @@ kind = "package_json"
     assert config.generated_files == [tmp_path / "package-lock.json", tmp_path / "pnpm-lock.yaml"]
 
 
+def test_load_config_accepts_generated_assets(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.generated_assets]]
+path = "docs/assets/banner.png"
+command = ["python", "-m", "repo_release_tools.assets.banner", "docs/assets/banner.png", "unicode"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert len(config.generated_assets) == 1
+    assert config.generated_assets[0].path == tmp_path / "docs/assets/banner.png"
+    assert config.generated_assets[0].command[0] == "python"
+
+
+def test_load_config_rejects_invalid_generated_assets(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.generated_assets]]
+path = ""
+command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="generated_assets"):
+        load_config(tmp_path)
+
+
 def test_load_config_supports_grouped_configuration(tmp_path: Path) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\

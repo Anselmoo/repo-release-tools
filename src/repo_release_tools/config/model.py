@@ -281,6 +281,23 @@ class PinTarget:
 
 
 @dataclass(frozen=True)
+class GeneratedAsset:
+    """A generated repository asset refreshed during release bumping."""
+
+    path: Path
+    command: list[str]
+
+    def validate(self) -> None:
+        """Validate generated asset configuration."""
+        if self.path.is_absolute():
+            raise ValueError("generated_assets.path must be a relative path")
+        if any(part == ".." for part in self.path.parts):
+            raise ValueError("generated_assets.path must not escape the repository root")
+        if not self.command or not all(isinstance(part, str) and part for part in self.command):
+            raise ValueError("generated_assets.command must be a non-empty list of strings")
+
+
+@dataclass(frozen=True)
 class VersionGroup:
     """A coordinated release unit inside a repository."""
 
@@ -290,6 +307,7 @@ class VersionGroup:
     lock_command: list[str]
     generated_files: list[Path]
     version_targets: list[VersionTarget]
+    generated_assets: list[GeneratedAsset] = field(default_factory=list)
     version_source: Path | None = None
     pin_targets: list[PinTarget] = field(default_factory=list)
     changelog_workflow: str = DEFAULT_CHANGELOG_WORKFLOW
@@ -609,6 +627,11 @@ class RrtConfig:
     def generated_files(self) -> list[Path]:
         """Backward-compatible access to the default group's generated files."""
         return self.resolve_group().generated_files
+
+    @property
+    def generated_assets(self) -> list[GeneratedAsset]:
+        """Backward-compatible access to the default group's generated assets."""
+        return self.resolve_group().generated_assets
 
     @property
     def version_targets(self) -> list[VersionTarget]:
