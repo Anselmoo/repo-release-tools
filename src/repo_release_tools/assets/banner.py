@@ -485,27 +485,35 @@ def _compose_crt_monitor(
 
     if fixed_size is None:
         work_w = content_img.width + (144 * scale)
-        work_h = content_img.height + (168 * scale)
+        # Taller canvas to accommodate the monitor, PC case, and keyboard.
+        work_h = content_img.height + (320 * scale)
     else:
         work_w, work_h = fixed_size[0] * scale, fixed_size[1] * scale
 
-    card = Image.new("RGBA", (work_w, work_h), card_bg)
+    card: Image.Image = Image.new("RGBA", (work_w, work_h), card_bg)
     draw = ImageDraw.Draw(card)
 
     outer_margin = 28 * scale
     inner_margin = 60 * scale
-    footer_height = 46 * scale
+    # Monitor bezel takes most of the upper area
+    monitor_h = (content_img.height + 120 * scale) if fixed_size is None else (work_h * 0.65)
     corner_r = 14 * scale
 
+    # 1. MONITOR BEZEL
     draw.rounded_rectangle(
-        (outer_margin, outer_margin, work_w - outer_margin, work_h - outer_margin),
+        (outer_margin, outer_margin, work_w - outer_margin, outer_margin + monitor_h),
         radius=corner_r,
         fill=bezel_outer,
         outline=(102, 85, 64, 255),
         width=4 * scale,
     )
     draw.rounded_rectangle(
-        (inner_margin, inner_margin, work_w - inner_margin, work_h - inner_margin),
+        (
+            inner_margin,
+            inner_margin,
+            work_w - inner_margin,
+            inner_margin + (monitor_h - (inner_margin - outer_margin) * 2),
+        ),
         radius=10 * scale,
         fill=bezel_inner,
         outline=(132, 108, 78, 255),
@@ -515,7 +523,7 @@ def _compose_crt_monitor(
     screen_left = inner_margin + 18 * scale
     screen_top = inner_margin + 18 * scale
     screen_right = work_w - inner_margin - 18 * scale
-    screen_bottom = work_h - inner_margin - footer_height
+    screen_bottom = inner_margin + (monitor_h - (inner_margin - outer_margin) * 2) - 36 * scale
 
     draw.rectangle(
         (screen_left, screen_top, screen_right, screen_bottom),
@@ -536,59 +544,161 @@ def _compose_crt_monitor(
     y = screen_top + 10 * scale
     card.paste(crop, (x, y), crop)
 
+    # 2. PC CASE (Desktop Unit)
+    case_top = outer_margin + monitor_h + 10 * scale
+    case_h = 70 * scale
+    draw.rounded_rectangle(
+        (outer_margin, case_top, work_w - outer_margin, case_top + case_h),
+        radius=6 * scale,
+        fill=bezel_outer,
+        outline=(102, 85, 64, 255),
+        width=3 * scale,
+    )
+
+    # Floppy Drive Slot (Left & Wider)
+    floppy_w, floppy_h = 220 * scale, 18 * scale
+    floppy_x = outer_margin + 20 * scale
+    floppy_y = case_top + (case_h - floppy_h) // 2
     draw.rectangle(
-        (
-            screen_left + 2 * scale,
-            screen_top + 2 * scale,
-            screen_right - 2 * scale,
-            screen_bottom - 2 * scale,
-        ),
-        outline=screen_glow,
+        (floppy_x, floppy_y, floppy_x + floppy_w, floppy_y + floppy_h),
+        fill=screen_bg,
+        outline=screen_outline,
         width=2 * scale,
     )
-    for yline in range(screen_top + 2 * scale, screen_bottom, 4 * scale):
-        draw.line(
-            (screen_left + 2 * scale, yline, screen_right - 2 * scale, yline),
-            fill=(0, 0, 0, 28),
-            width=1,
+    # Floppy Button & LED
+    btn_size = 12 * scale
+    draw.rectangle(
+        (
+            floppy_x + floppy_w + 6 * scale,
+            floppy_y + (floppy_h - btn_size) // 2,
+            floppy_x + floppy_w + 6 * scale + btn_size,
+            floppy_y + (floppy_h + btn_size) // 2,
+        ),
+        fill=bezel_inner,
+        outline=screen_outline,
+        width=1 * scale,
+    )
+    led_size = 6 * scale
+    draw.ellipse(
+        (
+            floppy_x + floppy_w - 24 * scale,
+            floppy_y + floppy_h + 4 * scale,
+            floppy_x + floppy_w - 24 * scale + led_size,
+            floppy_y + floppy_h + 4 * scale + led_size,
+        ),
+        fill=screen_glow,
+    )
+
+    # Cooling Slots (Middle)
+    slot_w = 180 * scale
+    slot_x = (work_w - slot_w) // 2
+    for v in range(5):
+        vy = case_top + 15 * scale + (v * 9 * scale)
+        draw.rounded_rectangle(
+            (slot_x, vy, slot_x + slot_w, vy + 4 * scale),
+            radius=2 * scale,
+            fill=bezel_inner,
+            outline=screen_outline,
+            width=1 * scale,
         )
 
-    # Footer control: a single power switch instead of RGB status LEDs.
-    power_box_w = 68 * scale
-    power_box_h = 24 * scale
+    # Power Button for Tower (Right)
+    pwr_btn_size = 24 * scale
+    pwr_x = work_w - outer_margin - pwr_btn_size - 30 * scale
+    pwr_y = case_top + (case_h - pwr_btn_size) // 2
+    draw.rounded_rectangle(
+        (pwr_x, pwr_y, pwr_x + pwr_btn_size, pwr_y + pwr_btn_size),
+        radius=4 * scale,
+        fill=bezel_inner,
+        outline=screen_outline,
+        width=1 * scale,
+    )
+    # Tower Power LED (Glow)
+    led_r = 4 * scale
+    draw.ellipse(
+        (
+            pwr_x + pwr_btn_size // 2 - led_r,
+            pwr_y + pwr_btn_size // 2 - led_r,
+            pwr_x + pwr_btn_size // 2 + led_r,
+            pwr_y + pwr_btn_size // 2 + led_r,
+        ),
+        fill=screen_glow,
+    )
+
+    # 3. KEYBOARD
+    kbd_top = case_top + case_h + 10 * scale
+    kbd_h = 80 * scale
+    # Full width tapered keyboard look
+    kbd_points = [
+        (0, kbd_top + kbd_h),  # Bottom Left
+        (work_w, kbd_top + kbd_h),  # Bottom Right
+        (work_w - outer_margin, kbd_top),  # Top Right
+        (outer_margin, kbd_top),  # Top Left
+    ]
+    draw.polygon(kbd_points, fill=bezel_outer, outline=(102, 85, 64, 255))
+
+    # Realistic Keyboard Layout (5 Rows)
+    # Row 1: Function/Numbers (15 keys)
+    # Row 2: QWERTY (14 keys, Tab/Backslash wider)
+    # Row 3: ASDF (13 keys, Caps/Enter wider)
+    # Row 4: ZXCV (12 keys, Shifts wider)
+    # Row 5: Spacebar Row (7 keys: Ctrl, Alt, Space, Alt, Ctrl...)
+
+    key_h = 8 * scale
+    key_gap = 4 * scale
+
+    row_layouts = [
+        [1.0] * 15,  # Row 0
+        [1.5] + [1.0] * 12 + [1.5],  # Row 1
+        [1.8] + [1.0] * 11 + [2.2],  # Row 2
+        [2.4] + [1.0] * 10 + [2.6],  # Row 3
+        [1.5, 1.2, 7.0, 1.2, 1.5],  # Row 4 (Spacebar row)
+    ]
+
+    for row_idx, layout in enumerate(row_layouts):
+        row_y = kbd_top + 10 * scale + row_idx * (key_h + key_gap)
+
+        # Taper calculation for centering
+        t = (row_y - kbd_top) / kbd_h
+        row_margin = outer_margin * (1 - t)
+        row_width = work_w - (row_margin * 2)
+
+        # Calculate total units in this row to scale keys to fit
+        total_units = sum(layout)
+        unit_w = (row_width - (len(layout) + 1) * key_gap) / total_units
+
+        current_x = row_margin + key_gap
+        for key_unit in layout:
+            kw = unit_w * key_unit
+            draw.rounded_rectangle(
+                (current_x, row_y, current_x + kw, row_y + key_h),
+                radius=2 * scale,
+                fill=bezel_inner,
+                outline=screen_outline,
+                width=1 * scale,
+            )
+            current_x += kw + key_gap
+
+    # Power Switch on Monitor
+    power_box_w = 40 * scale
+    power_box_h = 16 * scale
     power_x2 = work_w - inner_margin - 18 * scale
     power_x1 = power_x2 - power_box_w
-    power_y1 = work_h - inner_margin - footer_height + (footer_height - power_box_h) // 2
+    power_y1 = outer_margin + monitor_h - 32 * scale
     power_y2 = power_y1 + power_box_h
 
     draw.rounded_rectangle(
         (power_x1, power_y1, power_x2, power_y2),
-        radius=5 * scale,
+        radius=4 * scale,
         fill=bezel_outer,
         outline=screen_outline,
-        width=2 * scale,
+        width=1 * scale,
     )
 
-    # Classic power glyph: ring with centered top gap + centered vertical stroke.
     cx = (power_x1 + power_x2) // 2
     cy = (power_y1 + power_y2) // 2
-    r = 6 * scale
-    ring_w = 2 * scale
-    draw.ellipse(
-        (cx - r, cy - r, cx + r, cy + r),
-        outline=screen_glow,
-        width=ring_w,
-    )
-    gap = 2 * scale
-    draw.rectangle(
-        (cx - gap, cy - r - ring_w, cx + gap, cy - r + 2 * scale),
-        fill=bezel_outer,
-    )
-    draw.line(
-        (cx, cy - r - 1 * scale, cx, cy - 1 * scale),
-        fill=screen_glow,
-        width=2 * scale,
-    )
+    r = 4 * scale
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=screen_glow, width=1 * scale)
 
     if scale > 1:
         resample_filter = getattr(getattr(Image, "Resampling", Image), "LANCZOS")
@@ -629,10 +739,10 @@ def export_social_card_png(
     banner_str: str,
     output_path: str | Path,
     *,
-    font_size: int = 14,
+    font_size: int = 15,
     bg: tuple[int, int, int, int] = _SOCIAL_CARD_EXPORT[1],
     fg: tuple[int, int, int] = _SOCIAL_CARD_EXPORT[2],
-    padding: int = 24,
+    padding: int = 0,
     card_size: tuple[int, int] = _SOCIAL_CARD_SIZE,
 ) -> None:
     """Render a banner string into a 1280×640 social card.
