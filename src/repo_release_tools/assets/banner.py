@@ -496,8 +496,10 @@ def _compose_crt_monitor(
     outer_margin = 28 * scale
     inner_margin = 60 * scale
     # Monitor bezel takes most of the upper area
-    monitor_h = int(
-        content_img.height + 120 * scale if fixed_size is None else round(work_h * 0.65)
+    monitor_h = (
+        int(round(content_img.height + 120 * scale))
+        if fixed_size is None
+        else int(round(work_h * 0.65))
     )
     corner_r = 14 * scale
 

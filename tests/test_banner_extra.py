@@ -127,14 +127,11 @@ def test_compose_crt_monitor_uses_integer_rounded_rectangle_coords(
     recorded_boxes: list[tuple[float, ...]] = []
 
     def _capture_rounded_rectangle(
-        self: ImageDraw.ImageDraw,
+        _self: ImageDraw.ImageDraw,
         xy: tuple[float, float, float, float],
-        *args: object,
-        **kwargs: object,
+        *_args: object,
+        **_kwargs: object,
     ) -> None:
-        _ = self
-        _ = args
-        _ = kwargs
         recorded_boxes.append(tuple(xy))
 
     monkeypatch.setattr(ImageDraw.ImageDraw, "rounded_rectangle", _capture_rounded_rectangle)
