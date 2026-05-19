@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [1.6.1] - 2026-05-19
+
+### Added
+- update and replace banner assets
+
+### Documentation
+- update ascii art (#68)
+
 ## [1.6.0] - 2026-05-18
 
 ### Added
