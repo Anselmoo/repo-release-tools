@@ -200,6 +200,20 @@ def test_main_writes_light_banner(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert out.exists()
 
 
+def test_main_writes_social_card(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    out = tmp_path / "social-card.png"
+    monkeypatch.setattr(sys, "argv", ["banner", str(out), "social"])
+    from PIL import Image
+
+    from repo_release_tools.assets.banner import _main
+
+    _main()
+
+    assert out.exists()
+    with Image.open(out) as img:
+        assert img.size == (1280, 640)
+
+
 def test_main_default_args(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "argv", ["banner"])
     monkeypatch.chdir(tmp_path)
@@ -209,3 +223,4 @@ def test_main_default_args(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert (tmp_path / "docs" / "assets" / "banner.png").exists()
     assert (tmp_path / "docs" / "assets" / "banner-light.png").exists()
     assert (tmp_path / "docs" / "assets" / "banner-windows.png").exists()
+    assert (tmp_path / "docs" / "assets" / "social-card.png").exists()

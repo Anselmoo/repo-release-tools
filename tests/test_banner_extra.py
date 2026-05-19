@@ -99,3 +99,18 @@ def test_export_banner_png_env_font_oserror_falls_back(
     assert truetype_mock.call_args_list[0].args[0] == "/bad/font.ttf"
     assert truetype_mock.call_args_list[1].args[0] == "good-candidate"
     assert out.exists()
+
+
+def test_compose_crt_monitor_scale_gt_one_resizes_output() -> None:
+    from PIL import Image
+
+    import repo_release_tools.assets.banner as bmod
+
+    content = Image.new("RGBA", (900, 520), (0, 0, 0, 0))
+
+    out_scale_1 = bmod._compose_crt_monitor(content, theme="dark", fixed_size=None, scale=1)
+    out_scale_2 = bmod._compose_crt_monitor(content, theme="dark", fixed_size=None, scale=2)
+
+    # scale=2 path downsamples before returning; output should be smaller.
+    assert out_scale_2.size[0] < out_scale_1.size[0]
+    assert out_scale_2.size[1] < out_scale_1.size[1]
