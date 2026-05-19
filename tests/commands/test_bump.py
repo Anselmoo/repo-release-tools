@@ -601,7 +601,7 @@ def test_cmd_bump_runs_generated_asset_commands_and_stages_outputs(
 lock_command = []
 
 [[tool.rrt.generated_assets]]
-path = "docs/assets/banner.png"
+path = "docs/assets/banner-dark.png"
 command = ["generate", "banner"]
 
 [[tool.rrt.generated_assets]]
@@ -646,8 +646,8 @@ kind = "package_json"
                 out = tmp_path / "docs" / "assets" / "banner-windows.png"
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_text("windows", encoding="utf-8")
-            if "banner.png" in label and "windows" not in label:
-                out = tmp_path / "docs" / "assets" / "banner.png"
+            if "banner-dark.png" in label and "windows" not in label:
+                out = tmp_path / "docs" / "assets" / "banner-dark.png"
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_text("unicode", encoding="utf-8")
         return ""
@@ -673,7 +673,7 @@ kind = "package_json"
     assert ["generate", "banner"] in calls
     assert ["generate", "banner-windows"] in calls
     assert add_calls
-    assert "docs/assets/banner.png" in add_calls[-1]
+    assert "docs/assets/banner-dark.png" in add_calls[-1]
     assert "docs/assets/banner-windows.png" in add_calls[-1]
 
 
@@ -688,7 +688,7 @@ def test_cmd_bump_generated_asset_failure_policy(
 lock_command = []
 
 [[tool.rrt.generated_assets]]
-path = "docs/assets/banner.png"
+path = "docs/assets/banner-dark.png"
 command = ["generate", "banner"]
 
 [[tool.rrt.version_targets]]
@@ -773,7 +773,7 @@ def test_cmd_bump_generated_asset_missing_output_policy(
 lock_command = []
 
 [[tool.rrt.generated_assets]]
-path = "docs/assets/banner.png"
+path = "docs/assets/banner-dark.png"
 command = ["generate", "banner"]
 
 [[tool.rrt.version_targets]]

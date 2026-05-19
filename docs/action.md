@@ -19,7 +19,7 @@ Use the GitHub Action when you want CI to enforce the same policy that
   with:
     fetch-depth: 0
 
-- uses: Anselmoo/repo-release-tools@v1.6.0
+- uses: Anselmoo/repo-release-tools@v1.6.1
   with:
     check-branch-name: "true"
     check-commit-subject: "true"
@@ -75,7 +75,7 @@ hooks with CI `changelog-strategy: "unreleased"`.
 ### Default CI setup
 
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.6.0
+- uses: Anselmoo/repo-release-tools@v1.6.1
   with:
     check-changelog: "true"
     changelog-strategy: "auto"
@@ -84,7 +84,7 @@ hooks with CI `changelog-strategy: "unreleased"`.
 ### Hook-managed `[Unreleased]` workflow
 
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.6.0
+- uses: Anselmoo/repo-release-tools@v1.6.1
   with:
     check-changelog: "true"
     changelog-strategy: "unreleased"
@@ -93,7 +93,7 @@ hooks with CI `changelog-strategy: "unreleased"`.
 ### Release-time changelog workflow
 
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.6.0
+- uses: Anselmoo/repo-release-tools@v1.6.1
   with:
     check-changelog: "true"
     changelog-strategy: "release-only"

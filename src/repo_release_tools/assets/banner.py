@@ -23,7 +23,7 @@ _BANNER_ROW_WIDTH = 74
 
 _BANNER_EXPORTS: dict[str, tuple[str, tuple[int, int, int]]] = {
     # GitHub dark theme: a bright mint foreground pops against the dark page.
-    "unicode": ("banner.png", (195, 255, 196)),
+    "unicode": ("banner-dark.png", (195, 255, 196)),
     # GitHub light theme: a deeper green keeps the banner readable on white.
     "light": ("banner-light.png", (24, 102, 53)),
     # ASCII fallback stays available as the Windows-friendly export.
@@ -693,7 +693,7 @@ def _main() -> None:
     the GitHub theme pair and the ASCII-fallback (Windows) variant are
     exported side-by-side:
 
-        <out_dir>/banner.png          — Unicode variant (Linux / macOS)
+        <out_dir>/banner-dark.png     — Unicode variant (Linux / macOS)
         <out_dir>/banner-light.png    — light-theme variant (GitHub light mode)
         <out_dir>/banner-windows.png  — ASCII-fallback variant (Windows)
 

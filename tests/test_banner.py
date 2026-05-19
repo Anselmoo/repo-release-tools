@@ -220,7 +220,7 @@ def test_main_default_args(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     from repo_release_tools.assets.banner import _main
 
     _main()
-    assert (tmp_path / "docs" / "assets" / "banner.png").exists()
+    assert (tmp_path / "docs" / "assets" / "banner-dark.png").exists()
     assert (tmp_path / "docs" / "assets" / "banner-light.png").exists()
     assert (tmp_path / "docs" / "assets" / "banner-windows.png").exists()
     assert (tmp_path / "docs" / "assets" / "social-card.png").exists()
