@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [1.6.2] - 2026-05-20
+
+### Added
+- enhance PNG assets and improve banner rendering in banner.py (#70)
+
 ## [1.6.1] - 2026-05-19
 
 ### Added
