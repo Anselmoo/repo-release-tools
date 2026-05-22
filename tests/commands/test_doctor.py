@@ -259,6 +259,61 @@ def test_doctor_lefthook_surface_detected(
     assert "lefthook.yml includes repo-release-tools hooks" in capsys.readouterr().out
 
 
+def test_doctor_husky_surface_detected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Husky hook script with rrt-hooks is reported as OK."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    husky_dir = tmp_path / ".husky"
+    husky_dir.mkdir()
+    (husky_dir / "pre-commit").write_text("rrt-hooks pre-commit\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert ".husky includes repo-release-tools hooks (pre-commit)" in capsys.readouterr().out
+
+
+def test_doctor_husky_surface_missing_markers_warns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Husky hook script without rrt markers warns but does not fail doctor."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    husky_dir = tmp_path / ".husky"
+    husky_dir.mkdir()
+    (husky_dir / "pre-commit").write_text("npm test\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert "no repo-release-tools hooks were detected" in capsys.readouterr().out
+
+
+def test_doctor_husky_dir_without_hook_scripts_warns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Husky directory without top-level hook scripts warns but does not fail doctor."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    (tmp_path / ".husky" / "_").mkdir(parents=True)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert ".husky contains no hook scripts" in capsys.readouterr().out
+
+
 def test_doctor_github_actions_surface_detected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

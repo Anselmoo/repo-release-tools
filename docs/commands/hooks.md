@@ -265,7 +265,7 @@ rrt-hooks commit-msg "$1"
 
 ```bash
 # .husky/pre-push  (optional — add when you want an unreleased guard)
-rrt-hooks check-changelog --strategy unreleased
+rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
 ```
 
 ### Squash workflow example
@@ -287,7 +287,7 @@ rrt-hooks commit-msg "$1"
 | Auto-write changelog | `rrt-update-unreleased` (commit-msg) | `rrt-update-unreleased --message-file {1}` | `rrt-hooks update-unreleased --message-file "$1"` |
 | Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` | `rrt-hooks commit-msg "$1"` |
 | Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-hooks pre-commit` | `rrt-hooks pre-commit` |
-| Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --strategy unreleased` | `rrt-hooks check-changelog --strategy unreleased` |
+| Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased` | `rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased` |
 
 <!-- rrt:auto:start:doc-footer -->
 ---

@@ -1397,14 +1397,59 @@ pre-commit:
       run: rrt-hooks pre-commit
 ```
 
-### Comparison: pre-commit vs. lefthook
+---
 
-| Policy | pre-commit | lefthook |
-|---|---|---|
-| Auto-write changelog | `rrt-update-unreleased` (commit-msg) | `rrt-update-unreleased --message-file {1}` |
-| Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` |
-| Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-hooks pre-commit` |
-| Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --strategy unreleased` |
+## Husky setup
+
+[Husky](https://github.com/typicode/husky) v9 runs shell scripts from `.husky/`
+and works with any installed CLI, including `rrt-hooks`.
+
+Install `repo-release-tools` so `rrt-hooks` is on `PATH`, then initialise Husky
+once and add the script files that match your workflow:
+
+```bash
+pip install repo-release-tools   # or: uv pip install repo-release-tools
+npx husky init
+```
+
+### Incremental workflow example
+
+```bash
+# .husky/pre-commit
+rrt-hooks pre-commit
+```
+
+```bash
+# .husky/commit-msg
+rrt-hooks update-unreleased --message-file "$1"
+rrt-hooks commit-msg "$1"
+```
+
+```bash
+# .husky/pre-push  (optional — add when you want an unreleased guard)
+rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
+```
+
+### Squash workflow example
+
+```bash
+# .husky/pre-commit
+rrt-hooks pre-commit
+```
+
+```bash
+# .husky/commit-msg
+rrt-hooks commit-msg "$1"
+```
+
+### Comparison: pre-commit · lefthook · husky
+
+| Policy | pre-commit | lefthook | husky |
+|---|---|---|---|
+| Auto-write changelog | `rrt-update-unreleased` (commit-msg) | `rrt-update-unreleased --message-file {1}` | `rrt-hooks update-unreleased --message-file "$1"` |
+| Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` | `rrt-hooks commit-msg "$1"` |
+| Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-hooks pre-commit` | `rrt-hooks pre-commit` |
+| Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased` | `rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased` |
 """
 
 AGENT_INSTRUCTIONS_DOC = """# Hook & Action Reference

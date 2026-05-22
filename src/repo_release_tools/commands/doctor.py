@@ -14,6 +14,7 @@ basics are wired correctly:
 
 - `.pre-commit-config.yaml` when present
 - `lefthook.yml` when present
+- `.husky/*` hook scripts when present
 - `.github/workflows/*.yml` / `.yaml` when present
 
 The checks are intentionally light-touch: they verify presence, readability,
@@ -61,7 +62,7 @@ rrt doctor
 - [Runtime EOL tracking](eol.md)
 - [rrt eol (CLI)](rrt-cli.md)
 - [rrt release check](rrt-cli.md)
-- [pre-commit / lefthook](hooks.md)
+- [pre-commit / lefthook / husky](hooks.md)
 - [GitHub Action](action.md)
 """
 
@@ -162,6 +163,41 @@ def _check_github_workflows(root: Path) -> tuple[str, bool, str]:
     )
 
 
+def _check_husky(root: Path) -> tuple[str, bool, str]:
+    """Inspect Husky hook scripts for repo-release-tools usage."""
+    husky_dir = root / ".husky"
+    if not husky_dir.exists():
+        return ".husky not configured", True, "warning"
+
+    try:
+        hook_files = sorted(
+            path
+            for path in husky_dir.iterdir()
+            if path.is_file() and not path.name.startswith((".", "_"))
+        )
+    except OSError as exc:
+        return f".husky unreadable: {exc}", False, "error"
+
+    if not hook_files:
+        return ".husky contains no hook scripts", True, "warning"
+
+    markers = ("rrt-hooks", "repo-release-tools")
+    matching: list[str] = []
+    for hook_file in hook_files:
+        try:
+            text = _read_text(hook_file)
+        except OSError as exc:
+            return f"{hook_file.relative_to(root)} unreadable: {exc}", False, "error"
+        if any(marker in text for marker in markers):
+            matching.append(hook_file.name)
+
+    if matching:
+        hooks = ", ".join(matching)
+        return f".husky includes repo-release-tools hooks ({hooks})", True, "ok"
+
+    return ".husky exists but no repo-release-tools hooks were detected", True, "warning"
+
+
 def _fix_missing_unreleased(root: Path, config: object, *, dry_run: bool) -> list[str]:
     """Add a missing [Unreleased] section to each group's changelog.
 
@@ -257,6 +293,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             success_message="lefthook.yml includes repo-release-tools hooks",
             warning_message="lefthook.yml exists but no repo-release-tools hooks were detected",
         ),
+        _check_husky(root),
         _check_github_workflows(root),
     ]
 

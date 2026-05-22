@@ -25,6 +25,7 @@ basics are wired correctly:
 
 - `.pre-commit-config.yaml` when present
 - `lefthook.yml` when present
+- `.husky/*` hook scripts when present
 - `.github/workflows/*.yml` / `.yaml` when present
 
 The checks are intentionally light-touch: they verify presence, readability,
@@ -72,7 +73,7 @@ rrt doctor
 - [Runtime EOL tracking](eol.md)
 - [rrt eol (CLI)](rrt-cli.md)
 - [rrt release check](rrt-cli.md)
-- [pre-commit / lefthook](hooks.md)
+- [pre-commit / lefthook / husky](hooks.md)
 - [GitHub Action](action.md)
 
 <!-- rrt:auto:start:doc-footer -->
