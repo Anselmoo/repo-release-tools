@@ -242,10 +242,11 @@ pre-commit:
 [Husky](https://github.com/typicode/husky) v9 runs shell scripts from `.husky/`
 and works with any installed CLI, including `rrt-hooks`.
 
-Install `repo-release-tools` so `rrt-hooks` is on `PATH`, initialise Husky once,
-then add the script files that match your workflow:
+Install `repo-release-tools` so `rrt-hooks` is on `PATH`, then initialise Husky
+once and add the script files that match your workflow:
 
 ```bash
+pip install repo-release-tools   # or: uv pip install repo-release-tools
 npx husky init
 ```
 
@@ -264,7 +265,7 @@ rrt-hooks commit-msg "$1"
 
 ```bash
 # .husky/pre-push  (optional — add when you want an unreleased guard)
-rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
+rrt-hooks check-changelog --strategy unreleased
 ```
 
 ### Squash workflow example
