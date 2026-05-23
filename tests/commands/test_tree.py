@@ -992,10 +992,7 @@ def test_canonical_entry_repr_stable_across_formats(tmp_path: Path) -> None:
     hash_classic = lock_classic["snapshot"]["tree_hash"]
 
     tree.cmd_tree(_args(root=str(tmp_path), snapshot=True, format="ascii"))
-    lock_ascii = _tomllib.loads(
-        (tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8")
-    )
+    lock_ascii = _tomllib.loads((tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8"))
     hash_ascii = lock_ascii["snapshot"]["tree_hash"]
 
     assert hash_classic == hash_ascii
-
