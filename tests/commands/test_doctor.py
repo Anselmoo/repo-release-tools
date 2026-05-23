@@ -259,6 +259,106 @@ def test_doctor_lefthook_surface_detected(
     assert "lefthook.yml includes repo-release-tools hooks" in capsys.readouterr().out
 
 
+def test_doctor_husky_surface_detected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Husky hook script with rrt-hooks is reported as OK."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    husky_dir = tmp_path / ".husky"
+    husky_dir.mkdir()
+    (husky_dir / "pre-commit").write_text("rrt-hooks pre-commit\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert ".husky includes repo-release-tools hooks (pre-commit)" in capsys.readouterr().out
+
+
+def test_doctor_husky_surface_missing_markers_warns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Husky hook script without rrt markers warns but does not fail doctor."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    husky_dir = tmp_path / ".husky"
+    husky_dir.mkdir()
+    (husky_dir / "pre-commit").write_text("npm test\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert "no repo-release-tools hooks were detected" in capsys.readouterr().out
+
+
+def test_doctor_husky_dir_without_hook_scripts_warns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Husky directory without top-level hook scripts warns but does not fail doctor."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    (tmp_path / ".husky" / "_").mkdir(parents=True)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    assert ".husky contains no hook scripts" in capsys.readouterr().out
+
+
+def test_doctor_husky_dir_unreadable_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """.husky exists as a file (not a directory) so iterdir() raises OSError — doctor fails."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    # Create .husky as a regular file; iterdir() on a file raises NotADirectoryError (OSError)
+    (tmp_path / ".husky").write_text("not a directory\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert ".husky unreadable" in out
+    assert "One or more core automation checks failed" in out
+
+
+def test_doctor_husky_hook_file_unreadable_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A hook file inside .husky that cannot be read causes doctor to fail."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    husky_dir = tmp_path / ".husky"
+    husky_dir.mkdir()
+    (husky_dir / "pre-commit").write_text("rrt-hooks pre-commit\n", encoding="utf-8")
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+    # Patch _read_text so reading any hook file raises OSError
+    monkeypatch.setattr(
+        doctor, "_read_text", lambda _path: (_ for _ in ()).throw(OSError("permission denied"))
+    )
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "pre-commit unreadable" in out
+    assert "One or more core automation checks failed" in out
+
+
 def test_doctor_github_actions_surface_detected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

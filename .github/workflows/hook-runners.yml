@@ -1,0 +1,355 @@
+name: Hook Runners
+
+on:
+  push:
+    branches:
+      - main
+      - feat/**
+      - fix/**
+      - chore/**
+      - docs/**
+      - refactor/**
+      - test/**
+      - ci/**
+      - perf/**
+      - style/**
+      - build/**
+      - copilot/**
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hook-runners-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    name: pre-commit hook runner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install repo-release-tools from source
+        run: uv pip install --system -e .
+
+      - name: Set up test git repo
+        run: |
+          mkdir /tmp/rrt-precommit-test
+          cd /tmp/rrt-precommit-test
+          git init -b feat/test-branch
+          git config user.name "RRT CI"
+          git config user.email "rrt@example.invalid"
+          git config commit.gpgsign false
+          cat > pyproject.toml << 'EOF'
+          [build-system]
+          requires = ["setuptools"]
+          build-backend = "setuptools.backends.legacy:build"
+
+          [project]
+          name = "test-project"
+          version = "0.1.0"
+          EOF
+          cat > CHANGELOG.md << 'EOF'
+          # Changelog
+
+          ## [Unreleased]
+          EOF
+          git add .
+          git commit -m "chore: initial commit"
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Create pre-commit config (local repo hooks)
+        run: |
+          cat > /tmp/rrt-precommit-test/.pre-commit-config.yaml << EOF
+          repos:
+            - repo: $GITHUB_WORKSPACE
+              rev: ""
+              hooks:
+                - id: rrt-branch-name
+          EOF
+
+      - name: Verify rrt-branch-name hook passes on valid branch
+        working-directory: /tmp/rrt-precommit-test
+        run: |
+          # feat/test-branch is a valid conventional branch name — hook must pass
+          pre-commit run rrt-branch-name --all-files
+
+      - name: Verify rrt-hooks pre-commit passes on valid branch
+        working-directory: /tmp/rrt-precommit-test
+        run: rrt-hooks pre-commit
+
+      - name: Verify rrt-hooks pre-commit fails on invalid branch
+        working-directory: /tmp/rrt-precommit-test
+        run: |
+          git checkout -b invalid-branch-name 2>/dev/null || true
+          if rrt-hooks pre-commit; then
+            echo "ERROR: hook should have rejected 'invalid-branch-name'" >&2
+            exit 1
+          else
+            echo "OK: hook correctly rejected 'invalid-branch-name'"
+          fi
+
+      - name: Verify rrt-hooks commit-msg validates subjects
+        run: |
+          echo "feat: add something useful" > /tmp/commit_msg_valid.txt
+          rrt-hooks commit-msg /tmp/commit_msg_valid.txt
+
+          echo "bad commit message without type" > /tmp/commit_msg_bad.txt
+          if rrt-hooks commit-msg /tmp/commit_msg_bad.txt; then
+            echo "ERROR: hook should have rejected bad commit message" >&2
+            exit 1
+          else
+            echo "OK: hook correctly rejected bad commit message"
+          fi
+
+      - name: Verify rrt-hooks update-unreleased writes changelog entry
+        working-directory: /tmp/rrt-precommit-test
+        run: |
+          echo "feat: add a new feature" > /tmp/commit_msg_feat.txt
+          rrt-hooks update-unreleased --message-file /tmp/commit_msg_feat.txt
+          grep -q "add a new feature" CHANGELOG.md || {
+            echo "ERROR: changelog entry not written" >&2
+            cat CHANGELOG.md
+            exit 1
+          }
+          echo "OK: changelog updated correctly"
+
+  lefthook:
+    name: lefthook hook runner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install repo-release-tools from source
+        run: uv pip install --system -e .
+
+      - name: Install lefthook
+        run: npm install -g @evilmartians/lefthook
+
+      - name: Set up test git repo with lefthook config
+        run: |
+          mkdir /tmp/rrt-lefthook-test
+          cd /tmp/rrt-lefthook-test
+          git init -b feat/test-branch
+          git config user.name "RRT CI"
+          git config user.email "rrt@example.invalid"
+          git config commit.gpgsign false
+          cat > pyproject.toml << 'EOF'
+          [build-system]
+          requires = ["setuptools"]
+          build-backend = "setuptools.backends.legacy:build"
+
+          [project]
+          name = "test-project"
+          version = "0.1.0"
+          EOF
+          cat > CHANGELOG.md << 'EOF'
+          # Changelog
+
+          ## [Unreleased]
+          EOF
+          cat > lefthook.yml << 'EOF'
+          pre-commit:
+            skip_no_files: false
+            commands:
+              branch-name:
+                run: rrt-hooks pre-commit
+          commit-msg:
+            commands:
+              validate-subject:
+                run: rrt-hooks commit-msg {1}
+              update-unreleased:
+                run: rrt-hooks update-unreleased --message-file {1}
+          EOF
+          git add .
+          git commit -m "chore: initial commit"
+
+      - name: Install lefthook hooks
+        working-directory: /tmp/rrt-lefthook-test
+        run: lefthook install
+
+      - name: Verify lefthook pre-commit run passes on valid branch
+        working-directory: /tmp/rrt-lefthook-test
+        run: |
+          # Ensure lefthook has staged input so command execution is not skipped.
+          echo "trigger valid branch check" > .lefthook-trigger
+          git add .lefthook-trigger
+          lefthook run pre-commit
+
+      - name: Verify lefthook pre-commit run fails on invalid branch
+        working-directory: /tmp/rrt-lefthook-test
+        run: |
+          git checkout -b invalid-branch-name 2>/dev/null || true
+          # Stage a file so pre-commit commands are executed instead of skipped.
+          echo "trigger invalid branch check" > .lefthook-trigger
+          git add .lefthook-trigger
+          if lefthook run pre-commit; then
+            echo "ERROR: lefthook pre-commit should have rejected 'invalid-branch-name'" >&2
+            exit 1
+          else
+            echo "OK: lefthook pre-commit correctly rejected 'invalid-branch-name'"
+          fi
+
+  husky:
+    name: husky hook runner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install repo-release-tools from source
+        run: uv pip install --system -e .
+
+      - name: Set up test git repo
+        run: |
+          mkdir /tmp/rrt-husky-test
+          cd /tmp/rrt-husky-test
+          git init -b feat/test-branch
+          git config user.name "RRT CI"
+          git config user.email "rrt@example.invalid"
+          git config commit.gpgsign false
+          cat > pyproject.toml << 'EOF'
+          [build-system]
+          requires = ["setuptools"]
+          build-backend = "setuptools.backends.legacy:build"
+
+          [project]
+          name = "test-project"
+          version = "0.1.0"
+          EOF
+          cat > CHANGELOG.md << 'EOF'
+          # Changelog
+
+          ## [Unreleased]
+          EOF
+          cat > package.json << 'EOF'
+          {
+            "name": "test-project",
+            "version": "0.1.0",
+            "scripts": {
+              "prepare": "husky"
+            }
+          }
+          EOF
+          git add .
+          git commit -m "chore: initial commit"
+
+      - name: Install husky
+        working-directory: /tmp/rrt-husky-test
+        run: npm install --save-dev husky
+
+      - name: Initialise husky
+        working-directory: /tmp/rrt-husky-test
+        run: npx husky init
+
+      - name: Create .husky/pre-commit hook
+        working-directory: /tmp/rrt-husky-test
+        run: |
+          cat > .husky/pre-commit << 'EOF'
+          #!/usr/bin/env sh
+          rrt-hooks pre-commit
+          EOF
+          chmod +x .husky/pre-commit
+
+      - name: Create .husky/commit-msg hook
+        working-directory: /tmp/rrt-husky-test
+        run: |
+          cat > .husky/commit-msg << 'EOF'
+          #!/usr/bin/env sh
+          rrt-hooks update-unreleased --message-file "$1"
+          rrt-hooks commit-msg "$1"
+          EOF
+          chmod +x .husky/commit-msg
+
+      - name: Point git hooks path to .husky
+        working-directory: /tmp/rrt-husky-test
+        run: git config core.hooksPath .husky
+
+      - name: Verify pre-commit hook passes on valid branch (feat/test-branch)
+        working-directory: /tmp/rrt-husky-test
+        run: |
+          # Run the hook script directly — simulates what git does
+          sh .husky/pre-commit
+
+      - name: Verify pre-commit hook fails on invalid branch
+        working-directory: /tmp/rrt-husky-test
+        run: |
+          git checkout -b invalid-branch-name 2>/dev/null || true
+          if sh .husky/pre-commit; then
+            echo "ERROR: hook should have rejected 'invalid-branch-name'" >&2
+            exit 1
+          else
+            echo "OK: hook correctly rejected 'invalid-branch-name'"
+          fi
+
+      - name: Verify commit-msg hook writes changelog and validates subject
+        working-directory: /tmp/rrt-husky-test
+        run: |
+          git checkout feat/test-branch
+          echo "feat: integrate husky with rrt" > /tmp/husky_commit_msg.txt
+          sh .husky/commit-msg /tmp/husky_commit_msg.txt
+          grep -q "integrate husky with rrt" CHANGELOG.md || {
+            echo "ERROR: changelog entry not written by commit-msg hook" >&2
+            cat CHANGELOG.md
+            exit 1
+          }
+          echo "OK: commit-msg hook wrote changelog entry"
+
+      - name: Verify commit-msg hook rejects bad subject
+        working-directory: /tmp/rrt-husky-test
+        run: |
+          echo "bad message without conventional commit type" > /tmp/husky_bad_msg.txt
+          if sh .husky/commit-msg /tmp/husky_bad_msg.txt; then
+            echo "ERROR: commit-msg hook should have rejected bad subject" >&2
+            exit 1
+          else
+            echo "OK: commit-msg hook correctly rejected bad subject"
+          fi

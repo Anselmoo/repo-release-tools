@@ -125,7 +125,7 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 ## What the project includes
 
 - `rrt` CLI for branches, bumps, config inspection, and Git helpers
-- `rrt-hooks` for `pre-commit`, `lefthook`, and CI validation
+- `rrt-hooks` for `pre-commit`, `lefthook`, `husky`, and CI validation
 - a reusable GitHub Action in `action.yml`
 - bundled agent skills for `uvx` and installed-CLI workflows
 - docs for branch policy, hook setup, and release workflows
