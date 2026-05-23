@@ -36,6 +36,10 @@
       root.dataset.theme = theme;
       return;
     }
+    if (theme === "auto") {
+      delete root.dataset.theme;
+      return;
+    }
     delete root.dataset.theme;
   };
 
@@ -81,7 +85,7 @@
       const theme = nextTheme(currentTheme());
       if (theme === "auto") {
         safeStorageRemove();
-        applyTheme(null);
+        applyTheme("auto");
       } else {
         safeStorageWrite(theme);
         applyTheme(theme);
