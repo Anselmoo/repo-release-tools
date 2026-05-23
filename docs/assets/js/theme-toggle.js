@@ -2,8 +2,32 @@
   const STORAGE_KEY = "rrt-docs-theme";
   const root = document.documentElement;
 
+  const safeStorageRead = () => {
+    try {
+      return window.localStorage.getItem(STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  };
+
+  const safeStorageWrite = (theme) => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, theme);
+    } catch {
+      // Best-effort persistence only.
+    }
+  };
+
+  const safeStorageRemove = () => {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Best-effort persistence only.
+    }
+  };
+
   const readStoredTheme = () => {
-    const value = window.localStorage.getItem(STORAGE_KEY);
+    const value = safeStorageRead();
     return value === "light" || value === "dark" ? value : null;
   };
 
@@ -56,10 +80,10 @@
     button.addEventListener("click", () => {
       const theme = nextTheme(currentTheme());
       if (theme === "auto") {
-        window.localStorage.removeItem(STORAGE_KEY);
+        safeStorageRemove();
         applyTheme(null);
       } else {
-        window.localStorage.setItem(STORAGE_KEY, theme);
+        safeStorageWrite(theme);
         applyTheme(theme);
       }
       syncButton();
