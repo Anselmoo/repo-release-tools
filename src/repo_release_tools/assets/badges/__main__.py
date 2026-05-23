@@ -1,7 +1,7 @@
 """Main entry point for badge asset generation."""
 
-import sys
-from pathlib import Path
+import sys  # pragma: no cover
+from pathlib import Path  # pragma: no cover
 
 from repo_release_tools.assets.badges import export_all_badges  # pragma: no cover
 
