@@ -42,6 +42,7 @@ from repo_release_tools.folders import (
     resolve_template_catalog,
     scaffold_folders,
 )
+from repo_release_tools.state import health_lock_path, upsert_health_lock_checks
 from repo_release_tools.ui import DryRunPrinter
 
 FOLDER_EPILOG = (
@@ -73,6 +74,24 @@ def cmd_folder_check(args: argparse.Namespace) -> int:
         template_names=tuple(args.template or ()),
         mode_override="warn" if args.report_only else None,
     )
+
+    if getattr(args, "snapshot", False):
+        check_entries = [
+            {
+                "name": f"folder.{target.rule_name}",
+                "status": "ok" if target.ok else "error",
+                "message": (
+                    f"{target.rule_name}: {target.base_path} — "
+                    f"{len(target.violations)} violation(s)"
+                    if not target.ok
+                    else f"{target.rule_name}: {target.base_path} — ok"
+                ),
+            }
+            for target in report.targets
+        ]
+        upsert_health_lock_checks(health_lock_path(root), check_entries)
+        p_snap = DryRunPrinter(False)
+        p_snap.ok(f"Folder results merged into .rrt/health.lock.toml ({len(check_entries)} checks)")
 
     if getattr(args, "format", "text") == "json":
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
@@ -169,6 +188,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         default=False,
         help="Downgrade violations to warnings for this invocation.",
+    )
+    check_parser.add_argument(
+        "--snapshot",
+        action="store_true",
+        default=False,
+        help="Merge folder check results into .rrt/health.lock.toml after running.",
     )
     check_parser.set_defaults(handler=cmd_folder_check)
 

@@ -615,3 +615,136 @@ def test_doctor_fix_rst_changelog(
     result = changelog.read_text(encoding="utf-8")
     assert "Unreleased" in result
     assert "--------" in result
+
+
+# ---------------------------------------------------------------------------
+# --snapshot / --check / --strict
+# ---------------------------------------------------------------------------
+
+
+def _args_snapshot(
+    *, snapshot: bool = False, check: bool = False, strict: bool = False
+) -> argparse.Namespace:
+    return argparse.Namespace(snapshot=snapshot, check=check, strict=strict)
+
+
+def test_doctor_snapshot_writes_health_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--snapshot writes .rrt/health.lock.toml and exits 0."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_args_snapshot(snapshot=True))
+
+    assert rc == 0
+    lock_path = tmp_path / ".rrt" / "health.lock.toml"
+    assert lock_path.exists()
+    import tomllib
+
+    data = tomllib.loads(lock_path.read_text())
+    assert "meta" in data
+    assert "checks" in data
+    assert "pre_commit" in data["checks"]
+
+
+def test_doctor_check_exits_0_when_no_regression(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--check exits 0 when check statuses match the snapshot."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Write baseline first
+    doctor.cmd_doctor(_args_snapshot(snapshot=True))
+    # Check against the same baseline
+    rc = doctor.cmd_doctor(_args_snapshot(check=True))
+
+    assert rc == 0
+
+
+def test_doctor_check_advisory_exits_0_on_regression(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--check without --strict exits 0 even when regression found."""
+    from repo_release_tools.state import build_health_lock, write_lock
+
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Write a snapshot with all checks as "ok"
+    lock_path = tmp_path / ".rrt" / "health.lock.toml"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    write_lock(
+        lock_path,
+        build_health_lock(
+            [
+                {"name": "pre_commit", "status": "ok"},
+                {"name": "lefthook", "status": "ok"},
+                {"name": "husky", "status": "ok"},
+                {"name": "workflows", "status": "ok"},
+            ]
+        ),
+    )
+
+    rc = doctor.cmd_doctor(_args_snapshot(check=True))
+
+    # Advisory: may detect regressions (missing markers etc.) but exits 0
+    assert rc == 0
+    out = capsys.readouterr().out
+    # Either "no regressions" or advisory warning — both are exit 0
+    assert "regression" in out.lower() or "No health regressions" in out
+
+
+def test_doctor_check_strict_exits_1_on_regression(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--check --strict exits 1 when a regression is detected."""
+    from repo_release_tools.state import build_health_lock, write_lock
+
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    # Write a snapshot where pre_commit was "ok" (better than real state)
+    lock_path = tmp_path / ".rrt" / "health.lock.toml"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    write_lock(
+        lock_path,
+        build_health_lock(
+            [
+                {"name": "pre_commit", "status": "ok"},
+                {"name": "lefthook", "status": "ok"},
+                {"name": "husky", "status": "ok"},
+                {"name": "workflows", "status": "ok"},
+            ]
+        ),
+    )
+
+    # In tmp_path there's no .pre-commit-config.yaml → actual check will be "warning"
+    rc = doctor.cmd_doctor(_args_snapshot(check=True, strict=True))
+
+    # Strict mode: regression found → exit 1
+    assert rc == 1
+
+
+def test_doctor_check_missing_lock_exits_1_strict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--check --strict exits 1 when no health.lock.toml exists (no baseline)."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_args_snapshot(check=True, strict=True))
+
+    assert rc == 1

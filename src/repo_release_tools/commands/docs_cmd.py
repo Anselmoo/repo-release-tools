@@ -60,7 +60,7 @@ Controlled by `[tool.rrt.docs] extraction_mode` in config:
 
 ## Lockfile
 
-`rrt docs generate --format toml` writes `.rrt/docs.lock.toml` (by default),
+`rrt docs generate --format toml` writes `.rrt/docs.lock.toml` (default),
 a human-readable TOML file tracking each source file's SHA-256 hash and the
 symbols it exports.  Use `rrt docs check` or the `rrt-docs-check` pre-commit
 hook to fail fast when docs drift from source.
@@ -70,7 +70,7 @@ hook to fail fast when docs drift from source.
 ```bash
 rrt docs generate --format rich            # colourised terminal preview
 rrt docs generate --format toml --dry-run  # show lock without writing
-rrt docs check                             # exits 1 if lock is stale
+rrt docs check                             # exits 1 if lockfile is stale
 rrt docs api --format json                 # machine-readable API index
 ```
 
@@ -397,6 +397,30 @@ def _expand_platform_vars(
         content = content.replace("{platform_badge}", badge_linked)
         content = content.replace("{platform_badge_inline}", badge_inline)
 
+    # Expand specific variants if requested
+    for variant in [
+        "color",
+        "dark",
+        "light",
+        "reto_dark",
+        "reto_light",
+        "adaptive",
+        "adaptive_reto",
+    ]:
+        var_name = f"{{platform_badge_{variant}}}"
+        actual_variant = variant.replace("_", "-")
+        if var_name in content:
+            badge = render_badge(
+                platform,
+                repo_url=repo_url,
+                badge_style=docs.badge_style,
+                badge_assets_dir=badge_assets_dir,
+                badge_variant=actual_variant,
+                label=label,
+                linked=True,
+            )
+            content = content.replace(var_name, badge)
+
     content = content.replace("{platform}", platform)
     content = content.replace("{platform_label}", label)
     return content
@@ -607,7 +631,11 @@ def _cmd_badges(args: argparse.Namespace) -> int:
     else:
         platforms = [platform_arg]
 
-    variants = ["color", "dark", "light"] if variant_arg is None else [variant_arg]
+    variants = (
+        ["color", "dark", "light", "reto-dark", "reto-light"]
+        if variant_arg is None
+        else [variant_arg]
+    )
 
     p = DryRunPrinter(dry_run=dry_run)
     p.header("rrt docs badges")
@@ -974,8 +1002,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     bdg_p.add_argument(
         "--variant",
         default=None,
-        choices=["color", "dark", "light"],
-        help="Generate only one visual variant (default: all three).",
+        choices=["color", "dark", "light", "reto-dark", "reto-light"],
+        help="Generate only one visual variant (default: all available).",
     )
     bdg_p.set_defaults(handler=cmd_docs)
 

@@ -3118,3 +3118,38 @@ def test_load_pin_target_missing_valid() -> None:
     from repo_release_tools.config.core import _load_pin_target_missing
 
     assert _load_pin_target_missing("warn") == "warn"
+
+
+def test_artifact_target_validate_empty_path() -> None:
+    from repo_release_tools.config.model import ArtifactTarget
+
+    with pytest.raises(ValueError, match="non-empty"):
+        ArtifactTarget(path="").validate()
+
+
+def test_artifact_target_validate_absolute_path() -> None:
+    from repo_release_tools.config.model import ArtifactTarget
+
+    with pytest.raises(ValueError, match="relative"):
+        ArtifactTarget(path="/abs/path/*.svg").validate()
+
+
+def test_load_artifact_targets_not_a_list() -> None:
+    from repo_release_tools.config.core import _load_artifact_targets
+
+    with pytest.raises(ValueError, match="array"):
+        _load_artifact_targets("not-a-list")
+
+
+def test_load_artifact_targets_item_not_dict() -> None:
+    from repo_release_tools.config.core import _load_artifact_targets
+
+    with pytest.raises(ValueError, match="table"):
+        _load_artifact_targets(["not-a-dict"])
+
+
+def test_load_artifact_targets_missing_path() -> None:
+    from repo_release_tools.config.core import _load_artifact_targets
+
+    with pytest.raises(ValueError, match="non-empty 'path'"):
+        _load_artifact_targets([{"description": "no path"}])

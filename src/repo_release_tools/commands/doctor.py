@@ -86,6 +86,12 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
+from repo_release_tools.state import (
+    build_health_lock,
+    health_lock_is_current,
+    health_lock_path,
+    write_lock,
+)
 from repo_release_tools.ui import DryRunPrinter
 
 DOCTOR_EPILOG = "  $ rrt doctor\n  $ rrt release check\n  $ rrt docs check"
@@ -239,6 +245,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     root = Path.cwd()
     fix: bool = getattr(args, "fix", False)
     fix_dry_run: bool = getattr(args, "fix_dry_run", False)
+    do_snapshot: bool = getattr(args, "snapshot", False)
+    do_check: bool = getattr(args, "check", False)
+    strict: bool = getattr(args, "strict", False)
 
     try:
         config = load_or_autodetect_config(root)
@@ -276,30 +285,61 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     p.action(f"Version groups: {group_count} {plural}")
     p.blank_line()
 
-    statuses = [
-        _check_text_integration(
-            root,
-            ".pre-commit-config.yaml",
-            markers=("repo-release-tools", "rrt-"),
-            success_message=".pre-commit-config.yaml includes repo-release-tools hooks",
-            warning_message=(
-                ".pre-commit-config.yaml exists but no repo-release-tools hooks were detected"
+    named_checks: list[tuple[str, tuple[str, bool, str]]] = [
+        (
+            "pre_commit",
+            _check_text_integration(
+                root,
+                ".pre-commit-config.yaml",
+                markers=("repo-release-tools", "rrt-"),
+                success_message=".pre-commit-config.yaml includes repo-release-tools hooks",
+                warning_message=(
+                    ".pre-commit-config.yaml exists but no repo-release-tools hooks were detected"
+                ),
             ),
         ),
-        _check_text_integration(
-            root,
-            "lefthook.yml",
-            markers=("rrt-hooks", "repo-release-tools"),
-            success_message="lefthook.yml includes repo-release-tools hooks",
-            warning_message="lefthook.yml exists but no repo-release-tools hooks were detected",
+        (
+            "lefthook",
+            _check_text_integration(
+                root,
+                "lefthook.yml",
+                markers=("rrt-hooks", "repo-release-tools"),
+                success_message="lefthook.yml includes repo-release-tools hooks",
+                warning_message="lefthook.yml exists but no repo-release-tools hooks were detected",
+            ),
         ),
-        _check_husky(root),
-        _check_github_workflows(root),
+        ("husky", _check_husky(root)),
+        ("workflows", _check_github_workflows(root)),
     ]
+
+    # Structured results for snapshot/check
+    check_results: list[dict[str, str]] = [
+        {"name": name, "status": severity, "message": message}
+        for name, (message, _ok, severity) in named_checks
+    ]
+
+    if do_snapshot:
+        lock_data = build_health_lock(check_results)
+        write_lock(health_lock_path(root), lock_data)
+        p.ok("Health snapshot written to .rrt/health.lock.toml")
+        return 0
+
+    if do_check:
+        current, regressions = health_lock_is_current(health_lock_path(root), check_results)
+        if current:
+            p.ok("No health regressions detected.")
+            return 0
+        for msg in regressions:
+            p.warn(f"  {msg}")
+        if strict:
+            p.line("Health regressions detected (--strict mode).", ok=False)
+            return 1
+        p.warn("Health regressions detected (advisory). Use --strict to block.")
+        return 0
 
     all_ok = True
     p.section("Core automation checks")
-    for message, ok, severity in statuses:
+    for _name, (message, ok, severity) in named_checks:
         if severity == "ok":
             p.line(f"  {message}", ok=True)
         elif severity == "warning":
@@ -367,4 +407,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         default=False,
         help="Preview what --fix would change without writing files.",
+    )
+    snapshot_group = parser.add_mutually_exclusive_group()
+    snapshot_group.add_argument(
+        "--snapshot",
+        action="store_true",
+        default=False,
+        help="Write current health check results to .rrt/health.lock.toml as a baseline.",
+    )
+    snapshot_group.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Compare current health against .rrt/health.lock.toml and report regressions.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        default=False,
+        help="With --check: exit 1 on any regression (default: advisory, exit 0).",
     )

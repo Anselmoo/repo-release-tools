@@ -786,6 +786,8 @@ def export_social_card_png(
 
 def _export_all_banner_assets(out_dir: Path) -> None:
     """Export all banner and social-card assets into ``out_dir``."""
+    from repo_release_tools.assets.badges import export_all_badges
+
     for variant_name, (file_name, fg) in _BANNER_EXPORTS.items():
         out = out_dir / file_name
         theme = _CRT_BANNER_VARIANTS.get(variant_name)
@@ -798,6 +800,10 @@ def _export_all_banner_assets(out_dir: Path) -> None:
     social_out = out_dir / _SOCIAL_CARD_EXPORT[0]
     export_social_card_png(get_banner("unicode"), social_out)
     sys.stdout.write(f"wrote {social_out}\n")
+
+    # Sync badges as well when exporting "all" visual assets
+    badges_out = out_dir / "badges"
+    export_all_badges(badges_out)
 
 
 def _main() -> None:
@@ -813,6 +819,7 @@ def _main() -> None:
         <out_dir>/banner-dark.png     — Unicode variant (Linux / macOS)
         <out_dir>/banner-light.png    — light-theme variant (GitHub light mode)
         <out_dir>/banner-windows.png  — ASCII-fallback variant (Windows)
+        <out_dir>/badges/*.svg        — All platform badges (all variants)
 
     Passing an explicit variant (``"unicode"``, ``"light"`` or ``"ascii"``)
     exports only that variant to the path given as the first argument.

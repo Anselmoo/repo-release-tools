@@ -80,7 +80,7 @@ cmd = "rrt docs publish --check"
 
 [tool.poe.groups.docs.tasks.docs]
 help = "Regenerate generated docs and confirm they are current."
-sequence = ["docs-generate", "docs-check", "docs-inject", "docs-inject-check"]
+sequence = ["docs-generate", "docs-check", "docs-inject", "docs-inject-check", "badge-export", "badge-sync", "banner-export"]
 
 [tool.poe.groups.docs.tasks.docs-verify]
 help = "Verify generated docs and shared anchors are current."
@@ -94,8 +94,27 @@ cmd = "python -c \"from pathlib import Path; req=[Path('.github/skills/rrt-user-
 help = "Render all theme/platform banner PNGs to docs/assets/ (banner-dark.png, banner-light.png, banner-windows.png, social-card.png)."
 cmd = "python -m repo_release_tools.assets.banner docs/assets"
 
+[tool.poe.groups.docs.tasks.badge-export]
+help = "Export all platform/variant badge SVGs to src/repo_release_tools/assets/badges/ for shipping."
+cmd = "python -m repo_release_tools.assets.badges src/repo_release_tools/assets/badges"
+
+[tool.poe.groups.docs.tasks.badge-sync]
+help = "Sync already-generated src/badges SVGs to docs/assets/badges/ (run after badge-export)."
+cmd = "python -m repo_release_tools.assets.badges docs/assets/badges"
+
 [tool.rrt]
 pin_target_missing = "warn"
+
+[[tool.rrt.generated_assets]]
+path = "src/repo_release_tools/assets/badges/*.svg"
+command = [
+    "uv",
+    "run",
+    "python",
+    "-m",
+    "repo_release_tools.assets.badges",
+    "src/repo_release_tools/assets/badges",
+]
 
 [[tool.rrt.generated_assets]]
 path = "docs/assets/banner-dark.png"
@@ -144,6 +163,10 @@ command = [
     "docs/assets/social-card.png",
     "social",
 ]
+
+[[tool.rrt.artifact_targets]]
+path = "src/repo_release_tools/assets/badges/*.svg"
+description = "Platform badge SVG files"
 
 [[tool.rrt.version_targets]]
 path = "pyproject.toml"
@@ -213,6 +236,7 @@ strictness = "loose"
 exact = false
 required_files = [
     "test_agents_cmd.py",
+    "test_artifacts_cmd.py",
     "test_branch.py",
     "test_bump.py",
     "test_ci_version.py",
@@ -385,6 +409,7 @@ src_dir = "src/repo_release_tools"
 suggest_roots = ["src/repo_release_tools/commands"]
 suggest_exempt = ["__init__.py", "__main__.py"]
 suggest_min_chars = 2500
+badge_variant = "adaptive"
 
 # Source-link settings used by docs exporters to build file/line URLs.
 source_repo_url = "https://github.com/Anselmoo/repo-release-tools"
@@ -400,7 +425,7 @@ stubs = [
 
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "page-header"
-content = """{platform_badge}
+content = """{platform_badge_adaptive_reto}
 """
 before_blank_lines = 0
 after_blank_lines = 1
@@ -410,6 +435,14 @@ targets = [
     "docs/agent-instructions.md",
     "docs/commands/*.md",
 ]
+
+[[tool.rrt.docs.shared_blocks]]
+anchor_id = "readme-header"
+content = """{platform_badge_adaptive_reto}
+"""
+before_blank_lines = 0
+after_blank_lines = 1
+targets = ["README.md"]
 
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "doc-footer"

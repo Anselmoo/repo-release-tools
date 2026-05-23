@@ -262,3 +262,26 @@ def test_folder_check_json_output_is_machine_readable(
     assert payload["mode"] == "strict"
     assert payload["ok"] is False
     assert payload["violation_count"] >= 1
+
+
+def test_folder_check_snapshot_writes_health_lock(tmp_path: Path) -> None:
+    """--snapshot merges folder check results into .rrt/health.lock.toml."""
+    import argparse
+    import tomllib
+
+    from repo_release_tools.commands.folder import cmd_folder_check
+
+    args = argparse.Namespace(
+        root=str(tmp_path),
+        template=["python-package"],
+        report_only=False,
+        format="text",
+        snapshot=True,
+    )
+    cmd_folder_check(args)
+    lock_path = tmp_path / ".rrt" / "health.lock.toml"
+    assert lock_path.exists()
+    data = tomllib.loads(lock_path.read_text())
+    assert "checks" in data
+    folder_checks = [k for k in data["checks"] if k.startswith("folder.")]
+    assert folder_checks

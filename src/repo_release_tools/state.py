@@ -12,6 +12,9 @@ from repo_release_tools import __version__
 
 _RRT_DIR = ".rrt"
 _DOCS_LOCK_NAME = "docs.lock.toml"
+_HEALTH_LOCK_NAME = "health.lock.toml"
+_TREE_LOCK_NAME = "tree.lock.toml"
+_ARTIFACTS_LOCK_NAME = "artifacts.lock.toml"
 
 
 def rrt_dir(root: Path) -> Path:
@@ -25,6 +28,21 @@ def docs_lock_path(root: Path, lock_file: str = _DOCS_LOCK_NAME) -> Path:
     if p.is_absolute():
         return p
     return root / p if p.parts[0] == _RRT_DIR else root / _RRT_DIR / p
+
+
+def health_lock_path(root: Path) -> Path:
+    """Return the path to the health snapshot lockfile."""
+    return root / _RRT_DIR / _HEALTH_LOCK_NAME
+
+
+def tree_lock_path(root: Path) -> Path:
+    """Return the path to the tree snapshot lockfile."""
+    return root / _RRT_DIR / _TREE_LOCK_NAME
+
+
+def artifacts_lock_path(root: Path) -> Path:
+    """Return the path to the artifact integrity lockfile."""
+    return root / _RRT_DIR / _ARTIFACTS_LOCK_NAME
 
 
 def hash_content(content: str) -> str:
@@ -100,6 +118,219 @@ def lock_is_current(lock_path: Path, sources: list[dict[str, Any]]) -> tuple[boo
     for key in locked_sources:
         if key not in seen_keys:
             drifted.append(f"Source removed but still in lockfile: {key}")
+
+    return (not drifted, drifted)
+
+
+def upsert_health_lock_checks(lock_path: Path, checks: list[dict[str, Any]]) -> None:
+    """Merge *checks* into the existing health lock, creating it if absent.
+
+    Existing check entries for other subsystems are preserved; only keys
+    present in *checks* are updated.
+    """
+    existing = read_lock(lock_path)
+    ts = now_utc()
+    if "meta" not in existing:
+        existing["meta"] = {"generated_at": ts, "rrt_version": __version__}
+    else:
+        existing["meta"]["generated_at"] = ts
+        existing["meta"]["rrt_version"] = __version__
+    if "checks" not in existing:
+        existing["checks"] = {}
+    for entry in checks:
+        existing["checks"][entry["name"]] = {
+            "status": entry["status"],
+            "message": entry.get("message", ""),
+            "updated_at": ts,
+        }
+    write_lock(lock_path, existing)
+
+
+def build_health_lock(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    """Construct a health snapshot lock dict from a list of check result dicts.
+
+    Each entry must have ``name`` (str) and ``status`` (``"ok"``, ``"warning"``,
+    or ``"error"``).  An optional ``message`` field is preserved verbatim.
+    """
+    ts = now_utc()
+    result: dict[str, Any] = {
+        "meta": {
+            "generated_at": ts,
+            "rrt_version": __version__,
+        },
+        "checks": {},
+    }
+    for entry in checks:
+        name = entry["name"]
+        result["checks"][name] = {
+            "status": entry["status"],
+            "message": entry.get("message", ""),
+            "updated_at": ts,
+        }
+    return result
+
+
+def health_lock_is_current(
+    lock_path: Path,
+    checks: list[dict[str, Any]],
+) -> tuple[bool, list[str]]:
+    """Compare current check statuses against the health lockfile.
+
+    Only regressions are reported (ok→warning/error, or new check added).
+    Improvements (warning→ok) are silently accepted.
+
+    Returns ``(is_current, list_of_regression_messages)``.
+    """
+    current = read_lock(lock_path)
+    locked_checks: dict[str, Any] = current.get("checks", {})
+
+    _SEVERITY = {"ok": 0, "warning": 1, "error": 2}
+
+    regressions: list[str] = []
+    for entry in checks:
+        name = entry["name"]
+        new_status = entry["status"]
+        locked = locked_checks.get(name)
+        if locked is None:
+            regressions.append(f"New check not in health snapshot: {name} ({new_status})")
+        else:
+            old_severity = _SEVERITY.get(locked.get("status", "ok"), 0)
+            new_severity = _SEVERITY.get(new_status, 0)
+            if new_severity > old_severity:
+                regressions.append(
+                    f"Health regression for {name}: {locked.get('status', '?')} → {new_status}"
+                )
+
+    return (not regressions, regressions)
+
+
+def build_tree_lock(tree_meta: dict[str, Any]) -> dict[str, Any]:
+    """Construct a tree snapshot lock dict from tree metadata.
+
+    *tree_meta* must contain ``entry_count`` (int) and ``tree_hash`` (str).
+    An optional ``ignored_count`` (int) is preserved when present.
+    """
+    ts = now_utc()
+    snapshot: dict[str, Any] = {
+        "entry_count": tree_meta["entry_count"],
+        "tree_hash": tree_meta["tree_hash"],
+        "updated_at": ts,
+    }
+    if "ignored_count" in tree_meta:
+        snapshot["ignored_count"] = tree_meta["ignored_count"]
+    return {
+        "meta": {
+            "generated_at": ts,
+            "rrt_version": __version__,
+        },
+        "snapshot": snapshot,
+    }
+
+
+def tree_lock_is_current(
+    lock_path: Path,
+    tree_meta: dict[str, Any],
+) -> tuple[bool, list[str]]:
+    """Compare current tree metadata against the tree lockfile.
+
+    Drifts when the ``tree_hash`` differs from the snapshot.
+
+    Returns ``(is_current, list_of_drift_messages)``.
+    """
+    current = read_lock(lock_path)
+    locked_snapshot: dict[str, Any] = current.get("snapshot", {})
+
+    drifted: list[str] = []
+    locked_hash = locked_snapshot.get("tree_hash")
+    if locked_hash is None:
+        drifted.append("Tree snapshot not found in lockfile")
+    elif locked_hash != tree_meta.get("tree_hash"):
+        locked_count = locked_snapshot.get("entry_count", "?")
+        new_count = tree_meta.get("entry_count", "?")
+        drifted.append(
+            f"Tree structure changed since snapshot (was {locked_count} entries, now {new_count})"
+        )
+
+    return (not drifted, drifted)
+
+
+def hash_file(path: Path) -> str:
+    """Return a stable sha256 hex digest of *path*'s content, prefixed with 'sha256:'."""
+    h = hashlib.sha256(path.read_bytes())
+    return "sha256:" + h.hexdigest()
+
+
+def build_artifacts_lock(
+    artifact_targets: list[dict[str, Any]],
+    repo_root: Path,
+) -> dict[str, Any]:
+    """Construct an artifact integrity lock from configured target globs.
+
+    Each entry in *artifact_targets* must have a ``path`` key (glob pattern
+    relative to *repo_root*) and an optional ``description`` string.  Every
+    file matched by the glob is hashed with SHA-256 and recorded.
+    """
+    ts = now_utc()
+    result: dict[str, Any] = {
+        "meta": {
+            "generated_at": ts,
+            "rrt_version": __version__,
+        },
+        "files": {},
+    }
+    for target in artifact_targets:
+        pattern = str(target.get("path", ""))
+        description = str(target.get("description", ""))
+        for matched in sorted(repo_root.glob(pattern)):
+            if not matched.is_file():
+                continue
+            rel = str(matched.relative_to(repo_root))
+            result["files"][rel] = {
+                "hash": hash_file(matched),
+                "size": matched.stat().st_size,
+                "description": description,
+                "updated_at": ts,
+            }
+    return result
+
+
+def artifacts_lock_is_current(
+    lock_path: Path,
+    artifact_targets: list[dict[str, Any]],
+    repo_root: Path,
+) -> tuple[bool, list[str]]:
+    """Compare current artifact hashes against the artifacts lockfile.
+
+    Drifts on: hash mismatch, file tracked in lock but now missing, or
+    file matched by a target but not yet in the lock.
+
+    Returns ``(is_current, list_of_drift_messages)``.
+    """
+    current = read_lock(lock_path)
+    locked_files: dict[str, Any] = current.get("files", {})
+
+    drifted: list[str] = []
+    seen_paths: set[str] = set()
+
+    for target in artifact_targets:
+        pattern = str(target.get("path", ""))
+        for matched in sorted(repo_root.glob(pattern)):
+            if not matched.is_file():
+                continue
+            rel = str(matched.relative_to(repo_root))
+            seen_paths.add(rel)
+            locked = locked_files.get(rel)
+            if locked is None:
+                drifted.append(f"Artifact not in lock (run --snapshot): {rel}")
+            else:
+                current_hash = hash_file(matched)
+                if current_hash != locked.get("hash", ""):
+                    drifted.append(f"Artifact hash mismatch (content changed): {rel}")
+
+    for rel in locked_files:
+        if rel not in seen_paths:
+            if not (repo_root / rel).exists():
+                drifted.append(f"Artifact in lock but file missing: {rel}")
 
     return (not drifted, drifted)
 

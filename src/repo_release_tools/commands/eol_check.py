@@ -86,6 +86,7 @@ from repo_release_tools.eol import (
     get_eol_records,
     resolve_override_eol,
 )
+from repo_release_tools.state import health_lock_path, upsert_health_lock_checks
 from repo_release_tools.ui import DryRunPrinter
 
 EOL_EPILOG = (
@@ -226,12 +227,14 @@ def run_eol_checks(
     today: date | None = None,
     host_only: bool = False,
     project_only: bool = False,
-) -> bool:
+) -> tuple[bool, list[dict[str, str]]]:
     """Run EOL checks for all requested languages.
 
-    Returns True when all checks pass (exit code 0), False when any error.
+    Returns ``(all_ok, check_entries)`` where *check_entries* is a list of
+    health-lock-compatible dicts with ``name``, ``status``, and ``message``.
     """
     all_ok = True
+    check_entries: list[dict[str, str]] = []
 
     for language in languages:
         p.section(f"EOL check: {language}")
@@ -260,6 +263,15 @@ def run_eol_checks(
             _emit_check(p, "Host runtime", host_ver, host_status, host_record)
             if host_status == "error":
                 all_ok = False
+            check_entries.append(
+                {
+                    "name": f"eol.{language}.host",
+                    "status": "ok"
+                    if host_status in ("ok", "info")
+                    else ("warning" if host_status in ("warn", "unknown") else "error"),
+                    "message": f"{language} host {host_ver or 'not detected'} — {_status_label(host_status)}",
+                }
+            )
 
         # Project minimum (skip when host-only requested)
         proj_ver: str | None = None
@@ -284,10 +296,19 @@ def run_eol_checks(
             _emit_check(p, "Project minimum", proj_ver, proj_status, proj_record)
             if proj_status == "error":
                 all_ok = False
+            check_entries.append(
+                {
+                    "name": f"eol.{language}.minimum",
+                    "status": "ok"
+                    if proj_status in ("ok", "info")
+                    else ("warning" if proj_status in ("warn", "unknown") else "error"),
+                    "message": f"{language} minimum {proj_ver or 'not detected'} — {_status_label(proj_status)}",
+                }
+            )
 
         p.blank_line()
 
-    return all_ok
+    return all_ok, check_entries
 
 
 def cmd_eol(args: argparse.Namespace) -> int:
@@ -331,7 +352,7 @@ def cmd_eol(args: argparse.Namespace) -> int:
     host_only = getattr(args, "host_only", False)
     project_only = getattr(args, "project_only", False)
 
-    all_ok = run_eol_checks(
+    all_ok, check_entries = run_eol_checks(
         languages=languages,
         root=root,
         warn_days=warn_days,
@@ -343,6 +364,10 @@ def cmd_eol(args: argparse.Namespace) -> int:
         host_only=host_only,
         project_only=project_only,
     )
+
+    if getattr(args, "snapshot", False):
+        upsert_health_lock_checks(health_lock_path(root), check_entries)
+        p.ok(f"EOL results merged into .rrt/health.lock.toml ({len(check_entries)} checks)")
 
     if all_ok:
         p.ok("All EOL checks passed.")
@@ -373,6 +398,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     # Attach common args to the top-level `rrt eol` and also provide a
     # `rrt eol check` sub-action for parity with other commands.
     _attach_eol_args(parser)
+    parser.add_argument(
+        "--snapshot",
+        action="store_true",
+        default=False,
+        help="Merge EOL check results into .rrt/health.lock.toml after running.",
+    )
 
     sub = parser.add_subparsers(dest="eol_action")
     chk_p = sub.add_parser(

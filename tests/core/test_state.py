@@ -9,13 +9,24 @@ import pytest
 from repo_release_tools.state import (
     _dict_to_toml,
     _toml_value,
+    artifacts_lock_is_current,
+    artifacts_lock_path,
+    build_artifacts_lock,
+    build_health_lock,
     build_lock,
+    build_tree_lock,
     docs_lock_path,
     hash_content,
+    hash_file,
+    health_lock_is_current,
+    health_lock_path,
     lock_is_current,
     now_utc,
     read_lock,
     rrt_dir,
+    tree_lock_is_current,
+    tree_lock_path,
+    upsert_health_lock_checks,
     write_lock,
 )
 
@@ -224,3 +235,340 @@ class TestLockIsCurrent:
         ok, messages = lock_is_current(lock_path, [old_sources[0]])
         assert not ok
         assert any("b.py" in m for m in messages)
+
+
+class TestBuildHealthLock:
+    """Test build_health_lock."""
+
+    def test_structure(self) -> None:
+        """Should produce meta and checks sections."""
+        checks = [{"name": "pre_commit", "status": "ok", "message": "all good"}]
+        result = build_health_lock(checks)
+        assert "meta" in result
+        assert "checks" in result
+        assert "pre_commit" in result["checks"]
+
+    def test_empty_checks(self) -> None:
+        """Should handle empty check list gracefully."""
+        result = build_health_lock([])
+        assert result["checks"] == {}
+
+    def test_status_stored(self) -> None:
+        """Should preserve ok/warning/error status values."""
+        checks = [
+            {"name": "a", "status": "ok"},
+            {"name": "b", "status": "warning"},
+            {"name": "c", "status": "error"},
+        ]
+        result = build_health_lock(checks)
+        assert result["checks"]["a"]["status"] == "ok"
+        assert result["checks"]["b"]["status"] == "warning"
+        assert result["checks"]["c"]["status"] == "error"
+
+    def test_message_preserved(self) -> None:
+        """Should store the optional message field."""
+        checks = [{"name": "x", "status": "ok", "message": "looks good"}]
+        result = build_health_lock(checks)
+        assert result["checks"]["x"]["message"] == "looks good"
+
+    def test_missing_message_defaults_empty(self) -> None:
+        """Should default message to empty string when absent."""
+        checks = [{"name": "x", "status": "ok"}]
+        result = build_health_lock(checks)
+        assert result["checks"]["x"]["message"] == ""
+
+
+class TestHealthLockIsCurrent:
+    """Test health_lock_is_current."""
+
+    def test_no_regression(self, tmp_path: Path) -> None:
+        """Same status as snapshot → no regression."""
+        lock_path = tmp_path / "health.lock.toml"
+        checks = [{"name": "pre_commit", "status": "ok"}]
+        write_lock(lock_path, build_health_lock(checks))
+        ok, msgs = health_lock_is_current(lock_path, checks)
+        assert ok
+        assert msgs == []
+
+    def test_regression_ok_to_error(self, tmp_path: Path) -> None:
+        """ok → error is a regression."""
+        lock_path = tmp_path / "health.lock.toml"
+        old = [{"name": "pre_commit", "status": "ok"}]
+        write_lock(lock_path, build_health_lock(old))
+        current = [{"name": "pre_commit", "status": "error"}]
+        ok, msgs = health_lock_is_current(lock_path, current)
+        assert not ok
+        assert any("pre_commit" in m for m in msgs)
+
+    def test_regression_ok_to_warning(self, tmp_path: Path) -> None:
+        """ok → warning is a regression."""
+        lock_path = tmp_path / "health.lock.toml"
+        write_lock(lock_path, build_health_lock([{"name": "x", "status": "ok"}]))
+        ok, msgs = health_lock_is_current(lock_path, [{"name": "x", "status": "warning"}])
+        assert not ok
+        assert any("x" in m for m in msgs)
+
+    def test_improvement_not_regression(self, tmp_path: Path) -> None:
+        """warning → ok is an improvement, not a regression."""
+        lock_path = tmp_path / "health.lock.toml"
+        write_lock(lock_path, build_health_lock([{"name": "x", "status": "warning"}]))
+        ok, msgs = health_lock_is_current(lock_path, [{"name": "x", "status": "ok"}])
+        assert ok
+        assert msgs == []
+
+    def test_new_check_is_regression(self, tmp_path: Path) -> None:
+        """A check not present in the snapshot is treated as a regression."""
+        lock_path = tmp_path / "health.lock.toml"
+        write_lock(lock_path, build_health_lock([{"name": "a", "status": "ok"}]))
+        ok, msgs = health_lock_is_current(
+            lock_path,
+            [{"name": "a", "status": "ok"}, {"name": "b", "status": "error"}],
+        )
+        assert not ok
+        assert any("b" in m for m in msgs)
+
+    def test_missing_lock_file(self, tmp_path: Path) -> None:
+        """Missing lockfile → all checks are 'new', treated as regressions."""
+        lock_path = tmp_path / "health.lock.toml"
+        ok, msgs = health_lock_is_current(lock_path, [{"name": "x", "status": "ok"}])
+        assert not ok
+        assert any("x" in m for m in msgs)
+
+
+class TestUpsertHealthLockChecks:
+    """Test upsert_health_lock_checks."""
+
+    def test_creates_lock_when_missing(self, tmp_path: Path) -> None:
+        """Should create .rrt/health.lock.toml when it does not exist."""
+        lock_path = tmp_path / ".rrt" / "health.lock.toml"
+        upsert_health_lock_checks(lock_path, [{"name": "x", "status": "ok"}])
+        data = read_lock(lock_path)
+        assert data["checks"]["x"]["status"] == "ok"
+
+    def test_preserves_other_subsystem_checks(self, tmp_path: Path) -> None:
+        """Should not clobber checks from other subsystems."""
+        lock_path = tmp_path / ".rrt" / "health.lock.toml"
+        upsert_health_lock_checks(lock_path, [{"name": "doctor.pre_commit", "status": "ok"}])
+        upsert_health_lock_checks(lock_path, [{"name": "eol.python.host", "status": "warning"}])
+        data = read_lock(lock_path)
+        assert "doctor.pre_commit" in data["checks"]
+        assert "eol.python.host" in data["checks"]
+
+    def test_updates_existing_entry(self, tmp_path: Path) -> None:
+        """Should overwrite the same check name on second call."""
+        lock_path = tmp_path / ".rrt" / "health.lock.toml"
+        upsert_health_lock_checks(lock_path, [{"name": "x", "status": "ok"}])
+        upsert_health_lock_checks(lock_path, [{"name": "x", "status": "error"}])
+        data = read_lock(lock_path)
+        assert data["checks"]["x"]["status"] == "error"
+
+
+class TestHealthLockPath:
+    """Test health_lock_path helper."""
+
+    def test_returns_health_lock_toml(self, tmp_path: Path) -> None:
+        assert health_lock_path(tmp_path) == tmp_path / ".rrt" / "health.lock.toml"
+
+
+class TestBuildTreeLock:
+    """Test build_tree_lock."""
+
+    def test_structure(self) -> None:
+        """Should produce meta and snapshot sections."""
+        meta = {"entry_count": 42, "tree_hash": "sha256:abc"}
+        result = build_tree_lock(meta)
+        assert "meta" in result
+        assert "snapshot" in result
+        assert result["snapshot"]["entry_count"] == 42
+
+    def test_hash_stored(self) -> None:
+        """Should store the tree_hash verbatim."""
+        meta = {"entry_count": 10, "tree_hash": "sha256:xyz"}
+        result = build_tree_lock(meta)
+        assert result["snapshot"]["tree_hash"] == "sha256:xyz"
+
+    def test_ignored_count_optional(self) -> None:
+        """ignored_count is included when present."""
+        meta = {"entry_count": 5, "tree_hash": "sha256:abc", "ignored_count": 3}
+        result = build_tree_lock(meta)
+        assert result["snapshot"]["ignored_count"] == 3
+
+    def test_ignored_count_absent(self) -> None:
+        """ignored_count is absent when not provided."""
+        meta = {"entry_count": 5, "tree_hash": "sha256:abc"}
+        result = build_tree_lock(meta)
+        assert "ignored_count" not in result["snapshot"]
+
+
+class TestTreeLockIsCurrent:
+    """Test tree_lock_is_current."""
+
+    def test_same_hash(self, tmp_path: Path) -> None:
+        """Same hash as snapshot → no drift."""
+        lock_path = tmp_path / "tree.lock.toml"
+        meta = {"entry_count": 10, "tree_hash": "sha256:abc"}
+        write_lock(lock_path, build_tree_lock(meta))
+        ok, msgs = tree_lock_is_current(lock_path, meta)
+        assert ok
+        assert msgs == []
+
+    def test_hash_changed(self, tmp_path: Path) -> None:
+        """Different hash → drift detected."""
+        lock_path = tmp_path / "tree.lock.toml"
+        write_lock(lock_path, build_tree_lock({"entry_count": 10, "tree_hash": "sha256:old"}))
+        ok, msgs = tree_lock_is_current(lock_path, {"entry_count": 12, "tree_hash": "sha256:new"})
+        assert not ok
+        assert any("changed" in m for m in msgs)
+
+    def test_missing_lock_file(self, tmp_path: Path) -> None:
+        """Missing lockfile → drift reported."""
+        lock_path = tmp_path / "tree.lock.toml"
+        ok, msgs = tree_lock_is_current(lock_path, {"entry_count": 5, "tree_hash": "sha256:x"})
+        assert not ok
+        assert any("snapshot" in m.lower() for m in msgs)
+
+
+class TestTreeLockPath:
+    """Test tree_lock_path helper."""
+
+    def test_returns_tree_lock_toml(self, tmp_path: Path) -> None:
+        assert tree_lock_path(tmp_path) == tmp_path / ".rrt" / "tree.lock.toml"
+
+
+class TestArtifactsLockPath:
+    """Test artifacts_lock_path helper."""
+
+    def test_returns_artifacts_lock_toml(self, tmp_path: Path) -> None:
+        assert artifacts_lock_path(tmp_path) == tmp_path / ".rrt" / "artifacts.lock.toml"
+
+
+class TestHashFile:
+    """Test hash_file helper."""
+
+    def test_returns_sha256_prefix(self, tmp_path: Path) -> None:
+        f = tmp_path / "test.txt"
+        f.write_bytes(b"hello")
+        result = hash_file(f)
+        assert result.startswith("sha256:")
+        assert len(result) > 7
+
+    def test_same_content_same_hash(self, tmp_path: Path) -> None:
+        a = tmp_path / "a.txt"
+        b = tmp_path / "b.txt"
+        a.write_bytes(b"same")
+        b.write_bytes(b"same")
+        assert hash_file(a) == hash_file(b)
+
+    def test_different_content_different_hash(self, tmp_path: Path) -> None:
+        a = tmp_path / "a.txt"
+        b = tmp_path / "b.txt"
+        a.write_bytes(b"foo")
+        b.write_bytes(b"bar")
+        assert hash_file(a) != hash_file(b)
+
+
+class TestBuildArtifactsLock:
+    """Test build_artifacts_lock structure and glob expansion."""
+
+    def test_structure(self, tmp_path: Path) -> None:
+        (tmp_path / "a.svg").write_text("<svg/>", encoding="utf-8")
+        targets = [{"path": "*.svg", "description": "SVG files"}]
+        result = build_artifacts_lock(targets, tmp_path)
+        assert "meta" in result
+        assert "rrt_version" in result["meta"]
+        assert "files" in result
+        assert "a.svg" in result["files"]
+
+    def test_hash_stored(self, tmp_path: Path) -> None:
+        (tmp_path / "b.svg").write_text("<svg>x</svg>", encoding="utf-8")
+        targets = [{"path": "*.svg", "description": ""}]
+        result = build_artifacts_lock(targets, tmp_path)
+        entry = result["files"]["b.svg"]
+        assert entry["hash"].startswith("sha256:")
+        assert entry["size"] > 0
+
+    def test_empty_glob_no_files(self, tmp_path: Path) -> None:
+        targets = [{"path": "*.png", "description": "PNGs"}]
+        result = build_artifacts_lock(targets, tmp_path)
+        assert result["files"] == {}
+
+    def test_multiple_targets(self, tmp_path: Path) -> None:
+        (tmp_path / "x.svg").write_text("<svg/>", encoding="utf-8")
+        (tmp_path / "y.txt").write_text("text", encoding="utf-8")
+        targets = [
+            {"path": "*.svg", "description": "SVG"},
+            {"path": "*.txt", "description": "TXT"},
+        ]
+        result = build_artifacts_lock(targets, tmp_path)
+        assert "x.svg" in result["files"]
+        assert "y.txt" in result["files"]
+
+
+class TestArtifactsLockIsCurrent:
+    """Test artifacts_lock_is_current drift detection."""
+
+    def test_no_drift_when_hashes_match(self, tmp_path: Path) -> None:
+        (tmp_path / "a.svg").write_text("<svg/>", encoding="utf-8")
+        targets = [{"path": "*.svg", "description": ""}]
+        lock_path = tmp_path / "artifacts.lock.toml"
+        write_lock(lock_path, build_artifacts_lock(targets, tmp_path))
+        ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert ok
+        assert msgs == []
+
+    def test_drift_on_content_change(self, tmp_path: Path) -> None:
+        f = tmp_path / "a.svg"
+        f.write_text("<svg/>", encoding="utf-8")
+        targets = [{"path": "*.svg", "description": ""}]
+        lock_path = tmp_path / "artifacts.lock.toml"
+        write_lock(lock_path, build_artifacts_lock(targets, tmp_path))
+        f.write_text("<svg>changed</svg>", encoding="utf-8")
+        ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert not ok
+        assert any("mismatch" in m.lower() for m in msgs)
+
+    def test_drift_on_new_file_not_in_lock(self, tmp_path: Path) -> None:
+        (tmp_path / "a.svg").write_text("<svg/>", encoding="utf-8")
+        targets = [{"path": "*.svg", "description": ""}]
+        lock_path = tmp_path / "artifacts.lock.toml"
+        write_lock(lock_path, build_artifacts_lock(targets, tmp_path))
+        (tmp_path / "b.svg").write_text("<svg>new</svg>", encoding="utf-8")
+        ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert not ok
+        assert any("b.svg" in m for m in msgs)
+
+    def test_drift_on_file_in_lock_but_deleted(self, tmp_path: Path) -> None:
+        f = tmp_path / "a.svg"
+        f.write_text("<svg/>", encoding="utf-8")
+        targets = [{"path": "*.svg", "description": ""}]
+        lock_path = tmp_path / "artifacts.lock.toml"
+        write_lock(lock_path, build_artifacts_lock(targets, tmp_path))
+        f.unlink()
+        ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert not ok
+        assert any("missing" in m.lower() for m in msgs)
+
+    def test_no_drift_empty_lock_empty_files(self, tmp_path: Path) -> None:
+        targets = [{"path": "*.png", "description": ""}]
+        lock_path = tmp_path / "artifacts.lock.toml"
+        write_lock(lock_path, build_artifacts_lock(targets, tmp_path))
+        ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert ok
+        assert msgs == []
+
+    def test_skips_directories_in_build(self, tmp_path: Path) -> None:
+        (tmp_path / "subdir.svg").mkdir()
+        (tmp_path / "real.svg").write_text("<svg/>", encoding="utf-8")
+        targets = [{"path": "*.svg", "description": ""}]
+        result = build_artifacts_lock(targets, tmp_path)
+        assert "real.svg" in result["files"]
+        assert "subdir.svg" not in result["files"]
+
+    def test_skips_directories_in_is_current(self, tmp_path: Path) -> None:
+        (tmp_path / "real.svg").write_text("<svg/>", encoding="utf-8")
+        targets = [{"path": "*.svg", "description": ""}]
+        lock_path = tmp_path / "artifacts.lock.toml"
+        write_lock(lock_path, build_artifacts_lock(targets, tmp_path))
+        (tmp_path / "dir.svg").mkdir()
+        ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert ok

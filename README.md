@@ -1,5 +1,13 @@
 # repo-release-tools
 
+<!-- rrt:auto:start:readme-header -->
+<a href="https://github.com/Anselmoo/repo-release-tools"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/badges/github-reto-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/badges/github-reto-light.svg">
+  <img alt="GitHub" src="docs/assets/badges/github-reto-dark.svg">
+</picture></a>
+<!-- rrt:auto:end:readme-header -->
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-dark.png?raw=true">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-light.png?raw=true">

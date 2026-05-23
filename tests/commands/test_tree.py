@@ -893,3 +893,49 @@ def test_build_entries_rel_text_set_to_none_when_equal_repo_root(
     assert isinstance(result, list)
     # 'repo' entry must exist with rel_text=None so it bypasses the ignore cache check
     assert any(name == "repo" for name, _is_dir, _children in result)
+
+
+# ---------------------------------------------------------------------------
+# --snapshot / --check / --strict
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_tree_snapshot_writes_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """--snapshot writes .rrt/tree.lock.toml and exits 0."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    rc = tree.cmd_tree(_args(root=str(tmp_path), snapshot=True))
+    assert rc == 0
+    assert (tmp_path / ".rrt" / "tree.lock.toml").exists()
+
+
+def test_cmd_tree_check_no_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """--check exits 0 when tree matches snapshot."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    tree.cmd_tree(_args(root=str(tmp_path), snapshot=True))
+    rc = tree.cmd_tree(_args(root=str(tmp_path), check=True))
+    assert rc == 0
+
+
+def test_cmd_tree_check_drift_advisory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--check without --strict exits 0 on drift."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    tree.cmd_tree(_args(root=str(tmp_path), snapshot=True))
+    (tmp_path / "b.txt").write_text("y", encoding="utf-8")
+    rc = tree.cmd_tree(_args(root=str(tmp_path), check=True))
+    assert rc == 0
+    assert "drift" in capsys.readouterr().out.lower()
+
+
+def test_cmd_tree_check_drift_strict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """--check --strict exits 1 on drift."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    tree.cmd_tree(_args(root=str(tmp_path), snapshot=True))
+    (tmp_path / "b.txt").write_text("y", encoding="utf-8")
+    rc = tree.cmd_tree(_args(root=str(tmp_path), check=True, strict=True))
+    assert rc == 1

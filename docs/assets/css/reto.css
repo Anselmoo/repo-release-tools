@@ -4,6 +4,7 @@
   --reto-font-display: "Orbitron", "Eurostile", "Avenir Next Condensed", "Segoe UI", sans-serif;
   --reto-font-code: "JetBrains Mono", "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
 
+  /* Light mode: A paper-like retro aesthetic */
   --reto-bg: #f5f0e6;
   --reto-bg-elevated: #fff9ef;
   --reto-surface: #fff;
@@ -15,102 +16,143 @@
   --reto-link: #8f3f03;
   --reto-code-bg: #f8ebd8;
   --reto-shadow: 0 10px 28px rgb(50 25 0 / 15%);
-  --reto-glow: 0 0 0 1px rgb(255 194 115 / 45%), 0 0 28px rgb(255 166 69 / 24%);
+  --reto-glow: 0 0 15px rgb(182 94 19 / 20%);
   --reto-footer-badge: "⚙ repo-release-tools docs / reto-mode";
 }
 
 @media (prefers-color-scheme: dark) {
   html:not([data-theme]) {
-    --reto-bg: #110d09;
-    --reto-bg-elevated: #1a120b;
-    --reto-surface: #20160f;
-    --reto-text: #f8dfbc;
-    --reto-text-soft: #caa978;
-    --reto-border: #6f4d2f;
-    --reto-accent: #ffc26e;
+    /* Dark mode: Strictly Amber Terminal (from banner) */
+    --reto-bg: #0c0805;
+    --reto-bg-elevated: #160f0a;
+    --reto-surface: #1a120b;
+    --reto-text: #ffb36c;
+    --reto-text-soft: #b65e13;
+    --reto-border: #4a2f18;
+    --reto-accent: #ffb36c;
     --reto-accent-strong: #ff9f3f;
     --reto-link: #ffca86;
-    --reto-code-bg: #26190f;
-    --reto-shadow: 0 10px 35px rgb(0 0 0 / 45%);
-    --reto-glow: 0 0 0 1px rgb(255 177 79 / 22%), 0 0 30px rgb(255 166 69 / 18%);
+    --reto-code-bg: #120c08;
+    --reto-shadow: 0 10px 35px rgb(0 0 0 / 80%);
+    --reto-glow: 0 0 12px rgba(255, 179, 108, 0.4);
+    --reto-phosphor-glow: 0 0 8px rgba(255, 179, 108, 0.6);
   }
 }
 
 html[data-theme="dark"] {
-  --reto-bg: #110d09;
-  --reto-bg-elevated: #1a120b;
-  --reto-surface: #20160f;
-  --reto-text: #f8dfbc;
-  --reto-text-soft: #caa978;
-  --reto-border: #6f4d2f;
-  --reto-accent: #ffc26e;
+  --reto-bg: #0c0805;
+  --reto-bg-elevated: #160f0a;
+  --reto-surface: #1a120b;
+  --reto-text: #ffb36c;
+  --reto-text-soft: #b65e13;
+  --reto-border: #4a2f18;
+  --reto-accent: #ffb36c;
   --reto-accent-strong: #ff9f3f;
   --reto-link: #ffca86;
-  --reto-code-bg: #26190f;
-  --reto-shadow: 0 10px 35px rgb(0 0 0 / 45%);
-  --reto-glow: 0 0 0 1px rgb(255 177 79 / 22%), 0 0 30px rgb(255 166 69 / 18%);
+  --reto-code-bg: #120c08;
+  --reto-shadow: 0 10px 35px rgb(0 0 0 / 80%);
+  --reto-glow: 0 0 12px rgba(255, 179, 108, 0.4);
+  --reto-phosphor-glow: 0 0 8px rgba(255, 179, 108, 0.6);
 }
 
 html,
 body {
-  background:
-    radial-gradient(circle at 5% -10%, rgb(255 183 108 / 25%), transparent 45%),
-    radial-gradient(circle at 95% 0%, rgb(255 220 150 / 12%), transparent 35%),
-    var(--reto-bg);
+  background: var(--reto-bg);
   color: var(--reto-text);
   font-family: var(--reto-font-body);
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.wrapper {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.site-header {
+  padding: 2rem 0;
+  border-bottom: 2px solid var(--reto-border);
+  background: var(--reto-bg-elevated);
+}
+
+.site-footer {
+  padding: 3rem 0;
+  border-top: 2px solid var(--reto-border);
+  margin-top: auto;
+  background: var(--reto-bg-elevated);
 }
 
 body {
   font-size: 17px;
   line-height: 1.65;
   letter-spacing: 0.01em;
-}
-
-.site-header,
-.site-footer {
-  border-color: var(--reto-border);
-  background: linear-gradient(90deg, var(--reto-bg-elevated), var(--reto-bg));
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 .site-title,
 .page-link {
   color: var(--reto-accent);
+  text-shadow: var(--reto-phosphor-glow);
+}
+
+.page-content {
+  flex: 1;
 }
 
 .page-content .wrapper {
   background: var(--reto-surface);
-  border: 1px solid var(--reto-border);
-  border-radius: 16px;
+  border: 3px double var(--reto-border); /* Terminal "Double Line" Border */
+  border-radius: 8px;
   box-shadow: var(--reto-shadow);
-  margin-top: 1.5rem;
-  margin-bottom: 2rem;
-  padding: clamp(1.25rem, 3vw, 2.25rem);
+  margin-top: 2rem;
+  margin-bottom: 3rem;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  position: relative;
+  overflow: hidden;
 }
 
+/* Phosphor "Bleed" Effect for Headers */
 h1,
 h2,
 h3,
 h4 {
   color: var(--reto-accent);
   font-family: var(--reto-font-display);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-shadow: var(--reto-phosphor-glow);
+  margin-top: 2rem;
+}
+
+h1 {
+  font-size: 2.2rem;
+  border-bottom: 1px solid var(--reto-border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
 }
 
 h2::before,
 h3::before {
   color: var(--reto-accent-strong);
   font-family: var(--reto-font-code);
-  margin-right: 0.4rem;
+  margin-right: 0.6rem;
 }
 
 h2::before {
-  content: "✦";
+  content: "█"; /* More terminal-esque than ✦ */
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
 }
 
 h3::before {
-  content: "▸";
+  content: ">>";
 }
 
 p,
@@ -122,20 +164,23 @@ th {
 
 a {
   color: var(--reto-link);
-  text-decoration-color: color-mix(in srgb, var(--reto-link), transparent 45%);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 a:hover {
   color: var(--reto-accent-strong);
-  text-decoration-color: currentColor;
+  text-shadow: var(--reto-phosphor-glow);
 }
 
 blockquote {
-  border-left: 4px solid var(--reto-accent-strong);
-  background: color-mix(in srgb, var(--reto-bg-elevated), var(--reto-surface) 50%);
+  border: 1px solid var(--reto-border);
+  background: var(--reto-code-bg);
   color: var(--reto-text-soft);
-  border-radius: 0 10px 10px 0;
-  padding: 0.75rem 1rem;
+  border-left: 8px solid var(--reto-accent-strong);
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
 }
 
 pre,
@@ -146,60 +191,67 @@ code {
 pre {
   background: var(--reto-code-bg);
   border: 1px solid var(--reto-border);
-  border-radius: 10px;
-  box-shadow: inset 0 0 0 1px rgb(255 184 85 / 12%);
+  border-radius: 4px;
+  padding: 1rem;
+  overflow-x: auto;
 }
 
 code.highlighter-rouge {
   background: var(--reto-code-bg);
-  border: 1px solid color-mix(in srgb, var(--reto-border), transparent 35%);
-  border-radius: 6px;
-  color: var(--reto-accent);
-  padding: 0.12em 0.4em;
+  border: 1px solid var(--reto-border);
+  border-radius: 4px;
+  color: var(--reto-accent-strong);
+  padding: 0.1em 0.3em;
 }
 
 table {
+  width: 100%;
+  border-collapse: collapse;
   border: 1px solid var(--reto-border);
-  border-radius: 10px;
-  overflow: hidden;
+  margin: 1.5rem 0;
+}
+
+th, td {
+  border: 1px solid var(--reto-border);
+  padding: 0.75rem;
+  text-align: left;
 }
 
 th {
-  background: color-mix(in srgb, var(--reto-bg-elevated), var(--reto-surface) 30%);
-  color: var(--reto-accent);
+  background: var(--reto-bg-elevated);
+  font-family: var(--reto-font-display);
+  font-size: 0.9rem;
+  text-transform: uppercase;
 }
 
 tr:nth-child(2n) {
-  background: color-mix(in srgb, var(--reto-bg-elevated), transparent 55%);
+  background: rgba(255, 179, 108, 0.03);
 }
 
 hr {
+  border: 0;
   border-top: 1px solid var(--reto-border);
+  margin: 2rem 0;
 }
 
 #reto-theme-toggle {
   appearance: none;
-  border: 1px solid var(--reto-border);
-  border-radius: 999px;
+  border: 2px solid var(--reto-border);
+  border-radius: 4px;
   box-shadow: var(--reto-glow);
   cursor: pointer;
   position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  min-width: 44px;
-  min-height: 44px;
+  right: 2rem;
+  bottom: 2rem;
+  width: 48px;
+  height: 48px;
   z-index: 60;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  font-family: var(--reto-font-code);
+  font-size: 1.5rem;
   color: var(--reto-accent);
   background: var(--reto-bg-elevated);
-}
-
-#reto-theme-toggle:hover {
-  background: color-mix(in srgb, var(--reto-bg-elevated), var(--reto-accent) 15%);
 }
 
 .site-footer::before {
@@ -207,5 +259,143 @@ hr {
   display: block;
   color: var(--reto-text-soft);
   font-family: var(--reto-font-code);
-  margin-bottom: 0.65rem;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* --- Reto Layout Additions --- */
+
+.reto-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header-content,
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.reto-logo {
+  color: var(--reto-accent-strong);
+  margin-right: 0.5rem;
+  font-size: 1.4em;
+  text-shadow: var(--reto-phosphor-glow);
+}
+
+.reto-status {
+  font-family: var(--reto-font-code);
+  font-weight: bold;
+  color: var(--reto-accent);
+  text-shadow: var(--reto-phosphor-glow);
+  margin-bottom: 0.5rem;
+  display: block;
+  letter-spacing: 3px;
+}
+
+/* Retro buttons (Matched to banner terminal boxes) */
+.btn-reto,
+.site-nav .page-link {
+  display: inline-block;
+  padding: 0.5rem 1.2rem;
+  font-family: var(--reto-font-display);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--reto-accent);
+  background: transparent;
+  border: 1px solid var(--reto-accent);
+  border-radius: 0;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  text-decoration: none;
+  margin-left: 0.5rem;
+  position: relative;
+}
+
+.btn-reto:hover,
+.site-nav .page-link:hover {
+  background: var(--reto-accent);
+  color: var(--reto-bg) !important;
+  box-shadow: var(--reto-phosphor-glow);
+  transform: scale(1.05);
+}
+
+/* Badge Glow */
+img[src*="-reto.svg"] {
+  filter: drop-shadow(0 0 2px rgba(255, 179, 108, 0.5));
+  transition: filter 0.2s ease;
+}
+
+img[src*="-reto.svg"]:hover {
+  filter: drop-shadow(0 0 5px rgba(255, 179, 108, 0.8));
+}
+
+/* CRT Scanline effect (Enhanced) */
+.reto-scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.1) 50%
+  ),
+  linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.02),
+    rgba(0, 255, 0, 0.02),
+    rgba(0, 0, 255, 0.02)
+  );
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.4;
+}
+
+/* Noise effect for that old monitor feel */
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 99;
+}
+
+@media screen and (max-width: 600px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .site-nav {
+    width: 100%;
+  }
+
+  .site-nav .trigger {
+    display: none;
+    flex-direction: column;
+    margin-top: 1.5rem;
+  }
+
+  .nav-trigger:checked ~ .trigger {
+    display: flex;
+  }
+
+  .site-nav .page-link {
+    margin: 0.5rem 0;
+    width: 100%;
+    text-align: center;
+  }
 }
