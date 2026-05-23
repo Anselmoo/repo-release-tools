@@ -1412,32 +1412,47 @@ pip install repo-release-tools   # or: uv pip install repo-release-tools
 npx husky init
 ```
 
+> **Husky v9 hook file format**: `npx husky init` creates `.husky/pre-commit` with
+> a shell shebang. Keep the header it generates and replace only the command body.
+> Each hook file must be executable — run `chmod +x .husky/<hook>` after creating it.
+
 ### Incremental workflow example
 
-```bash
+```sh
+#!/usr/bin/env sh
 # .husky/pre-commit
 rrt-hooks pre-commit
 ```
 
-```bash
+```sh
+#!/usr/bin/env sh
 # .husky/commit-msg
 rrt-hooks update-unreleased --message-file "$1"
 rrt-hooks commit-msg "$1"
 ```
 
-```bash
+```sh
+#!/usr/bin/env sh
 # .husky/pre-push  (optional — add when you want an unreleased guard)
 rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
 ```
 
-### Squash workflow example
+After creating each file, make it executable:
 
 ```bash
+chmod +x .husky/pre-commit .husky/commit-msg  # add .husky/pre-push if used
+```
+
+### Squash workflow example
+
+```sh
+#!/usr/bin/env sh
 # .husky/pre-commit
 rrt-hooks pre-commit
 ```
 
-```bash
+```sh
+#!/usr/bin/env sh
 # .husky/commit-msg
 rrt-hooks commit-msg "$1"
 ```
