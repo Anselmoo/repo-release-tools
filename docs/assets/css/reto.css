@@ -16,6 +16,7 @@
   --reto-code-bg: #f8ebd8;
   --reto-shadow: 0 10px 28px rgb(50 25 0 / 15%);
   --reto-glow: 0 0 0 1px rgb(255 194 115 / 45%), 0 0 28px rgb(255 166 69 / 24%);
+  --reto-footer-badge: "⚙ repo-release-tools docs / reto-mode";
 }
 
 @media (prefers-color-scheme: dark) {
@@ -32,6 +33,7 @@
     --reto-code-bg: #26190f;
     --reto-shadow: 0 10px 35px rgb(0 0 0 / 45%);
     --reto-glow: 0 0 0 1px rgb(255 177 79 / 22%), 0 0 30px rgb(255 166 69 / 18%);
+    --reto-footer-badge: "⚙ repo-release-tools docs / reto-mode";
   }
 }
 
@@ -48,6 +50,7 @@ html[data-theme="light"] {
   --reto-code-bg: #f8ebd8;
   --reto-shadow: 0 10px 28px rgb(50 25 0 / 15%);
   --reto-glow: 0 0 0 1px rgb(255 194 115 / 45%), 0 0 28px rgb(255 166 69 / 24%);
+  --reto-footer-badge: "⚙ repo-release-tools docs / reto-mode";
 }
 
 html[data-theme="dark"] {
@@ -63,6 +66,7 @@ html[data-theme="dark"] {
   --reto-code-bg: #26190f;
   --reto-shadow: 0 10px 35px rgb(0 0 0 / 45%);
   --reto-glow: 0 0 0 1px rgb(255 177 79 / 22%), 0 0 30px rgb(255 166 69 / 18%);
+  --reto-footer-badge: "⚙ repo-release-tools docs / reto-mode";
 }
 
 html,
@@ -217,7 +221,7 @@ hr {
 }
 
 .site-footer::before {
-  content: "⚙ repo-release-tools docs / reto-mode";
+  content: var(--reto-footer-badge);
   display: block;
   color: var(--reto-text-soft);
   font-family: var(--reto-font-code);

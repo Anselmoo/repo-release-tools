@@ -15,7 +15,12 @@
     delete root.dataset.theme;
   };
 
-  const currentTheme = () => root.dataset.theme || readStoredTheme() || "auto";
+  const currentTheme = () => {
+    if (root.dataset.theme === "light" || root.dataset.theme === "dark") {
+      return root.dataset.theme;
+    }
+    return readStoredTheme() || "auto";
+  };
 
   const nextTheme = (theme) => {
     if (theme === "auto") return "dark";
@@ -64,7 +69,7 @@
     document.body.appendChild(button);
   };
 
-  applyTheme(readStoredTheme());
+  applyTheme(readStoredTheme() || "auto");
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", renderButton, { once: true });
   } else {
