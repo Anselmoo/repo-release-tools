@@ -408,7 +408,7 @@ def test_run_eol_checks_host_not_detected(tmp_path: Path) -> None:
         ),
         patch("repo_release_tools.commands.eol_check.get_eol_records", return_value=[]),
     ):
-        all_ok = run_eol_checks(
+        all_ok, _ = run_eol_checks(
             languages=("python",),
             root=tmp_path,
             warn_days=180,
@@ -446,7 +446,7 @@ def test_run_eol_checks_project_eol_error(tmp_path: Path) -> None:
             return_value=[eol_record],
         ),
     ):
-        all_ok = run_eol_checks(
+        all_ok, _ = run_eol_checks(
             languages=("python",),
             root=tmp_path,
             warn_days=180,
@@ -477,9 +477,36 @@ def test_cmd_eol_allow_eol_with_failures_returns_0(tmp_path: Path) -> None:
         ),
         patch(
             "repo_release_tools.commands.eol_check.run_eol_checks",
-            return_value=False,
+            return_value=(False, []),
         ),
         patch("pathlib.Path.cwd", return_value=tmp_path),
     ):
         result = cmd_eol(_make_args(allow_eol=True))
     assert result == 0
+
+
+def test_cmd_eol_snapshot_writes_health_lock(tmp_path: Path) -> None:
+    """--snapshot merges EOL check results into .rrt/health.lock.toml."""
+    import tomllib
+    from unittest.mock import patch
+
+    from repo_release_tools.commands.eol_check import cmd_eol
+
+    with (
+        patch(
+            "repo_release_tools.commands.eol_check.load_or_autodetect_config",
+            side_effect=FileNotFoundError,
+        ),
+        patch("repo_release_tools.commands.eol_check.detect_host_version", return_value=None),
+        patch("repo_release_tools.commands.eol_check.detect_project_minimum", return_value=None),
+        patch("repo_release_tools.commands.eol_check.get_eol_records", return_value=[]),
+        patch("pathlib.Path.cwd", return_value=tmp_path),
+    ):
+        rc = cmd_eol(_make_args(snapshot=True))
+    assert rc == 0
+    lock_path = tmp_path / ".rrt" / "health.lock.toml"
+    assert lock_path.exists()
+    data = tomllib.loads(lock_path.read_text())
+    assert "checks" in data
+    eol_checks = [k for k in data["checks"] if k.startswith("eol.")]
+    assert eol_checks

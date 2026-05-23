@@ -115,7 +115,9 @@ VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
 VALID_FOLDER_MODES = frozenset({"strict", "warn", "off"})
 VALID_TEMPLATE_STRICTNESS = frozenset({"strict", "loose"})
 VALID_BADGE_STYLES = frozenset({"svg", "shields", "text"})
-VALID_BADGE_VARIANTS = frozenset({"color", "dark", "light"})
+VALID_BADGE_VARIANTS = frozenset(
+    {"color", "dark", "light", "reto-dark", "reto-light", "adaptive", "adaptive-reto"}
+)
 
 AUTODETECTED_CONFIG_BASENAME = ".rrt.autodetected.toml"
 DEFAULT_INIT_CONFIG = ".rrt.toml"
@@ -295,6 +297,21 @@ class GeneratedAsset:
             raise ValueError("generated_assets.path must not escape the repository root")
         if not self.command or not all(isinstance(part, str) and part for part in self.command):
             raise ValueError("generated_assets.command must be a non-empty list of strings")
+
+
+@dataclass(frozen=True)
+class ArtifactTarget:
+    """A glob pattern targeting generated files that should be integrity-tracked."""
+
+    path: str
+    description: str = ""
+
+    def validate(self) -> None:
+        """Validate artifact target configuration."""
+        if not self.path:
+            raise ValueError("artifact_targets.path must be a non-empty string")
+        if Path(self.path).is_absolute():
+            raise ValueError("artifact_targets.path must be a relative glob pattern")
 
 
 @dataclass(frozen=True)
@@ -583,6 +600,7 @@ class RrtConfig:
     eol: EolConfig | None = None
     docs: DocsConfig | None = None
     folders: FolderPolicyConfig | None = None
+    artifact_targets: list[ArtifactTarget] = field(default_factory=list)
     pin_target_missing: str = "error"
     extra_commit_types: tuple[str, ...] = ()
     extra_section_map: dict[str, str] = field(default_factory=dict)

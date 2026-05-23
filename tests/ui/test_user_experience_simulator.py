@@ -42,6 +42,7 @@ Affected entrypoints:
 -   tag         Create and validate release tags
 
 ## Repository Health
+-   artifacts  Content-addressed integrity tracking for generated artifacts
 -   doctor  Check core automation wiring for the resolved rrt configuration
 -   config  Show the resolved rrt configuration for this repository
 -   env     Show environment variables and interpreter details that affect rrt behavior

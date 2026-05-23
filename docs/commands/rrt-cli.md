@@ -3,7 +3,11 @@ title: "rrt CLI"
 permalink: "/commands/rrt-cli/"
 ---
 <!-- rrt:auto:start:page-header -->
-[![GitHub](../assets/badges/github.svg)](https://github.com/Anselmoo/repo-release-tools)
+<a href="https://github.com/Anselmoo/repo-release-tools"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/badges/github-reto-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="../assets/badges/github-reto-light.svg">
+  <img alt="GitHub" src="../assets/badges/github-reto-dark.svg">
+</picture></a>
 <!-- rrt:auto:end:page-header -->
 
 
@@ -50,15 +54,16 @@ Version & Release
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Repository Health
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  doctor  Validate the core automation wiring for the current repository.
-  config  Inspect the resolved rrt configuration after discovery and auto-detection.
-  env     Show environment variables and interpreter details that affect rrt behavior.
-  eol     Check detected host runtimes and project minimum versions against end-of-life dates.
-  toc     Read a Markdown file and print a nested bullet-list TOC to stdout.
-  tree    Render a directory tree from the selected root while respecting gitignore rules.
-  docs    Scan source files and extract inline documentation blocks
-  drift   Lock and check the repo's agent-facing surfaces, such as Claude hooks, agent prompts, and shared skill docs.
-  folder  Supervise folder structures against config-defined rules or built-in templates, scaffold missing structure, and infer new templates from existing trees.
+  doctor     Validate the core automation wiring for the current repository.
+  artifacts  Hash and verify generated files against a committed fingerprint lock.
+  config     Inspect the resolved rrt configuration after discovery and auto-detection.
+  env        Show environment variables and interpreter details that affect rrt behavior.
+  eol        Check detected host runtimes and project minimum versions against end-of-life dates.
+  toc        Read a Markdown file and print a nested bullet-list TOC to stdout.
+  tree       Render a directory tree from the selected root while respecting gitignore rules.
+  docs       Scan source files and extract inline documentation blocks
+  drift      Lock and check the repo's agent-facing surfaces, such as Claude hooks, agent prompts, and shared skill docs.
+  folder     Supervise folder structures against config-defined rules or built-in templates, scaffold missing structure, and infer new templates from existing trees.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 CI & Automation
@@ -715,6 +720,9 @@ Options
   -h, --help     Show this message and exit.
   --fix          Auto-repair fixable issues (e.g. missing [Unreleased] changelog section).
   --fix-dry-run  Preview what --fix would change without writing files.
+  --snapshot     Write current health check results to .rrt/health.lock.toml as a baseline.
+  --check        Compare current health against .rrt/health.lock.toml and report regressions.
+  --strict       With --check: exit 1 on any regression (default: advisory, exit 0).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -722,6 +730,35 @@ Examples
   $ rrt doctor
   $ rrt release check
   $ rrt docs check
+```
+
+## `rrt artifacts`
+
+```text
+Usage:  rrt artifacts [OPTIONS]
+
+Hash and verify generated files against a committed fingerprint lock.
+Run --snapshot to record current hashes; --check to verify them in CI.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --snapshot  Hash all configured artifact_targets and write .rrt/artifacts.lock.toml.
+  --check     Verify artifact hashes match the committed lock. Advisory by default.
+  --list      Display all tracked artifacts and their current hash status.
+  --strict    With --check: exit 1 on any hash mismatch (for CI gates).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt artifacts --snapshot
+  $ rrt artifacts --check --strict
+  $ rrt artifacts --list
 ```
 
 ## `rrt config`
@@ -1015,6 +1052,7 @@ Options
   --allow-eol      Downgrade errors to warnings (useful during migration grace periods).
   --host-only      Only check the host runtime; skip project minimum checks.
   --project-only   Only check the project minimum version; skip host runtime checks.
+  --snapshot       Merge EOL check results into .rrt/health.lock.toml after running.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -1266,6 +1304,9 @@ Options
   --inject FILE  Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
   --anchor ID    Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
   --dry-run      Print the result instead of writing (only effective with --inject).
+  --snapshot     Write a tree structure snapshot to .rrt/tree.lock.toml as a baseline.
+  --check        Compare current tree against .rrt/tree.lock.toml and report structural drift.
+  --strict       With --check: exit 1 on structural drift (default: advisory, exit 0).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -1430,7 +1471,7 @@ Options
   --check              Fail if any badge file is stale; do not write.
   --root PATH          Project root directory (default: current directory).
   --dry-run            Print which files would be written without doing so.
-  --variant            Generate only one visual variant (default: all three).
+  --variant            Generate only one visual variant (default: all available).
 ```
 
 ### `rrt docs api`
@@ -1571,6 +1612,7 @@ Options
   --root PATH    Root to validate.
   --template     Built-in or custom template name to apply at the root. Available built-ins: bash-powershell-project, cargo-inspired, cli-tool, docs-only, go-module, javascript-package, library-module, loose-starter, loose-validate, monorepo-workspace, plugin-extension, python-package.
   --report-only  Downgrade violations to warnings for this invocation.
+  --snapshot     Merge folder check results into .rrt/health.lock.toml after running.
 ```
 
 ### `rrt folder scaffold`

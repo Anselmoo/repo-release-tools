@@ -333,3 +333,49 @@ def test_get_badge_svg_fallback_unknown_platform() -> None:
 def test_get_badge_svg_fallback_known_platform() -> None:
     svg = get_badge_svg("github", "dark")
     assert "<svg" in svg
+
+
+def test_render_badge_adaptive_variant() -> None:
+    """adaptive badge_variant produces a <picture> element."""
+    html = render_badge(
+        "github",
+        repo_url="https://github.com/o/r",
+        badge_style="svg",
+        badge_variant="adaptive",
+        badge_assets_dir="docs/assets/badges",
+        linked=True,
+    )
+    assert "<picture>" in html
+    assert "github-dark.svg" in html
+    assert "github-light.svg" in html
+    assert "github.svg" in html
+    assert 'href="https://github.com/o/r"' in html
+
+
+def test_render_badge_adaptive_reto_variant() -> None:
+    """adaptive-reto badge_variant uses reto-dark/reto-light SVGs."""
+    html = render_badge(
+        "github",
+        repo_url="https://github.com/o/r",
+        badge_style="svg",
+        badge_variant="adaptive-reto",
+        badge_assets_dir="docs/assets/badges",
+        linked=True,
+    )
+    assert "<picture>" in html
+    assert "github-reto-dark.svg" in html
+    assert "github-reto-light.svg" in html
+
+
+def test_render_badge_adaptive_unlinked() -> None:
+    """adaptive without repo_url returns just the <picture> element."""
+    html = render_badge(
+        "github",
+        repo_url="",
+        badge_style="svg",
+        badge_variant="adaptive",
+        badge_assets_dir="docs/assets/badges",
+        linked=False,
+    )
+    assert "<picture>" in html
+    assert "<a " not in html

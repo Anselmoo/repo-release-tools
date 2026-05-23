@@ -1,6 +1,6 @@
 title: repo-release-tools
 description: Minimal product docs for repo-release-tools
-theme: minima
+# theme: minima # Custom "reto" design enforced via local _layouts
 
 # GitHub Pages project-site routing
 url: "https://anselmoo.github.io"
@@ -13,6 +13,11 @@ permalink: pretty
 kramdown:
   input: GFM
   hard_wrap: false
+
+# Standard Jekyll plugins for GitHub Pages
+plugins:
+  - jekyll-seo-tag
+  - jekyll-feed
 
 # Keep generated output clean
 exclude:

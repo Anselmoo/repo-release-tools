@@ -108,11 +108,19 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, TypeAlias
 
+from repo_release_tools.state import (
+    build_tree_lock,
+    hash_content,
+    tree_lock_is_current,
+    tree_lock_path,
+    write_lock,
+)
 from repo_release_tools.tools.inject import (
     ANCHOR_END_TOKEN,
     ANCHOR_START_TOKEN,
@@ -147,6 +155,25 @@ TREE_EPILOG = """  $ rrt tree
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("tree", __doc__ or ""),)
 
 TreeEntry: TypeAlias = tuple[str, bool, list["TreeEntry"] | None]
+
+
+def _canonical_entry_repr(entries: list[TreeEntry]) -> str:
+    """Return a stable, format-independent JSON serialization of tree entries.
+
+    This is used to compute a hash that is independent of rendering format
+    (ascii/markdown/rich/classic) and platform-specific glyph choices.
+    """
+
+    def _to_list(nodes: list[TreeEntry]) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        for name, is_dir, children in nodes:
+            entry: dict[str, object] = {"name": name, "is_dir": is_dir}
+            if children is not None:
+                entry["children"] = _to_list(children)
+            result.append(entry)
+        return result
+
+    return json.dumps(_to_list(entries), sort_keys=True, separators=(",", ":"))
 
 
 def _resolve_git_root(cwd: Path) -> Path | None:
@@ -443,6 +470,37 @@ def cmd_tree(args: argparse.Namespace) -> int:
         case _:
             rendered = GLYPHS.tree.render(entries)
 
+    entry_count = _entry_count(entries)
+    ignored_count = sum(1 for v in ignore_cache.values() if v)
+    tree_meta = {
+        "entry_count": entry_count,
+        "tree_hash": hash_content(_canonical_entry_repr(entries)),
+        "ignored_count": ignored_count,
+    }
+
+    do_snapshot: bool = getattr(args, "snapshot", False)
+    do_check: bool = getattr(args, "check", False)
+    strict: bool = getattr(args, "strict", False)
+
+    if do_snapshot:
+        lock_data = build_tree_lock(tree_meta)
+        write_lock(tree_lock_path(root), lock_data)
+        p.ok(f"Tree snapshot written to .rrt/tree.lock.toml ({entry_count} entries)")
+        return 0
+
+    if do_check:
+        current, drifted = tree_lock_is_current(tree_lock_path(root), tree_meta)
+        if current:
+            p.ok("No tree structure drift detected.")
+            return 0
+        for msg in drifted:
+            p.warn(f"  {msg}")
+        if strict:
+            p.line("Tree structure drift detected (--strict mode).", ok=False)
+            return 1
+        p.warn("Tree structure drift detected (advisory). Use --strict to block.")
+        return 0
+
     # --- inject mode: replace anchored block in a target file ---
     if inject_file and anchor_id:
         target = Path(inject_file)
@@ -495,7 +553,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
     if warnings:
         p.blank_line()
 
-    p.ok(f"Done. {_entry_count(entries)} entries shown.")
+    p.ok(f"Done. {entry_count} entries shown.")
     return 0
 
 
@@ -566,5 +624,24 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         default=False,
         help="Print the result instead of writing (only effective with --inject).",
+    )
+    snapshot_group = parser.add_mutually_exclusive_group()
+    snapshot_group.add_argument(
+        "--snapshot",
+        action="store_true",
+        default=False,
+        help="Write a tree structure snapshot to .rrt/tree.lock.toml as a baseline.",
+    )
+    snapshot_group.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Compare current tree against .rrt/tree.lock.toml and report structural drift.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        default=False,
+        help="With --check: exit 1 on structural drift (default: advisory, exit 0).",
     )
     parser.set_defaults(handler=cmd_tree)

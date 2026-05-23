@@ -14,6 +14,7 @@ from typing import IO, Any, NoReturn, cast
 from repo_release_tools.assets.banner import get_cached_banner
 from repo_release_tools.commands import (
     agents_cmd,
+    artifacts_cmd,
     branch,
     bump,
     changelog_cmd,
@@ -110,6 +111,7 @@ COMMAND_GROUPS: dict[str, list[str]] = {
     "Version & Release": ["bump", "changelog", "ci-version", "release", "workspace", "tag"],
     "Repository Health": [
         "doctor",
+        "artifacts",
         "config",
         "env",
         "eol",
@@ -162,6 +164,7 @@ DANGER_COMMANDS = {
 
 COMMAND_REGISTRARS = (
     agents_cmd.register,
+    artifacts_cmd.register,
     branch.register,
     bump.register,
     changelog_cmd.register,

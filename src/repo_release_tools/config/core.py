@@ -33,6 +33,7 @@ from .model import (
     VALID_CI_FORMATS,
     VALID_PIN_TARGET_MISSING,
     VALID_TARGET_KINDS,
+    ArtifactTarget,
     DocsConfig,
     EolConfig,
     EolOverride,
@@ -692,6 +693,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         eol=_load_eol_config(raw.get("eol")),
         docs=_load_docs_config(raw.get("docs"), root=root),
         folders=_load_folders_config(raw.get("folders")),
+        artifact_targets=_load_artifact_targets(raw.get("artifact_targets", [])),
         pin_target_missing=_load_pin_target_missing(raw.get("pin_target_missing")),
         extra_commit_types=_load_extra_commit_types(raw.get("extra_commit_types", [])),
         extra_section_map=_load_extra_section_map(raw.get("extra_section_map", {})),
@@ -1070,6 +1072,25 @@ def _load_generated_assets(root: Path, raw_assets: object) -> list[GeneratedAsse
             GeneratedAsset(path=root / asset.path, command=asset.command),
         )
     return assets
+
+
+def _load_artifact_targets(raw_targets: object) -> list[ArtifactTarget]:
+    """Parse a list of artifact target tables into ``ArtifactTarget`` objects."""
+    if not isinstance(raw_targets, list):
+        raise ValueError("artifact_targets must be an array of tables")
+    targets: list[ArtifactTarget] = []
+    for item in raw_targets:
+        if not isinstance(item, dict):
+            raise ValueError("Each artifact_targets entry must be a table")
+        typed_item = cast("dict[str, object]", item)
+        raw_path = typed_item.get("path")
+        if not isinstance(raw_path, str) or not raw_path:
+            raise ValueError("Each artifact_targets entry must have a non-empty 'path' string")
+        description = str(typed_item.get("description", ""))
+        target = ArtifactTarget(path=raw_path, description=description)
+        target.validate()
+        targets.append(target)
+    return targets
 
 
 def _load_version_group(

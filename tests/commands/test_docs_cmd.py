@@ -1271,3 +1271,71 @@ class TestCmdInjectAddAnchors:
         assert content.startswith("# Existing Content\n")
         assert "# Existing Content\n\n<!-- rrt:auto:start:doc-footer -->" in content
         assert content.endswith("<!-- rrt:auto:end:doc-footer -->\n\n")
+
+
+class TestExpandPlatformVarsVariants:
+    """Tests for _expand_platform_vars badge variant placeholders (lines 405-414)."""
+
+    def test_expand_platform_vars_dark_variant(self) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="svg",
+            badge_assets_dir="docs/assets/badges",
+        )
+        result = _expand_platform_vars("{platform_badge_dark}", docs)
+        assert "github-dark.svg" in result
+        assert "{platform_badge_dark}" not in result
+
+    def test_expand_platform_vars_adaptive_variant(self) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="svg",
+            badge_assets_dir="docs/assets/badges",
+        )
+        result = _expand_platform_vars("{platform_badge_adaptive}", docs)
+        assert "<picture>" in result
+        assert "{platform_badge_adaptive}" not in result
+
+    def test_expand_platform_vars_adaptive_reto_variant(self) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="svg",
+            badge_assets_dir="docs/assets/badges",
+        )
+        result = _expand_platform_vars("{platform_badge_adaptive_reto}", docs)
+        assert "<picture>" in result
+        assert "reto-dark" in result
+        assert "{platform_badge_adaptive_reto}" not in result
+
+
+class TestBadgesMain:
+    """Tests for assets/badges __init__ _main and __main__ entry points."""
+
+    def test_badges_main_uses_default_dest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """_main() uses 'docs/assets/badges' when no sys.argv[1] given."""
+        from unittest.mock import patch as _patch
+
+        from repo_release_tools.assets.badges import _main
+
+        monkeypatch.chdir(tmp_path)
+        with _patch("sys.argv", ["prog"]), _patch("sys.exit") as mock_exit:
+            _main()
+        mock_exit.assert_called_once()
+        # Called with the exit code from export_all_badges
+        assert isinstance(mock_exit.call_args[0][0], int)
+
+    def test_badges_main_uses_provided_dest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """_main() uses sys.argv[1] as the output directory when provided."""
+        from unittest.mock import patch as _patch
+
+        from repo_release_tools.assets.badges import _main
+
+        out_dir = tmp_path / "out"
+        with _patch("sys.argv", ["prog", str(out_dir)]), _patch("sys.exit") as mock_exit:
+            _main()
+        mock_exit.assert_called_once_with(0)
+        assert out_dir.exists()
