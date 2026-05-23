@@ -939,3 +939,63 @@ def test_cmd_tree_check_drift_strict(tmp_path: Path, monkeypatch: pytest.MonkeyP
     (tmp_path / "b.txt").write_text("y", encoding="utf-8")
     rc = tree.cmd_tree(_args(root=str(tmp_path), check=True, strict=True))
     assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# _canonical_entry_repr
+# ---------------------------------------------------------------------------
+
+
+def test_canonical_entry_repr_is_format_independent() -> None:
+    """The canonical representation is independent of rendering format."""
+    import json as _json
+
+    entries: list[tree.TreeEntry] = [
+        ("README.md", False, None),
+        ("src", True, [("module.py", False, None)]),
+    ]
+    result = tree._canonical_entry_repr(entries)
+    parsed = _json.loads(result)
+    assert parsed[0]["name"] == "README.md"
+    assert parsed[0]["is_dir"] is False
+    assert parsed[1]["name"] == "src"
+    assert parsed[1]["is_dir"] is True
+    assert parsed[1]["children"][0]["name"] == "module.py"
+
+
+def test_canonical_entry_repr_empty_entries() -> None:
+    """Empty entry list returns a JSON empty array."""
+    result = tree._canonical_entry_repr([])
+    assert result == "[]"
+
+
+def test_canonical_entry_repr_none_children_omitted() -> None:
+    """Entries with children=None do not include 'children' key."""
+    import json as _json
+
+    entries: list[tree.TreeEntry] = [("file.txt", False, None)]
+    result = tree._canonical_entry_repr(entries)
+    parsed = _json.loads(result)
+    assert "children" not in parsed[0]
+
+
+def test_canonical_entry_repr_stable_across_formats(tmp_path: Path) -> None:
+    """tree_hash in snapshot is stable regardless of --format flag used."""
+    import tomllib as _tomllib
+
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+
+    tree.cmd_tree(_args(root=str(tmp_path), snapshot=True, format="classic"))
+    lock_classic = _tomllib.loads(
+        (tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8")
+    )
+    hash_classic = lock_classic["snapshot"]["tree_hash"]
+
+    tree.cmd_tree(_args(root=str(tmp_path), snapshot=True, format="ascii"))
+    lock_ascii = _tomllib.loads(
+        (tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8")
+    )
+    hash_ascii = lock_ascii["snapshot"]["tree_hash"]
+
+    assert hash_classic == hash_ascii
+

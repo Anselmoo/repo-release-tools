@@ -327,12 +327,12 @@ hr {
 }
 
 /* Badge Glow */
-img[src*="-reto.svg"] {
+img[src*="-reto-"] {
   filter: drop-shadow(0 0 2px rgba(255, 179, 108, 0.5));
   transition: filter 0.2s ease;
 }
 
-img[src*="-reto.svg"]:hover {
+img[src*="-reto-"]:hover {
   filter: drop-shadow(0 0 5px rgba(255, 179, 108, 0.8));
 }
 

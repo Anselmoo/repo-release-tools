@@ -170,7 +170,7 @@ def _print_artifact_list(
             p.line(rule(pattern, width=width))
 
         if not matched:
-            p.line(f"  (no files matched: {pattern})")
+            p.warn(f"no files matched: {pattern}")
             continue
 
         for path in matched:
@@ -180,11 +180,11 @@ def _print_artifact_list(
             current_hash = hash_file(path)
             locked_entry = locked.get(rel)
             if locked_entry is None:
-                p.line(f"  {rel:<60}  NOT IN LOCK")
+                p.line(f"{rel:<60}  NOT IN LOCK", ok=False)
             elif current_hash == locked_entry.get("hash", ""):
-                p.line(f"  {rel:<60}  ✓")
+                p.line(f"{rel:<60}  ✓", ok=True)
             else:
-                p.line(f"  {rel:<60}  MISMATCH")
+                p.line(f"{rel:<60}  MISMATCH", ok=False)
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]

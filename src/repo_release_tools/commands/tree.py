@@ -108,6 +108,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -154,6 +155,25 @@ TREE_EPILOG = """  $ rrt tree
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("tree", __doc__ or ""),)
 
 TreeEntry: TypeAlias = tuple[str, bool, list["TreeEntry"] | None]
+
+
+def _canonical_entry_repr(entries: list[TreeEntry]) -> str:
+    """Return a stable, format-independent JSON serialization of tree entries.
+
+    This is used to compute a hash that is independent of rendering format
+    (ascii/markdown/rich/classic) and platform-specific glyph choices.
+    """
+
+    def _to_list(nodes: list[TreeEntry]) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        for name, is_dir, children in nodes:
+            entry: dict[str, object] = {"name": name, "is_dir": is_dir}
+            if children is not None:
+                entry["children"] = _to_list(children)
+            result.append(entry)
+        return result
+
+    return json.dumps(_to_list(entries), sort_keys=True, separators=(",", ":"))
 
 
 def _resolve_git_root(cwd: Path) -> Path | None:
@@ -454,7 +474,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
     ignored_count = sum(1 for v in ignore_cache.values() if v)
     tree_meta = {
         "entry_count": entry_count,
-        "tree_hash": hash_content(rendered),
+        "tree_hash": hash_content(_canonical_entry_repr(entries)),
         "ignored_count": ignored_count,
     }
 
