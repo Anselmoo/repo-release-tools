@@ -1,0 +1,211 @@
+:root {
+  color-scheme: light dark;
+  --reto-font-body: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --reto-font-display: "Orbitron", "Eurostile", "Avenir Next Condensed", "Segoe UI", sans-serif;
+  --reto-font-code: "JetBrains Mono", "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+
+  --reto-bg: #f5f0e6;
+  --reto-bg-elevated: #fff9ef;
+  --reto-surface: #fff;
+  --reto-text: #2a1c10;
+  --reto-text-soft: #6d5135;
+  --reto-border: #d2bc9d;
+  --reto-accent: #7a4d1c;
+  --reto-accent-strong: #b65e13;
+  --reto-link: #8f3f03;
+  --reto-code-bg: #f8ebd8;
+  --reto-shadow: 0 10px 28px rgb(50 25 0 / 15%);
+  --reto-glow: 0 0 0 1px rgb(255 194 115 / 45%), 0 0 28px rgb(255 166 69 / 24%);
+  --reto-footer-badge: "⚙ repo-release-tools docs / reto-mode";
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) {
+    --reto-bg: #110d09;
+    --reto-bg-elevated: #1a120b;
+    --reto-surface: #20160f;
+    --reto-text: #f8dfbc;
+    --reto-text-soft: #caa978;
+    --reto-border: #6f4d2f;
+    --reto-accent: #ffc26e;
+    --reto-accent-strong: #ff9f3f;
+    --reto-link: #ffca86;
+    --reto-code-bg: #26190f;
+    --reto-shadow: 0 10px 35px rgb(0 0 0 / 45%);
+    --reto-glow: 0 0 0 1px rgb(255 177 79 / 22%), 0 0 30px rgb(255 166 69 / 18%);
+  }
+}
+
+html[data-theme="dark"] {
+  --reto-bg: #110d09;
+  --reto-bg-elevated: #1a120b;
+  --reto-surface: #20160f;
+  --reto-text: #f8dfbc;
+  --reto-text-soft: #caa978;
+  --reto-border: #6f4d2f;
+  --reto-accent: #ffc26e;
+  --reto-accent-strong: #ff9f3f;
+  --reto-link: #ffca86;
+  --reto-code-bg: #26190f;
+  --reto-shadow: 0 10px 35px rgb(0 0 0 / 45%);
+  --reto-glow: 0 0 0 1px rgb(255 177 79 / 22%), 0 0 30px rgb(255 166 69 / 18%);
+}
+
+html,
+body {
+  background:
+    radial-gradient(circle at 5% -10%, rgb(255 183 108 / 25%), transparent 45%),
+    radial-gradient(circle at 95% 0%, rgb(255 220 150 / 12%), transparent 35%),
+    var(--reto-bg);
+  color: var(--reto-text);
+  font-family: var(--reto-font-body);
+}
+
+body {
+  font-size: 17px;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+}
+
+.site-header,
+.site-footer {
+  border-color: var(--reto-border);
+  background: linear-gradient(90deg, var(--reto-bg-elevated), var(--reto-bg));
+}
+
+.site-title,
+.page-link {
+  color: var(--reto-accent);
+}
+
+.page-content .wrapper {
+  background: var(--reto-surface);
+  border: 1px solid var(--reto-border);
+  border-radius: 16px;
+  box-shadow: var(--reto-shadow);
+  margin-top: 1.5rem;
+  margin-bottom: 2rem;
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--reto-accent);
+  font-family: var(--reto-font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+h2::before,
+h3::before {
+  color: var(--reto-accent-strong);
+  font-family: var(--reto-font-code);
+  margin-right: 0.4rem;
+}
+
+h2::before {
+  content: "✦";
+}
+
+h3::before {
+  content: "▸";
+}
+
+p,
+li,
+td,
+th {
+  color: var(--reto-text);
+}
+
+a {
+  color: var(--reto-link);
+  text-decoration-color: color-mix(in srgb, var(--reto-link), transparent 45%);
+}
+
+a:hover {
+  color: var(--reto-accent-strong);
+  text-decoration-color: currentColor;
+}
+
+blockquote {
+  border-left: 4px solid var(--reto-accent-strong);
+  background: color-mix(in srgb, var(--reto-bg-elevated), var(--reto-surface) 50%);
+  color: var(--reto-text-soft);
+  border-radius: 0 10px 10px 0;
+  padding: 0.75rem 1rem;
+}
+
+pre,
+code {
+  font-family: var(--reto-font-code);
+}
+
+pre {
+  background: var(--reto-code-bg);
+  border: 1px solid var(--reto-border);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(255 184 85 / 12%);
+}
+
+code.highlighter-rouge {
+  background: var(--reto-code-bg);
+  border: 1px solid color-mix(in srgb, var(--reto-border), transparent 35%);
+  border-radius: 6px;
+  color: var(--reto-accent);
+  padding: 0.12em 0.4em;
+}
+
+table {
+  border: 1px solid var(--reto-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+th {
+  background: color-mix(in srgb, var(--reto-bg-elevated), var(--reto-surface) 30%);
+  color: var(--reto-accent);
+}
+
+tr:nth-child(2n) {
+  background: color-mix(in srgb, var(--reto-bg-elevated), transparent 55%);
+}
+
+hr {
+  border-top: 1px solid var(--reto-border);
+}
+
+#reto-theme-toggle {
+  appearance: none;
+  border: 1px solid var(--reto-border);
+  border-radius: 999px;
+  box-shadow: var(--reto-glow);
+  cursor: pointer;
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  min-width: 44px;
+  min-height: 44px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-family: var(--reto-font-code);
+  color: var(--reto-accent);
+  background: var(--reto-bg-elevated);
+}
+
+#reto-theme-toggle:hover {
+  background: color-mix(in srgb, var(--reto-bg-elevated), var(--reto-accent) 15%);
+}
+
+.site-footer::before {
+  content: var(--reto-footer-badge);
+  display: block;
+  color: var(--reto-text-soft);
+  font-family: var(--reto-font-code);
+  margin-bottom: 0.65rem;
+}

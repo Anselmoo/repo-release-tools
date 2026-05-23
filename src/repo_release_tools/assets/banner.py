@@ -257,6 +257,7 @@ _MONOSPACE_CANDIDATES = [
 ]
 
 _PNG_SAFE_FALLBACKS = {
+    "…": ".",
     "✦": "*",
     "☾": "o",
     "★": "*",
