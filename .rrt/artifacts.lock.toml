@@ -1,0 +1,213 @@
+[meta]
+generated_at = "2026-05-23T20:28:30+00:00"
+rrt_version = "1.6.2"
+
+[files."src/repo_release_tools/assets/badges/azure-dark.svg"]
+hash = "sha256:53e7c126aa219197dba789c5e0a3dd8a5e8111578f5ea987409ca1babf622450"
+size = 684
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/azure-light.svg"]
+hash = "sha256:97b4617de082979d50262fd3665c62470ab26541967546bd5120bedf72d35ce8"
+size = 684
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/azure-reto-dark.svg"]
+hash = "sha256:7da8f88d448f8ad0bb2d1635d1a6e6cc585099b7cabe86277873b5d5fb779029"
+size = 684
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/azure-reto-light.svg"]
+hash = "sha256:6af7ac4687fed693a59ff05ece3bc90dae3cb1fcc5a792836d3d1fc910fd6b2d"
+size = 684
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/azure.svg"]
+hash = "sha256:72e275ed2556e903325043e74a0c0e9f60831b3ef6f5af71f49ed7e46627703e"
+size = 684
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/bitbucket-dark.svg"]
+hash = "sha256:55c43de4fae8eab49683674dc7a8fbe6cb2ff9928fd8b9c662fe55285c89569b"
+size = 639
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/bitbucket-light.svg"]
+hash = "sha256:aafa92f5048e656b0a0a3b3167d85904358d3213113c8783faa22e66d70204df"
+size = 639
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/bitbucket-reto-dark.svg"]
+hash = "sha256:bb4266cf8b89d6ea975a1f620c432e9b58ceed84c025fc7cae976a2a2d0f7762"
+size = 639
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/bitbucket-reto-light.svg"]
+hash = "sha256:c4810e2d87fcfbdce78358a667274b4c7ba70bed8df5a8fd275f76fddba0ecd9"
+size = 639
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/bitbucket.svg"]
+hash = "sha256:0aa0b2b85487f758cd0edd489c9be995ac8b3abc19a2b9b7b19a158c7cf4cff2"
+size = 639
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/codeberg-dark.svg"]
+hash = "sha256:e5e795e67c0afb7c025da94f6fca0bfb1411bea5bdafa8632a20cef6775a80a1"
+size = 984
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/codeberg-light.svg"]
+hash = "sha256:ebf79739890742e8c3d77b58ab8f0be2539e9fd1cc78cfc105dcd7d1119a0d3a"
+size = 984
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/codeberg-reto-dark.svg"]
+hash = "sha256:88a91970df11e110e681426d58ab246bb3636a3b16d08434994f9e7154cf5209"
+size = 984
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/codeberg-reto-light.svg"]
+hash = "sha256:89fd1f480a9fd7e7f902838fec2eb696363148c06d2d69c7f6129192908a5c23"
+size = 984
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/codeberg.svg"]
+hash = "sha256:75093570de9a4f21d08b73ce2de2ad09107df31860cbcaceabe045013431d3b8"
+size = 984
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/generic-dark.svg"]
+hash = "sha256:292d5516b1db81057648550eccd7933494e70db79b658dca1f27b5e2e7b287b3"
+size = 549
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/generic-light.svg"]
+hash = "sha256:ee6d1f198d9198e0b7dbdd71afa7ae96d8bacc3848542b2624a6612b49e7278f"
+size = 549
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/generic-reto-dark.svg"]
+hash = "sha256:a5161ea6a027452bccec2825e8148f0b78faef7db7deff628319f36a1b1a2515"
+size = 549
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/generic-reto-light.svg"]
+hash = "sha256:1c9fee7ec9ce1b1cbb604128c6d5a28a9d73537942d5c0758a20c6492fb63992"
+size = 549
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/generic.svg"]
+hash = "sha256:675f5b8be196e6119cff047fcd33d1729c04d387fdee15d9339d44ebcee8e9f8"
+size = 549
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitea-dark.svg"]
+hash = "sha256:4425b5ae186cce7c7370f071723d59a1efdd36dab2d8a7e6d77959f4b02060e2"
+size = 2155
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitea-light.svg"]
+hash = "sha256:b8497ec10a0e3b987c0b51aeaf5c4b889634ddb5fdfee7d75f48f7868edd59b1"
+size = 2155
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitea-reto-dark.svg"]
+hash = "sha256:5f2570026710120d2b2ac76f3059ed72c5f6342e88436c548fc876ce1645ce93"
+size = 2155
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitea-reto-light.svg"]
+hash = "sha256:f0869257a5cc2535d46d93085ae764ca048029ff5caf6dad72c4a881b44128fa"
+size = 2155
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitea.svg"]
+hash = "sha256:8c7bf4bb64d2ed6916964eb48511b80067301b1d9016e9dceb347688749eb764"
+size = 2155
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/github-dark.svg"]
+hash = "sha256:47b5a7e4f7be5c712f9ee971488302ae5f11f63302913636d970aeeada4b0e9f"
+size = 1171
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/github-light.svg"]
+hash = "sha256:8680d0ff03f355a4cde1c1d5e3342b35d043350ce7a6ff34fde8165fea67c03f"
+size = 1171
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/github-reto-dark.svg"]
+hash = "sha256:4a96e1ecab91fba03c770956e340b8b37eb04d0b622f7479be844faf9ff7b5a8"
+size = 1171
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/github-reto-light.svg"]
+hash = "sha256:1e01956b796ad29e67bb8fd8758d8b28f4de6b295b758c61b19045b73f101bd0"
+size = 1171
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/github.svg"]
+hash = "sha256:d0f19be5d933cbf4cd95bbbe874315c8e73809e792e676b71bd8b6675d393458"
+size = 1171
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitlab-dark.svg"]
+hash = "sha256:1eac5f6e9e1d1b451a6d29df400f6f75d2a18beb52fb2e8dcbb8841420f85fd5"
+size = 922
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitlab-light.svg"]
+hash = "sha256:dd4117a07062b92ca7da1f67ed7c00537e1e6af4b481b136de33bddb917bc155"
+size = 922
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitlab-reto-dark.svg"]
+hash = "sha256:731854db9c0896a7f410a76999a424e592e5f749734b0b875fa8acfea0352316"
+size = 922
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitlab-reto-light.svg"]
+hash = "sha256:84cb6253bbb90feff1aadd2e301c70e0631583f81bea58a3d27b441b6b239c92"
+size = 922
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
+
+[files."src/repo_release_tools/assets/badges/gitlab.svg"]
+hash = "sha256:8a8b9101d6fc9f38a9e5818b4eb0f9bdb0483cb024d551b141eb58e1240d0485"
+size = 922
+description = "Platform badge SVG files"
+updated_at = "2026-05-23T20:28:30+00:00"
