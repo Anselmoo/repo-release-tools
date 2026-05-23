@@ -203,12 +203,19 @@ jobs:
 
       - name: Verify lefthook pre-commit run passes on valid branch
         working-directory: /tmp/rrt-lefthook-test
-        run: lefthook run pre-commit
+        run: |
+          # Ensure lefthook has staged input so command execution is not skipped.
+          echo "trigger valid branch check" > .lefthook-trigger
+          git add .lefthook-trigger
+          lefthook run pre-commit
 
       - name: Verify lefthook pre-commit run fails on invalid branch
         working-directory: /tmp/rrt-lefthook-test
         run: |
           git checkout -b invalid-branch-name 2>/dev/null || true
+          # Stage a file so pre-commit commands are executed instead of skipped.
+          echo "trigger invalid branch check" > .lefthook-trigger
+          git add .lefthook-trigger
           if lefthook run pre-commit; then
             echo "ERROR: lefthook pre-commit should have rejected 'invalid-branch-name'" >&2
             exit 1
