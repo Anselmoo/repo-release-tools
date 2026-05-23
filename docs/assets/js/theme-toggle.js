@@ -47,7 +47,7 @@
     if (root.dataset.theme === "light" || root.dataset.theme === "dark") {
       return root.dataset.theme;
     }
-    return readStoredTheme() || "auto";
+    return "auto";
   };
 
   const nextTheme = (theme) => {
