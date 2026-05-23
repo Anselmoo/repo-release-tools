@@ -183,6 +183,7 @@ jobs:
           EOF
           cat > lefthook.yml << 'EOF'
           pre-commit:
+            skip_no_files: false
             commands:
               branch-name:
                 run: rrt-hooks pre-commit
