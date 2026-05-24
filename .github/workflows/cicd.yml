@@ -55,6 +55,31 @@ jobs:
       - name: Ruff lint
         run: uvx pre-commit run --all-files --show-diff-on-failure
 
+  verify:
+    name: Snapshot drift checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --all-groups
+      - name: Check docs lock drift
+        run: uv run rrt docs publish --check
+      - name: Check docs inject drift
+        run: uv run rrt docs inject --check
+      - name: Check health regressions
+        run: uv run rrt doctor --check --strict
+      - name: Check tree structure drift
+        run: uv run rrt tree --check --strict
+      - name: Generate badge SVGs for artifact check
+        run: uv run python -m repo_release_tools.assets.badges src/repo_release_tools/assets/badges
+      - name: Check artifact integrity
+        run: uv run rrt artifacts --check --strict
+
   test:
     name: Tests (${{ matrix.python-version }})
     needs: lint
