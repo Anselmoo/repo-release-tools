@@ -311,3 +311,13 @@ class TestRender:
         assert isinstance(result, str)
         lock_path = tmp_path / ".rrt" / "docs.lock.toml"
         assert lock_path.exists()
+
+
+class TestHtmlRenderer:
+    """Tests for the HTML format renderer stub."""
+
+    def test_render_html_raises_not_implemented(self) -> None:
+        from repo_release_tools.docs.formats.html import render_html
+
+        with pytest.raises(NotImplementedError):
+            render_html([_entry()], _config())

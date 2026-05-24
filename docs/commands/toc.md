@@ -3,11 +3,11 @@ title: "rrt toc"
 permalink: "/commands/toc/"
 ---
 <!-- rrt:auto:start:page-header -->
-<a href="https://github.com/Anselmoo/repo-release-tools"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../assets/badges/github-reto-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="../assets/badges/github-reto-light.svg">
-  <img alt="GitHub" src="../assets/badges/github-reto-dark.svg">
-</picture></a>
+<p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../assets/badges/github-reto-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="../../assets/badges/github-reto-light.svg">
+  <img alt="GitHub" src="../../assets/badges/github-reto-dark.svg">
+</picture></a></p>
 <!-- rrt:auto:end:page-header -->
 
 

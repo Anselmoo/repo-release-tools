@@ -78,13 +78,33 @@ cmd = "rrt docs inject --check"
 help = "Verify all generated docs match their source-owned content."
 cmd = "rrt docs publish --check"
 
+[tool.poe.groups.docs.tasks.docs-toc]
+help = "Inject auto-generated TOC into all doc pages that carry a toc anchor."
+shell = """
+for f in docs/commands/*.md docs/action.md docs/agent-instructions.md; do
+  uv run rrt toc "$f" --inject "$f" --anchor toc --min-level 2 --max-level 3 2>/dev/null || true
+done
+"""
+
 [tool.poe.groups.docs.tasks.docs]
 help = "Regenerate generated docs and confirm they are current."
-sequence = ["docs-generate", "docs-check", "docs-inject", "docs-inject-check", "badge-export", "badge-sync", "banner-export"]
+sequence = ["docs-generate", "docs-check", "docs-inject", "docs-inject-check", "docs-toc", "badge-export", "badge-sync", "banner-export"]
 
 [tool.poe.groups.docs.tasks.docs-verify]
 help = "Verify generated docs and shared anchors are current."
 sequence = ["docs-check", "docs-inject-check"]
+
+[tool.poe.groups.docs.tasks.serve]
+help = "Serve the docs site locally with Jekyll at http://localhost:4000/ (requires Ruby)."
+shell = "cd docs && bundle install && bundle exec jekyll serve --baseurl '' --livereload"
+
+[tool.poe.groups.docs.tasks.serve-pages]
+help = "Serve with the production baseurl (/repo-release-tools) to simulate GitHub Pages exactly (requires Ruby)."
+shell = "cd docs && bundle install && bundle exec jekyll serve --baseurl '/repo-release-tools'"
+
+[tool.poe.groups.docs.tasks.serve-python]
+help = "Serve raw docs directory via Python HTTP server at http://localhost:4000/ (no Jekyll rendering — templates stay as Liquid/Markdown)."
+cmd = "python -m http.server 4000 --directory docs"
 
 [tool.poe.groups.docs.tasks.sync-assets]
 help = "Validate source-owned skill and agent assets are present (no copy needed)."

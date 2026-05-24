@@ -357,7 +357,14 @@ def _badge_assets_dir_for_target(
     if not assets_path.is_absolute():
         assets_path = (root / assets_path).resolve()
     resolved_target = target_path if target_path.is_absolute() else (root / target_path)
-    return Path(os.path.relpath(assets_path, start=resolved_target.parent.resolve())).as_posix()
+    # Jekyll `permalink: pretty` serves foo.md at /foo/ (trailing slash = one virtual level
+    # deeper than the file's parent directory). Compute relative paths from that virtual
+    # location so <picture srcset="..."> links resolve correctly in the browser.
+    if resolved_target.suffix == ".md" and resolved_target.stem != "index":
+        effective_parent = (resolved_target.parent / resolved_target.stem).resolve()
+    else:
+        effective_parent = resolved_target.parent.resolve()
+    return Path(os.path.relpath(assets_path, start=effective_parent)).as_posix()
 
 
 def _expand_platform_vars(
