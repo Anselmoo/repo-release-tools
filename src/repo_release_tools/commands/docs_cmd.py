@@ -360,7 +360,10 @@ def _badge_assets_dir_for_target(
     # Jekyll `permalink: pretty` serves foo.md at /foo/ (trailing slash = one virtual level
     # deeper than the file's parent directory). Compute relative paths from that virtual
     # location so <picture srcset="..."> links resolve correctly in the browser.
-    if resolved_target.suffix == ".md" and resolved_target.stem != "index":
+    # Only apply for files inside the docs/ site tree; repo-root files (e.g. README.md)
+    # are not served by Jekyll and must not receive the extra virtual depth.
+    is_in_docs = root is not None and resolved_target.is_relative_to((root / "docs").resolve())
+    if resolved_target.suffix == ".md" and resolved_target.stem != "index" and is_in_docs:
         effective_parent = (resolved_target.parent / resolved_target.stem).resolve()
     else:
         effective_parent = resolved_target.parent.resolve()

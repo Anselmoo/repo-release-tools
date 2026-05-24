@@ -2,9 +2,9 @@
 
 <!-- rrt:auto:start:readme-header -->
 <p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../docs/assets/badges/github-reto-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="../docs/assets/badges/github-reto-light.svg">
-  <img alt="GitHub" src="../docs/assets/badges/github-reto-dark.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/badges/github-reto-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/badges/github-reto-light.svg">
+  <img alt="GitHub" src="docs/assets/badges/github-reto-dark.svg">
 </picture></a></p>
 <!-- rrt:auto:end:readme-header -->
 

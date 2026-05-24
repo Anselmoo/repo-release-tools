@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from repo_release_tools.docs.markdown import (
+import repo_release_tools.docs.markdown as _compat_shim
+from repo_release_tools.docs.formats.markdown import (
     has_markdown_headings,
     heading_level,
     normalize_markdown_headings,
@@ -51,3 +52,8 @@ def test_normalize_markdown_headings_raises_shallow_heading_level() -> None:
     text = "# Title\n\n## Section\n"
 
     assert normalize_markdown_headings(text, min_level=3) == "### Title\n\n#### Section"
+
+
+def test_compat_shim_re_exports_all_public_symbols() -> None:
+    assert _compat_shim.heading_level("# H1") == 1
+    assert _compat_shim.has_markdown_headings("# H1") is True

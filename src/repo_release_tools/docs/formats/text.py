@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from repo_release_tools.config.core import DocsConfig
     from repo_release_tools.docs.extractor import DocEntry
 
-from repo_release_tools.docs.markdown import parse_markdown_lines
+from .markdown import parse_markdown_lines
 
 
 def render_structured_txt(content: str) -> str:

@@ -2,7 +2,7 @@
 
 from .extractor import DocEntry, extract_docs, extract_docs_from_dir, lang_for_path
 from .formats import render
-from .markdown import (
+from .formats.markdown import (
     MarkdownLine,
     has_markdown_headings,
     heading_level,

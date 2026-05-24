@@ -1071,6 +1071,25 @@ class TestPlatformHelpers:
         # index.md is not subject to Jekyll pretty-permalink depth; badges are a sibling dir
         assert "](assets/badges/github.svg)" in result
 
+    def test_expand_platform_vars_svg_badge_readme_md_uses_direct_parent_path(
+        self, tmp_path: Path
+    ) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="svg",
+            badge_assets_dir="docs/assets/badges",
+        )
+        # README.md lives at repo root, outside docs/ — must not receive the Jekyll
+        # virtual-depth adjustment that would incorrectly produce ../docs/assets/...
+        target = tmp_path / "README.md"
+        result = _expand_platform_vars(
+            "{platform_badge}",
+            docs,
+            root=tmp_path,
+            target_path=target,
+        )
+        assert "](docs/assets/badges/github.svg)" in result
+
 
 class TestCmdBadges:
     """Tests for rrt docs badges subcommand."""

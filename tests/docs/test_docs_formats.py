@@ -16,6 +16,7 @@ from repo_release_tools.docs.formats import (
     render_rich,
     render_txt,
 )
+from repo_release_tools.docs.formats.richtext import render_structured_rich
 from repo_release_tools.state import hash_content
 
 
@@ -256,6 +257,14 @@ class TestRenderRich:
         entries = [_entry("hello", "Plain prose")]
         result = render_rich(entries, _config_with_source_links())
         assert "https://github.com/Anselmoo/repo-release-tools/blob/main/src/mod.py#L1" in result
+
+    def test_render_structured_rich_no_headings_returns_raw_content(self) -> None:
+        result = render_structured_rich("plain text no headings")
+        assert result == "plain text no headings"
+
+    def test_render_structured_rich_empty_string_does_not_raise(self) -> None:
+        result = render_structured_rich("")
+        assert result == ""
 
 
 class TestRenderJson:

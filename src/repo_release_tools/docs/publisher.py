@@ -37,7 +37,7 @@ from repo_release_tools.commands import skill as skill_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
-from repo_release_tools.docs.markdown import heading_level, normalize_markdown_headings
+from repo_release_tools.docs.formats.markdown import heading_level, normalize_markdown_headings
 from repo_release_tools.integrations import action as action_module
 from repo_release_tools.tools.inject import apply_generated_docs as apply_generated_docs
 from repo_release_tools.workflow import git as git_helpers

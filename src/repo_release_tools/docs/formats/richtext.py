@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from repo_release_tools.config.core import DocsConfig
     from repo_release_tools.docs.extractor import DocEntry
 
-from repo_release_tools.docs.markdown import has_markdown_headings, parse_markdown_lines
+from .markdown import has_markdown_headings, parse_markdown_lines
 
 
 def render_structured_rich(content: str) -> str:
@@ -19,6 +19,8 @@ def render_structured_rich(content: str) -> str:
     heading_levels = [
         line.level for line in parsed if line.kind == "heading" and line.level is not None
     ]
+    if not heading_levels:
+        return content.strip()
     shallowest = min(heading_levels)
     parts: list[str] = []
     for line in parsed:
