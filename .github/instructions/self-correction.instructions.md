@@ -15,6 +15,12 @@ existing workspace instructions. If yes, update instructions before closing.
   would have prevented the mistake.
 - When a new pattern, workaround, or convention is discovered mid-session, capture
   it in `.github/instructions/<domain>.instructions.md` before the session ends.
+- When `rrt tree --check --strict` reports drift, first compare against a clean
+  clone or clean checkout and remove any local-only empty directories (for
+  example under `src/`) before regenerating `.rrt/tree.lock.toml`.
+- If an empty directory is intentional and should survive clean clones, warn
+  for it in `rrt tree` and suggest a `.gitkeep` placeholder instead of relying
+  on the directory itself being tracked by Git.
 - When editing an instruction file, check for contradictions with other rules in
   the same file and with `.github/copilot-instructions.md` before saving.
 - Prefer adding to an existing scoped instruction file over adding to

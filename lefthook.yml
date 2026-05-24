@@ -18,6 +18,12 @@ pre-commit:
     rrt-branch-name:
       # Validates the active branch name against the project's branch policy.
       run: rrt-hooks pre-commit
+    rrt-tree-auto-update:
+      # Auto-refreshes .rrt/tree.lock.toml and stages it when drift is detected.
+      run: rrt tree --check --strict || (rrt tree --snapshot && git add .rrt/tree.lock.toml)
+    rrt-doctor-auto-update:
+      # Auto-refreshes .rrt/health.lock.toml and stages it when health drift is detected.
+      run: rrt doctor --check --strict || (rrt doctor --snapshot && git add .rrt/health.lock.toml)
 
 pre-push:
   commands:
@@ -25,3 +31,11 @@ pre-push:
       # Ensures [Unreleased] is non-empty before pushing — guards against commits
       # that bypassed the commit-msg hooks (e.g. committed with --no-verify).
       run: rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased
+    rrt-tree-check:
+      # Auto-refreshes the snapshot on drift and blocks the push so the update can be committed.
+      run: |
+        if ! rrt tree --check --strict; then
+          rrt tree --snapshot && git add .rrt/tree.lock.toml
+          echo "↺  Snapshot auto-updated — commit .rrt/tree.lock.toml and push again."
+          exit 1
+        fi

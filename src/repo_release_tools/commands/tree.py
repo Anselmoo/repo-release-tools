@@ -414,6 +414,87 @@ def _build_entries(
     return result
 
 
+def _warn_for_empty_directories(entries: list[TreeEntry], warnings: list[str]) -> None:
+    """Append warnings for directories that are effectively empty.
+
+    A directory is treated as effectively empty when it has no visible child
+    entries or when its only visible child is a ``.gitkeep`` placeholder.
+    """
+
+    def visit(nodes: list[TreeEntry], prefix: str = "") -> None:
+        for name, is_dir, children in nodes:
+            current = f"{prefix}{name}"
+            if not is_dir:
+                continue
+            if children == [] or (
+                children is not None
+                and len(children) == 1
+                and children[0][0] == ".gitkeep"
+                and not children[0][1]
+            ):
+                warnings.append(
+                    f"Empty directory detected: {current}/. Git does not track empty directories; "
+                    f"if this folder should stay in the repository and tree snapshots, "
+                    f"add a .gitkeep placeholder file.",
+                )
+                continue
+            if children:
+                visit(children, prefix=f"{current}/")
+
+    visit(entries)
+
+
+def _report_tree_check_result(
+    printer: DryRunPrinter,
+    *,
+    drifted: list[str],
+    strict: bool,
+) -> int:
+    """Print tree drift messages and return the appropriate exit code."""
+    for msg in drifted:
+        printer.warn(f"  {msg}")
+    if strict:
+        printer.line("Tree structure drift detected (--strict mode).", ok=False)
+        return 1
+    printer.warn("Tree structure drift detected (advisory). Use --strict to block.")
+    return 0
+
+
+def _inject_rendered_tree(
+    printer: DryRunPrinter,
+    *,
+    inject_file: str,
+    anchor_id: str,
+    rendered: str,
+) -> int:
+    """Replace the anchored block in a target file with rendered tree output."""
+    target = Path(inject_file)
+    if not target.exists():
+        printer.line(f"Inject target does not exist: {target}", ok=False, stream=sys.stderr)
+        return 1
+
+    existing = target.read_text(encoding="utf-8")
+    updated = replace_anchored_block(existing, anchor_id=anchor_id, content=rendered)
+    if updated is None:
+        printer.line(
+            f"{target} is missing anchor "
+            f"<!-- {ANCHOR_START_TOKEN}{anchor_id} --> / "
+            f"<!-- {ANCHOR_END_TOKEN}{anchor_id} -->.",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+
+    if printer.dry_run:
+        printer.action(f"[dry-run] Would update anchored block {anchor_id!r} in {target}")
+        printer.blank_line()
+        sys.stdout.write(updated)
+    else:
+        target.write_text(updated, encoding="utf-8")
+        printer.ok(f"Updated anchored block {anchor_id!r} in {target}")
+    return 0
+
+
 def cmd_tree(args: argparse.Namespace) -> int:
     """Render a project tree from the selected root."""
     p = DryRunPrinter(getattr(args, "dry_run", False))
@@ -452,6 +533,8 @@ def cmd_tree(args: argparse.Namespace) -> int:
         ignore_cache=ignore_cache,
         warnings=warnings,
     )
+    if repo_root is not None:
+        _warn_for_empty_directories(entries, warnings)
 
     fmt = args.format
     rendered: str
@@ -471,7 +554,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
             rendered = GLYPHS.tree.render(entries)
 
     entry_count = _entry_count(entries)
-    ignored_count = sum(1 for v in ignore_cache.values() if v)
+    ignored_count = sum(ignore_cache.values())
     tree_meta = {
         "entry_count": entry_count,
         "tree_hash": hash_content(_canonical_entry_repr(entries)),
@@ -493,41 +576,13 @@ def cmd_tree(args: argparse.Namespace) -> int:
         if current:
             p.ok("No tree structure drift detected.")
             return 0
-        for msg in drifted:
-            p.warn(f"  {msg}")
-        if strict:
-            p.line("Tree structure drift detected (--strict mode).", ok=False)
-            return 1
-        p.warn("Tree structure drift detected (advisory). Use --strict to block.")
-        return 0
+        return _report_tree_check_result(p, drifted=drifted, strict=strict)
 
     # --- inject mode: replace anchored block in a target file ---
     if inject_file and anchor_id:
-        target = Path(inject_file)
-        if not target.exists():
-            p.line(f"Inject target does not exist: {target}", ok=False, stream=sys.stderr)
-            return 1
-
-        existing = target.read_text(encoding="utf-8")
-        updated = replace_anchored_block(existing, anchor_id=anchor_id, content=rendered)
-        if updated is None:
-            p.line(
-                f"{target} is missing anchor "
-                f"<!-- {ANCHOR_START_TOKEN}{anchor_id} --> / "
-                f"<!-- {ANCHOR_END_TOKEN}{anchor_id} -->.",
-                ok=False,
-                stream=sys.stderr,
-            )
-            return 1
-
-        if p.dry_run:
-            p.action(f"[dry-run] Would update anchored block {anchor_id!r} in {target}")
-            p.blank_line()
-            sys.stdout.write(updated)
-        else:
-            target.write_text(updated, encoding="utf-8")
-            p.ok(f"Updated anchored block {anchor_id!r} in {target}")
-        return 0
+        return _inject_rendered_tree(
+            p, inject_file=inject_file, anchor_id=anchor_id, rendered=rendered
+        )
 
     # --- default mode: print tree to stdout ---
     p.ok("Project tree")

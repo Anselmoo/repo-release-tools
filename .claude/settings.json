@@ -57,6 +57,11 @@
           },
           {
             "type": "command",
+            "command": "python3 .claude/hooks/drift_guard.py",
+            "timeout": 120
+          },
+          {
+            "type": "command",
             "command": "python3 .claude/hooks/coverage_non_regression.py",
             "timeout": 60
           }
