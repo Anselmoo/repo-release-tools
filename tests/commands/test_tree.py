@@ -707,6 +707,28 @@ def test_cmd_tree_reports_warnings_for_unreadable_dirs(
     assert "Cannot read /secret" in out
 
 
+def test_cmd_tree_warns_on_gitkeep_only_directories(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Directories kept alive only by .gitkeep should warn and suggest the placeholder."""
+    (tmp_path / "src" / "mcp").mkdir(parents=True)
+    (tmp_path / "src" / "mcp" / ".gitkeep").write_text("", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        tree, "_batch_ignored_by_git", lambda paths_from_repo_root, repo_root: set()
+    )
+
+    rc = tree.cmd_tree(_args())
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Empty directory detected: src/mcp/" in out
+    assert ".gitkeep" in out
+
+
 # ---------------------------------------------------------------------------
 # _build_entries: OSError and relative_to edge cases
 # ---------------------------------------------------------------------------
@@ -985,14 +1007,12 @@ def test_canonical_entry_repr_stable_across_formats(tmp_path: Path) -> None:
 
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
 
-    tree.cmd_tree(_args(root=str(tmp_path), snapshot=True, format="classic"))
-    lock_classic = _tomllib.loads(
-        (tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8")
-    )
-    hash_classic = lock_classic["snapshot"]["tree_hash"]
+    hashes: list[str] = []
+    for fmt in ("classic", "ascii"):
+        tree.cmd_tree(_args(root=str(tmp_path), snapshot=True, format=fmt))
+        lock_data = _tomllib.loads(
+            (tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8")
+        )
+        hashes.append(lock_data["snapshot"]["tree_hash"])
 
-    tree.cmd_tree(_args(root=str(tmp_path), snapshot=True, format="ascii"))
-    lock_ascii = _tomllib.loads((tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8"))
-    hash_ascii = lock_ascii["snapshot"]["tree_hash"]
-
-    assert hash_classic == hash_ascii
+    assert hashes[0] == hashes[1]
