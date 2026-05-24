@@ -1,8 +1,9 @@
 # Claude coverage hooks
 
-This project uses two local Claude hooks for coverage safety:
+This project uses local Claude hooks for workflow safety:
 
 - `completeness_guard.py` (`Stop`): blocks completion when required hooks, agents, or skills are missing.
+- `drift_guard.py` (`Stop`): blocks completion when `rrt drift check` detects stale agent-facing surfaces.
 - `coverage_non_regression.py` (`Stop`): blocks completion when current coverage is below policy floor and/or below baseline thresholds.
 - `refresh_coverage_baseline.py` (`PostToolUse`): auto-refreshes `.claude/coverage-baseline.json` from `coverage.xml` after successful `pytest` commands.
 

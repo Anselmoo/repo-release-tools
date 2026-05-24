@@ -10,6 +10,7 @@ from pathlib import Path
 REQUIRED_PATHS = (
     Path(".claude/hooks/coverage_non_regression.py"),
     Path(".claude/hooks/refresh_coverage_baseline.py"),
+    Path(".claude/hooks/drift_guard.py"),
     Path(".claude/hooks/rrt_ux_guard.py"),
     Path(".claude/hooks/rrt_ux_write_guard.py"),
     Path(".github/agents/rrt-user-bootstrap.agent.md"),
