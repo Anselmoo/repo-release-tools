@@ -82,7 +82,7 @@ jobs:
 
   test:
     name: Tests (${{ matrix.python-version }})
-    needs: lint
+    needs: [lint, verify]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
