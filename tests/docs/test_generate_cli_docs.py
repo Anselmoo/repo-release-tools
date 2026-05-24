@@ -43,16 +43,31 @@ def test_generate_markdown_has_stable_sections_without_ansi_sequences() -> None:
 
     content = docs.generate_markdown()
 
+    # Compact index: has H1, global help, command-group table, no per-command argparse blocks
     assert content.startswith("# rrt CLI\n")
     assert "## Global help" in content
-    assert "## `rrt branch`" in content
-    assert "conventional branches" in content
-    assert "rrt git" in content
-    assert "### `rrt branch new`" in content
-    assert "### `rrt git diff`" in content
-    assert "### `rrt ci-version compute`" in content
-    assert "### `rrt skill install`" in content
+    assert "## Command reference" in content
+    assert "Version & Release" in content
+    assert "Repository Health" in content
+    assert "Git Workflow" in content
+    assert "version-release.md" in content
+    assert "repo-health.md" in content
+    # Per-command sections are no longer in the compact index (they live in group pages)
+    assert "### `rrt branch new`" not in content
     assert "RRT CLI" not in content
+    assert "\x1b[" not in content
+
+
+def test_generate_group_reference_markdown_contains_per_command_sections() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_group_reference_markdown("Git Workflow", ("branch", "git"))
+
+    assert content.startswith("# rrt Git Workflow\n")
+    assert "## `rrt branch`" in content
+    assert "### `rrt branch new`" in content
+    assert "## `rrt git`" in content
+    assert "### `rrt git diff`" in content
     assert "\x1b[" not in content
 
 
@@ -84,16 +99,61 @@ def test_render_command_docs_prefers_source_owned_topic_docs_for_branch_and_git(
     assert "Git helpers for repo-release-tools" not in git_rendered
 
 
-def test_generate_markdown_places_command_docs_before_help_block() -> None:
+def test_generate_group_reference_markdown_places_help_in_code_block() -> None:
     docs = _load_generator_module()
-    docs.iter_help_sections = lambda: iter([docs.HelpSection(argv=("branch",), heading_level=2)])
-    docs.render_command_docs = lambda argv, heading_level: "### Overview\n\nDoc text"
+    docs.iter_help_sections_for_commands = lambda commands: iter(
+        [docs.HelpSection(argv=("branch",), heading_level=2)]
+    )
     docs.render_help = lambda argv: "Usage: rrt branch"
 
-    content = docs.generate_markdown()
+    content = docs.generate_group_reference_markdown("Git Workflow", ("branch",))
 
-    assert "## `rrt branch`\n\n### Overview\n\nDoc text\n\n```text" in content
-    assert content.index("Doc text") < content.index("```text")
+    assert "## `rrt branch`" in content
+    assert "```text\nUsage: rrt branch\n```" in content
+    # Prose from COMMAND_DOC_SOURCES["branch"] must appear between the heading and the code block
+    heading_end = content.index("## `rrt branch`\n") + len("## `rrt branch`\n")
+    code_start = content.index("```text")
+    assert content[heading_end:code_start].strip(), "no prose injected before code block"
+
+
+def test_render_command_docs_returns_empty_for_unknown_command() -> None:
+    docs = _load_generator_module()
+    docs.COMMAND_DOC_MODULES = None
+    docs.COMMAND_DOC_SOURCES = {}
+
+    # A command not in the registry returns "" and exercises the module-not-found branch
+    result = docs.render_command_docs(("nonexistent-cmd",), heading_level=2)
+
+    assert result == ""
+
+
+def test_render_command_docs_uses_get_command_doc_modules_when_sentinel_is_none() -> None:
+    docs = _load_generator_module()
+    docs.COMMAND_DOC_MODULES = None
+    docs.COMMAND_DOC_SOURCES = {}
+
+    # "toc" is in _get_command_doc_modules() but not in COMMAND_DOC_SOURCES
+    result = docs.render_command_docs(("toc",), heading_level=2)
+
+    # toc module has a docstring, so result should be non-empty or at least not raise
+    assert isinstance(result, str)
+
+
+def test_iter_help_sections_for_commands_returns_nothing_for_unknown_command() -> None:
+    docs = _load_generator_module()
+
+    sections = list(docs.iter_help_sections_for_commands(["__not_a_real_rrt_command__"]))
+
+    assert sections == []
+
+
+def test_iter_help_sections_for_commands_stops_when_no_subparsers() -> None:
+    docs = _load_generator_module()
+    docs._find_subparsers_action = lambda _parser: None
+
+    sections = list(docs.iter_help_sections_for_commands(["branch"]))
+
+    assert sections == []
 
 
 def test_heading_level_rejects_invalid_heading_variants() -> None:
@@ -245,6 +305,35 @@ def test_validate_generated_pages_returns_no_issues_for_current_registry() -> No
     docs = _load_generator_module()
 
     assert docs.validate_generated_pages() == []
+
+
+def test_get_command_doc_modules_covers_all_group_page_commands() -> None:
+    docs = _load_generator_module()
+
+    modules = docs._get_command_doc_modules()
+    registered = set(modules.keys()) | set(docs.COMMAND_DOC_SOURCES.keys())
+
+    all_group_commands = {cmd for _, _, commands in docs.COMMAND_GROUPS_CONFIG for cmd in commands}
+
+    missing = all_group_commands - registered
+    assert not missing, f"Commands missing from doc registry: {missing}"
+
+
+def test_generate_group_reference_markdown_includes_docstring_prose() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_group_reference_markdown("Git Workflow", ("branch", "git"))
+
+    # branch and git both have prose docs — verify they appear before their code blocks
+    assert "```text" in content
+    # Each top-level command section should have prose between its heading and code block
+    branch_heading = "## `rrt branch`\n"
+    assert branch_heading in content
+    branch_end = content.index(branch_heading) + len(branch_heading)
+    # Find the next code block after the branch heading
+    next_code = content.index("```text", branch_end)
+    between = content[branch_end:next_code].strip()
+    assert between, "no prose injected for rrt branch"
 
 
 def test_extract_first_h1_and_compute_permalink_helpers() -> None:
@@ -405,13 +494,13 @@ def test_task_generate_and_check_cover_all_generated_docs(
     git_path = tmp_path / "git.md"
     cli_path = tmp_path / "rrt-cli.md"
 
-    docs.iter_generated_doc_targets = lambda: iter(
-        [
-            docs.DocTarget(cli_path, lambda: "cli\n"),
-            docs.DocTarget(semantic_path, lambda: "semantic\n"),
-            docs.DocTarget(git_path, lambda: "git\n"),
-        ]
+    fixed_targets = (
+        docs.DocTarget(cli_path, lambda: "cli\n"),
+        docs.DocTarget(semantic_path, lambda: "semantic\n"),
+        docs.DocTarget(git_path, lambda: "git\n"),
     )
+    docs._build_generated_doc_targets = lambda cfg_docs=None: fixed_targets
+    docs._load_cfg_docs = lambda: None
 
     assert docs.task_generate() == 0
     assert cli_path.read_text(encoding="utf-8") == "cli\n"
@@ -691,6 +780,9 @@ version = "0.1.0"
 [[tool.rrt.version_targets]]
 path = "pyproject.toml"
 kind = "pep621"
+
+[tool.rrt.docs]
+source_repo_url = "https://github.com/Anselmoo/repo-release-tools"
 
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "test-footer"
@@ -1027,3 +1119,123 @@ def test_insert_anchor_stub_str_rejects_negative_after_blank_lines() -> None:
 
     with pytest.raises(ValueError, match="after_blank_lines must be >= 0"):
         insert_anchor_stub_str("content", "my-anchor", after_blank_lines=-1)
+
+
+# ---------------------------------------------------------------------------
+# Config-driven publisher helpers
+# ---------------------------------------------------------------------------
+
+
+def test_get_command_groups_config_returns_defaults_when_no_cfg() -> None:
+    docs = _load_generator_module()
+    result = docs._get_command_groups_config(None)
+    assert result is docs.COMMAND_GROUPS_CONFIG
+
+
+def test_get_command_groups_config_uses_cfg_when_provided() -> None:
+    from repo_release_tools.config.model import CommandGroupEntry
+
+    docs = _load_generator_module()
+
+    class FakeDocs:
+        command_groups = (
+            CommandGroupEntry(slug="my-group", display="My Group", commands=("foo",)),
+        )
+
+    result = docs._get_command_groups_config(FakeDocs())
+    assert result == (("my-group", "My Group", ("foo",)),)
+
+
+def test_get_topic_page_outputs_returns_defaults_when_no_cfg() -> None:
+    docs = _load_generator_module()
+    result = docs._get_topic_page_outputs(None)
+    assert result is docs.TOPIC_PAGE_OUTPUTS
+
+
+def test_get_topic_page_outputs_uses_cfg_when_provided() -> None:
+    from pathlib import Path
+
+    from repo_release_tools.config.model import TopicPageEntry
+
+    docs = _load_generator_module()
+
+    class FakeDocs:
+        topic_pages = (TopicPageEntry(slug="mytopic", output="docs/commands/mytopic.md"),)
+
+    result = docs._get_topic_page_outputs(FakeDocs())
+    assert result == {"mytopic": Path("docs/commands/mytopic.md")}
+
+
+def test_get_title_overrides_returns_defaults_when_no_cfg() -> None:
+    docs = _load_generator_module()
+    result = docs._get_title_overrides(None)
+    assert result is docs.TITLE_OVERRIDES
+
+
+def test_get_title_overrides_uses_cfg_when_provided() -> None:
+    docs = _load_generator_module()
+
+    class FakeDocs:
+        title_overrides = {"my-page": "My Page Title"}
+
+    result = docs._get_title_overrides(FakeDocs())
+    assert result == {"my-page": "My Page Title"}
+
+
+def test_load_cfg_docs_returns_none_when_no_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+    result = docs._load_cfg_docs()
+    assert result is None
+
+
+def test_load_cfg_docs_returns_docs_config_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    docs = _load_generator_module()
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0.1.0"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        '[tool.rrt.docs]\nsource_repo_url = "https://example.com"\n',
+        encoding="utf-8",
+    )
+    result = docs._load_cfg_docs()
+    assert result is not None
+    assert getattr(result, "source_repo_url", None) == "https://example.com"
+
+
+def test_load_cfg_docs_returns_none_for_missing_rrt_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docs = _load_generator_module()
+    import repo_release_tools.config as _cfg_mod
+
+    sentinel = ValueError("no [tool.rrt]")
+
+    def _raise(_path: object) -> None:
+        raise sentinel
+
+    monkeypatch.setattr(_cfg_mod, "load_config", _raise)
+    monkeypatch.setattr(_cfg_mod, "is_missing_tool_rrt_error", lambda exc: exc is sentinel)
+    result = docs._load_cfg_docs()
+    assert result is None
+
+
+def test_load_cfg_docs_reraises_unknown_value_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docs = _load_generator_module()
+    import repo_release_tools.config as _cfg_mod
+
+    sentinel = ValueError("unexpected config error")
+
+    def _raise(_path: object) -> None:
+        raise sentinel
+
+    monkeypatch.setattr(_cfg_mod, "load_config", _raise)
+    monkeypatch.setattr(_cfg_mod, "is_missing_tool_rrt_error", lambda _exc: False)
+    with pytest.raises(ValueError, match="unexpected config error"):
+        docs._load_cfg_docs()

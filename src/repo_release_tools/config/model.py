@@ -365,6 +365,23 @@ class EolConfig:
 
 
 @dataclass(frozen=True)
+class CommandGroupEntry:
+    """A CLI command group for docs reference page generation."""
+
+    slug: str  # URL-safe identifier, e.g. "version-release"
+    display: str  # Human display name, e.g. "Version & Release"
+    commands: tuple[str, ...]  # argparse command names in this group
+
+
+@dataclass(frozen=True)
+class TopicPageEntry:
+    """A source-owned topic page for docs publishing."""
+
+    slug: str  # Key into SOURCE_OWNED_TOPIC_DOCS, e.g. "branch"
+    output: str  # Relative output path, e.g. "docs/commands/branch.md"
+
+
+@dataclass(frozen=True)
 class SharedBlock:
     """A single anchor-injected shared block stamped across doc target files."""
 
@@ -426,6 +443,10 @@ class DocsConfig:
     suggest_roots: tuple[str, ...] = ()
     suggest_exempt: tuple[str, ...] = ()
     suggest_min_chars: int | None = None
+    # Publisher overrides — when non-empty these replace the built-in RRT defaults
+    command_groups: tuple[CommandGroupEntry, ...] = ()
+    topic_pages: tuple[TopicPageEntry, ...] = ()
+    title_overrides: dict[str, str] = field(default_factory=dict)
 
     def validate(self) -> None:
         """Validate badge_style and badge_variant values."""

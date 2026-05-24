@@ -1047,7 +1047,48 @@ class TestPlatformHelpers:
             root=tmp_path,
             target_path=target,
         )
-        assert "](../assets/badges/github.svg)" in result
+        # Jekyll `permalink: pretty` serves skill.md at /commands/skill/ (one level deeper
+        # than the file's parent), so the correct relative path is two levels up.
+        assert "](../../assets/badges/github.svg)" in result
+
+    def test_expand_platform_vars_svg_badge_index_md_uses_direct_parent_path(
+        self, tmp_path: Path
+    ) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="svg",
+            badge_assets_dir="docs/assets/badges",
+        )
+        # index.md is exempt from the Jekyll pretty-permalink depth adjustment
+        target = tmp_path / "docs" / "index.md"
+        target.parent.mkdir(parents=True)
+        result = _expand_platform_vars(
+            "{platform_badge}",
+            docs,
+            root=tmp_path,
+            target_path=target,
+        )
+        # index.md is not subject to Jekyll pretty-permalink depth; badges are a sibling dir
+        assert "](assets/badges/github.svg)" in result
+
+    def test_expand_platform_vars_svg_badge_readme_md_uses_direct_parent_path(
+        self, tmp_path: Path
+    ) -> None:
+        docs = DocsConfig(
+            source_repo_url="https://github.com/o/r",
+            badge_style="svg",
+            badge_assets_dir="docs/assets/badges",
+        )
+        # README.md lives at repo root, outside docs/ — must not receive the Jekyll
+        # virtual-depth adjustment that would incorrectly produce ../docs/assets/...
+        target = tmp_path / "README.md"
+        result = _expand_platform_vars(
+            "{platform_badge}",
+            docs,
+            root=tmp_path,
+            target_path=target,
+        )
+        assert "](docs/assets/badges/github.svg)" in result
 
 
 class TestCmdBadges:

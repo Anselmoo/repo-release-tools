@@ -3,11 +3,11 @@ title: "repo-release-tools"
 permalink: "/"
 ---
 <!-- rrt:auto:start:page-header -->
-<a href="https://github.com/Anselmoo/repo-release-tools"><picture>
+<p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/badges/github-reto-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="assets/badges/github-reto-light.svg">
   <img alt="GitHub" src="assets/badges/github-reto-dark.svg">
-</picture></a>
+</picture></a></p>
 <!-- rrt:auto:end:page-header -->
 
 
@@ -44,31 +44,43 @@ the canonical home for the current `rrt` command surface.
 - [rrt tree](commands/tree.md) — generated guide for `rrt tree` output modes, ignore behavior, and traversal controls
 <!-- rrt:auto:end:index-topic-links -->
 
-## Commands reference
+## Command reference by group
 
-The `docs/commands/` directory mirrors `src/repo_release_tools/commands/` plus
-the workflow-owned hook entrypoint in `src/repo_release_tools/workflow/hooks.py`.
-The source tree now groups shared domains under `config/`, `docs/`, `eol/`,
-`version/`, `workflow/`, and `integrations/` instead of leaving those modules
-flat at `src/repo_release_tools/`. Each generated page documents one command or
-source-owned topic module.
+The CLI is split into per-group reference pages (auto-generated from the live argparse tree) and
+prose topic pages for individual commands.
 
-| Doc | Module | Status |
+### Auto-generated group reference pages
+
+| Group | Commands | Page |
 |---|---|---|
-| [branch](commands/branch.md) | `commands/branch.py` | full |
-| [bump](commands/bump.md) | `commands/bump.py` | stub |
-| [ci_version](commands/ci_version.md) | `commands/ci_version.py` | stub |
-| [config_cmd](commands/config_cmd.md) | `commands/config_cmd.py` | stub |
-| [doctor](commands/doctor.md) | `commands/doctor.py` | full |
-| [env_cmd](commands/env_cmd.md) | `commands/env_cmd.py` | stub |
-| [eol_check](commands/eol_check.md) | `commands/eol_check.py` | full |
-| [folder](commands/folder.md) | `commands/folder.py` | stub |
-| [git_cmd](commands/git_cmd.md) | `commands/git_cmd.py` | full |
-| [hooks](commands/hooks.md) | `hooks.py` | full |
-| [init](commands/init.md) | `commands/init.py` | stub |
-| [rrt-cli](commands/rrt-cli.md) | `cli.py` + all commands | auto-generated |
-| [skill](commands/skill.md) | `commands/skill.py` | full |
-| [tree](commands/tree.md) | `commands/tree.py` | full |
+| **Version & Release** | `bump`, `changelog`, `ci-version`, `release`, `workspace`, `tag` | [version-release](commands/version-release.md) |
+| **Repository Health** | `doctor`, `artifacts`, `config`, `env`, `eol`, `toc`, `tree`, `docs`, `drift`, `folder` | [repo-health](commands/repo-health.md) |
+| **Git Workflow** | `branch`, `git` | [git-workflow](commands/git-workflow.md) |
+| **CI & Automation** | `action` | [ci-automation](commands/ci-automation.md) |
+| **Setup & Tooling** | `install`, `init`, `skill`, `agents`, `hooks` | [setup-tooling](commands/setup-tooling.md) |
+
+The [rrt CLI index](commands/rrt-cli.md) page has the global help and links to all groups.
+
+### Prose topic pages
+
+| Doc | Content |
+|---|---|
+| [branch](commands/branch.md) | Branch naming model and allowed types |
+| [bump](commands/bump.md) | Stub — see [version-release](commands/version-release.md) |
+| [ci_version](commands/ci_version.md) | Stub — see [version-release](commands/version-release.md) |
+| [config_cmd](commands/config_cmd.md) | Stub — see [repo-health](commands/repo-health.md) |
+| [doctor](commands/doctor.md) | Repository automation health checks |
+| [drift](commands/drift.md) | Agent-facing surface drift detection |
+| [env_cmd](commands/env_cmd.md) | Stub — see [repo-health](commands/repo-health.md) |
+| [eol_check](commands/eol_check.md) | Runtime end-of-life checks |
+| [folder](commands/folder.md) | Folder structure supervision |
+| [git_cmd](commands/git_cmd.md) | Git workflow helpers |
+| [hooks](commands/hooks.md) | pre-commit / lefthook hook setup |
+| [init](commands/init.md) | Stub — see [setup-tooling](commands/setup-tooling.md) |
+| [install](commands/install.md) | Agent surface installation |
+| [skill](commands/skill.md) | Bundled agent skills |
+| [toc](commands/toc.md) | Markdown TOC generation |
+| [tree](commands/tree.md) | Directory tree rendering |
 
 ## Changelog workflow
 

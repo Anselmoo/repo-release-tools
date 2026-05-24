@@ -3153,3 +3153,137 @@ def test_load_artifact_targets_missing_path() -> None:
 
     with pytest.raises(ValueError, match="non-empty 'path'"):
         _load_artifact_targets([{"description": "no path"}])
+
+
+# ---------------------------------------------------------------------------
+# _load_command_groups / _load_topic_pages / _load_title_overrides
+# ---------------------------------------------------------------------------
+
+
+def test_load_command_groups_returns_empty_when_absent() -> None:
+    from repo_release_tools.config.docs_config import _load_command_groups
+
+    assert _load_command_groups({}) == ()
+
+
+def test_load_command_groups_parses_valid_entry() -> None:
+    from repo_release_tools.config.docs_config import _load_command_groups
+
+    d: dict[str, object] = {
+        "command_groups": [
+            {"slug": "version-release", "display": "Version & Release", "commands": ["bump", "tag"]}
+        ]
+    }
+    result = _load_command_groups(d)
+    assert len(result) == 1
+    assert result[0].slug == "version-release"
+    assert result[0].display == "Version & Release"
+    assert result[0].commands == ("bump", "tag")
+
+
+def test_load_command_groups_not_a_list_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_command_groups
+
+    with pytest.raises(ValueError, match="array of tables"):
+        _load_command_groups({"command_groups": "not-a-list"})
+
+
+def test_load_command_groups_item_not_dict_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_command_groups
+
+    with pytest.raises(ValueError, match=r"command_groups\[0\] must be a table"):
+        _load_command_groups({"command_groups": ["not-a-dict"]})
+
+
+def test_load_command_groups_missing_slug_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_command_groups
+
+    with pytest.raises(ValueError, match="slug must be a non-empty string"):
+        _load_command_groups({"command_groups": [{"display": "X", "commands": ["a"]}]})
+
+
+def test_load_command_groups_missing_display_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_command_groups
+
+    with pytest.raises(ValueError, match="display must be a non-empty string"):
+        _load_command_groups({"command_groups": [{"slug": "x", "commands": ["a"]}]})
+
+
+def test_load_command_groups_commands_not_list_of_strings_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_command_groups
+
+    with pytest.raises(ValueError, match="list of strings"):
+        _load_command_groups({"command_groups": [{"slug": "x", "display": "X", "commands": 42}]})
+
+
+def test_load_topic_pages_returns_empty_when_absent() -> None:
+    from repo_release_tools.config.docs_config import _load_topic_pages
+
+    assert _load_topic_pages({}) == ()
+
+
+def test_load_topic_pages_parses_valid_entry() -> None:
+    from repo_release_tools.config.docs_config import _load_topic_pages
+
+    d: dict[str, object] = {
+        "topic_pages": [{"slug": "branch", "output": "docs/commands/branch.md"}]
+    }
+    result = _load_topic_pages(d)
+    assert len(result) == 1
+    assert result[0].slug == "branch"
+    assert result[0].output == "docs/commands/branch.md"
+
+
+def test_load_topic_pages_not_a_list_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_topic_pages
+
+    with pytest.raises(ValueError, match="array of tables"):
+        _load_topic_pages({"topic_pages": "not-a-list"})
+
+
+def test_load_topic_pages_item_not_dict_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_topic_pages
+
+    with pytest.raises(ValueError, match=r"topic_pages\[0\] must be a table"):
+        _load_topic_pages({"topic_pages": ["not-a-dict"]})
+
+
+def test_load_topic_pages_missing_slug_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_topic_pages
+
+    with pytest.raises(ValueError, match="slug must be a non-empty string"):
+        _load_topic_pages({"topic_pages": [{"output": "docs/x.md"}]})
+
+
+def test_load_topic_pages_missing_output_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_topic_pages
+
+    with pytest.raises(ValueError, match="output must be a non-empty string"):
+        _load_topic_pages({"topic_pages": [{"slug": "x"}]})
+
+
+def test_load_title_overrides_returns_empty_when_absent() -> None:
+    from repo_release_tools.config.docs_config import _load_title_overrides
+
+    assert _load_title_overrides({}) == {}
+
+
+def test_load_title_overrides_parses_valid_dict() -> None:
+    from repo_release_tools.config.docs_config import _load_title_overrides
+
+    result = _load_title_overrides({"title_overrides": {"rrt-cli": "rrt CLI"}})
+    assert result == {"rrt-cli": "rrt CLI"}
+
+
+def test_load_title_overrides_not_a_dict_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_title_overrides
+
+    with pytest.raises(ValueError, match="must be a table"):
+        _load_title_overrides({"title_overrides": ["not", "a", "dict"]})
+
+
+def test_load_title_overrides_non_string_value_raises() -> None:
+    from repo_release_tools.config.docs_config import _load_title_overrides
+
+    with pytest.raises(ValueError, match="keys and values must be strings"):
+        _load_title_overrides({"title_overrides": {"key": 123}})

@@ -37,7 +37,7 @@ from repo_release_tools.commands import skill as skill_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
-from repo_release_tools.docs.markdown import heading_level, normalize_markdown_headings
+from repo_release_tools.docs.formats.markdown import heading_level, normalize_markdown_headings
 from repo_release_tools.integrations import action as action_module
 from repo_release_tools.tools.inject import apply_generated_docs as apply_generated_docs
 from repo_release_tools.workflow import git as git_helpers
@@ -55,6 +55,32 @@ AUTOGEN_NOTE: str = (
 )
 
 _README_BASE: str = "https://github.com/Anselmoo/repo-release-tools/blob/main"
+
+# ---------------------------------------------------------------------------
+# Command-group reference page registry
+# ---------------------------------------------------------------------------
+
+# Maps a URL-safe slug to (group display name, tuple of CLI command names).
+# Command names must match the argparse names used in cli.COMMAND_GROUPS.
+COMMAND_GROUPS_CONFIG: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    (
+        "version-release",
+        "Version & Release",
+        ("bump", "changelog", "ci-version", "release", "workspace", "tag"),
+    ),
+    (
+        "repo-health",
+        "Repository Health",
+        ("doctor", "artifacts", "config", "env", "eol", "toc", "tree", "docs", "drift", "folder"),
+    ),
+    ("git-workflow", "Git Workflow", ("branch", "git")),
+    ("ci-automation", "CI & Automation", ("action",)),
+    ("setup-tooling", "Setup & Tooling", ("install", "init", "skill", "agents", "hooks")),
+)
+
+GROUP_REFERENCE_OUTPUTS: dict[str, Path] = {
+    slug: Path(f"docs/commands/{slug}.md") for slug, _, _ in COMMAND_GROUPS_CONFIG
+}
 
 
 # ---------------------------------------------------------------------------
@@ -141,21 +167,33 @@ def _render_topic_doc(slug: str) -> str:
 def _get_command_doc_modules() -> dict[str, object]:
     """Return the per-command module registry (lazily importing cli)."""
     from repo_release_tools import cli  # noqa: PLC0415  (lazy – avoid circular)
+    from repo_release_tools.commands import action_cmd  # noqa: PLC0415
 
     return {
+        "action": action_cmd,
+        "agents": cli.agents_cmd,
+        "artifacts": cli.artifacts_cmd,
         "branch": cli.branch,
         "bump": cli.bump,
+        "changelog": cli.changelog_cmd,
         "ci-version": cli.ci_version,
         "config": cli.config_cmd,
+        "docs": cli.docs_cmd,
         "doctor": cli.doctor,
+        "drift": cli.drift_cmd,
         "env": cli.env_cmd,
         "eol": cli.eol_check,
+        "folder": cli.folder,
         "git": cli.git_cmd,
+        "hooks": cli.hooks_cmd,
         "init": cli.init,
         "install": cli.install_cmd,
+        "release": cli.release_cmd,
         "skill": cli.skill,
+        "tag": cli.tag,
         "toc": toc_module,
         "tree": cli.tree,
+        "workspace": cli.workspace,
     }
 
 
@@ -337,11 +375,14 @@ def render_help(argv: Sequence[str]) -> str:
 
 
 def generate_markdown() -> str:
-    """Return the generated CLI reference Markdown."""
+    """Return the generated CLI reference Markdown (compact command index)."""
     parts = [
         "# rrt CLI",
         "",
         AUTOGEN_NOTE,
+        "",
+        "<!-- rrt:auto:start:toc -->",
+        "<!-- rrt:auto:end:toc -->",
         "",
         "This reference is generated from the live `argparse` configuration in",
         "`repo_release_tools.cli` and `src/repo_release_tools/commands/*.py`.",
@@ -349,26 +390,77 @@ def generate_markdown() -> str:
         "Use `rrt docs publish` to rewrite this file or `rrt docs publish --check` to",
         "verify it is current.",
         "",
+        "## Global help",
+        "",
+        "```text",
+        render_help(()),
+        "```",
+        "",
+        "## Command reference",
+        "",
+        "Each command group has its own reference page with the full argparse help.",
+        "",
+        "| Group | Commands | Reference |",
+        "|---|---|---|",
     ]
 
-    for section in iter_help_sections():
-        prose = render_command_docs(section.argv, heading_level=section.heading_level)
-        parts.extend(
-            [
-                f"{'#' * section.heading_level} {section.title}",
-                "",
-            ],
-        )
-        if prose:
-            parts.extend([prose, ""])
-        parts.extend(
-            [
-                "```text",
-                render_help(section.argv),
-                "```",
-                "",
-            ],
-        )
+    for slug, display, commands in COMMAND_GROUPS_CONFIG:
+        cmd_list = ", ".join(f"`{c}`" for c in commands)
+        ref_file = f"{slug}.md"
+        parts.append(f"| **{display}** | {cmd_list} | [{display}]({ref_file}) |")
+
+    parts.append("")
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def iter_help_sections_for_commands(commands: Sequence[str]) -> Iterator[HelpSection]:
+    """Yield help sections for a specific subset of top-level CLI commands."""
+    from repo_release_tools import cli  # noqa: PLC0415
+
+    root = cli.build_parser()
+    root_subparsers = _find_subparsers_action(root)
+    if root_subparsers is None:
+        return
+
+    def walk(
+        argv: tuple[str, ...],
+        parser: argparse.ArgumentParser,
+    ) -> Iterator[HelpSection]:
+        yield HelpSection(argv=argv, heading_level=min(2 + len(argv) - 1, 6))
+        subparsers = _find_subparsers_action(parser)
+        if subparsers is None:
+            return
+        for name in _ordered_subcommand_names(subparsers):
+            child = subparsers.choices[name]
+            yield from walk((*argv, name), child)
+
+    for name in commands:
+        if name in root_subparsers.choices:
+            child = root_subparsers.choices[name]
+            yield from walk((name,), child)
+
+
+def generate_group_reference_markdown(group_display_name: str, commands: Sequence[str]) -> str:
+    """Return generated reference Markdown for a CLI command group."""
+    parts = [
+        f"# rrt {group_display_name}",
+        "",
+        AUTOGEN_NOTE,
+        "",
+        "<!-- rrt:auto:start:toc -->",
+        "<!-- rrt:auto:end:toc -->",
+        "",
+    ]
+
+    for section in iter_help_sections_for_commands(commands):
+        parts.append(f"{'#' * section.heading_level} {section.title}")
+        parts.append("")
+        if len(section.argv) == 1:
+            prose = render_command_docs(section.argv, heading_level=section.heading_level)
+            if prose:
+                parts.append(prose)
+                parts.append("")
+        parts.extend(["```text", render_help(section.argv), "```", ""])
 
     return "\n".join(parts).rstrip() + "\n"
 
@@ -414,6 +506,46 @@ def generate_readme_links_markdown() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Config-driven accessors (fall back to built-in defaults when config is absent)
+# ---------------------------------------------------------------------------
+
+
+def _get_command_groups_config(
+    cfg_docs: object = None,
+) -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+    """Return command groups from DocsConfig or the built-in RRT defaults."""
+    from repo_release_tools.config.model import CommandGroupEntry  # noqa: PLC0415
+
+    if cfg_docs is not None:
+        groups = getattr(cfg_docs, "command_groups", ())
+        if groups:
+            return tuple(
+                (e.slug, e.display, e.commands) for e in groups if isinstance(e, CommandGroupEntry)
+            )
+    return COMMAND_GROUPS_CONFIG
+
+
+def _get_topic_page_outputs(cfg_docs: object = None) -> dict[str, Path]:
+    """Return topic page outputs from DocsConfig or the built-in RRT defaults."""
+    from repo_release_tools.config.model import TopicPageEntry  # noqa: PLC0415
+
+    if cfg_docs is not None:
+        pages = getattr(cfg_docs, "topic_pages", ())
+        if pages:
+            return {e.slug: Path(e.output) for e in pages if isinstance(e, TopicPageEntry)}
+    return TOPIC_PAGE_OUTPUTS
+
+
+def _get_title_overrides(cfg_docs: object = None) -> dict[str, str]:
+    """Return title overrides from DocsConfig or the built-in RRT defaults."""
+    if cfg_docs is not None:
+        overrides = getattr(cfg_docs, "title_overrides", {})
+        if overrides:
+            return dict(overrides)
+    return TITLE_OVERRIDES
+
+
+# ---------------------------------------------------------------------------
 # Topic-page output registry
 # ---------------------------------------------------------------------------
 
@@ -447,6 +579,7 @@ TITLE_OVERRIDES: dict[str, str] = {
     "agent-instructions": "Hook & Action Reference",
     "doctor": "rrt doctor",
     "eol": "rrt eol",
+    **{slug: f"rrt {display}" for slug, display, _ in COMMAND_GROUPS_CONFIG},
 }
 
 
@@ -514,15 +647,27 @@ def _wrap_with_frontmatter(
     return _wrapped
 
 
-def _build_generated_doc_targets() -> tuple[DocTarget, ...]:
-    """Build the registry of generated doc outputs."""
+def _build_generated_doc_targets(cfg_docs: object = None) -> tuple[DocTarget, ...]:
+    """Build the registry of generated doc outputs.
+
+    When *cfg_docs* provides non-empty ``command_groups``, ``topic_pages``, or
+    ``title_overrides``, those values override the built-in RRT defaults so that
+    other projects can drive doc generation entirely from their own config.
+    """
+    command_groups = _get_command_groups_config(cfg_docs)
+    topic_page_outputs = _get_topic_page_outputs(cfg_docs)
+    title_overrides = _get_title_overrides(cfg_docs)
+    group_ref_outputs: dict[str, Path] = {
+        slug: Path(f"docs/commands/{slug}.md") for slug, _, _ in command_groups
+    }
+
     targets: list[DocTarget] = [
         DocTarget(
             DEFAULT_OUTPUT,
             _wrap_with_frontmatter(
                 DEFAULT_OUTPUT,
                 generate_markdown,
-                title_override=TITLE_OVERRIDES.get("rrt-cli"),
+                title_override=title_overrides.get("rrt-cli"),
                 slug="rrt-cli",
             ),
         ),
@@ -538,14 +683,26 @@ def _build_generated_doc_targets() -> tuple[DocTarget, ...]:
         ),
     ]
 
-    for slug, output_path in TOPIC_PAGE_OUTPUTS.items():
+    for slug, output_path in topic_page_outputs.items():
         render_fn = _wrap_with_frontmatter(
             output_path,
             lambda slug=slug: _render_topic_doc(slug),
-            title_override=TITLE_OVERRIDES.get(slug),
+            title_override=title_overrides.get(slug),
             slug=slug,
         )
         targets.append(DocTarget(output_path, render_fn))
+
+    for slug, display, commands in command_groups:
+        output_path = group_ref_outputs[slug]
+        title = f"rrt {display}"
+        render_fn = _wrap_with_frontmatter(
+            output_path,
+            lambda d=display, c=commands: generate_group_reference_markdown(d, c),
+            title_override=title,
+            slug=slug,
+        )
+        targets.append(DocTarget(output_path, render_fn))
+
     return tuple(targets)
 
 
@@ -615,12 +772,32 @@ def iter_generated_doc_targets() -> Iterator[DocTarget]:
 # ---------------------------------------------------------------------------
 
 
+def _load_cfg_docs() -> object:
+    """Load DocsConfig from the current working directory, or return None."""
+    from repo_release_tools.config import (
+        is_missing_tool_rrt_error,  # noqa: PLC0415
+        load_config,  # noqa: PLC0415
+    )
+
+    try:
+        cfg = load_config(Path.cwd())
+        return cfg.docs if cfg is not None else None
+    except FileNotFoundError:
+        return None
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return None
+        raise
+
+
 def task_generate() -> int:
     """Write all generated docs to disk."""
     import sys  # noqa: PLC0415
 
+    cfg_docs = _load_cfg_docs()
+    targets = _build_generated_doc_targets(cfg_docs)
     exit_code = 0
-    for target in iter_generated_doc_targets():
+    for target in targets:
         exit_code = max(
             exit_code,
             apply_generated_docs(
@@ -641,8 +818,10 @@ def task_check() -> int:
     """Verify all generated docs are up to date."""
     import sys  # noqa: PLC0415
 
+    cfg_docs = _load_cfg_docs()
+    targets = _build_generated_doc_targets(cfg_docs)
     exit_code = 0
-    for target in iter_generated_doc_targets():
+    for target in targets:
         exit_code = max(
             exit_code,
             apply_generated_docs(
@@ -680,7 +859,7 @@ def _apply_shared_blocks(*, check: bool) -> int:
         return 0
 
     if cfg.docs is not None and cfg.docs.shared_blocks:
-        repo_url = "https://github.com/Anselmoo/repo-release-tools"
+        repo_url = cfg.docs.source_repo_url or ""
         exit_code = 0
         for block in cfg.docs.shared_blocks:
             content = block.content.rstrip("\n")

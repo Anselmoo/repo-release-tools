@@ -373,6 +373,11 @@ body::after {
   z-index: 99;
 }
 
+/* Hide the CSS-only hamburger toggle; visibility is driven by :checked state */
+.nav-trigger {
+  display: none;
+}
+
 @media screen and (max-width: 600px) {
   .header-content {
     flex-direction: column;

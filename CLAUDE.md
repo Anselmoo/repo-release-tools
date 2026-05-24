@@ -93,3 +93,27 @@ uvx --with tox-uv tox -e 3.14 --recreate        # rebuild env from scratch
 **Adding a new Python version:** add to `env_list` in `[tool.tox]`, add to `matrix.python-version` in `.github/workflows/cicd.yml`, add the classifier under `[project]`.
 
 `skip_missing_interpreters = true` silently skips any version not installed locally.
+
+## Local docs development
+
+```bash
+# Regenerate all docs and assets:
+uv run poe docs
+
+# Inject TOC into group reference pages:
+uv run poe docs-toc
+
+# Serve locally at http://localhost:4000/ (mirrors GitHub Pages, baseurl overridden):
+uv run poe serve
+
+# Serve with production baseurl /repo-release-tools for full simulation:
+uv run poe serve-pages
+
+# Quick raw-file preview via Python (no Jekyll rendering — templates stay as Liquid/Markdown):
+uv run poe serve-python
+```
+
+The 5 auto-generated command-group reference pages live in `docs/commands/`:
+`version-release.md`, `repo-health.md`, `git-workflow.md`, `ci-automation.md`, `setup-tooling.md`.
+Regenerate with `uv run poe docs-generate`. TOC anchor stubs are embedded in their H1; fill
+them with `uv run poe docs-toc`.

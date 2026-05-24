@@ -359,8 +359,8 @@ def render_badge(
             f"</picture>"
         )
         if linked and repo_url:
-            return f'<a href="{repo_url}">{img_html}</a>'
-        return img_html
+            return f'<p><a href="{repo_url}">{img_html}</a></p>'
+        return f"<p>{img_html}</p>"
     else:  # "svg"
         suffix = f"-{badge_variant}" if badge_variant != "color" else ""
         img_url = f"{badge_assets_dir.rstrip('/')}/{platform}{suffix}.svg"

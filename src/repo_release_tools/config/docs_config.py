@@ -24,10 +24,12 @@ from typing import cast
 from .model import (
     VALID_BADGE_STYLES,
     VALID_BADGE_VARIANTS,
+    CommandGroupEntry,
     DocsConfig,
     EolConfig,
     EolOverride,
     SharedBlock,
+    TopicPageEntry,
 )
 
 
@@ -154,6 +156,9 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
         suggest_roots=_load_docs_suggest_roots(d),
         suggest_exempt=_load_docs_suggest_exempt(d),
         suggest_min_chars=_load_optional_docs_int(d, "suggest_min_chars"),
+        command_groups=_load_command_groups(d),
+        topic_pages=_load_topic_pages(d),
+        title_overrides=_load_title_overrides(d),
     )
 
 
@@ -382,3 +387,72 @@ def _load_shared_blocks(
         block.validate()
         blocks.append(block)
     return tuple(blocks)
+
+
+def _load_command_groups(d: dict[str, object]) -> tuple[CommandGroupEntry, ...]:
+    raw = d.get("command_groups")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError("tool.rrt.docs.command_groups must be an array of tables")
+    entries: list[CommandGroupEntry] = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise ValueError(f"tool.rrt.docs.command_groups[{i}] must be a table")
+        e = cast("dict[str, object]", item)
+        slug = e.get("slug")
+        display = e.get("display")
+        commands = e.get("commands")
+        if not isinstance(slug, str) or not slug.strip():
+            raise ValueError(f"tool.rrt.docs.command_groups[{i}].slug must be a non-empty string")
+        if not isinstance(display, str) or not display.strip():
+            raise ValueError(
+                f"tool.rrt.docs.command_groups[{i}].display must be a non-empty string"
+            )
+        if not isinstance(commands, list) or not all(isinstance(c, str) for c in commands):
+            raise ValueError(
+                f"tool.rrt.docs.command_groups[{i}].commands must be a list of strings"
+            )
+        entries.append(
+            CommandGroupEntry(
+                slug=slug.strip(),
+                display=display.strip(),
+                commands=tuple(cast("list[str]", commands)),
+            )
+        )
+    return tuple(entries)
+
+
+def _load_topic_pages(d: dict[str, object]) -> tuple[TopicPageEntry, ...]:
+    raw = d.get("topic_pages")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError("tool.rrt.docs.topic_pages must be an array of tables")
+    entries: list[TopicPageEntry] = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise ValueError(f"tool.rrt.docs.topic_pages[{i}] must be a table")
+        e = cast("dict[str, object]", item)
+        slug = e.get("slug")
+        output = e.get("output")
+        if not isinstance(slug, str) or not slug.strip():
+            raise ValueError(f"tool.rrt.docs.topic_pages[{i}].slug must be a non-empty string")
+        if not isinstance(output, str) or not output.strip():
+            raise ValueError(f"tool.rrt.docs.topic_pages[{i}].output must be a non-empty string")
+        entries.append(TopicPageEntry(slug=slug.strip(), output=output.strip()))
+    return tuple(entries)
+
+
+def _load_title_overrides(d: dict[str, object]) -> dict[str, str]:
+    raw = d.get("title_overrides")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("tool.rrt.docs.title_overrides must be a table")
+    result: dict[str, str] = {}
+    for k, v in cast("dict[str, object]", raw).items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise ValueError("tool.rrt.docs.title_overrides keys and values must be strings")
+        result[k] = v
+    return result
