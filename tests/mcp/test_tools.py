@@ -359,6 +359,7 @@ def test_rrt_bump_dry_run(tmp_path: Path) -> None:
     assert isinstance(result, list)
     assert result[0].dry_run is True
     assert result[0].applied is False
+    assert ctx.report_progress.await_count >= 1
 
 
 def test_rrt_bump_applied(tmp_path: Path) -> None:
@@ -602,7 +603,10 @@ def test_rrt_branch_new_apply_success(tmp_path: Path) -> None:
     result = asyncio.run(_run())
     assert result.created is True
     mock_run.assert_called_once()
+    assert mock_run.call_args.args[0] == ["git", "checkout", "-b", result.branch]
     assert mock_run.call_args.kwargs["timeout"] == 8.0
+    assert mock_run.call_args.kwargs["capture_output"] is True
+    assert mock_run.call_args.kwargs["text"] is True
 
 
 def test_rrt_branch_new_apply_git_fails(tmp_path: Path) -> None:
