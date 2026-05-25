@@ -1,9 +1,9 @@
 [meta]
-generated_at = "2026-05-24T13:11:07+00:00"
+generated_at = "2026-05-25T12:28:39+00:00"
 rrt_version = "1.6.2"
 
 [snapshot]
-entry_count = 246
-tree_hash = "sha256:b0fbe93b63829ca0c5352465face96713c8440337c87aaadc200784916fbe6d5"
-updated_at = "2026-05-24T13:11:07+00:00"
-ignored_count = 62
+entry_count = 263
+tree_hash = "sha256:c8ade9fe9613939854fb04dc2662fd3bfcbe1a8938ea43c17972035f6cc9a525"
+updated_at = "2026-05-25T12:28:39+00:00"
+ignored_count = 64
