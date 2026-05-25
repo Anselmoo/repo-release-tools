@@ -29,7 +29,7 @@ def register(mcp: FastMCP) -> None:
         root = ctx.lifespan_context.get("root", Path.cwd())
         try:
             extra = load_extra_branch_types(root)
-        except Exception:
+        except FileNotFoundError:
             extra = ()
         error = validate_branch_name(branch_name, extra_types=extra)
         if error is None:
@@ -51,7 +51,7 @@ def register(mcp: FastMCP) -> None:
         root = ctx.lifespan_context.get("root", Path.cwd())
         try:
             extra = load_extra_branch_types(root)
-        except Exception:
+        except FileNotFoundError:
             extra = ()
         error = validate_commit_subject(subject, extra)
         if error is None:

@@ -51,6 +51,8 @@ def register(mcp: FastMCP) -> None:
         await ctx.info(f"Branch target: {branch_name} (suggested title: {commit_title})")
 
         if not dry_run:
+            import subprocess as _sp
+
             await ctx.warning(f"Creating branch '{branch_name}' — this modifies git state")
             if git.branch_exists(root, branch_name):
                 return BranchResult(
@@ -60,9 +62,21 @@ def register(mcp: FastMCP) -> None:
                     suggested_commit_title=commit_title,
                     error=f"Branch '{branch_name}' already exists. Delete it first or choose a different description.",
                 )
-            git.run(
-                ["git", "checkout", "-b", branch_name], root, dry_run=False, label="git checkout -b"
+            _result = _sp.run(
+                ["git", "checkout", "-b", branch_name],
+                cwd=root,
+                capture_output=True,
+                text=True,
             )
+            if _result.returncode != 0:
+                return BranchResult(
+                    branch=branch_name,
+                    created=False,
+                    dry_run=False,
+                    suggested_commit_title=commit_title,
+                    error=f"git checkout -b failed: {(_result.stderr or _result.stdout).strip()}",
+                )
+            await ctx.info(f"Created branch '{branch_name}'")
 
         return BranchResult(
             branch=branch_name,

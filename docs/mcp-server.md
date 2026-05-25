@@ -145,7 +145,7 @@ chooses from data exposed by `rrt://locks/{name}` or other resources.
 
 ## Prompt templates
 
-Nine reusable prompts guide AI-assisted workflows:
+Seven reusable prompts guide AI-assisted workflows:
 
 | Prompt | Parameters | Description |
 |---|---|---|

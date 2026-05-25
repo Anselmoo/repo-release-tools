@@ -57,6 +57,7 @@ headers = ".github/hooks"
 
 [dependency-groups]
 dev = [
+    "fastmcp[apps]>=3.3.0",
     "pillow>=11.0",
     "poethepoet>=0.45.0",
     "pytest>=8.0",
@@ -518,6 +519,7 @@ extra-paths = ["src"]
 
 [tool.ty.src]
 include = ["src", "tests"]
+exclude = ["src/repo_release_tools/mcp"]
 
 [tool.ty.terminal]
 output-format = "full"
@@ -537,14 +539,16 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-fail-under=100",
 ]
-markers = ["runtime: end-to-end runtime/toolchain integration tests"]
+markers = [
+    "runtime: end-to-end runtime/toolchain integration tests",
+    "mcp: tests requiring the [mcp] optional extra (fastmcp, prefab_ui)",
+]
 
 [tool.coverage.run]
 source = ["src/repo_release_tools"]
 omit = [
     "tests/*",
     "src/repo_release_tools/assets/hooks/**/*.py",
-    "src/repo_release_tools/mcp/**/*.py",
 ]
 
 [tool.coverage.report]

@@ -1,4 +1,104 @@
-"""FastMCP app tools for the rrt MCP server — interactive PrefabApp dashboards, charts, and forms."""
+"""FastMCP app tools for the rrt MCP server — interactive PrefabApp dashboards, charts, and forms.
+
+## Overview
+
+This module registers the **interactive UI surface** of the rrt MCP server.  While the tool
+modules in `mcp/tools/` return structured JSON, the app tools here return `PrefabApp`
+objects — rich composable UI components rendered directly inside the AI assistant's chat
+window (supported by Claude Desktop, VS Code Copilot chat, and other FastMCP 3.x hosts with
+PrefabApp rendering).
+
+All app tools are registered with `app=True` in the `@mcp.tool(...)` decorator, which tells
+FastMCP to treat the return value as a UI widget rather than plain text.
+
+## Available dashboards
+
+### `rrt_health_dashboard`
+
+The primary health overview screen.  Shows:
+- **Metric summary** — total checks, passing, warnings, and errors
+- **Ring chart** — percentage of passing checks (green ≥ 100%, yellow, or red)
+- **Bar chart** — per-lock-file breakdown (health, tree, artifacts, drift)
+- **Check cards** — one card per health check with badge and message
+- **Detail table** — all entries across all locks, sortable and searchable
+
+Data sources: `.rrt/health.lock.toml`, `.rrt/tree.lock.toml`,
+`.rrt/artifacts.lock.toml`, `.rrt/drift.lock.toml`.
+
+### `rrt_version_overview`
+
+A version-target map showing every configured file, kind, and current version string.
+Reads all version groups from the `[tool.rrt]` lifespan config.  Each target is displayed
+in a card with the file path, kind (`pep621`, `package_json`, `go_version`, etc.), and
+the current version string (or an error message when the file is missing).
+
+### `rrt_doctor_dashboard`
+
+Health check cards for the automation tooling: pre-commit, lefthook, husky, and GitHub
+Actions workflows.  Each card shows a severity badge (ok / warning / error) and the
+diagnostic message.  An overall badge summarises the worst severity across all checks.
+
+### `rrt_tree_dashboard`
+
+Repository tree snapshot browser.  Displays:
+- Lock metadata: tree hash (truncated), entry count, and updated_at timestamp
+- A live `git ls-files` listing of tracked files (up to 200 lines)
+- Falls back gracefully when git is unavailable or the snapshot lock is missing
+
+### `rrt_locks_overview`
+
+High-level summary of all four lock files in a single carousel.  Each slide shows:
+- **Health** — all checks with status badges
+- **Tree** — snapshot hash and entry count
+- **Artifacts** — registered artifact files
+- **Drift** — drift-tracked source files
+
+Useful for a quick "what does rrt know about my repo?" overview.
+
+### `rrt_init` and `rrt_init_run`
+
+An interactive form for scaffolding rrt configuration.
+
+- **`rrt_init`** — renders the `RrtInitForm` with target, dry_run, and force fields
+- **`rrt_init_run`** — async tool that executes `rrt init` with the form values and
+  returns the command output as text
+
+`rrt_init_run` defaults to `dry_run=True` so it will only preview the init without
+writing files unless the user explicitly disables dry-run.
+
+## Helper functions
+
+### `_severity_icon(severity)`
+
+Maps `"ok"` → `"✓"`, `"warning"` → `"⚠"`, `"error"` → `"✗"`, anything else → `"?"`.
+
+### `_badge_variant(severity)`
+
+Maps severity strings to PrefabUI badge variants:
+`"ok"` → `"success"`, `"warning"` → `"warning"`, `"error"` → `"destructive"`,
+other → `"secondary"`.
+
+### `_overall_badge(severities)`
+
+Given a list of severity strings, returns `(label, variant)` for the worst:
+- All ok or empty → `("All Healthy", "success")`
+- Any warning → `("Warnings", "warning")`
+- Any error → `("Errors", "destructive")`
+
+## `RrtInitForm`
+
+Pydantic `BaseModel` used as the form schema for `rrt_init`.  Fields:
+- `target` — config format: one of `"rrt-toml"`, `"pyproject"`, `"cargo"`, `"node"`, `"go"`
+  (default `"rrt-toml"`)
+- `dry_run` — preview without writing (default `True`)
+- `force` — overwrite existing config (default `False`)
+
+## Layout components used
+
+`Column`, `Row`, `Grid`, `Card`, `CardContent`, `Heading`, `Badge`, `Metric`, `Ring`,
+`BarChart`, `PieChart`, `DataTable`, `Separator`, `Text`, `Muted`, `Carousel`,
+`ExpandableRow`, `Form` (all from `prefab_ui`).
+"""
 
 from __future__ import annotations
 
@@ -490,6 +590,8 @@ def register_apps(mcp: FastMCP) -> None:
         output = result.stdout
         if result.stderr:
             output += f"\n[stderr]: {result.stderr}"
+        if result.returncode != 0 and not output.strip():
+            output = f"[error]: rrt init exited with code {result.returncode}"
         return output.strip() or "Init complete."
 
     @mcp.tool(

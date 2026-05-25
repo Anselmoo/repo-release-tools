@@ -1182,6 +1182,7 @@ mcp = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "fastmcp", extra = ["apps"] },
     { name = "pillow" },
     { name = "poethepoet" },
     { name = "pytest" },
@@ -1196,6 +1197,7 @@ provides-extras = ["mcp"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "fastmcp", extras = ["apps"], specifier = ">=3.3.0" },
     { name = "pillow", specifier = ">=11.0" },
     { name = "poethepoet", specifier = ">=0.45.0" },
     { name = "pytest", specifier = ">=8.0" },

@@ -1,4 +1,138 @@
-"""Prompt templates for the rrt MCP server."""
+"""Prompt templates for the rrt MCP server — reusable AI assistant guidance.
+
+## Overview
+
+This module registers **MCP prompt templates** on the FastMCP server.  Prompts differ from
+tools in that they return plain text that the AI assistant uses as a starting point for
+reasoning — they don't invoke any code or return structured data.  Instead, each prompt
+expands a parameterised Markdown template that guides the assistant through a rrt workflow.
+
+Prompts appear in the MCP host's prompt palette (e.g. the `/` menu in Claude Desktop) and
+can be invoked by name with optional arguments.
+
+## Available prompts
+
+### `release_workflow`
+
+**Trigger:** user wants a step-by-step release guide
+
+**Parameters:**
+- `version_level` (default `"minor"`) — semver bump level: `major`, `minor`, or `patch`
+- `repo_name` (default `"this repo"`) — repository name for personalised output
+
+**Output:** An eight-step numbered guide covering `rrt bump`, changelog review,
+`rrt git commit`, health checks, branch creation, PR, and tagging.  References the
+`rrt_health`, `rrt_drift`, and `rrt_version` MCP tools for in-chat inspection.
+
+---
+
+### `version_strategy`
+
+**Trigger:** user wants help deciding which semver level to bump
+
+**Parameters:**
+- `change_summary` (default `""`) — free-form description of the changes since the last
+  release
+
+**Output:** A structured analysis prompt that the assistant fills in with a recommendation
+(`major` / `minor` / `patch`), one-line rationale, and the exact `rrt bump` command to run.
+
+Rules embedded in the prompt:
+- `major` → breaking API or behaviour change (`BREAKING CHANGE` footer)
+- `minor` → new feature, backward-compatible (`feat:` commits)
+- `patch` → bug fix, docs, maintenance (`fix:`, `docs:`, `chore:`)
+
+---
+
+### `branch_strategy`
+
+**Trigger:** user is about to create a branch and wants naming guidance
+
+**Parameters:**
+- `task_description` (default `""`) — what the branch is for
+- `context_hint` (default `""`) — additional context (e.g. module name, ticket number)
+
+**Output:** A structured template listing all conventional branch types (`feat`, `fix`,
+`chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `style`, `build`) with slug rules and
+the exact `rrt branch new` command to create the branch.
+
+---
+
+### `commit_message_guide`
+
+**Trigger:** user wants to write a Conventional Commit message
+
+**Parameters:**
+- `staged_summary` (default `""`) — description of staged changes (`git diff --cached`)
+- `branch_name` (default `""`) — current branch name for additional context
+
+**Output:** A Conventional Commits formatting guide with format, rules, type list, and
+three worked examples.  The assistant drafts the subject line and an optional body/footer.
+
+Format: `<type>[(<scope>)]: <description>` — max 72 chars, imperative mood, no period.
+
+---
+
+### `changelog_entry`
+
+**Trigger:** user wants to add an entry to `CHANGELOG.md`
+
+**Parameters:**
+- `commit_summary` (default `""`) — one-line description of the change
+- `section_hint` (default `""`) — target Keep-a-Changelog section name
+
+**Output:** A drafter prompt listing all Keep-a-Changelog sections (`Added`, `Changed`,
+`Deprecated`, `Removed`, `Fixed`, `Security`, `Maintenance`) with style rules and two
+example bullets.  The assistant responds with the section name and full bullet text.
+
+Note: `Maintenance` entries (chore/ci/build/test/deps) do NOT require a changelog entry
+per the rrt convention — the prompt explains this explicitly.
+
+---
+
+### `config_setup`
+
+**Trigger:** user wants to add `[tool.rrt]` to a project
+
+**Parameters:**
+- `project_type` (default `"python"`) — one of `"python"`, `"node"`, `"go"` (unknown values
+  fall back to `"python"`)
+
+**Output:** A five-step setup guide covering install, `rrt init`, a starter config snippet
+tailored to the project type, key config options, and validation commands.
+
+Config snippet variants:
+- `python` → `pep621` version target pointing at `pyproject.toml`
+- `node` → `package_json` target pointing at `package.json`
+- `go` → `go_version` target pointing at `cmd/root.go`
+
+---
+
+### `release_readiness`
+
+**Trigger:** user is about to cut a release and wants a pre-flight checklist
+
+**Parameters:**
+- `version` (default `""`) — pending version string (displayed as `v{version}`)
+- `target_env` (default `"production"`) — deployment environment label
+
+**Output:** A six-section Markdown checklist covering version, changelog, health & drift,
+branch validation, CI, and the final `rrt bump` + commit + push sequence.  Each section
+has specific MCP tool calls to make and a pass/fail/warn verdict format.
+
+---
+
+## Usage example
+
+```python
+from repo_release_tools.mcp.prompts import register_prompts
+from fastmcp import FastMCP
+
+mcp = FastMCP("my-server")
+register_prompts(mcp)
+# Prompts are now available as mcp.get_prompt("release_workflow") etc.
+```
+"""
 
 from __future__ import annotations
 

@@ -36,6 +36,9 @@ def register(mcp: FastMCP) -> None:
     )
     def rrt_config(ctx: Context) -> dict[str, Any] | ConfigError:
         """Return the resolved rrt configuration as a JSON-serialisable dict."""
+        config_error = ctx.lifespan_context.get("config_error")
+        if config_error is not None:
+            return ConfigError(error=f"Invalid rrt configuration: {config_error}")
         config = ctx.lifespan_context.get("config")
         if config is None:
             return ConfigError(error="No rrt configuration found in this repository.")

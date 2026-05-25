@@ -25,6 +25,9 @@ def register(mcp: FastMCP) -> None:
         """Return the current version from each version group's primary target."""
         from repo_release_tools.version.targets import read_version_string
 
+        config_error = ctx.lifespan_context.get("config_error")
+        if config_error is not None:
+            return ConfigError(error=f"Invalid rrt configuration: {config_error}")
         config = ctx.lifespan_context.get("config")
         if config is None:
             return ConfigError(error="No rrt configuration found.")
@@ -55,6 +58,9 @@ def register(mcp: FastMCP) -> None:
         if level not in valid_levels:
             return {"error": f"level must be one of: {', '.join(valid_levels)}"}
 
+        config_error = ctx.lifespan_context.get("config_error")
+        if config_error is not None:
+            return {"error": f"Invalid rrt configuration: {config_error}"}
         config = ctx.lifespan_context.get("config")
         if config is None:
             return {"error": "No rrt configuration found."}
@@ -75,10 +81,15 @@ def register(mcp: FastMCP) -> None:
                 )
                 applied = False
                 if not dry_run:
+                    import contextlib
+                    import io
+
                     from repo_release_tools.version.targets import replace_version_in_file
 
                     for target in group.version_targets:
-                        replace_version_in_file(target, new_ver, dry_run=False)
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            replace_version_in_file(target, new_ver, dry_run=False)
+                        await ctx.info(f"Updated {target.path}")
                     applied = True
                 results.append(
                     BumpGroupResult(

@@ -35,11 +35,15 @@ async def _lifespan(server: FastMCP[Any]) -> AsyncGenerator[dict[str, Any], None
     from repo_release_tools.config import load_or_autodetect_config
 
     root = _find_repo_root()
+    config = None
+    config_error: str | None = None
     try:
         config = load_or_autodetect_config(root)
-    except (FileNotFoundError, ValueError, RuntimeError):
-        config = None
-    yield {"root": root, "config": config}
+    except FileNotFoundError:
+        pass
+    except (ValueError, RuntimeError) as exc:
+        config_error = str(exc)
+    yield {"root": root, "config": config, "config_error": config_error}
 
 
 def create_server() -> FastMCP[Any]:
@@ -109,5 +113,5 @@ def main() -> None:
         server.run(transport="stdio")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

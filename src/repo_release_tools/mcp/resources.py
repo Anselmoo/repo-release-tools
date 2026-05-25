@@ -23,6 +23,7 @@ def _path_to_str(obj: Any) -> Any:
 
 def register_resources(mcp: FastMCP) -> None:
     """Register resources and resource templates on *mcp*."""
+    from repo_release_tools.mcp.server import _find_repo_root
     from repo_release_tools.state import (
         artifacts_lock_path,
         health_lock_path,
@@ -50,7 +51,7 @@ def register_resources(mcp: FastMCP) -> None:
         """Resolved rrt configuration as JSON."""
         from repo_release_tools.config import load_or_autodetect_config
 
-        root = Path.cwd()
+        root = _find_repo_root()
         try:
             config = load_or_autodetect_config(root)
             return json.dumps(_path_to_str(asdict(config)), indent=2)
@@ -72,7 +73,7 @@ def register_resources(mcp: FastMCP) -> None:
     @mcp.resource("rrt://changelog", title="RRT Changelog", tags={"changelog"})
     def resource_changelog() -> str:
         """Full content of the repository CHANGELOG.md."""
-        changelog = Path.cwd() / "CHANGELOG.md"
+        changelog = _find_repo_root() / "CHANGELOG.md"
         if not changelog.exists():
             return "No CHANGELOG.md found."
         return changelog.read_text(encoding="utf-8")
@@ -86,5 +87,5 @@ def register_resources(mcp: FastMCP) -> None:
         resolver = _LOCK_RESOLVER.get(name)
         if resolver is None:
             return json.dumps({"error": f"Unknown lock '{name}'. Valid: {valid}"})
-        root = Path.cwd()
+        root = _find_repo_root()
         return json.dumps(read_lock(resolver(root)), indent=2)
