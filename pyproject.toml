@@ -239,7 +239,7 @@ pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.folders.templates]]
 name = "tests-root"
-description = "tests/ root: only conftest.py plus the nine logical subdirs"
+description = "tests/ root: only conftest.py plus the ten logical subdirs"
 strictness = "strict"
 exact = false
 required_files = ["conftest.py"]
@@ -251,6 +251,7 @@ required_dirs = [
     "folders",
     "hooks",
     "integration",
+    "mcp",
     "ui",
     "version",
     "workflow",
@@ -336,6 +337,21 @@ exact = false
 required_files = ["test_runtime_hybrid.py"]
 
 [[tool.rrt.folders.templates]]
+name = "tests-mcp"
+description = "MCP server tests"
+strictness = "strict"
+exact = true
+required_files = [
+    "conftest.py",
+    "test_apps.py",
+    "test_models.py",
+    "test_prompts.py",
+    "test_resources.py",
+    "test_server.py",
+    "test_tools.py",
+]
+
+[[tool.rrt.folders.templates]]
 name = "tests-ui"
 description = "UI rendering layer tests"
 strictness = "strict"
@@ -408,6 +424,11 @@ templates = ["tests-hooks"]
 name = "tests-integration-rule"
 selector = "tests/integration"
 templates = ["tests-integration"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-mcp-rule"
+selector = "tests/mcp"
+templates = ["tests-mcp"]
 
 [[tool.rrt.folders.rules]]
 name = "tests-ui-rule"

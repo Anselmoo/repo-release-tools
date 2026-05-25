@@ -586,12 +586,18 @@ def register_apps(mcp: FastMCP) -> None:
             cmd.append("--dry-run")
         if force:
             cmd.append("--force")
-        result = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True)
+        try:
+            result = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=20.0)
+        except subprocess.TimeoutExpired:
+            return "[error]: rrt init timed out after 20 seconds"
         output = result.stdout
         if result.stderr:
             output += f"\n[stderr]: {result.stderr}"
-        if result.returncode != 0 and not output.strip():
-            output = f"[error]: rrt init exited with code {result.returncode}"
+        if result.returncode != 0:
+            details = (result.stderr or result.stdout).strip()
+            if details:
+                return f"[error]: rrt init exited with code {result.returncode}: {details}"
+            return f"[error]: rrt init exited with code {result.returncode}"
         return output.strip() or "Init complete."
 
     @mcp.tool(

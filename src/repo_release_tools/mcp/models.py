@@ -105,7 +105,7 @@ Fields:
 - `error` — set when branch creation failed (e.g. branch already exists)
 
 ### `RawLockData`
-Passthrough wrapper returned by `rrt_lock` for arbitrary lock file content.
+Passthrough wrapper for arbitrary lock-style data when a structured tool model is not needed.
 
 Fields:
 - `data` — the parsed TOML dictionary

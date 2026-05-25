@@ -72,7 +72,6 @@ def register(mcp: FastMCP) -> None:
         total = float(len(groups))
         results: list[BumpGroupResult] = []
         for i, group in enumerate(groups):
-            await ctx.report_progress(float(i), total)
             try:
                 current = read_version_string(group.primary_target())
                 new_ver = str(Version.parse(current).bump(level))
@@ -102,5 +101,8 @@ def register(mcp: FastMCP) -> None:
                 )
             except (RuntimeError, OSError, ValueError) as exc:
                 results.append(BumpGroupResult(group=group.name, error=str(exc)))
-        await ctx.report_progress(total, total)
+            if total > 0:
+                await ctx.report_progress(float(i + 1), total)
+        if total > 0:
+            await ctx.report_progress(total, total)
         return results

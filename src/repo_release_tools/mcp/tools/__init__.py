@@ -20,7 +20,7 @@ registrations in dependency order.
   pre-commit hooks, lefthook, husky, and GitHub Actions workflow files.  Returns a
   `DoctorResponse` with a `CheckResult` per component.
 
-### `lock_tools` → `rrt_health`, `rrt_drift`, `rrt_tree`, `rrt_artifacts`, `rrt_lock`
+### `lock_tools` → `rrt_health`, `rrt_drift`, `rrt_tree`, `rrt_artifacts`
 
 - **`rrt_health`** — Reads `.rrt/health.lock.toml` and returns all health check entries
   (status, message, updated_at) as a list.
@@ -30,16 +30,13 @@ registrations in dependency order.
   (tree_hash, entry_count, updated_at).
 - **`rrt_artifacts`** — Reads `.rrt/artifacts.lock.toml` and returns registered artifact
   file metadata (path, description, hash, updated_at).
-- **`rrt_lock`** — Generic passthrough that reads any `.rrt/*.lock.toml` file and returns
-  its full parsed content.  Useful for inspecting lock files not covered by the typed tools.
-
 ### `version_tools` → `rrt_version`, `rrt_bump`
 
 - **`rrt_version`** — Returns the current version for each configured version group.
   Safe to call at any time; never modifies files.
 - **`rrt_bump`** — Preview or apply a semver bump across all version targets.  Defaults to
   `dry_run=True` for safety; set `dry_run=False` only after the user explicitly confirms.
-  Accepts `level` = `"major"`, `"minor"`, or `"patch"`.
+  Accepts `level` = `"major"`, `"minor"`, `"patch"`, `"alpha"`, `"beta"`, or `"rc"`.
 
 ### `validation_tools` → `rrt_validate_branch`, `rrt_validate_commit`
 
@@ -52,15 +49,14 @@ registrations in dependency order.
 ### `changelog_tools` → `rrt_changelog`
 
 - **`rrt_changelog`** — Reads `CHANGELOG.md` and returns the entries for a given section
-  (default: `"Unreleased"`).  When `raw=True` the raw section text is returned instead of
-  a parsed entry list.  Returns a `ChangelogResponse`.
+  (default: `"Unreleased"`). Returns a `ChangelogResponse`.
 
 ### `git_tools` → `rrt_branch_new`
 
 - **`rrt_branch_new`** — Creates (or previews) a conventional branch from a type + slug.
-  Internally calls `rrt branch new <type> <description> [--scope <scope>]`.  Always
-  defaults to `dry_run=True`.  Returns a `BranchResult` with the full branch name and a
-  suggested commit title.
+  Uses rrt branch naming helpers and runs `git checkout -b` when `dry_run=False`.
+  Always defaults to `dry_run=True`. Returns a `BranchResult` with the full branch name
+  and a suggested commit title.
 
 ## Response conventions
 

@@ -54,7 +54,8 @@ def create_server() -> FastMCP[Any]:
             "MCP server for repo-release-tools (rrt). "
             "Exposes version management, changelog, health/drift/tree/artifact lock inspection, "
             "branch and commit validation, and config introspection as MCP tools and resources. "
-            "All mutating tools (rrt_bump) default to dry_run=True for safety."
+            "Mutating tools rrt_bump, rrt_branch_new, and rrt_init_run default to dry_run=True "
+            "for safety."
         ),
         version=__version__,
         lifespan=_lifespan,

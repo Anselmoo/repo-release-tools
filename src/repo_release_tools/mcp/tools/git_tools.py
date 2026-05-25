@@ -62,12 +62,22 @@ def register(mcp: FastMCP) -> None:
                     suggested_commit_title=commit_title,
                     error=f"Branch '{branch_name}' already exists. Delete it first or choose a different description.",
                 )
-            _result = _sp.run(
-                ["git", "checkout", "-b", branch_name],
-                cwd=root,
-                capture_output=True,
-                text=True,
-            )
+            try:
+                _result = _sp.run(
+                    ["git", "checkout", "-b", branch_name],
+                    cwd=root,
+                    capture_output=True,
+                    text=True,
+                    timeout=8.0,
+                )
+            except _sp.TimeoutExpired:
+                return BranchResult(
+                    branch=branch_name,
+                    created=False,
+                    dry_run=False,
+                    suggested_commit_title=commit_title,
+                    error="git checkout -b timed out after 8 seconds.",
+                )
             if _result.returncode != 0:
                 return BranchResult(
                     branch=branch_name,

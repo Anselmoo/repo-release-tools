@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -327,6 +328,20 @@ def test_rrt_bump_no_config(tmp_path: Path) -> None:
     assert "error" in result
 
 
+def test_rrt_bump_empty_groups_skips_progress(tmp_path: Path) -> None:
+    tools = _ver_tools(tmp_path)
+    mock_config = MagicMock()
+    mock_config.version_groups = []
+    ctx = _ctx(tmp_path, config=mock_config)
+
+    async def _run() -> Any:
+        return await tools["rrt_bump"](ctx, level="patch")
+
+    result = asyncio.run(_run())
+    assert result == []
+    ctx.report_progress.assert_not_called()
+
+
 def test_rrt_bump_dry_run(tmp_path: Path) -> None:
     tools = _ver_tools(tmp_path)
     mock_group = MagicMock()
@@ -573,12 +588,12 @@ def test_rrt_branch_new_with_scope(tmp_path: Path) -> None:
 def test_rrt_branch_new_apply_success(tmp_path: Path) -> None:
     tools = _git_tools(tmp_path)
     ctx = _ctx(tmp_path)
+    mock_run = MagicMock(return_value=MagicMock(returncode=0, stdout="", stderr=""))
 
     async def _run() -> BranchResult:
-        fake_proc = MagicMock(returncode=0, stdout="", stderr="")
         with (
             patch("repo_release_tools.workflow.git.branch_exists", return_value=False),
-            patch("subprocess.run", return_value=fake_proc),
+            patch("subprocess.run", mock_run),
         ):
             return await tools["rrt_branch_new"](
                 ctx, commit_type="feat", description="new feature", dry_run=False
@@ -586,6 +601,8 @@ def test_rrt_branch_new_apply_success(tmp_path: Path) -> None:
 
     result = asyncio.run(_run())
     assert result.created is True
+    mock_run.assert_called_once()
+    assert mock_run.call_args.kwargs["timeout"] == 8.0
 
 
 def test_rrt_branch_new_apply_git_fails(tmp_path: Path) -> None:
@@ -621,3 +638,24 @@ def test_rrt_branch_new_apply_already_exists(tmp_path: Path) -> None:
     result = asyncio.run(_run())
     assert result.created is False
     assert result.error is not None
+
+
+def test_rrt_branch_new_apply_timeout(tmp_path: Path) -> None:
+    tools = _git_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> BranchResult:
+        with (
+            patch("repo_release_tools.workflow.git.branch_exists", return_value=False),
+            patch(
+                "subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd=["git", "checkout", "-b"], timeout=8.0),
+            ),
+        ):
+            return await tools["rrt_branch_new"](
+                ctx, commit_type="feat", description="slow branch", dry_run=False
+            )
+
+    result = asyncio.run(_run())
+    assert result.created is False
+    assert result.error == "git checkout -b timed out after 8 seconds."

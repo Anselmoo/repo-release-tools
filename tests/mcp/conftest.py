@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-fastmcp = pytest.importorskip("fastmcp", reason="[mcp] extra not installed")
+pytest.importorskip("fastmcp", reason="[mcp] extra not installed")
 
 pytestmark = pytest.mark.mcp
 

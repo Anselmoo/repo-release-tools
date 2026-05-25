@@ -350,13 +350,16 @@ def test_rrt_init_run_dry_run(tmp_path: Path) -> None:
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)
     fake_proc = MagicMock(stdout="Would write .rrt.toml", stderr="", returncode=0)
+    mock_run = MagicMock(return_value=fake_proc)
 
     async def _run() -> str:
-        with patch("subprocess.run", return_value=fake_proc):
+        with patch("subprocess.run", mock_run):
             return await tools["rrt_init_run"](ctx)
 
     result = asyncio.run(_run())
     assert "Would write" in result
+    mock_run.assert_called_once()
+    assert mock_run.call_args.kwargs["timeout"] == 20.0
 
 
 def test_rrt_init_run_apply(tmp_path: Path) -> None:
@@ -382,7 +385,8 @@ def test_rrt_init_run_with_stderr(tmp_path: Path) -> None:
             return await tools["rrt_init_run"](ctx)
 
     result = asyncio.run(_run())
-    assert "[stderr]" in result
+    assert "[error]" in result
+    assert "some warning" in result
 
 
 def test_rrt_init_run_empty_output(tmp_path: Path) -> None:
@@ -410,6 +414,21 @@ def test_rrt_init_run_nonzero_no_output(tmp_path: Path) -> None:
     result = asyncio.run(_run())
     assert "[error]" in result
     assert "1" in result
+
+
+def test_rrt_init_run_timeout(tmp_path: Path) -> None:
+    tools = _registered(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> str:
+        with patch(
+            "subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd=["python", "-m", "repo_release_tools.cli"], timeout=20),
+        ):
+            return await tools["rrt_init_run"](ctx)
+
+    result = asyncio.run(_run())
+    assert result == "[error]: rrt init timed out after 20 seconds"
 
 
 # ── rrt_locks_overview ────────────────────────────────────────────────────────

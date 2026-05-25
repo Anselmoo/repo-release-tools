@@ -79,7 +79,7 @@ After restarting Claude Desktop the full rrt tool palette is available in chat.
 
 **Changelog** — `rrt_changelog`
 
-**Lock inspection** — `rrt_health`, `rrt_drift`, `rrt_tree`, `rrt_artifacts`, `rrt_lock`
+**Lock inspection** — `rrt_health`, `rrt_drift`, `rrt_tree`, `rrt_artifacts`
 
 **Config** — `rrt_config`, `rrt_doctor`
 
@@ -94,7 +94,7 @@ After restarting Claude Desktop the full rrt tool palette is available in chat.
 | `rrt://config` | Current `[tool.rrt]` configuration as JSON |
 | `rrt://schema/config` | Full JSON Schema for all rrt config options |
 | `rrt://changelog` | Full `CHANGELOG.md` text |
-| `rrt://lock/{name}` | Parsed lock file (`health`, `drift`, `tree`, `artifacts`) as JSON |
+| `rrt://locks/{name}` | Parsed lock file (`health`, `drift`, `tree`, `artifacts`) as JSON |
 
 ## Safety
 
