@@ -2,9 +2,9 @@
 
 <!-- rrt:auto:start:readme-header -->
 <p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/badges/github-reto-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/badges/github-reto-light.svg">
-  <img alt="GitHub" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/badges/github-reto-dark.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-light.svg?raw=true">
+  <img alt="GitHub" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
 </picture></a></p>
 <!-- rrt:auto:end:readme-header -->
 
@@ -152,6 +152,7 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 - Markdown TOC: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/toc.md>
 - Config health checks: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/doctor.md>
 - Runtime EOL tracking: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/eol_check.md>
+- MCP Server: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/mcp-server.md>
 - Agent instructions: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/agent-instructions.md>
 <!-- rrt:auto:end:readme-links -->
 

@@ -486,7 +486,11 @@ targets = [
 
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "readme-header"
-content = """{platform_badge_adaptive_reto}
+content = """<p><a href="{repo_url}"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="{repo_url}/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
+  <source media="(prefers-color-scheme: light)" srcset="{repo_url}/blob/main/docs/assets/readme-badges/github-reto-light.svg?raw=true">
+  <img alt="GitHub" src="{repo_url}/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
+</picture></a></p>
 """
 before_blank_lines = 0
 after_blank_lines = 1

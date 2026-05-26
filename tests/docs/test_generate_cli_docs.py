@@ -236,6 +236,15 @@ def test_generate_index_topic_links_markdown_lists_expected_entries() -> None:
     assert "commands/branch.md" in content
     assert "commands/git_cmd.md" in content
     assert "commands/tree.md" in content
+    assert "mcp-server.md" in content
+
+
+def test_generate_readme_links_markdown_includes_mcp_server_doc() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_readme_links_markdown()
+
+    assert "docs/mcp-server.md" in content
 
 
 def test_iter_generated_doc_targets_exposes_all_targets() -> None:

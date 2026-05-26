@@ -42,6 +42,7 @@ the canonical home for the current `rrt` command surface.
 - [rrt branch](commands/branch.md) — generated branch naming model and allowed branch types
 - [rrt git](commands/git_cmd.md) — generated Git helpers and workflow shortcuts
 - [rrt tree](commands/tree.md) — generated guide for `rrt tree` output modes, ignore behavior, and traversal controls
+- [MCP Server](mcp-server.md) — MCP install and connect guide
 <!-- rrt:auto:end:index-topic-links -->
 
 ## Command reference by group

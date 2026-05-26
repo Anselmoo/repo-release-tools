@@ -482,6 +482,7 @@ def generate_index_topic_links_markdown() -> str:
         "- [rrt git](commands/git_cmd.md) — generated Git helpers and workflow shortcuts",
         "- [rrt tree](commands/tree.md) — generated guide for `rrt tree` output modes, "
         "ignore behavior, and traversal controls",
+        "- [MCP Server](mcp-server.md) — MCP install and connect guide",
     ]
     return "\n".join(links)
 
@@ -500,6 +501,7 @@ def generate_readme_links_markdown() -> str:
         f"- Markdown TOC: <{_README_BASE}/docs/commands/toc.md>",
         f"- Config health checks: <{_README_BASE}/docs/commands/doctor.md>",
         f"- Runtime EOL tracking: <{_README_BASE}/docs/commands/eol_check.md>",
+        f"- MCP Server: <{_README_BASE}/docs/mcp-server.md>",
         f"- Agent instructions: <{_README_BASE}/docs/agent-instructions.md>",
     ]
     return "\n".join(links)
