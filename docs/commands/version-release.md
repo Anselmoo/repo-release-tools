@@ -50,7 +50,8 @@ Depending on the selected version group, the command can update:
    ``<bump>`` value.
 4. Update version targets and optional pin targets.
 5. Update the changelog unless ``--no-changelog`` is set.
-6. Run the configured lock command unless ``--no-update`` is set.
+6. Run the configured lock and generated-asset commands unless
+   ``--no-update`` is set.
 7. Create the release branch and stage or commit the resulting changes.
 
 ### Changelog behavior
@@ -110,7 +111,7 @@ Content
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   --no-changelog          Do not update the changelog file.
   --no-pin-sync           Skip dependency pin synchronisation.
-  --no-update             Skip the lockfile update step.
+  --no-update             Skip lockfile and generated-asset refresh steps.
   --include-maintenance   Include maintenance commits in changelog.
   --changelog-mode MODE   How to write changelog entries (auto | promote | generate).
 

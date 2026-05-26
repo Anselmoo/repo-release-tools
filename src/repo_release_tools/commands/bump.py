@@ -28,7 +28,8 @@ Depending on the selected version group, the command can update:
    ``<bump>`` value.
 4. Update version targets and optional pin targets.
 5. Update the changelog unless ``--no-changelog`` is set.
-6. Run the configured lock command unless ``--no-update`` is set.
+6. Run the configured lock and generated-asset commands unless
+   ``--no-update`` is set.
 7. Create the release branch and stage or commit the resulting changes.
 
 ## Changelog behavior
@@ -558,7 +559,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     content_grp.add_argument(
         "--no-update",
         action="store_true",
-        help="Skip the lockfile update step.",
+        help="Skip lockfile and generated-asset refresh steps.",
     )
     content_grp.add_argument(
         "--include-maintenance",

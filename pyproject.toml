@@ -133,17 +133,6 @@ cmd = "python -m repo_release_tools.assets.badges docs/assets/badges"
 pin_target_missing = "warn"
 
 [[tool.rrt.generated_assets]]
-path = "src/repo_release_tools/assets/badges/*.svg"
-command = [
-    "uv",
-    "run",
-    "python",
-    "-m",
-    "repo_release_tools.assets.badges",
-    "src/repo_release_tools/assets/badges",
-]
-
-[[tool.rrt.generated_assets]]
 path = "docs/assets/banner-dark.png"
 command = [
     "uv",
