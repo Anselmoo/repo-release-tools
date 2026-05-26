@@ -1,5 +1,23 @@
 ## [Unreleased]
 
+## [1.7.0] - 2026-05-26
+
+### Added
+- **mcp**: rich Prefab UI dashboards, GenerativeUI, init form, and docs (#78)
+- **docs**: add version-release documentation and implement format re… (#76)
+- add artifacts integrity tracking with UI layer migration (#74)
+
+### Fixed
+- update documentation and commands to include generated-asset handling in bump process (#80)
+- badge links in README.md (#79)
+- tree lock (#77)
+- add artifacts snapshot to resolve strict artifacts check failure
+- add tree snapshot to resolve strict tree check failure
+- add health snapshot to resolve strict doctor check failure (#75)
+
+### Documentation
+- add Husky v9 support to hooks.md alongside pre-commit and Lefthook (#72)
+
 ## [1.6.2] - 2026-05-20
 
 ### Added
