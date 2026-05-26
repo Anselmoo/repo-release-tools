@@ -423,7 +423,9 @@ def test_rrt_init_run_timeout(tmp_path: Path) -> None:
     async def _run() -> str:
         with patch(
             "subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd=["python", "-m", "repo_release_tools.cli"], timeout=20),
+            side_effect=subprocess.TimeoutExpired(
+                cmd=["python", "-m", "repo_release_tools.cli"], timeout=20
+            ),
         ):
             return await tools["rrt_init_run"](ctx)
 

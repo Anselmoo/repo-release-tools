@@ -587,7 +587,9 @@ def register_apps(mcp: FastMCP) -> None:
         if force:
             cmd.append("--force")
         try:
-            result = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=20.0)
+            result = subprocess.run(
+                cmd, cwd=str(root), capture_output=True, text=True, timeout=20.0
+            )
         except subprocess.TimeoutExpired:
             return "[error]: rrt init timed out after 20 seconds"
         output = result.stdout
