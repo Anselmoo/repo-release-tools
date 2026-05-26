@@ -34,6 +34,12 @@ repo-release-tools = "repo_release_tools.cli:main"
 rrt = "repo_release_tools.cli:main"
 rrt-agents = "repo_release_tools.commands.agents_cmd:main"
 rrt-hooks = "repo_release_tools.workflow.hooks:main"
+rrt-mcp = "repo_release_tools.mcp.server:main"
+
+[project.optional-dependencies]
+mcp = [
+    "fastmcp[apps]>=3.3.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.12.0"]
@@ -51,6 +57,7 @@ headers = ".github/hooks"
 
 [dependency-groups]
 dev = [
+    "fastmcp[apps]>=3.3.0",
     "pillow>=11.0",
     "poethepoet>=0.45.0",
     "pytest>=8.0",
@@ -232,7 +239,7 @@ pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.folders.templates]]
 name = "tests-root"
-description = "tests/ root: only conftest.py plus the nine logical subdirs"
+description = "tests/ root: only conftest.py plus the ten logical subdirs"
 strictness = "strict"
 exact = false
 required_files = ["conftest.py"]
@@ -244,6 +251,7 @@ required_dirs = [
     "folders",
     "hooks",
     "integration",
+    "mcp",
     "ui",
     "version",
     "workflow",
@@ -329,6 +337,21 @@ exact = false
 required_files = ["test_runtime_hybrid.py"]
 
 [[tool.rrt.folders.templates]]
+name = "tests-mcp"
+description = "MCP server tests"
+strictness = "strict"
+exact = true
+required_files = [
+    "conftest.py",
+    "test_apps.py",
+    "test_models.py",
+    "test_prompts.py",
+    "test_resources.py",
+    "test_server.py",
+    "test_tools.py",
+]
+
+[[tool.rrt.folders.templates]]
 name = "tests-ui"
 description = "UI rendering layer tests"
 strictness = "strict"
@@ -401,6 +424,11 @@ templates = ["tests-hooks"]
 name = "tests-integration-rule"
 selector = "tests/integration"
 templates = ["tests-integration"]
+
+[[tool.rrt.folders.rules]]
+name = "tests-mcp-rule"
+selector = "tests/mcp"
+templates = ["tests-mcp"]
 
 [[tool.rrt.folders.rules]]
 name = "tests-ui-rule"
@@ -512,6 +540,7 @@ extra-paths = ["src"]
 
 [tool.ty.src]
 include = ["src", "tests"]
+exclude = ["src/repo_release_tools/mcp"]
 
 [tool.ty.terminal]
 output-format = "full"
@@ -531,11 +560,17 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-fail-under=100",
 ]
-markers = ["runtime: end-to-end runtime/toolchain integration tests"]
+markers = [
+    "runtime: end-to-end runtime/toolchain integration tests",
+    "mcp: tests requiring the [mcp] optional extra (fastmcp, prefab_ui)",
+]
 
 [tool.coverage.run]
 source = ["src/repo_release_tools"]
-omit = ["tests/*", "src/repo_release_tools/assets/hooks/**/*.py"]
+omit = [
+    "tests/*",
+    "src/repo_release_tools/assets/hooks/**/*.py",
+]
 
 [tool.coverage.report]
 show_missing = true

@@ -27,6 +27,7 @@ _SKILL_NAMES: tuple[str, ...] = (
     "rrt-user-config-safety",
     "rrt-user-ci-readiness",
     "rrt-user-migration-uvx-to-installed",
+    "rrt-user-mcp-server",
 )
 
 

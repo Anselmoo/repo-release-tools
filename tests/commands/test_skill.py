@@ -26,6 +26,7 @@ EXPECTED_SKILL_NAMES = {
     "rrt-user-config-safety",
     "rrt-user-ci-readiness",
     "rrt-user-migration-uvx-to-installed",
+    "rrt-user-mcp-server",
 }
 
 
