@@ -114,6 +114,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeAlias
 
@@ -161,6 +162,38 @@ TREE_EPILOG = """  $ rrt tree
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("tree", __doc__ or ""),)
 
 TreeEntry: TypeAlias = tuple[str, bool, list["TreeEntry"] | None]
+
+
+@dataclass(frozen=True)
+class ManifestEntry:
+    """Manifest entry metadata for the deterministic tree manifest.
+
+    Attributes mirror the JSON schema written to `.rrt/tree.manifest.json`.
+    """
+
+    path: str
+    is_dir: bool
+    size: int | None
+    mtime: int | None
+    sha256: str | None
+    mode: int | None
+    uid: int | None
+    gid: int | None
+    symlink_target: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serialisable dict for this manifest entry."""
+        return {
+            "path": self.path,
+            "is_dir": self.is_dir,
+            "size": self.size,
+            "mtime": self.mtime,
+            "sha256": self.sha256,
+            "mode": self.mode,
+            "uid": self.uid,
+            "gid": self.gid,
+            "symlink_target": self.symlink_target,
+        }
 
 
 def _canonical_entry_repr(entries: list[TreeEntry]) -> str:
@@ -468,14 +501,14 @@ def _flatten_entries_for_manifest(
     *,
     hash_files: bool,
     warnings: list[str],
-) -> list[dict[str, object]]:
-    """Flatten the nested *entries* into a list of metadata dicts.
+) -> list[ManifestEntry]:
+    """Flatten the nested *entries* into a list of ManifestEntry instances.
 
-    Each entry dict contains: path (posix, relative to *root*), is_dir,
+    Each ManifestEntry contains: path (posix, relative to *root*), is_dir,
     size, mtime (int), sha256 (or null), mode, uid, gid, symlink_target (or null).
     When *hash_files* is False the sha256 field will always be null.
     """
-    result: list[dict[str, object]] = []
+    result: list[ManifestEntry] = []
 
     def visit(nodes: list[TreeEntry], parent: Path) -> None:
         for name, is_dir, children in nodes:
@@ -533,19 +566,18 @@ def _flatten_entries_for_manifest(
             uid = lstat.st_uid if lstat is not None else None
             gid = lstat.st_gid if lstat is not None else None
 
-            result.append(
-                {
-                    "path": posix,
-                    "is_dir": bool(is_dir),
-                    "size": size,
-                    "mtime": mtime,
-                    "sha256": sha,
-                    "mode": mode,
-                    "uid": uid,
-                    "gid": gid,
-                    "symlink_target": symlink_target,
-                }
+            entry = ManifestEntry(
+                path=posix,
+                is_dir=bool(is_dir),
+                size=size,
+                mtime=mtime,
+                sha256=sha,
+                mode=mode,
+                uid=uid,
+                gid=gid,
+                symlink_target=symlink_target,
             )
+            result.append(entry)
 
             if children:
                 visit(children, rel)
@@ -553,7 +585,7 @@ def _flatten_entries_for_manifest(
     visit(entries, Path())
 
     # Deterministic ordering by path
-    return sorted(result, key=lambda e: str(e.get("path", "")))
+    return sorted(result, key=lambda e: e.path)
 
 
 def _write_tree_manifest(
@@ -568,9 +600,11 @@ def _write_tree_manifest(
         entries, root=root, hash_files=hash_files, warnings=warnings
     )
 
+    # Convert ManifestEntry instances to plain dicts for stable JSON output.
+    manifest_files = [e.to_dict() for e in manifest_entries]
     manifest: dict[str, object] = {
         "meta": {"generated_at": now_utc()},
-        "files": manifest_entries,
+        "files": manifest_files,
     }
 
     text = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -770,15 +804,15 @@ def cmd_tree(args: argparse.Namespace) -> int:
                 current_files = _flatten_entries_for_manifest(
                     entries, root, hash_files=False, warnings=warnings
                 )
-                curr_paths = {str(e.get("path", "")) for e in current_files}
+                curr_paths = {str(e.path) for e in current_files}
 
                 added = sorted(curr_paths - prev_paths)
                 removed = sorted(prev_paths - curr_paths)
 
-                prev_file_count = sum(1 for e in prev_files if not e.get("is_dir"))
-                prev_dir_count = sum(1 for e in prev_files if e.get("is_dir"))
-                curr_file_count = sum(1 for e in current_files if not e.get("is_dir"))
-                curr_dir_count = sum(1 for e in current_files if e.get("is_dir"))
+                prev_file_count = sum(not e.get("is_dir") for e in prev_files)
+                prev_dir_count = sum(e.get("is_dir") for e in prev_files)
+                curr_file_count = sum(not e.is_dir for e in current_files)
+                curr_dir_count = sum(e.is_dir for e in current_files)
 
                 # Build a compact multi-line manifest summary to append to the
                 # drift diagnostic. Limit listed paths to a reasonable N.
