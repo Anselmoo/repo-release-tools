@@ -81,7 +81,12 @@ from repo_release_tools.changelog import (
     detect_changelog_format,
     get_unreleased_section_body,
 )
-from repo_release_tools.config import RrtConfig, VersionGroup, load_or_autodetect_config
+from repo_release_tools.config import (
+    RrtConfig,
+    VersionGroup,
+    find_repo_root,
+    load_or_autodetect_config,
+)
 from repo_release_tools.ui import error, success, warning
 
 
@@ -176,7 +181,7 @@ def _extract_release_section(content: str, version: str, fmt: ChangelogFormat) -
 
 def cmd_changelog_lint(args: argparse.Namespace) -> int:
     """Lint changelog entries for style consistency."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     try:
         config: RrtConfig = load_or_autodetect_config(root)
     except Exception as exc:

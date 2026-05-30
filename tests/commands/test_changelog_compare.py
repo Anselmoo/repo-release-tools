@@ -203,6 +203,32 @@ def test_cmd_compare_text_output(
     assert "1.3.0" in out
 
 
+def test_cmd_compare_from_subdir_uses_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Resolves the repo root before loading config from a nested working directory."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "docs" / "guide"
+    nested.mkdir(parents=True)
+    (repo_root / ".rrt.toml").write_text("", encoding="utf-8")
+    conf = _make_config(repo_root)
+    monkeypatch.chdir(nested)
+
+    def _load(root: Path) -> RrtConfig:
+        assert root == repo_root
+        return conf
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.changelog_compare.load_or_autodetect_config",
+        _load,
+    )
+    rc = cmd_changelog_compare(_args(from_version="1.2.0", to_version="1.3.0"))
+    assert rc == 0
+    assert "Comparing 1.2.0 → 1.3.0" in capsys.readouterr().out
+
+
 def test_cmd_compare_json_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

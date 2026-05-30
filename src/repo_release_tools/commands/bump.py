@@ -78,6 +78,7 @@ from repo_release_tools.changelog import (
 )
 from repo_release_tools.config import (
     RrtConfig,
+    find_repo_root,
     format_autodetected_config_notice,
     format_missing_tool_rrt_guidance,
     is_missing_tool_rrt_error,
@@ -225,7 +226,7 @@ def update_changelog(
 
 def cmd_bump(args: argparse.Namespace) -> int:
     """Bump project version using [tool.rrt]."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     force = getattr(args, "force", False)
     try:
         config = load_or_autodetect_config(root)

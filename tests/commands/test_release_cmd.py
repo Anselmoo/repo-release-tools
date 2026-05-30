@@ -143,6 +143,35 @@ def test_release_check_all_healthy(
     assert "All release checks passed" in out
 
 
+def test_release_check_from_subdir_uses_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Finds the repo root from a nested working directory before loading config."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "docs" / "guide"
+    nested.mkdir(parents=True)
+    (repo_root / "pyproject.toml").write_text("", encoding="utf-8")
+    conf = _make_config(repo_root)
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (repo_root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.chdir(nested)
+
+    def _load(root: Path) -> RrtConfig:
+        assert root == repo_root
+        return conf
+
+    monkeypatch.setattr(release_cmd, "load_or_autodetect_config", _load)
+
+    rc = release_cmd.cmd_release_check(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Config file: pyproject.toml" in out
+    assert "All release checks passed" in out
+
+
 def test_release_check_autodetected_warns(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

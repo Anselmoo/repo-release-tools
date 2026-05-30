@@ -36,10 +36,9 @@ def detect_color_level() -> ColorLevel:
         return "truecolor"
 
     term = os.environ.get("TERM", "")
-    colorterm = os.environ.get("COLORTERM", "").lower()
-
     if term == "dumb":
         return "none"
+    colorterm = os.environ.get("COLORTERM", "").lower()
     if "truecolor" in colorterm or "24bit" in colorterm:
         return "truecolor"
     if "256color" in term:

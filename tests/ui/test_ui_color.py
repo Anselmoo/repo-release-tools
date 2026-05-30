@@ -98,8 +98,19 @@ def test_detect_color_level_returns_truecolor_for_colorterm(
 ) -> None:
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("RRT_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "xterm")
     monkeypatch.setenv("COLORTERM", "truecolor")
     assert color.detect_color_level() == "truecolor"
+
+
+def test_detect_color_level_returns_none_for_dumb_term_with_colorterm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("RRT_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "dumb")
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    assert color.detect_color_level() == "none"
 
 
 def test_detect_color_level_returns_none_on_legacy_windows(monkeypatch: pytest.MonkeyPatch) -> None:

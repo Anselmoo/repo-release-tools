@@ -71,6 +71,7 @@ from repo_release_tools.changelog import (
     has_unreleased_section,
 )
 from repo_release_tools.config import (
+    find_repo_root,
     format_missing_tool_rrt_guidance,
     is_missing_tool_rrt_error,
     iter_config_files,
@@ -116,7 +117,7 @@ def _format_gh_release(body: str, contributors: list[str]) -> str:
 
 def cmd_release_notes(args: argparse.Namespace) -> int:
     """Emit the [Unreleased] changelog section as a formatted release body."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     output_format = getattr(args, "notes_format", "md")
 
     try:

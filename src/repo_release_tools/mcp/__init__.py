@@ -37,8 +37,9 @@ The server is created by `create_server()`, which:
 3. Attaches a `GenerativeUI` provider so AI assistants can render rich UI components
 
 The **lifespan** context manager (`_lifespan`) runs once at server startup:
-- Walks up the filesystem to locate the repo root (looks for `.rrt/` or `pyproject.toml`)
-- Tries to load the `[tool.rrt]` configuration; sets `config=None` if unavailable
+- Walks up the filesystem to locate the repo root (looks for supported rrt config files
+  such as `pyproject.toml`, `package.json`, `Cargo.toml`, `.rrt.toml`, or `.config/rrt.toml`)
+- Tries to load the resolved rrt configuration; sets `config=None` if unavailable
 - Passes `{"root": <Path>, "config": <Config | None>}` as lifespan context to all tools
 
 ## Transport modes

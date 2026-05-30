@@ -51,6 +51,7 @@ from pathlib import Path
 
 from repo_release_tools.config import (
     RrtConfig,
+    find_repo_root,
     load_or_autodetect_config,
 )
 from repo_release_tools.state import (
@@ -79,7 +80,7 @@ def _target_dicts(config: RrtConfig) -> list[dict[str, str]]:
 
 def cmd_artifacts(args: argparse.Namespace) -> int:
     """Run artifact integrity check, snapshot, or list."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     do_snapshot: bool = getattr(args, "snapshot", False)
     do_check: bool = getattr(args, "check", False)
     do_list: bool = getattr(args, "list", False)

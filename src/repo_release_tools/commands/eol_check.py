@@ -75,7 +75,12 @@ import argparse
 from datetime import date
 from pathlib import Path
 
-from repo_release_tools.config import EolConfig, EolOverride, load_or_autodetect_config
+from repo_release_tools.config import (
+    EolConfig,
+    EolOverride,
+    find_repo_root,
+    load_or_autodetect_config,
+)
 from repo_release_tools.eol import (
     SUPPORTED_LANGUAGES,
     EolRecord,
@@ -313,7 +318,7 @@ def run_eol_checks(
 
 def cmd_eol(args: argparse.Namespace) -> int:
     """Check host runtimes and project minimums against EOL dates."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     p = DryRunPrinter(False)
 
     # Determine effective config: CLI flags override config-file values

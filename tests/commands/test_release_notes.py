@@ -107,3 +107,40 @@ def test_cmd_release_notes_resolve_group_value_error(
     rc = cmd_release_notes(_args(group="prod"))
     assert rc == 1
     assert "unknown group 'prod'" in capsys.readouterr().err
+
+
+def test_cmd_release_notes_from_subdir_uses_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Resolves the repo root before loading config from a nested working directory."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "docs" / "guide"
+    nested.mkdir(parents=True)
+    (repo_root / "pyproject.toml").write_text("", encoding="utf-8")
+    (repo_root / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n- Added: subdir support\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(nested)
+
+    mock_group = MagicMock()
+    mock_group.changelog_file = repo_root / "CHANGELOG.md"
+    mock_config = MagicMock()
+    mock_config.resolve_group.return_value = mock_group
+
+    def _load(root: Path) -> MagicMock:
+        assert root == repo_root
+        return mock_config
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes.load_or_autodetect_config",
+        _load,
+    )
+
+    rc = cmd_release_notes(_args())
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Added: subdir support" in out

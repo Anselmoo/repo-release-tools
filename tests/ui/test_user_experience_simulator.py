@@ -174,18 +174,24 @@ class TestSyntaxHighlight:
 
 
 class TestProgressBar:
-    def test_half_full_bar_glyphs_and_percentage(self) -> None:
+    def test_half_full_bar_glyphs_and_percentage(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TERM", "xterm-256color")
+        monkeypatch.delenv("NO_COLOR", raising=False)
         result = progress_bar(0.5, width=10)
         assert "50%" in result
         assert result.count("█") == 5
         assert result.count("░") == 5
 
-    def test_complete_bar_has_no_empty_glyphs(self) -> None:
+    def test_complete_bar_has_no_empty_glyphs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TERM", "xterm-256color")
+        monkeypatch.delenv("NO_COLOR", raising=False)
         result = progress_bar(1.0, width=10)
         assert "100%" in result
         assert "░" not in result
 
-    def test_empty_bar_has_no_filled_glyphs(self) -> None:
+    def test_empty_bar_has_no_filled_glyphs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TERM", "xterm-256color")
+        monkeypatch.delenv("NO_COLOR", raising=False)
         result = progress_bar(0.0, width=10)
         assert "0%" in result
         assert "█" not in result
@@ -197,6 +203,13 @@ class TestProgressBar:
     def test_ascii_fallback_when_dumb_term(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TERM", "dumb")
         monkeypatch.delenv("NO_COLOR", raising=False)
+        result = progress_bar(0.5, width=6)
+        assert "#" in result
+        assert "-" in result
+
+    def test_ascii_fallback_when_no_color(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TERM", "xterm-256color")
+        monkeypatch.setenv("NO_COLOR", "1")
         result = progress_bar(0.5, width=6)
         assert "#" in result
         assert "-" in result

@@ -213,7 +213,7 @@ def _cmd_validate(root: Path) -> int:
 
 def cmd_config(args: argparse.Namespace) -> int:
     """Print the resolved rrt config as a tree."""
-    root = Path.cwd()
+    root = cfg.find_repo_root(Path.cwd())
 
     if getattr(args, "schema", False):
         schema = _load_schema()

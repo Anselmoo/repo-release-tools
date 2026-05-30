@@ -31,8 +31,10 @@ the end.
 
 ## Config discovery behavior
 
-If no config file can be found, the command prints repository guidance and exits
-with an error.
+If no config file can be found in the current directory or any ancestor, the
+command prints repository guidance and exits with an error. The supported
+config roots are `pyproject.toml`, `package.json`, `Cargo.toml`, `.rrt.toml`,
+and `.config/rrt.toml`.
 
 If a config is auto-detected, the command emits a notice on stderr before the
 main report so you can tell that rrt did not use an explicitly selected file.
@@ -42,6 +44,13 @@ main report so you can tell that rrt did not use an explicitly selected file.
 ```bash
 rrt release check
 ```
+
+The command can be run from a nested subdirectory inside the repository; rrt
+walks upward until it finds the repo root and then checks the resolved config
+from there.
+
+Version targets may also point at Go, Rust, or .NET-style version files when
+you need to keep multiple language surfaces aligned.
 
 ## Related docs
 
@@ -63,6 +72,7 @@ from repo_release_tools.config import (
     PinTarget,
     VersionTarget,
     _describe_version_target,
+    find_repo_root,
     format_autodetected_config_notice,
     format_missing_tool_rrt_guidance,
     is_missing_tool_rrt_error,
@@ -114,7 +124,7 @@ def _check_pin_target(pin: PinTarget, root: Path) -> tuple[str, bool, str]:
 
 def cmd_release_check(args: argparse.Namespace) -> int:  # noqa: ARG001
     """Check release-oriented version, pin, and changelog targets."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
 
     try:
         config = load_or_autodetect_config(root)
@@ -234,7 +244,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Validate version targets, pin targets, and changelog files.",
         description=(
             "Validate the release-oriented parts of the resolved rrt configuration for the "
-            "current repository."
+            "current repository, starting from the nearest repo root above the current "
+            "working directory."
         ),
         epilog=RELEASE_CHECK_EPILOG,
     )

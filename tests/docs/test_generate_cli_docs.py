@@ -228,6 +228,22 @@ def test_pinned_help_environment_restores_existing_variables(
     assert os.environ["NO_COLOR"] == "0"
 
 
+def test_pinned_help_environment_restores_missing_no_color(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    docs = _load_generator_module()
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("COLUMNS", "99")
+
+    with docs.pinned_help_environment():
+        assert os.environ["COLUMNS"] == docs.PINNED_COLUMNS
+        assert os.environ["NO_COLOR"] == "1"
+
+    assert os.environ["COLUMNS"] == "99"
+    assert "NO_COLOR" not in os.environ
+
+
 def test_generate_index_topic_links_markdown_lists_expected_entries() -> None:
     docs = _load_generator_module()
 

@@ -30,6 +30,7 @@ from repo_release_tools.config import (
     find_changelog_file,
     find_config_file,
     find_explicit_config_file,
+    find_repo_root,
     format_autodetected_config_notice,
     load_config,
     load_config_from_path,
@@ -2259,6 +2260,83 @@ def test_load_or_autodetect_config_raises_missing_rrt_when_no_autodetect(tmp_pat
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
     with pytest.raises(ValueError, match="Missing rrt configuration"):
         load_or_autodetect_config(tmp_path)
+
+
+def test_find_repo_root_walks_to_parent_config(tmp_path: Path) -> None:
+    """find_repo_root returns the nearest ancestor with rrt config files."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "docs" / "guide"
+    nested.mkdir(parents=True)
+    (repo_root / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+
+    result = find_repo_root(nested)
+
+    assert result == repo_root
+
+
+def test_find_repo_root_prefers_nearest_ancestor(tmp_path: Path) -> None:
+    """find_repo_root stops at the closest matching ancestor."""
+    outer = tmp_path / "outer"
+    inner = outer / "inner"
+    nested = inner / "subdir"
+    nested.mkdir(parents=True)
+    (outer / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+    (inner / "pyproject.toml").write_text(
+        '[project]\nname = "inner"\nversion = "1.0.0"\n',
+        encoding="utf-8",
+    )
+
+    result = find_repo_root(nested)
+
+    assert result == inner
+
+
+def test_find_repo_root_detects_package_json(tmp_path: Path) -> None:
+    """find_repo_root recognizes JS projects via package.json."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "src" / "lib"
+    nested.mkdir(parents=True)
+    (repo_root / "package.json").write_text(
+        '{"name":"example","version":"1.0.0"}',
+        encoding="utf-8",
+    )
+
+    result = find_repo_root(nested)
+
+    assert result == repo_root
+
+
+def test_find_repo_root_detects_cargo_toml(tmp_path: Path) -> None:
+    """find_repo_root recognizes Rust projects via Cargo.toml."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "crates" / "app"
+    nested.mkdir(parents=True)
+    (repo_root / "Cargo.toml").write_text(
+        '[package]\nname = "example"\nversion = "1.0.0"\n',
+        encoding="utf-8",
+    )
+
+    result = find_repo_root(nested)
+
+    assert result == repo_root
+
+
+def test_find_repo_root_uses_autodetected_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """find_repo_root returns the first ancestor whose autodetect_config succeeds."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "nested" / "child"
+    nested.mkdir(parents=True)
+
+    def _fake_autodetect(candidate: Path) -> object | None:
+        return object() if candidate == repo_root else None
+
+    monkeypatch.setattr("repo_release_tools.config.autodetect_config", _fake_autodetect)
+
+    result = find_repo_root(nested)
+
+    assert result == repo_root
 
 
 def test_find_python_version_files_handles_iterdir_oserror(tmp_path: Path) -> None:

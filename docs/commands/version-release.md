@@ -439,8 +439,10 @@ the end.
 
 ### Config discovery behavior
 
-If no config file can be found, the command prints repository guidance and exits
-with an error.
+If no config file can be found in the current directory or any ancestor, the
+command prints repository guidance and exits with an error. The supported
+config roots are `pyproject.toml`, `package.json`, `Cargo.toml`, `.rrt.toml`,
+and `.config/rrt.toml`.
 
 If a config is auto-detected, the command emits a notice on stderr before the
 main report so you can tell that rrt did not use an explicitly selected file.
@@ -450,6 +452,13 @@ main report so you can tell that rrt did not use an explicitly selected file.
 ```bash
 rrt release check
 ```
+
+The command can be run from a nested subdirectory inside the repository; rrt
+walks upward until it finds the repo root and then checks the resolved config
+from there.
+
+Version targets may also point at Go, Rust, or .NET-style version files when
+you need to keep multiple language surfaces aligned.
 
 ### Related docs
 
@@ -482,7 +491,7 @@ Options
 ```text
 Usage:  rrt release check [OPTIONS]
 
-Validate the release-oriented parts of the resolved rrt configuration for the current repository.
+Validate the release-oriented parts of the resolved rrt configuration for the current repository, starting from the nearest repo root above the current working directory.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments

@@ -110,6 +110,32 @@ def test_cmd_config_shows_explicit_config_file(
     assert "pyproject.toml" in out
 
 
+def test_cmd_config_from_subdir_uses_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Resolves config from a nested working directory back to the repo root."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "src" / "pkg"
+    nested.mkdir(parents=True)
+    (repo_root / "pyproject.toml").write_text("", encoding="utf-8")
+    conf = _make_config(repo_root)
+    monkeypatch.chdir(nested)
+
+    def _load(root: Path) -> RrtConfig:
+        assert root == repo_root
+        return conf
+
+    monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", _load)
+
+    rc = config_cmd.cmd_config(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "pyproject.toml" in out
+
+
 def test_cmd_config_tree_shows_release_branch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

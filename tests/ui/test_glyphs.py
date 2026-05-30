@@ -84,10 +84,11 @@ def test_detect_legacy_terminal_dumb(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_detect_legacy_terminal_no_color(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TERM", "xterm-256color")
     monkeypatch.setenv("NO_COLOR", "1")
-    # Patch sys.platform so this test exercises the NO_COLOR branch on Windows CI too.
+    # NO_COLOR disables ANSI styling, but it should not force legacy Unicode fallbacks.
     monkeypatch.setattr(sys, "platform", "linux")
-    assert _detect_legacy_terminal() is True
+    assert _detect_legacy_terminal() is False
 
 
 def test_detect_legacy_terminal_normal(monkeypatch: pytest.MonkeyPatch) -> None:

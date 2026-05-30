@@ -64,7 +64,12 @@ import sys
 from pathlib import Path
 
 from repo_release_tools.changelog import ChangelogFormat, detect_changelog_format
-from repo_release_tools.config import RrtConfig, VersionGroup, load_or_autodetect_config
+from repo_release_tools.config import (
+    RrtConfig,
+    VersionGroup,
+    find_repo_root,
+    load_or_autodetect_config,
+)
 from repo_release_tools.ui import error, info, success, warning
 
 _MD_RELEASE_HEADER_RE = re.compile(r"^## \[([^\]]+)\][^\n]*\n", re.MULTILINE)
@@ -160,7 +165,7 @@ def _print_comparison(
 
 def cmd_changelog_compare(args: argparse.Namespace) -> int:
     """Compare two changelog release sections."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     try:
         config: RrtConfig = load_or_autodetect_config(root)
     except Exception as exc:

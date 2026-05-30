@@ -21,11 +21,7 @@ def _detect_legacy_terminal() -> bool:
     """Return True when the terminal cannot reliably render Unicode box-drawing glyphs."""
     if sys.platform == "win32":
         return True
-    if os.environ.get("TERM") == "dumb":
-        return True
-    if "NO_COLOR" in os.environ:
-        return True
-    return False
+    return os.environ.get("TERM") == "dumb"
 
 
 IS_LEGACY_TERMINAL: bool = _detect_legacy_terminal()
