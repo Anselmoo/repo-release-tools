@@ -9,6 +9,7 @@ from typing import Any, AsyncGenerator
 from fastmcp import FastMCP
 
 from repo_release_tools import __version__
+from repo_release_tools.config import find_repo_root
 
 from .apps import register_apps
 from .prompts import register_prompts
@@ -17,16 +18,8 @@ from .tools import register_tools
 
 
 def _find_repo_root() -> Path:
-    """Walk up from cwd to find the repo root (first dir containing .rrt/ or pyproject.toml)."""
-    cwd = Path.cwd()
-    return next(
-        (
-            p
-            for p in [cwd, *cwd.parents]
-            if (p / ".rrt").is_dir() or (p / "pyproject.toml").exists()
-        ),
-        cwd,
-    )
+    """Return the nearest repo root based on supported rrt config files."""
+    return find_repo_root(Path.cwd())
 
 
 @asynccontextmanager

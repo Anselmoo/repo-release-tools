@@ -80,6 +80,7 @@ from repo_release_tools.changelog import (
     has_unreleased_section,
 )
 from repo_release_tools.config import (
+    find_repo_root,
     format_autodetected_config_notice,
     format_missing_tool_rrt_guidance,
     is_missing_tool_rrt_error,
@@ -242,7 +243,7 @@ def _fix_missing_unreleased(root: Path, config: object, *, dry_run: bool) -> lis
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Check the health of the rrt configuration."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     fix: bool = getattr(args, "fix", False)
     fix_dry_run: bool = getattr(args, "fix_dry_run", False)
     do_snapshot: bool = getattr(args, "snapshot", False)

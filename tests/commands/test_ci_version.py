@@ -19,7 +19,7 @@ from repo_release_tools.commands.ci_version import (
     register,
     to_semver,
 )
-from repo_release_tools.config import MissingRrtConfigError, VersionTarget
+from repo_release_tools.config import MissingRrtConfigError, RrtConfig, VersionGroup, VersionTarget
 
 # ---------------------------------------------------------------------------
 # Unit – to_semver
@@ -61,6 +61,25 @@ def _ns(**kwargs: object) -> argparse.Namespace:
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
+
+
+def _make_config(root: Path) -> RrtConfig:
+    target = VersionTarget(path=root / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=root / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    return RrtConfig(
+        root=root,
+        config_file=root / "pyproject.toml",
+        version_groups=[group],
+        default_group_name="default",
+        autodetected=False,
+    )
 
 
 def test_context_from_args_prefers_cli_values_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -364,6 +383,39 @@ kind = "package_json"
     captured = capsys.readouterr()
     assert result == 0
     assert captured.out.strip() == "0.2.0.dev1201"
+
+
+def test_cmd_compute_from_subdir_uses_repo_root(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Resolves the repo root before loading config from a nested working directory."""
+    repo_root = tmp_path / "repo"
+    nested = repo_root / "nested"
+    nested.mkdir(parents=True)
+    (repo_root / ".rrt.toml").write_text("", encoding="utf-8")
+    (repo_root / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "1.2.3"\n',
+        encoding="utf-8",
+    )
+    (repo_root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    conf = _make_config(repo_root)
+    monkeypatch.chdir(nested)
+
+    def _load(root: Path) -> RrtConfig:
+        assert root == repo_root
+        return conf
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.ci_version.load_or_autodetect_config",
+        _load,
+    )
+
+    result = cmd_ci_version_compute(_ns(ref="refs/heads/main", run_id="12", run_attempt="1"))
+    captured = capsys.readouterr()
+    assert result == 0
+    assert captured.out.strip() == "1.2.3.dev1201"
 
 
 @pytest.mark.parametrize(

@@ -57,6 +57,7 @@ from pathlib import Path
 
 from repo_release_tools.config import (
     VALID_CI_FORMATS,
+    find_repo_root,
     format_autodetected_config_notice,
     format_missing_tool_rrt_guidance,
     is_missing_tool_rrt_error,
@@ -216,7 +217,7 @@ def cmd_ci_version_compute(args: argparse.Namespace) -> int:
 
         VERSION=$(rrt ci-version compute)
     """
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     base = _resolve_base(args, root)
     if base is None:
         return 1
@@ -240,7 +241,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     Cargo / TOML targets (``ci_format = "semver_pre"``) receive the version
     after conversion via :func:`to_semver`.
     """
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
 
     try:
         config = load_or_autodetect_config(root)
@@ -335,7 +336,7 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
 
     Equivalent to running ``compute`` followed by ``apply`` with the result.
     """
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     base = _resolve_base(args, root)
     if base is None:
         return 1

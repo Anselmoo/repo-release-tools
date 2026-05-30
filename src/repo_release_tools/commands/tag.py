@@ -66,6 +66,7 @@ import sys
 from pathlib import Path
 
 from repo_release_tools.config import (
+    find_repo_root,
     format_missing_tool_rrt_guidance,
     is_missing_tool_rrt_error,
     iter_config_files,
@@ -130,7 +131,7 @@ def _existing_tags(root: Path) -> list[str]:
 
 def cmd_tag_create(args: argparse.Namespace) -> int:
     """Create an annotated git tag matching the current configured version."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     dry_run: bool = getattr(args, "dry_run", False)
     push: bool = getattr(args, "push", False)
     prefix: str = getattr(args, "prefix", "v")
@@ -188,7 +189,7 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
 
 def cmd_tag_check(args: argparse.Namespace) -> int:
     """Validate existing tags match the configured naming convention."""
-    root = Path.cwd()
+    root = find_repo_root(Path.cwd())
     strict: bool = getattr(args, "strict", False)
     prefix: str = getattr(args, "prefix", "v")
 

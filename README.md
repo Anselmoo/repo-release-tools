@@ -94,10 +94,16 @@ rrt skill install --target codex-global --dry-run
 ```
 
 For basic versioning, `bump` and `ci-version` can run without `[tool.rrt]` by
-auto-detecting root-level `pyproject.toml`, `package.json`, and `Cargo.toml`.
+auto-detecting repo-root `pyproject.toml`, `package.json`, `Cargo.toml`,
+`.rrt.toml`, or `.config/rrt.toml`.
 If multiple version files are found, they are updated together. Explicit config
 is for the nice extras: grouped releases, changelog paths, release branches,
 lock commands, generated files, and custom patterns.
+
+Version targets also support common language/project files such as Python
+(`pep621`, `python_version`), Node/JS/TS (`package_json`), Go (`go_version`),
+Rust (`cargo_toml`), and .NET (`csproj`) so multi-language repositories can
+keep their release versions aligned.
 
 ## Changelog workflows
 

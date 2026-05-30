@@ -112,6 +112,24 @@ def iter_config_files(root: Path) -> list[Path]:
     return [root / candidate for candidate in CONFIG_FILE_CANDIDATES if (root / candidate).exists()]
 
 
+def find_repo_root(start: Path) -> Path:
+    """Return the nearest ancestor that looks like an rrt repository root.
+
+    The search walks upward from *start* and stops at the first directory that
+    either contains a supported rrt config file or can be auto-detected as a
+    valid zero-config repository root.  If nothing matches, the resolved
+    starting directory is returned unchanged so callers can still emit the
+    existing "no config found" guidance from that location.
+    """
+    resolved = start.resolve()
+    for candidate in (resolved, *resolved.parents):
+        if iter_config_files(candidate):
+            return candidate
+        if autodetect_config(candidate) is not None:
+            return candidate
+    return resolved
+
+
 def load_or_autodetect_config(root: Path) -> RrtConfig:
     """Load explicit config, or fall back to safe auto-detection."""
     try:
@@ -1257,6 +1275,7 @@ __all__ = [
     "find_changelog_file",
     "find_config_file",
     "find_explicit_config_file",
+    "find_repo_root",
     "format_autodetected_config_notice",
     "format_missing_tool_rrt_guidance",
     "ignore_dir_names",
