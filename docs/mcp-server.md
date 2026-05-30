@@ -159,7 +159,42 @@ python3 scripts/generate_mcp_json.py --command rrt-mcp --output .mcp.json
 python3 scripts/generate_mcp_json.py --command uvx --args 'repo-release-tools rrt-mcp' --output .mcp.json
 ```
 
-This script is intentionally minimal — adjust the generated file as needed for your MCP client or adapter.
+A new CLI helper is also available once the package is installed: `rrt-mcp-config`.
+
+Basic examples:
+
+- Append mode (only adds server entry if missing):
+
+```bash
+# write .mcp.json in repo root only if key 'rrt' is absent
+rrt-mcp-config --mode append --target local
+```
+
+- Extend mode (deep-merge into existing file):
+
+```bash
+# merge server entry, preserving existing args and merging lists
+rrt-mcp-config --mode extend --target local --command rrt-mcp --args "--transport http --port 8000"
+```
+
+- Overwrite mode (replace file):
+
+```bash
+rrt-mcp-config --mode overwrite --target local --command rrt-mcp --args "--transport http --port 8000"
+```
+
+Where to write:
+- local: `.mcp.json` in current repo
+- user: `~/.mcp.json` (user-level)
+- claude-desktop: platform path for Claude Desktop config (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`)
+- custom: pass `--path /some/path/.mcp.json`
+
+This tool supports three modes:
+- append: add server only if key missing
+- extend: deep-merge existing file and add/merge server entry
+- overwrite: replace target file with generated content
+
+Use with care for global targets; prefer `--mode append` or `--mode extend` when updating user or desktop config files.
 
 
 ---
