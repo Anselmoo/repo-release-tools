@@ -263,21 +263,17 @@ def tree_lock_is_current(
             counts_equal = False
 
         header = "Tree structure changed since snapshot:"
+        # Use a consistent "current / snapshot" numeric style so output is
+        # compact and unambiguous. Always show current first, then snapshot.
+        message_lines = [
+            header,
+            f"  - entry count: {new_count} / {locked_count} (current / snapshot)",
+            f"  - snapshot hash: {locked_hash}",
+            f"  - current hash: {current_hash}",
+        ]
         if counts_equal:
-            message_lines = [
-                header,
-                f"  - entry count: {locked_count} (unchanged)",
-                f"  - snapshot hash: {locked_hash}",
-                f"  - current hash: {current_hash}",
-                "  - suggestion: run 'rrt tree --snapshot' to refresh",
-            ]
-        else:
-            message_lines = [
-                header,
-                f"  - entry count: was {locked_count}, now {new_count}",
-                f"  - snapshot hash: {locked_hash}",
-                f"  - current hash: {current_hash}",
-            ]
+            # When counts are equal but hashes differ, offer a remediation hint.
+            message_lines.append("  - suggestion: run 'rrt tree --snapshot' to refresh")
 
         drifted.append("\n".join(message_lines))
 
