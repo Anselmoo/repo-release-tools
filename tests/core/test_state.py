@@ -431,9 +431,10 @@ class TestTreeLockIsCurrent:
         assert len(msgs) == 1
         msg = msgs[0]
         assert msg.startswith("Tree structure changed since snapshot:")
-        assert "  - entry count: 10 / 10 (current / snapshot) (delta: 0)" in msg
-        assert "  - snapshot hash: sha256:oldhash" in msg
-        assert "  - current hash: sha256:newhash" in msg
+        assert "  - entry count: was 10 → now 10" in msg
+        assert "(Δ 0" in msg
+        assert "  - snapshot hash: oldhash (sha256:oldhash)" in msg
+        assert "  - current hash: newhash (sha256:newhash)" in msg
         assert "run 'rrt tree --snapshot' to refresh" in msg
 
     def test_hash_changed_counts_differ_reports_bullets(self, tmp_path: Path) -> None:
@@ -445,9 +446,10 @@ class TestTreeLockIsCurrent:
         assert len(msgs) == 1
         msg = msgs[0]
         assert msg.startswith("Tree structure changed since snapshot:")
-        assert "  - entry count: 9 / 7 (current / snapshot) (delta: 2)" in msg
-        assert "  - snapshot hash: sha256:old2" in msg
-        assert "  - current hash: sha256:new2" in msg
+        assert "  - entry count: was 7 → now 9" in msg
+        assert "Δ +2" in msg
+        assert "  - snapshot hash: old2 (sha256:old2)" in msg
+        assert "  - current hash: new2 (sha256:new2)" in msg
 
     def test_missing_lock_file(self, tmp_path: Path) -> None:
         """Missing lockfile → drift reported."""

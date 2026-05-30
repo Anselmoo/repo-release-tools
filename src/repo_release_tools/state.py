@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from repo_release_tools import __version__
+from repo_release_tools.ui import GLYPHS
 
 _RRT_DIR = ".rrt"
 _DOCS_LOCK_NAME = "docs.lock.toml"
@@ -53,6 +54,20 @@ def hash_content(content: str) -> str:
 def now_utc() -> str:
     """Return the current UTC time as an ISO-8601 string."""
     return datetime.now(tz=UTC).isoformat(timespec="seconds")
+
+
+def _short_hash(h: str) -> str:
+    """Return an 8-character short prefix from a hash string like 'sha256:...'.
+
+    Returns '?' on error or when the input is falsy.
+    """
+    try:
+        if not h:
+            return "?"
+        body = h.split(":", 1)[1] if ":" in h else h
+        return body[:8]
+    except Exception:
+        return "?"
 
 
 # ---------------------------------------------------------------------------
@@ -283,24 +298,36 @@ def tree_lock_is_current(
         except Exception:
             delta = "?"
 
-        # Short prefixes of hashes for quick comparison (like git short-sha)
-        def _short(h: str) -> str:
-            try:
-                body = h.split(":", 1)[1] if ":" in h else h
-                return body[:8]
-            except Exception:
-                return "?"
+        # Short prefixes of hashes for quick comparison (short-first display)
+        locked_short = _short_hash(locked_hash) if locked_hash else "?"
+        current_short = _short_hash(current_hash) if current_hash else "?"
 
-        locked_short = _short(locked_hash) if locked_hash else "?"
-        current_short = _short(current_hash) if current_hash else "?"
+        # Signed delta for human readers ("+N" when the working tree grew).
+        signed_delta = delta
+        try:
+            if isinstance(new_count, int) and isinstance(locked_count, int):
+                diff = new_count - locked_count
+                signed_delta = f"+{diff}" if diff > 0 else str(diff)
+        except Exception:
+            signed_delta = delta
 
-        # Present counts as 'current / snapshot' but include an explicit delta
-        # to make it obvious how many entries changed.
+        # Choose a directional glyph for the delta when applicable. The
+        # GLYPHS registry handles ASCII fallbacks for legacy terminals.
+        glyph = ""
+        try:
+            if signed_delta.startswith("+"):
+                glyph = f" {GLYPHS.arrow.up}"
+            elif signed_delta.startswith("-"):
+                glyph = f" {GLYPHS.arrow.down}"
+        except Exception:
+            glyph = ""
+
+        # Present counts as 'was -> now (Δ ±N)' which reads naturally.
         message_lines = [
             header,
-            f"  - entry count: {new_count} / {locked_count} (current / snapshot) (delta: {delta})",
-            f"  - snapshot hash: {locked_hash} ({locked_short})",
-            f"  - current hash: {current_hash} ({current_short})",
+            f"  - entry count: was {locked_count} → now {new_count} (Δ {signed_delta}{glyph})",
+            f"  - snapshot hash: {locked_short} ({locked_hash})",
+            f"  - current hash: {current_short} ({current_hash})",
         ]
         if counts_equal:
             # When counts are equal but hashes differ, offer a remediation hint.
