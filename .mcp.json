@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "rrt": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "rrt-mcp"]
-    }
-  }
-}
