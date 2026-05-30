@@ -340,7 +340,7 @@ def render_badge(
 
     if badge_style == "shields":
         img_url = shields_badge_url(platform, label=display)
-    elif badge_variant in ("adaptive", "adaptive-reto") and badge_style == "svg":
+    elif badge_variant in {"adaptive", "adaptive-reto"} and badge_style == "svg":
         # Adaptive mode: render a <picture> element with dark/light variants
         if badge_variant == "adaptive-reto":
             dark_url = f"{badge_assets_dir.rstrip('/')}/{platform}-reto-dark.svg"
