@@ -244,12 +244,42 @@ def tree_lock_is_current(
     locked_hash = locked_snapshot.get("tree_hash")
     if locked_hash is None:
         drifted.append("Tree snapshot not found in lockfile")
-    elif locked_hash != tree_meta.get("tree_hash"):
+        return (not drifted, drifted)
+
+    # If the snapshot hash differs from the current tree hash, build a
+    # multi-line bulleted diagnostic that shows counts and both hashes.
+    current_hash = tree_meta.get("tree_hash", "?")
+    if locked_hash != current_hash:
+        # Provide a clearer diagnostic when the snapshot hash differs.
         locked_count = locked_snapshot.get("entry_count", "?")
         new_count = tree_meta.get("entry_count", "?")
-        drifted.append(
-            f"Tree structure changed since snapshot (was {locked_count} entries, now {new_count})"
-        )
+
+        # Compare raw counts when available (integers). Fall back to
+        # conservative equality if types differ.
+        counts_equal = False
+        try:
+            counts_equal = locked_snapshot.get("entry_count") == tree_meta.get("entry_count")
+        except Exception:
+            counts_equal = False
+
+        header = "Tree structure changed since snapshot:"
+        if counts_equal:
+            message_lines = [
+                header,
+                f"  - entry count: {locked_count} (unchanged)",
+                f"  - snapshot hash: {locked_hash}",
+                f"  - current hash: {current_hash}",
+                "  - suggestion: run 'rrt tree --snapshot' to refresh",
+            ]
+        else:
+            message_lines = [
+                header,
+                f"  - entry count: was {locked_count}, now {new_count}",
+                f"  - snapshot hash: {locked_hash}",
+                f"  - current hash: {current_hash}",
+            ]
+
+        drifted.append("\n".join(message_lines))
 
     return (not drifted, drifted)
 
@@ -257,7 +287,7 @@ def tree_lock_is_current(
 def hash_file(path: Path) -> str:
     """Return a stable sha256 hex digest of *path*'s content, prefixed with 'sha256:'."""
     h = hashlib.sha256(path.read_bytes())
-    return "sha256:" + h.hexdigest()
+    return f"sha256:{h.hexdigest()}"
 
 
 def build_artifacts_lock(
