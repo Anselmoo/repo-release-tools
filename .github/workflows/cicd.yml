@@ -73,6 +73,14 @@ jobs:
         run: uv run rrt docs inject --check
       - name: Check health regressions
         run: uv run rrt doctor --check --strict
+      - name: Generate tree manifest (for diagnostics)
+        run: uv run rrt tree --manifest
+      - name: Upload tree manifest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: tree-manifest
+          path: .rrt/tree.manifest.json.gz
+          retention-days: 7
       - name: Check tree structure drift
         run: uv run rrt tree --check --strict
       - name: Generate badge SVGs for artifact check
