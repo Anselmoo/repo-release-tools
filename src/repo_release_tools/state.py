@@ -263,13 +263,44 @@ def tree_lock_is_current(
             counts_equal = False
 
         header = "Tree structure changed since snapshot:"
-        # Use a consistent "current / snapshot" numeric style so output is
-        # compact and unambiguous. Always show current first, then snapshot.
+        # Compute numeric delta when both counts are integers; otherwise show '?'.
+        delta: str
+        try:
+            if isinstance(new_count, int) and isinstance(locked_count, int):
+                delta = str(new_count - locked_count)
+            else:
+                # attempt to coerce numeric strings
+                delta = (
+                    str(int(new_count) - int(locked_count))
+                    if (
+                        isinstance(new_count, str)
+                        and new_count.isdigit()
+                        and isinstance(locked_count, str)
+                        and locked_count.isdigit()
+                    )
+                    else "?"
+                )
+        except Exception:
+            delta = "?"
+
+        # Short prefixes of hashes for quick comparison (like git short-sha)
+        def _short(h: str) -> str:
+            try:
+                body = h.split(":", 1)[1] if ":" in h else h
+                return body[:8]
+            except Exception:
+                return "?"
+
+        locked_short = _short(locked_hash) if locked_hash else "?"
+        current_short = _short(current_hash) if current_hash else "?"
+
+        # Present counts as 'current / snapshot' but include an explicit delta
+        # to make it obvious how many entries changed.
         message_lines = [
             header,
-            f"  - entry count: {new_count} / {locked_count} (current / snapshot)",
-            f"  - snapshot hash: {locked_hash}",
-            f"  - current hash: {current_hash}",
+            f"  - entry count: {new_count} / {locked_count} (current / snapshot) (delta: {delta})",
+            f"  - snapshot hash: {locked_hash} ({locked_short})",
+            f"  - current hash: {current_hash} ({current_short})",
         ]
         if counts_equal:
             # When counts are equal but hashes differ, offer a remediation hint.
@@ -354,9 +385,8 @@ def artifacts_lock_is_current(
                     drifted.append(f"Artifact hash mismatch (content changed): {rel}")
 
     for rel in locked_files:
-        if rel not in seen_paths:
-            if not (repo_root / rel).exists():
-                drifted.append(f"Artifact in lock but file missing: {rel}")
+        if rel not in seen_paths and not (repo_root / rel).exists():
+            drifted.append(f"Artifact in lock but file missing: {rel}")
 
     return (not drifted, drifted)
 
