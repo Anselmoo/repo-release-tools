@@ -254,33 +254,6 @@ hr {
   background: var(--reto-bg-elevated);
 }
 
-/* Context7 chat button (positioned left of the theme toggle) */
-#context7-chat-button {
-  appearance: none;
-  border: 2px solid var(--reto-border);
-  border-radius: 4px;
-  box-shadow: var(--reto-glow);
-  cursor: pointer;
-  position: fixed;
-  right: calc(2rem + 64px); /* place left of the theme toggle (48px width + gap) */
-  bottom: 2rem;
-  width: 48px;
-  height: 48px;
-  z-index: 61; /* above the theme toggle */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  color: var(--reto-accent);
-  background: var(--reto-bg-elevated);
-}
-
-#context7-chat-button.loading {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-
 .site-footer::before {
   content: var(--reto-footer-badge);
   display: block;
@@ -306,6 +279,13 @@ hr {
   align-items: center;
   flex-wrap: wrap;
   gap: 1.5rem;
+}
+
+.site-disclaimer {
+  color: var(--reto-text-soft);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+  max-width: 38rem;
 }
 
 .reto-logo {
