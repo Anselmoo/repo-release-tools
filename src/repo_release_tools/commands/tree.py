@@ -107,16 +107,23 @@ Valid examples: `project-tree`, `src.layout`, `tree_v2`
 from __future__ import annotations
 
 import argparse
+import gzip
 import importlib
 import json
+import os
 import subprocess
 import sys
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeAlias
 
 from repo_release_tools.state import (
     build_tree_lock,
     hash_content,
+    hash_file,
+    now_utc,
+    rrt_dir,
     tree_lock_is_current,
     tree_lock_path,
     write_lock,
@@ -155,6 +162,38 @@ TREE_EPILOG = """  $ rrt tree
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("tree", __doc__ or ""),)
 
 TreeEntry: TypeAlias = tuple[str, bool, list["TreeEntry"] | None]
+
+
+@dataclass(frozen=True)
+class ManifestEntry:
+    """Manifest entry metadata for the deterministic tree manifest.
+
+    Attributes mirror the JSON schema written to `.rrt/tree.manifest.json`.
+    """
+
+    path: str
+    is_dir: bool
+    size: int | None
+    mtime: int | None
+    sha256: str | None
+    mode: int | None
+    uid: int | None
+    gid: int | None
+    symlink_target: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serialisable dict for this manifest entry."""
+        return {
+            "path": self.path,
+            "is_dir": self.is_dir,
+            "size": self.size,
+            "mtime": self.mtime,
+            "sha256": self.sha256,
+            "mode": self.mode,
+            "uid": self.uid,
+            "gid": self.gid,
+            "symlink_target": self.symlink_target,
+        }
 
 
 def _canonical_entry_repr(entries: list[TreeEntry]) -> str:
@@ -444,6 +483,184 @@ def _warn_for_empty_directories(entries: list[TreeEntry], warnings: list[str]) -
     visit(entries)
 
 
+def _compute_sha256(path: Path) -> str | None:
+    """Return a stable sha256:... digest for *path* or None on error.
+
+    Uses the shared state.hash_file helper; callers should handle exceptions
+    and control when hashing runs (it's intentionally expensive).
+    """
+    try:
+        return hash_file(path)
+    except Exception:
+        return None
+
+
+def _flatten_entries_for_manifest(
+    entries: list[TreeEntry],
+    root: Path,
+    *,
+    hash_files: bool,
+    warnings: list[str],
+) -> list[ManifestEntry]:
+    """Flatten the nested *entries* into a list of ManifestEntry instances.
+
+    Each ManifestEntry contains: path (posix, relative to *root*), is_dir,
+    size, mtime (int), sha256 (or null), mode, uid, gid, symlink_target (or null).
+    When *hash_files* is False the sha256 field will always be null.
+    """
+    result: list[ManifestEntry] = []
+
+    def visit(nodes: list[TreeEntry], parent: Path) -> None:
+        for name, is_dir, children in nodes:
+            rel = parent / name
+            full = root / rel
+            posix = rel.as_posix()
+
+            try:
+                lstat = full.lstat()
+            except OSError as exc:
+                warnings.append(f"Cannot stat {full}: {exc}")
+                lstat = None
+
+            is_symlink = full.is_symlink()
+            symlink_target: str | None = None
+            if is_symlink:
+                try:
+                    symlink_target = os.readlink(full)
+                except OSError as exc:
+                    warnings.append(f"Cannot readlink {full}: {exc}")
+
+            size: int | None = None
+            mtime: int | None = None
+            sha: str | None = None
+
+            try:
+                if is_dir:
+                    # directories: record size 0 and use lstat mtime when
+                    # available
+                    size = 0
+                    if lstat is not None:
+                        mtime = int(lstat.st_mtime)
+                else:
+                    # files: prefer stat() (follows symlink) for size/mtime
+                    try:
+                        statobj = full.stat()
+                    except OSError:
+                        statobj = lstat
+                    if statobj is not None:
+                        size = int(statobj.st_size)
+                        mtime = int(statobj.st_mtime)
+
+                    if hash_files:
+                        # Only hash regular files (Path.is_file() follows
+                        # symlinks). Broken links / non-files are skipped.
+                        try:
+                            if full.is_file():
+                                sha = _compute_sha256(full)
+                        except Exception as exc:  # pragma: no cover - defensive
+                            warnings.append(f"Cannot hash {full}: {exc}")
+            except Exception as exc:  # pragma: no cover - defensive
+                warnings.append(f"Error collecting metadata for {full}: {exc}")
+
+            mode = lstat.st_mode if lstat is not None else None
+            uid = lstat.st_uid if lstat is not None else None
+            gid = lstat.st_gid if lstat is not None else None
+
+            entry = ManifestEntry(
+                path=posix,
+                is_dir=bool(is_dir),
+                size=size,
+                mtime=mtime,
+                sha256=sha,
+                mode=mode,
+                uid=uid,
+                gid=gid,
+                symlink_target=symlink_target,
+            )
+            result.append(entry)
+
+            if children:
+                visit(children, rel)
+
+    visit(entries, Path())
+
+    # Deterministic ordering by path
+    return sorted(result, key=lambda e: e.path)
+
+
+def _write_tree_manifest(
+    entries: list[TreeEntry],
+    root: Path,
+    p: DryRunPrinter,
+    *,
+    hash_files: bool,
+    warnings: list[str],
+    compressed: bool = False,
+) -> None:
+    """Build and write .rrt/tree.manifest.json atomically.
+
+    The manifest is deterministic: entries are sorted by path and the JSON
+    dump uses stable separators and sort_keys for inner-dict consistency.
+    """
+    manifest_entries = _flatten_entries_for_manifest(
+        entries, root=root, hash_files=hash_files, warnings=warnings
+    )
+
+    # Convert ManifestEntry instances to plain dicts for stable JSON output.
+    manifest_files = [e.to_dict() for e in manifest_entries]
+    manifest: dict[str, object] = {"meta": {"generated_at": now_utc()}, "files": manifest_files}
+
+    text = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+    target_dir = rrt_dir(root)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / "tree.manifest.json"
+    gz_target = target_dir / "tree.manifest.json.gz"
+
+    if p.dry_run:
+        dest = gz_target if compressed else target
+        p.action(f"[dry-run] Would write manifest to {dest}")
+        p.blank_line()
+        sys.stdout.write(text + "\n")
+        return
+
+    # Atomic write into same directory. Write compressed if requested,
+    # otherwise write plain JSON.
+    if compressed:
+        try:
+            compressed_bytes = gzip.compress(text.encode("utf-8"))
+            fd = tempfile.NamedTemporaryFile(mode="wb", dir=str(target_dir), delete=False)
+            try:
+                fd.write(compressed_bytes)
+                fd.flush()
+                fd_name = fd.name
+            finally:
+                fd.close()
+            Path(fd_name).replace(gz_target)
+        except Exception as exc:
+            warnings.append(f"Failed to install compressed manifest {gz_target}: {exc}")
+            raise
+        p.ok(
+            f"Tree manifest written to .rrt/tree.manifest.json.gz ({len(manifest_entries)} entries)"
+        )
+    else:
+        try:
+            fd = tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=str(target_dir), delete=False
+            )
+            try:
+                fd.write(text)
+                fd.flush()
+                fd_name = fd.name
+            finally:
+                fd.close()
+            Path(fd_name).replace(target)
+        except Exception as exc:
+            warnings.append(f"Failed to install manifest {target}: {exc}")
+            raise
+        p.ok(f"Tree manifest written to .rrt/tree.manifest.json ({len(manifest_entries)} entries)")
+
+
 def _report_tree_check_result(
     printer: DryRunPrinter,
     *,
@@ -564,6 +781,22 @@ def cmd_tree(args: argparse.Namespace) -> int:
     do_snapshot: bool = getattr(args, "snapshot", False)
     do_check: bool = getattr(args, "check", False)
     strict: bool = getattr(args, "strict", False)
+    do_manifest: bool = getattr(args, "manifest", False)
+    do_compressed: bool = getattr(args, "compressed", False)
+    # --compressed implies --manifest
+    if do_compressed:
+        do_manifest = True
+
+    if do_manifest:
+        # Manifest generation is potentially expensive (hashing file
+        # contents); only run when explicitly requested.
+        _write_tree_manifest(
+            entries, root, p, hash_files=True, warnings=warnings, compressed=do_compressed
+        )
+        # If only manifest was requested, exit now. If snapshot/check are
+        # also provided, continue so they can run as well.
+        if not do_snapshot and not do_check:
+            return 0
 
     if do_snapshot:
         lock_data = build_tree_lock(tree_meta)
@@ -576,6 +809,74 @@ def cmd_tree(args: argparse.Namespace) -> int:
         if current:
             p.ok("No tree structure drift detected.")
             return 0
+
+        # When structural drift is detected, try to provide a compact,
+        # machine-assisted manifest diff if a previous manifest exists. This
+        # avoids dumping a large JSON blob into logs while giving humans a
+        # concise list of added/removed paths and file/dir counts.
+        try:
+            manifest_dir = rrt_dir(root)
+            manifest_json = manifest_dir / "tree.manifest.json"
+            manifest_gz = manifest_dir / "tree.manifest.json.gz"
+
+            manifest_text: str | None = None
+            if manifest_json.exists():
+                try:
+                    manifest_text = manifest_json.read_text(encoding="utf-8")
+                except Exception as exc:
+                    warnings.append(f"Failed to read manifest {manifest_json}: {exc}")
+            elif manifest_gz.exists():
+                try:
+                    with gzip.open(str(manifest_gz), "rb") as gf:
+                        manifest_text = gf.read().decode("utf-8")
+                except Exception as exc:
+                    warnings.append(f"Failed to read compressed manifest {manifest_gz}: {exc}")
+
+            if manifest_text:
+                prev_manifest = json.loads(manifest_text)
+                prev_files = list(prev_manifest.get("files", []))
+                prev_paths = {str(e.get("path", "")) for e in prev_files}
+
+                current_files = _flatten_entries_for_manifest(
+                    entries, root, hash_files=False, warnings=warnings
+                )
+                curr_paths = {str(e.path) for e in current_files}
+
+                added = sorted(curr_paths - prev_paths)
+                removed = sorted(prev_paths - curr_paths)
+
+                prev_file_count = sum(not e.get("is_dir") for e in prev_files)
+                prev_dir_count = sum(e.get("is_dir") for e in prev_files)
+                curr_file_count = sum(not e.is_dir for e in current_files)
+                curr_dir_count = sum(e.is_dir for e in current_files)
+
+                # Build a compact multi-line manifest summary to append to the
+                # drift diagnostic. Limit listed paths to a reasonable N.
+                N = 10
+                manifest_lines = [
+                    "Detailed manifest diff (from .rrt/tree.manifest.json):",
+                    f"  - files: was {prev_file_count} → now {curr_file_count} (Δ {curr_file_count - prev_file_count:+d})",
+                    f"  - directories: was {prev_dir_count} → now {curr_dir_count} (Δ {curr_dir_count - prev_dir_count:+d})",
+                ]
+
+                if added:
+                    manifest_lines.append(f"  - added ({len(added)}):")
+                    for pth in added[:N]:
+                        manifest_lines.append(f"    - {pth}")
+                    if len(added) > N:
+                        manifest_lines.append(f"    ... ({len(added) - N} more)")
+
+                if removed:
+                    manifest_lines.append(f"  - removed ({len(removed)}):")
+                    for pth in removed[:N]:
+                        manifest_lines.append(f"    - {pth}")
+                    if len(removed) > N:
+                        manifest_lines.append(f"    ... ({len(removed) - N} more)")
+
+                drifted.append("\n".join(manifest_lines))
+        except Exception as exc:  # pragma: no cover - best-effort diagnostics
+            warnings.append(f"Failed to compute manifest diff: {exc}")
+
         return _report_tree_check_result(p, drifted=drifted, strict=strict)
 
     # --- inject mode: replace anchored block in a target file ---
@@ -692,6 +993,25 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         default=False,
         help="Compare current tree against .rrt/tree.lock.toml and report structural drift.",
+    )
+    parser.add_argument(
+        "--manifest",
+        action="store_true",
+        default=False,
+        help=(
+            "Write a machine-readable manifest to .rrt/tree.manifest.json containing per-file "
+            "metadata (size, mtime, sha256, mode, uid, gid, symlink_target). This enables "
+            "deterministic, atomic manifest generation and implies hashing of file contents."
+        ),
+    )
+    parser.add_argument(
+        "--compressed",
+        action="store_true",
+        default=False,
+        help=(
+            "Write the manifest as a compressed gzip file (.rrt/tree.manifest.json.gz). "
+            "Implied: --manifest."
+        ),
     )
     parser.add_argument(
         "--strict",

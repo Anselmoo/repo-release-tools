@@ -16,6 +16,42 @@ initialPrompt: >-
 memory: project
 background: false
 effort: high
+target: vscode
+disable-model-invocation: true
+tools:
+- search
+- read
+- web
+- agent
+- github/issue_read
+- github.vscode-pull-request-github/issue_fetch
+- github.vscode-pull-request-github/activePullRequest
+- execute/getTerminalOutput
+- execute/testFailure
+- execute/getTerminalOutput
+- execute/sendToTerminal
+- execute/runTask
+- execute/createAndRunTask
+- execute/runInTerminal
+- execute/runTests
+- vscode/memory
+- vscode/askQuestions
+- serena/find_declaration
+- serena/find_implementations
+- serena/find_referencing_symbols
+- serena/find_symbol
+- serena/get_symbols_overview
+agents: ['Explore']
+handoffs:
+  - label: Start Implementation
+    agent: agent
+    prompt: 'Start implementation'
+    send: true
+  - label: Open in Editor
+    agent: agent
+    prompt: '#createFile the plan as is into an untitled file (`untitled:plan-${camelCaseName}.prompt.md` without frontmatter) for further refinement.'
+    send: true
+    showContinueOn: false
 ---
 
 You are coverage-rescuer. Your mission is raise failing coverage by turning URL-reported gaps into targeted, verified test improvements.

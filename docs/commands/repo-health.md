@@ -734,6 +734,8 @@ Options
   --dry-run      Print the result instead of writing (only effective with --inject).
   --snapshot     Write a tree structure snapshot to .rrt/tree.lock.toml as a baseline.
   --check        Compare current tree against .rrt/tree.lock.toml and report structural drift.
+  --manifest     Write a machine-readable manifest to .rrt/tree.manifest.json containing per-file metadata (size, mtime, sha256, mode, uid, gid, symlink_target). This enables deterministic, atomic manifest generation and implies hashing of file contents.
+  --compressed   Write the manifest as a compressed gzip file (.rrt/tree.manifest.json.gz). Implied: --manifest.
   --strict       With --check: exit 1 on structural drift (default: advisory, exit 0).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

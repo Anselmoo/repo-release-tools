@@ -25,7 +25,7 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/Anselmoo/repo-release-tools"
+Homepage = "https://anselmoo.github.io/repo-release-tools/"
 Issues = "https://github.com/Anselmoo/repo-release-tools/issues"
 Source = "https://github.com/Anselmoo/repo-release-tools"
 
@@ -37,9 +37,7 @@ rrt-hooks = "repo_release_tools.workflow.hooks:main"
 rrt-mcp = "repo_release_tools.mcp.server:main"
 
 [project.optional-dependencies]
-mcp = [
-    "fastmcp[apps]>=3.3.0",
-]
+mcp = ["fastmcp[apps]>=3.3.0"]
 
 [build-system]
 requires = ["uv_build>=0.9.26,<0.12.0"]
@@ -95,7 +93,16 @@ done
 
 [tool.poe.groups.docs.tasks.docs]
 help = "Regenerate generated docs and confirm they are current."
-sequence = ["docs-generate", "docs-check", "docs-inject", "docs-inject-check", "docs-toc", "badge-export", "badge-sync", "banner-export"]
+sequence = [
+    "docs-generate",
+    "docs-check",
+    "docs-inject",
+    "docs-inject-check",
+    "docs-toc",
+    "badge-export",
+    "badge-sync",
+    "banner-export",
+]
 
 [tool.poe.groups.docs.tasks.docs-verify]
 help = "Verify generated docs and shared anchors are current."
@@ -560,10 +567,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["src/repo_release_tools"]
-omit = [
-    "tests/*",
-    "src/repo_release_tools/assets/hooks/**/*.py",
-]
+omit = ["tests/*", "src/repo_release_tools/assets/hooks/**/*.py"]
 
 [tool.coverage.report]
 show_missing = true

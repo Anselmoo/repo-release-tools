@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from repo_release_tools import __version__
+from repo_release_tools.ui import GLYPHS
 
 _RRT_DIR = ".rrt"
 _DOCS_LOCK_NAME = "docs.lock.toml"
@@ -53,6 +54,20 @@ def hash_content(content: str) -> str:
 def now_utc() -> str:
     """Return the current UTC time as an ISO-8601 string."""
     return datetime.now(tz=UTC).isoformat(timespec="seconds")
+
+
+def _short_hash(h: str) -> str:
+    """Return an 8-character short prefix from a hash string like 'sha256:...'.
+
+    Returns '?' on error or when the input is falsy.
+    """
+    try:
+        if not h:
+            return "?"
+        body = h.split(":", 1)[1] if ":" in h else h
+        return body[:8]
+    except Exception:
+        return "?"
 
 
 # ---------------------------------------------------------------------------
@@ -244,12 +259,81 @@ def tree_lock_is_current(
     locked_hash = locked_snapshot.get("tree_hash")
     if locked_hash is None:
         drifted.append("Tree snapshot not found in lockfile")
-    elif locked_hash != tree_meta.get("tree_hash"):
+        return (not drifted, drifted)
+
+    # If the snapshot hash differs from the current tree hash, build a
+    # multi-line bulleted diagnostic that shows counts and both hashes.
+    current_hash = tree_meta.get("tree_hash", "?")
+    if locked_hash != current_hash:
+        # Provide a clearer diagnostic when the snapshot hash differs.
         locked_count = locked_snapshot.get("entry_count", "?")
         new_count = tree_meta.get("entry_count", "?")
-        drifted.append(
-            f"Tree structure changed since snapshot (was {locked_count} entries, now {new_count})"
-        )
+
+        # Compare raw counts when available (integers). Fall back to
+        # conservative equality if types differ.
+        counts_equal = False
+        try:
+            counts_equal = locked_snapshot.get("entry_count") == tree_meta.get("entry_count")
+        except Exception:
+            counts_equal = False
+
+        header = "Tree structure changed since snapshot:"
+        # Compute numeric delta when both counts are integers; otherwise show '?'.
+        delta: str
+        try:
+            if isinstance(new_count, int) and isinstance(locked_count, int):
+                delta = str(new_count - locked_count)
+            else:
+                # attempt to coerce numeric strings
+                delta = (
+                    str(int(new_count) - int(locked_count))
+                    if (
+                        isinstance(new_count, str)
+                        and new_count.isdigit()
+                        and isinstance(locked_count, str)
+                        and locked_count.isdigit()
+                    )
+                    else "?"
+                )
+        except Exception:
+            delta = "?"
+
+        # Short prefixes of hashes for quick comparison (short-first display)
+        locked_short = _short_hash(locked_hash) if locked_hash else "?"
+        current_short = _short_hash(current_hash) if current_hash else "?"
+
+        # Signed delta for human readers ("+N" when the working tree grew).
+        signed_delta = delta
+        try:
+            if isinstance(new_count, int) and isinstance(locked_count, int):
+                diff = new_count - locked_count
+                signed_delta = f"+{diff}" if diff > 0 else str(diff)
+        except Exception:
+            signed_delta = delta
+
+        # Choose a directional glyph for the delta when applicable. The
+        # GLYPHS registry handles ASCII fallbacks for legacy terminals.
+        glyph = ""
+        try:
+            if signed_delta.startswith("+"):
+                glyph = f" {GLYPHS.arrow.up}"
+            elif signed_delta.startswith("-"):
+                glyph = f" {GLYPHS.arrow.down}"
+        except Exception:
+            glyph = ""
+
+        # Present counts as 'was -> now (Δ ±N)' which reads naturally.
+        message_lines = [
+            header,
+            f"  - entry count: was {locked_count} → now {new_count} (Δ {signed_delta}{glyph})",
+            f"  - snapshot hash: {locked_short} ({locked_hash})",
+            f"  - current hash: {current_short} ({current_hash})",
+        ]
+        if counts_equal:
+            # When counts are equal but hashes differ, offer a remediation hint.
+            message_lines.append("  - suggestion: run 'rrt tree --snapshot' to refresh")
+
+        drifted.append("\n".join(message_lines))
 
     return (not drifted, drifted)
 
@@ -257,7 +341,7 @@ def tree_lock_is_current(
 def hash_file(path: Path) -> str:
     """Return a stable sha256 hex digest of *path*'s content, prefixed with 'sha256:'."""
     h = hashlib.sha256(path.read_bytes())
-    return "sha256:" + h.hexdigest()
+    return f"sha256:{h.hexdigest()}"
 
 
 def build_artifacts_lock(
@@ -328,9 +412,8 @@ def artifacts_lock_is_current(
                     drifted.append(f"Artifact hash mismatch (content changed): {rel}")
 
     for rel in locked_files:
-        if rel not in seen_paths:
-            if not (repo_root / rel).exists():
-                drifted.append(f"Artifact in lock but file missing: {rel}")
+        if rel not in seen_paths and not (repo_root / rel).exists():
+            drifted.append(f"Artifact in lock but file missing: {rel}")
 
     return (not drifted, drifted)
 

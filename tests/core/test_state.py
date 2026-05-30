@@ -420,6 +420,37 @@ class TestTreeLockIsCurrent:
         assert not ok
         assert any("changed" in m for m in msgs)
 
+    def test_hash_changed_counts_equal_reports_bullets(self, tmp_path: Path) -> None:
+        """When counts are equal but hashes differ, report bulleted hashes and suggestion."""
+        lock_path = tmp_path / "tree.lock.toml"
+        write_lock(lock_path, build_tree_lock({"entry_count": 10, "tree_hash": "sha256:oldhash"}))
+        ok, msgs = tree_lock_is_current(
+            lock_path, {"entry_count": 10, "tree_hash": "sha256:newhash"}
+        )
+        assert not ok
+        assert len(msgs) == 1
+        msg = msgs[0]
+        assert msg.startswith("Tree structure changed since snapshot:")
+        assert "  - entry count: was 10 → now 10" in msg
+        assert "(Δ 0" in msg
+        assert "  - snapshot hash: oldhash (sha256:oldhash)" in msg
+        assert "  - current hash: newhash (sha256:newhash)" in msg
+        assert "run 'rrt tree --snapshot' to refresh" in msg
+
+    def test_hash_changed_counts_differ_reports_bullets(self, tmp_path: Path) -> None:
+        """When counts differ, report was/now bullet and both hashes."""
+        lock_path = tmp_path / "tree.lock.toml"
+        write_lock(lock_path, build_tree_lock({"entry_count": 7, "tree_hash": "sha256:old2"}))
+        ok, msgs = tree_lock_is_current(lock_path, {"entry_count": 9, "tree_hash": "sha256:new2"})
+        assert not ok
+        assert len(msgs) == 1
+        msg = msgs[0]
+        assert msg.startswith("Tree structure changed since snapshot:")
+        assert "  - entry count: was 7 → now 9" in msg
+        assert "Δ +2" in msg
+        assert "  - snapshot hash: old2 (sha256:old2)" in msg
+        assert "  - current hash: new2 (sha256:new2)" in msg
+
     def test_missing_lock_file(self, tmp_path: Path) -> None:
         """Missing lockfile → drift reported."""
         lock_path = tmp_path / "tree.lock.toml"
