@@ -22,6 +22,7 @@ tools:
 - search
 - read
 - web
+- agent
 - github/issue_read
 - github.vscode-pull-request-github/issue_fetch
 - github.vscode-pull-request-github/activePullRequest
@@ -35,7 +36,6 @@ tools:
 - execute/runTests
 - vscode/memory
 - vscode/askQuestions
-- agent
 - serena/find_declaration
 - serena/find_implementations
 - serena/find_referencing_symbols
