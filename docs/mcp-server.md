@@ -78,6 +78,90 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`
 uv run rrt-mcp --transport http --port 8000
 ```
 
+#### Typical MCP client configuration examples (.mcp.json)
+
+Installed entry point (recommended, per-repo):
+
+```json
+{
+  "mcpServers": {
+    "rrt": {
+      "type": "stdio",
+      "command": "rrt-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+From-source (developer convenience using uvx):
+
+```json
+{
+  "mcpServers": {
+    "rrt": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["repo-release-tools", "rrt-mcp"]
+    }
+  }
+}
+```
+
+Claude Desktop / platform adapter example (uvx wrapper):
+
+```json
+{
+  "mcpServers": {
+    "rrt": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "repo-release-tools[mcp]", "rrt-mcp"]
+    }
+  }
+}
+```
+
+(Use the installed `rrt-mcp` entry point in production; `uvx` is convenient for iterating from a checkout.)
+
+### GitHub Copilot
+
+GitHub Copilot integrations vary by product and local tooling. The recommended approach is to install the bundled Copilot skill and run an MCP server that the Copilot client or adapter can reach:
+
+```bash
+rrt skill install --target copilot-local
+# start a local MCP HTTP server that an adapter can proxy to
+uv run rrt-mcp --transport http --port 8000
+```
+
+If using a hosted or product-specific Copilot client, consult the client documentation for how to point it at an MCP-compatible server or use a local adapter that bridges the client's extension API to MCP.
+
+### Codex and Gemini (adapters)
+
+Codex- and Gemini-based integrations typically require an adapter that understands the platform's client. For local testing and early development, install the codex-local skill and run the MCP HTTP transport:
+
+```bash
+rrt skill install --target codex-local
+uv run rrt-mcp --transport http --port 8000
+```
+
+For production or hosted LLMs, use an MCP-aware gateway or adapter that forwards requests from your LLM client to the local MCP server. See docs/commands/skill.md for how to install and manage bundled skills.
+
+For more details and advanced deployment options, consult the fastmcp project and the MCP client documentation for your chosen agent runtime.
+
+### Helper: generate a .mcp.json from a template
+
+A tiny helper script is included at `scripts/generate_mcp_json.py` to create a `.mcp.json` from a small template. Example usage (from the repository root):
+
+```bash
+python3 scripts/generate_mcp_json.py --command rrt-mcp --output .mcp.json
+# or, to generate a uvx-based entry for development
+python3 scripts/generate_mcp_json.py --command uvx --args 'repo-release-tools rrt-mcp' --output .mcp.json
+```
+
+This script is intentionally minimal — adjust the generated file as needed for your MCP client or adapter.
+
+
 ---
 
 ## Tools

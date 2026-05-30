@@ -93,6 +93,72 @@ rrt skill install --target claude-local --target codex-local
 rrt skill install --target codex-global --dry-run
 ```
 
+MCP (Model Context Protocol) server — short setup
+
+The `[mcp]` extra exposes repository context and "skills" to local agents (Claude, GitHub Copilot, Codex, Gemini). Full, authoritative documentation is in the project docs: docs/mcp-server.md (https://github.com/Anselmoo/repo-release-tools/blob/main/docs/mcp-server.md).
+
+Recommended installation (production / daily use)
+
+```bash
+pip install "repo-release-tools[mcp]"
+# then run the installed entry point:
+rrt-mcp --help
+```
+
+Developer / from-source (convenience)
+
+To run the MCP server from the local checkout (no install), use uvx. This is useful for iteration and local development but is not the recommended install path for production:
+
+```bash
+uvx repo-release-tools rrt-mcp
+```
+
+Typical MCP client configuration examples
+
+- Claude Code (per-repo `.mcp.json`) — prefer the installed `rrt-mcp` entry point when possible:
+
+```json
+{
+  "mcpServers": {
+    "rrt": {
+      "type": "stdio",
+      "command": "rrt-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+- Claude Desktop (macOS) — using uvx to run from source or the installed command:
+
+```json
+{
+  "mcpServers": {
+    "rrt": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["repo-release-tools", "rrt-mcp"]
+    }
+  }
+}
+```
+
+- HTTP transport (adapter or remote client) — start the server with an HTTP transport and point your adapter at the host/port:
+
+```bash
+# start MCP HTTP server on port 8000
+rrt-mcp --transport http --port 8000
+# or (from source)
+uvx repo-release-tools rrt-mcp -- --transport http --port 8000
+```
+
+Notes & links
+
+- Running via `uvx` is a development convenience. Installing the `[mcp]` extra and using the `rrt-mcp` entry point is the recommended path for end-users and CI adapters.
+- See docs/mcp-server.md for full configuration, adapters, and advanced deployment notes: https://github.com/Anselmoo/repo-release-tools/blob/main/docs/mcp-server.md
+- FastMCP (used by the server) docs: https://pypi.org/project/fastmcp/
+
+
 For basic versioning, `bump` and `ci-version` can run without `[tool.rrt]` by
 auto-detecting root-level `pyproject.toml`, `package.json`, and `Cargo.toml`.
 If multiple version files are found, they are updated together. Explicit config
