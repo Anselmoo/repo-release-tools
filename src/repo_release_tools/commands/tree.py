@@ -589,7 +589,13 @@ def _flatten_entries_for_manifest(
 
 
 def _write_tree_manifest(
-    entries: list[TreeEntry], root: Path, p: DryRunPrinter, *, hash_files: bool, warnings: list[str]
+    entries: list[TreeEntry],
+    root: Path,
+    p: DryRunPrinter,
+    *,
+    hash_files: bool,
+    warnings: list[str],
+    compressed: bool = False,
 ) -> None:
     """Build and write .rrt/tree.manifest.json atomically.
 
@@ -602,10 +608,7 @@ def _write_tree_manifest(
 
     # Convert ManifestEntry instances to plain dicts for stable JSON output.
     manifest_files = [e.to_dict() for e in manifest_entries]
-    manifest: dict[str, object] = {
-        "meta": {"generated_at": now_utc()},
-        "files": manifest_files,
-    }
+    manifest: dict[str, object] = {"meta": {"generated_at": now_utc()}, "files": manifest_files}
 
     text = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -615,36 +618,47 @@ def _write_tree_manifest(
     gz_target = target_dir / "tree.manifest.json.gz"
 
     if p.dry_run:
-        p.action(f"[dry-run] Would write manifest to {target}")
+        dest = gz_target if compressed else target
+        p.action(f"[dry-run] Would write manifest to {dest}")
         p.blank_line()
         sys.stdout.write(text + "\n")
         return
 
-    # Atomic write into same directory
-    fd = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=str(target_dir), delete=False)
-    try:
-        fd.write(text)
-        fd.flush()
-        fd_name = fd.name
-    finally:
-        fd.close()
-
-    try:
-        Path(fd_name).replace(target)
-    except Exception as exc:
-        warnings.append(f"Failed to install manifest {target}: {exc}")
-        raise
-
-    # Also write a compressed copy for compact upload in CI environments.
-    try:
-        with gzip.open(str(gz_target), "wb") as gzfd:
-            gzfd.write(text.encode("utf-8"))
-    except Exception as exc:  # pragma: no cover - best-effort
-        warnings.append(f"Failed to write compressed manifest {gz_target}: {exc}")
-
-    p.ok(
-        f"Tree manifest written to .rrt/tree.manifest.json ({len(manifest_entries)} entries); compressed: {gz_target.name}"
-    )
+    # Atomic write into same directory. Write compressed if requested,
+    # otherwise write plain JSON.
+    if compressed:
+        try:
+            compressed_bytes = gzip.compress(text.encode("utf-8"))
+            fd = tempfile.NamedTemporaryFile(mode="wb", dir=str(target_dir), delete=False)
+            try:
+                fd.write(compressed_bytes)
+                fd.flush()
+                fd_name = fd.name
+            finally:
+                fd.close()
+            Path(fd_name).replace(gz_target)
+        except Exception as exc:
+            warnings.append(f"Failed to install compressed manifest {gz_target}: {exc}")
+            raise
+        p.ok(
+            f"Tree manifest written to .rrt/tree.manifest.json.gz ({len(manifest_entries)} entries)"
+        )
+    else:
+        try:
+            fd = tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=str(target_dir), delete=False
+            )
+            try:
+                fd.write(text)
+                fd.flush()
+                fd_name = fd.name
+            finally:
+                fd.close()
+            Path(fd_name).replace(target)
+        except Exception as exc:
+            warnings.append(f"Failed to install manifest {target}: {exc}")
+            raise
+        p.ok(f"Tree manifest written to .rrt/tree.manifest.json ({len(manifest_entries)} entries)")
 
 
 def _report_tree_check_result(
@@ -768,11 +782,17 @@ def cmd_tree(args: argparse.Namespace) -> int:
     do_check: bool = getattr(args, "check", False)
     strict: bool = getattr(args, "strict", False)
     do_manifest: bool = getattr(args, "manifest", False)
+    do_compressed: bool = getattr(args, "compressed", False)
+    # --compressed implies --manifest
+    if do_compressed:
+        do_manifest = True
 
     if do_manifest:
         # Manifest generation is potentially expensive (hashing file
         # contents); only run when explicitly requested.
-        _write_tree_manifest(entries, root, p, hash_files=True, warnings=warnings)
+        _write_tree_manifest(
+            entries, root, p, hash_files=True, warnings=warnings, compressed=do_compressed
+        )
         # If only manifest was requested, exit now. If snapshot/check are
         # also provided, continue so they can run as well.
         if not do_snapshot and not do_check:
@@ -794,10 +814,26 @@ def cmd_tree(args: argparse.Namespace) -> int:
         # machine-assisted manifest diff if a previous manifest exists. This
         # avoids dumping a large JSON blob into logs while giving humans a
         # concise list of added/removed paths and file/dir counts.
-        manifest_path = rrt_dir(root) / "tree.manifest.json"
         try:
-            if manifest_path.exists():
-                prev_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest_dir = rrt_dir(root)
+            manifest_json = manifest_dir / "tree.manifest.json"
+            manifest_gz = manifest_dir / "tree.manifest.json.gz"
+
+            manifest_text: str | None = None
+            if manifest_json.exists():
+                try:
+                    manifest_text = manifest_json.read_text(encoding="utf-8")
+                except Exception as exc:
+                    warnings.append(f"Failed to read manifest {manifest_json}: {exc}")
+            elif manifest_gz.exists():
+                try:
+                    with gzip.open(str(manifest_gz), "rb") as gf:
+                        manifest_text = gf.read().decode("utf-8")
+                except Exception as exc:
+                    warnings.append(f"Failed to read compressed manifest {manifest_gz}: {exc}")
+
+            if manifest_text:
+                prev_manifest = json.loads(manifest_text)
                 prev_files = list(prev_manifest.get("files", []))
                 prev_paths = {str(e.get("path", "")) for e in prev_files}
 
@@ -966,6 +1002,15 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "Write a machine-readable manifest to .rrt/tree.manifest.json containing per-file "
             "metadata (size, mtime, sha256, mode, uid, gid, symlink_target). This enables "
             "deterministic, atomic manifest generation and implies hashing of file contents."
+        ),
+    )
+    parser.add_argument(
+        "--compressed",
+        action="store_true",
+        default=False,
+        help=(
+            "Write the manifest as a compressed gzip file (.rrt/tree.manifest.json.gz). "
+            "Implied: --manifest."
         ),
     )
     parser.add_argument(
