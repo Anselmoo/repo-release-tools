@@ -281,6 +281,13 @@ hr {
   gap: 1.5rem;
 }
 
+.site-disclaimer {
+  color: var(--reto-text-soft);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+  max-width: 38rem;
+}
+
 .reto-logo {
   color: var(--reto-accent-strong);
   margin-right: 0.5rem;
