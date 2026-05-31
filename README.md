@@ -5,6 +5,10 @@
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-light.svg?raw=true">
   <img alt="GitHub" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
+</picture></a> <a href="https://pypi.org/project/repo-release-tools/"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/pypi-reto-dark.svg?raw=true">
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/pypi-reto-light.svg?raw=true">
+  <img alt="PyPI" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/pypi-reto-dark.svg?raw=true">
 </picture></a></p>
 <!-- rrt:auto:end:readme-header -->
 
