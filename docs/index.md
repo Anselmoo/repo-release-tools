@@ -123,6 +123,14 @@ platform are available:
 | Azure DevOps | ![](assets/badges/azure.svg) | ![](assets/badges/azure-dark.svg) | ![](assets/badges/azure-light.svg) | ![](assets/badges/azure-reto-dark.svg) | ![](assets/badges/azure-reto-light.svg) |
 | Codeberg | ![](assets/badges/codeberg.svg) | ![](assets/badges/codeberg-dark.svg) | ![](assets/badges/codeberg-light.svg) | ![](assets/badges/codeberg-reto-dark.svg) | ![](assets/badges/codeberg-reto-light.svg) |
 | Gitea | ![](assets/badges/gitea.svg) | ![](assets/badges/gitea-dark.svg) | ![](assets/badges/gitea-light.svg) | ![](assets/badges/gitea-reto-dark.svg) | ![](assets/badges/gitea-reto-light.svg) |
+| Python | ![](assets/badges/python.svg) | ![](assets/badges/python-dark.svg) | ![](assets/badges/python-light.svg) | ![](assets/badges/python-reto-dark.svg) | ![](assets/badges/python-reto-light.svg) |
+| PyPI | ![](assets/badges/pypi.svg) | ![](assets/badges/pypi-dark.svg) | ![](assets/badges/pypi-light.svg) | ![](assets/badges/pypi-reto-dark.svg) | ![](assets/badges/pypi-reto-light.svg) |
+| NPM | ![](assets/badges/npm.svg) | ![](assets/badges/npm-dark.svg) | ![](assets/badges/npm-light.svg) | ![](assets/badges/npm-reto-dark.svg) | ![](assets/badges/npm-reto-light.svg) |
+| Go | ![](assets/badges/go.svg) | ![](assets/badges/go-dark.svg) | ![](assets/badges/go-light.svg) | ![](assets/badges/go-reto-dark.svg) | ![](assets/badges/go-reto-light.svg) |
+| Rust | ![](assets/badges/rust.svg) | ![](assets/badges/rust-dark.svg) | ![](assets/badges/rust-light.svg) | ![](assets/badges/rust-reto-dark.svg) | ![](assets/badges/rust-reto-light.svg) |
+| NuGet | ![](assets/badges/nuget.svg) | ![](assets/badges/nuget-dark.svg) | ![](assets/badges/nuget-light.svg) | ![](assets/badges/nuget-reto-dark.svg) | ![](assets/badges/nuget-reto-light.svg) |
+| Docker | ![](assets/badges/docker.svg) | ![](assets/badges/docker-dark.svg) | ![](assets/badges/docker-light.svg) | ![](assets/badges/docker-reto-dark.svg) | ![](assets/badges/docker-reto-light.svg) |
+| GitHub Actions | ![](assets/badges/githubactions.svg) | ![](assets/badges/githubactions-dark.svg) | ![](assets/badges/githubactions-light.svg) | ![](assets/badges/githubactions-reto-dark.svg) | ![](assets/badges/githubactions-reto-light.svg) |
 | Generic | ![](assets/badges/generic.svg) | ![](assets/badges/generic-dark.svg) | ![](assets/badges/generic-light.svg) | ![](assets/badges/generic-reto-dark.svg) | ![](assets/badges/generic-reto-light.svg) |
 
 Platform icons sourced from [Simple Icons](https://simpleicons.org) (CC0-1.0) and
