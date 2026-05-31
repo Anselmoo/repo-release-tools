@@ -1,5 +1,6 @@
 ---
 name: rrt-user-config-validator
+family: rrt-user
 description: >-
   Validates rrt configuration choices, target roots, and version-target safety
   from a user perspective. Use when config edits need a read-only sanity check

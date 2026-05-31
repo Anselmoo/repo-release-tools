@@ -45,7 +45,13 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = "src"
-source-include = [".github/agents/**", ".github/hooks/**", ".github/skills/**"]
+source-include = [
+    ".github/agents/**",
+    ".github/hooks/**",
+    ".github/skills/**",
+    "src/repo_release_tools/assets/**",
+    "src/repo_release_tools/_data/**",
+]
 
 [tool.uv.build-backend.data]
 purelib = ".github/skills"
@@ -62,6 +68,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.14.0",
     "ty>=0.0.26",
+    "libcst>=0.4.0",
 ]
 
 [tool.poe.groups.docs]

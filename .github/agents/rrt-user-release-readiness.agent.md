@@ -1,5 +1,6 @@
 ---
 name: rrt-user-release-readiness
+family: rrt-user
 description: >-
   Audits whether a repository is ready for an rrt-managed release. Use when a
   user wants a read-only readiness verdict covering docs, changelog, version targets, and checks.

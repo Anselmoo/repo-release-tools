@@ -1108,7 +1108,7 @@ class TestCmdBadges:
         assert (out_dir / "github.svg").exists()
 
     def test_cmd_badges_all_platforms(self, tmp_path: Path) -> None:
-        from repo_release_tools.tools.platform import PLATFORM_LABELS
+        from repo_release_tools.tools.platform import KNOWN_LABEL_KEYS
 
         out_dir = tmp_path / "badges"
         args = argparse.Namespace(
@@ -1120,7 +1120,7 @@ class TestCmdBadges:
             platform=None,
         )
         assert _cmd_badges(args) == 0
-        for plat in PLATFORM_LABELS:
+        for plat in KNOWN_LABEL_KEYS:
             assert (out_dir / f"{plat}.svg").exists()
 
     def test_cmd_badges_dry_run(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

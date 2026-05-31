@@ -1,5 +1,6 @@
 ---
 name: rrt-user-docs-sync-auditor
+family: rrt-user
 description: >-
   Audits whether rrt command docs, generated docs, and shipped assets still agree.
   Use when help output and published docs drift or when asset suites change.

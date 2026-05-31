@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from repo_release_tools.tools.platform import (
+    KNOWN_LABEL_KEYS,
     PLATFORM_COLORS,
-    PLATFORM_LABELS,
     PLATFORM_URL_TEMPLATES,
     detect_platform,
     get_badge_svg,
@@ -53,7 +53,7 @@ def test_detect_platform(url: str, expected: str) -> None:
 
 
 def test_all_platforms_have_templates() -> None:
-    for platform in PLATFORM_LABELS:
+    for platform in PLATFORM_URL_TEMPLATES:
         assert platform in PLATFORM_URL_TEMPLATES or platform == "generic"
 
 
@@ -141,7 +141,7 @@ def test_make_badge_svg_contains_color() -> None:
 def test_make_badge_svg_is_valid_xml() -> None:
     import xml.etree.ElementTree as ET
 
-    for platform in PLATFORM_LABELS:
+    for platform in KNOWN_LABEL_KEYS:
         svg = make_badge_svg(platform)
         ET.fromstring(svg)  # raises if invalid XML
 

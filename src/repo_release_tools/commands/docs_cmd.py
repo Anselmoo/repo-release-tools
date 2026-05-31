@@ -378,10 +378,10 @@ def _expand_platform_vars(
     target_path: Path | None = None,
 ) -> str:
     """Expand {platform}, {platform_label}, {platform_badge}, {platform_badge_inline}."""
-    from repo_release_tools.tools.platform import PLATFORM_LABELS  # noqa: PLC0415
+    from repo_release_tools.tools.platform import get_display_label  # noqa: PLC0415
 
     platform = _effective_platform(docs)
-    label = PLATFORM_LABELS.get(platform, platform.title())
+    label = get_display_label(platform)
     repo_url = docs.source_repo_url or ""
     badge_assets_dir = _badge_assets_dir_for_target(docs, root=root, target_path=target_path)
 
@@ -616,7 +616,7 @@ def _prepend_anchor_if_missing(
 
 def _cmd_badges(args: argparse.Namespace) -> int:
     """Generate platform SVG badge files into docs/assets/badges/."""
-    from repo_release_tools.tools.platform import PLATFORM_LABELS, get_badge_svg  # noqa: PLC0415
+    from repo_release_tools.tools.platform import KNOWN_LABEL_KEYS, get_badge_svg  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
     dry_run: bool = getattr(args, "dry_run", False)
@@ -637,7 +637,7 @@ def _cmd_badges(args: argparse.Namespace) -> int:
     output_path = root / assets_dir
 
     if all_platforms or platform_arg is None:
-        platforms = list(PLATFORM_LABELS.keys())
+        platforms = list(KNOWN_LABEL_KEYS)
     else:
         platforms = [platform_arg]
 

@@ -48,7 +48,7 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS
+from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS, BundledAgent
 from repo_release_tools.ui import DryRunPrinter
 
 AGENT_TARGET_PATHS = {
@@ -128,7 +128,12 @@ def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    """Install bundled user agents into one or more agent directories."""
+    """Install bundled user agents into one or more agent directories.
+
+    Supports optional --agent/--agents to request installation of a single
+    agent by name. When the requested agent declares a `family:` metadata key,
+    the entire family is installed instead.
+    """
     cwd = Path.cwd()
     home = Path.home()
     if not args.targets:
@@ -142,17 +147,39 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
 
+    # Determine selected agents based on optional --agent flags.
+    selected_agents = list(BUNDLED_AGENTS)
+    if getattr(args, "agents", None):
+        requested_names = args.agents
+        # Build an ordered, deduplicated selection preserving the canonical order.
+        requested_set: set[str] = set()
+        interim: list[BundledAgent] = []
+        for name in requested_names:
+            match = next((a for a in BUNDLED_AGENTS if a.name == name), None)
+            if match is None:
+                return _emit_install_error(f"Unknown agent: {name}. Available: {', '.join(a.name for a in BUNDLED_AGENTS)}")
+            if match.family:
+                interim.extend([a for a in BUNDLED_AGENTS if a.family == match.family])
+            else:
+                interim.append(match)
+        ordered: list[BundledAgent] = []
+        for a in BUNDLED_AGENTS:
+            if a in interim and a.name not in requested_set:
+                ordered.append(a)
+                requested_set.add(a.name)
+        selected_agents = ordered
+
     p = DryRunPrinter(args.dry_run)
     p.blank_line()
     p.header(
         "Agent install",
-        Agents=str(len(BUNDLED_AGENTS)),
+        Agents=str(len(selected_agents)),
         Targets=str(len(install_plan)),
     )
 
     conflicts: list[tuple[str, str, Path]] = []
     for target_name, agents_dir in install_plan:
-        for agent in BUNDLED_AGENTS:
+        for agent in selected_agents:
             destination = agents_dir / f"{agent.name}.agent.md"
             if destination.exists() and not args.force:
                 conflicts.append((target_name, agent.name, destination))
@@ -166,7 +193,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     if args.dry_run:
         for target_name, agents_dir in install_plan:
-            for agent in BUNDLED_AGENTS:
+            for agent in selected_agents:
                 destination = agents_dir / f"{agent.name}.agent.md"
                 location = _display_path(destination, cwd=cwd, home=home)
                 p.would_install(agent.name, target_name, location)
@@ -176,7 +203,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     for target_name, agents_dir in install_plan:
         agents_dir.mkdir(parents=True, exist_ok=True)
-        for agent in BUNDLED_AGENTS:
+        for agent in selected_agents:
             destination = agents_dir / f"{agent.name}.agent.md"
             try:
                 destination.write_text(agent.markdown.rstrip() + "\n", encoding="utf-8")
@@ -225,6 +252,17 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         ),
     )
     install_parser.add_argument(
+        "--agent",
+        dest="agents",
+        action="append",
+        required=False,
+        metavar="AGENT",
+        help=(
+            "Install a specific agent by name. When the agent declares a `family:` metadata, "
+            "the entire family will be installed. Repeat for multiple agents."
+        ),
+    )
+    install_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Preview without writing files.",
@@ -266,6 +304,17 @@ def main() -> None:
             "Install target. Repeat to install into multiple locations: "
             "claude-local, claude-global, codex-local, codex-global, "
             "copilot-local, copilot-global, gemini-local, gemini-global."
+        ),
+    )
+    install_parser.add_argument(
+        "--agent",
+        dest="agents",
+        action="append",
+        required=False,
+        metavar="AGENT",
+        help=(
+            "Install a specific agent by name. When the agent declares a `family:` metadata, "
+            "the entire family will be installed. Repeat for multiple agents."
         ),
     )
     install_parser.add_argument(

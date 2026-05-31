@@ -1,5 +1,6 @@
 ---
 name: rrt-user-commit-lint-triage
+family: rrt-user
 description: >-
   Triages Conventional Commit failures and rewrites the next-best rrt-friendly
   subject line. Use when a commit message is rejected or uncertain before commit.
