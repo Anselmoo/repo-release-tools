@@ -20,3 +20,5 @@ Notes
 -----
 - Java and Bash icons were intentionally excluded per project policy.
 - The authoritative icon path data is in src/repo_release_tools/tools/platform.py (inlined from Simple Icons).
+
+Pinned Simple Icons commit: f076d6f5fc9c0b83978e540a20d9279b28a0fd75 (fetched 2026-05-31T05:55:46Z)
