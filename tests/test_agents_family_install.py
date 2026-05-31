@@ -1,9 +1,12 @@
+import argparse
+from pathlib import Path
+from typing import Any
 
 from repo_release_tools.commands.agents_cmd import cmd_install
 from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS
 
 
-def test_agent_family_install(tmp_path, monkeypatch, capsys):
+def test_agent_family_install(tmp_path: Path, monkeypatch: Any, capsys: Any) -> None:
     # create a fake repo cwd with .github/agents containing a single agent file
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -15,11 +18,7 @@ def test_agent_family_install(tmp_path, monkeypatch, capsys):
 
     # run install targeting claude-local inside the fake repo
     monkeypatch.chdir(repo)
-    class Args: pass
-    args = Args()
-    args.targets = ["claude-local"]
-    args.dry_run = False
-    args.force = True
+    args = argparse.Namespace(targets=["claude-local"], dry_run=False, force=True)
     # install
     rc = cmd_install(args)
     assert rc == 0

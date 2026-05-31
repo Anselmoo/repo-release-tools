@@ -33,7 +33,7 @@ _AGENT_NAMES: tuple[str, ...] = (
 
 
 def _parse_family(markdown: str) -> Optional[str]:
-    """Extract a family name from agent markdown.
+    r"""Extract a family name from agent markdown.
 
     Supports YAML frontmatter (---\nkey: val\n---) or a top-of-file
     `family: <name>` line. Returns None when not present.

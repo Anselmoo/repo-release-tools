@@ -54,7 +54,7 @@ import re
 from dataclasses import dataclass
 from html import escape
 from importlib import resources
-from typing import Literal
+from typing import Literal, Optional
 from urllib.parse import quote, urlparse
 
 # ---------------------------------------------------------------------------
@@ -337,7 +337,7 @@ IconCategory = Literal["hosting", "registry", "language", "ecosystem", "generic"
 class IconDefinition:
     """A stored icon definition for a platform or package key."""
 
-    path: str
+    path: Optional[str] = None
     source: str | None = None
     license: str | None = None
     category: IconCategory | None = None
