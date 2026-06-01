@@ -82,7 +82,7 @@ jobs:
           path: .rrt/tree.manifest.json.gz
           retention-days: 7
       - name: Check tree structure drift
-        run: uv run rrt tree --check --strict
+        run: uv run rrt tree --check --strict --strict-empty-dirs
       - name: Generate badge SVGs for artifact check
         run: uv run python -m repo_release_tools.assets.badges src/repo_release_tools/assets/badges
       - name: Check artifact integrity
