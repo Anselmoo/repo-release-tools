@@ -827,24 +827,25 @@ def _main() -> None:
     first_arg = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("docs/assets")
     variant = sys.argv[2] if len(sys.argv) > 2 else "all"
 
-    if variant == "all":
-        out_dir = first_arg if first_arg.suffix == "" else first_arg.parent
-        _export_all_banner_assets(out_dir)
-    elif variant == "social":
-        file_name = _SOCIAL_CARD_EXPORT[0]
-        out = first_arg if first_arg.suffix else first_arg / file_name
-        export_social_card_png(get_banner("unicode"), out)
-        sys.stdout.write(f"wrote {out}\n")
-    else:
-        # Single-variant export — first_arg is treated as the output file path.
-        file_name, fg = _BANNER_EXPORTS.get(variant, _BANNER_EXPORTS["unicode"])
-        out = first_arg if first_arg.suffix else first_arg / file_name
-        theme = _CRT_BANNER_VARIANTS.get(variant)
-        if theme is None:
-            export_banner_png(get_banner(variant), out, fg=fg)
-        else:
-            export_crt_banner_png(get_banner(variant), out, theme=theme)
-        sys.stdout.write(f"wrote {out}\n")
+    match variant:
+        case "all":
+            out_dir = first_arg if first_arg.suffix == "" else first_arg.parent
+            _export_all_banner_assets(out_dir)
+        case "social":
+            file_name = _SOCIAL_CARD_EXPORT[0]
+            out = first_arg if first_arg.suffix else first_arg / file_name
+            export_social_card_png(get_banner("unicode"), out)
+            sys.stdout.write(f"wrote {out}\n")
+        case _:
+            # Single-variant export — first_arg is treated as the output file path.
+            file_name, fg = _BANNER_EXPORTS.get(variant, _BANNER_EXPORTS["unicode"])
+            out = first_arg if first_arg.suffix else first_arg / file_name
+            theme = _CRT_BANNER_VARIANTS.get(variant)
+            if theme is None:
+                export_banner_png(get_banner(variant), out, fg=fg)
+            else:
+                export_crt_banner_png(get_banner(variant), out, theme=theme)
+            sys.stdout.write(f"wrote {out}\n")
 
 
 if __name__ == "__main__":  # pragma: no cover

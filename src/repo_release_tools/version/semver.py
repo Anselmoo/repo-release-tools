@@ -53,17 +53,19 @@ class Version:
           (requires the version to already carry a pre-release identifier)
         - ``alpha``, ``beta``, ``rc`` — start or advance a named pre-release channel
         """
-        if kind == "major":
-            return Version(self.major + 1, 0, 0)
-        if kind == "minor":
-            return Version(self.major, self.minor + 1, 0)
-        if kind == "patch":
-            return Version(self.major, self.minor, self.patch + 1)
-        if kind == "pre-release":
-            return self._bump_pre_release()
-        if kind in PRE_RELEASE_CHANNELS:
-            return self._set_channel(kind)
-        raise ValueError(f"Unknown bump kind: {kind!r}")
+        match kind:
+            case "major":
+                return Version(self.major + 1, 0, 0)
+            case "minor":
+                return Version(self.major, self.minor + 1, 0)
+            case "patch":
+                return Version(self.major, self.minor, self.patch + 1)
+            case "pre-release":
+                return self._bump_pre_release()
+            case _ if kind in PRE_RELEASE_CHANNELS:
+                return self._set_channel(kind)
+            case _:
+                raise ValueError(f"Unknown bump kind: {kind!r}")
 
     def _bump_pre_release(self) -> Version:
         """Increment the numeric suffix of the current pre-release label."""

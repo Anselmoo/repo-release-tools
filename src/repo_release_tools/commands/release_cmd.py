@@ -204,12 +204,13 @@ def cmd_release_check(args: argparse.Namespace) -> int:  # noqa: ARG001
         else:
             p.line(f"[{group.name}]", ok=False)
         for msg, severity in statuses:
-            if severity == "ok":
-                p.line(f"  {msg}", ok=True)
-            elif severity == "warning":
-                p.warn(f"  {msg}")
-            else:
-                p.line(f"  {msg}", ok=False)
+            match severity:
+                case "ok":
+                    p.line(f"  {msg}", ok=True)
+                case "warning":
+                    p.warn(f"  {msg}")
+                case _:
+                    p.line(f"  {msg}", ok=False)
         p.blank_line()
 
         if not group_ok:

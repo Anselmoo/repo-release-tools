@@ -346,12 +346,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     p.section("Core automation checks")
     for _name, (message, ok, severity) in named_checks:
         p.verbose_line(f"  {_name}: {severity}", level=1)
-        if severity == "ok":
-            p.line(f"  {message}", ok=True)
-        elif severity == "warning":
-            p.warn(f"  {message}")
-        else:
-            p.line(f"  {message}", ok=False)
+        match severity:
+            case "ok":
+                p.line(f"  {message}", ok=True)
+            case "warning":
+                p.warn(f"  {message}")
+            case _:
+                p.line(f"  {message}", ok=False)
         if not ok:
             all_ok = False
 

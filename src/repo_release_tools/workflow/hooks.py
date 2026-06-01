@@ -1130,126 +1130,128 @@ def main(argv: list[str] | None = None) -> int:
 
     parsed = parser.parse_args(sys.argv[1:] if argv is None else argv)
     verbose: int = parsed.verbose
-    if parsed.command == "pre-commit":
-        return run_pre_commit(Path.cwd(), verbose=verbose)
-    if parsed.command == "pre-commit-changelog":
-        return run_pre_commit_changelog(
-            Path.cwd(), changelog_file=parsed.changelog_file, verbose=verbose
-        )
-    if parsed.command == "commit-msg":
-        return run_commit_msg(Path(parsed.message_file), verbose=verbose)
-    if parsed.command == "check-branch-name":
-        extra_types = load_extra_branch_types(Path.cwd())
-        return run_branch_name_check(
-            parsed.branch,
-            title="Branch name validation failed.",
-            extra_types=extra_types,
-            verbose=verbose,
-        )
-    if parsed.command == "check-commit-subject":
-        return run_commit_subject_check(
-            parsed.subject, title="Commit subject validation failed.", verbose=verbose
-        )
-    if parsed.command == "check-dirty-tree":
-        return run_dirty_tree_check(
-            Path.cwd(), title="Dirty tree validation failed.", verbose=verbose
-        )
-    if parsed.command == "check-docs":
-        return run_docs_check(Path.cwd(), verbose=verbose)
-    if parsed.command == "doctor":
-        parsed.verbose = verbose
-        return cmd_doctor(parsed)
-    if parsed.command == "release-check":
-        parsed.verbose = verbose
-        return cmd_release_check(parsed)
-    if parsed.command == "check-eol":
-        parsed.verbose = verbose
-        return cmd_eol_check(parsed)
-    if parsed.command == "docs-generate":
-        parsed.verbose = verbose
-        parsed.docs_action = "generate"
-        parsed.format = "toml"
-        parsed.lang = None
-        parsed.root = "."
-        parsed.dry_run = False
-        return cmd_docs(parsed)
-    if parsed.command == "docs-publish":
-        parsed.verbose = verbose
-        parsed.docs_action = "publish"
-        parsed.format = None
-        parsed.lang = None
-        parsed.root = "."
-        parsed.check = False
-        parsed.dry_run = False
-        parsed.fail_on_change = False
-        return cmd_docs(parsed)
-    if parsed.command == "docs-inject":
-        parsed.verbose = verbose
-        parsed.docs_action = "inject"
-        parsed.format = None
-        parsed.lang = None
-        parsed.root = "."
-        parsed.check = False
-        parsed.dry_run = False
-        parsed.add_anchors = True
-        return cmd_docs(parsed)
-    if parsed.command == "docstring-suggest":
-        parsed.verbose = verbose
-        parsed.root = "."
-        parsed.paths = []
-        parsed.min_chars = None
-        parsed.apply = True
-        return cmd_docs_suggest(parsed)
-    if parsed.command == "update-unreleased":
-        if parsed.message_file is not None:
-            # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
-            msg_path = Path(parsed.message_file)
-            if not msg_path.exists():
-                return emit_failure(
-                    "update-unreleased failed.",
-                    [f"Message file not found: {parsed.message_file}"],
-                )
-            try:
-                subject = read_commit_subject(msg_path)
-            except (OSError, UnicodeDecodeError) as exc:
-                return emit_failure(
-                    "update-unreleased failed.",
-                    [f"Could not read message file: {exc}"],
-                )
-        elif parsed.subject is not None:
-            subject = parsed.subject
-        else:
-            # Fall back to reading the commit message file that git sets during commit hooks.
-            commit_editmsg = Path.cwd() / ".git" / "COMMIT_EDITMSG"
-            if commit_editmsg.exists():
-                subject = read_commit_subject(commit_editmsg)
+    match parsed.command:
+        case "pre-commit":
+            return run_pre_commit(Path.cwd(), verbose=verbose)
+        case "pre-commit-changelog":
+            return run_pre_commit_changelog(
+                Path.cwd(), changelog_file=parsed.changelog_file, verbose=verbose
+            )
+        case "commit-msg":
+            return run_commit_msg(Path(parsed.message_file), verbose=verbose)
+        case "check-branch-name":
+            extra_types = load_extra_branch_types(Path.cwd())
+            return run_branch_name_check(
+                parsed.branch,
+                title="Branch name validation failed.",
+                extra_types=extra_types,
+                verbose=verbose,
+            )
+        case "check-commit-subject":
+            return run_commit_subject_check(
+                parsed.subject, title="Commit subject validation failed.", verbose=verbose
+            )
+        case "check-dirty-tree":
+            return run_dirty_tree_check(
+                Path.cwd(), title="Dirty tree validation failed.", verbose=verbose
+            )
+        case "check-docs":
+            return run_docs_check(Path.cwd(), verbose=verbose)
+        case "doctor":
+            parsed.verbose = verbose
+            return cmd_doctor(parsed)
+        case "release-check":
+            parsed.verbose = verbose
+            return cmd_release_check(parsed)
+        case "check-eol":
+            parsed.verbose = verbose
+            return cmd_eol_check(parsed)
+        case "docs-generate":
+            parsed.verbose = verbose
+            parsed.docs_action = "generate"
+            parsed.format = "toml"
+            parsed.lang = None
+            parsed.root = "."
+            parsed.dry_run = False
+            return cmd_docs(parsed)
+        case "docs-publish":
+            parsed.verbose = verbose
+            parsed.docs_action = "publish"
+            parsed.format = None
+            parsed.lang = None
+            parsed.root = "."
+            parsed.check = False
+            parsed.dry_run = False
+            parsed.fail_on_change = False
+            return cmd_docs(parsed)
+        case "docs-inject":
+            parsed.verbose = verbose
+            parsed.docs_action = "inject"
+            parsed.format = None
+            parsed.lang = None
+            parsed.root = "."
+            parsed.check = False
+            parsed.dry_run = False
+            parsed.add_anchors = True
+            return cmd_docs(parsed)
+        case "docstring-suggest":
+            parsed.verbose = verbose
+            parsed.root = "."
+            parsed.paths = []
+            parsed.min_chars = None
+            parsed.apply = True
+            return cmd_docs_suggest(parsed)
+        case "update-unreleased":
+            if parsed.message_file is not None:
+                # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
+                msg_path = Path(parsed.message_file)
+                if not msg_path.exists():
+                    return emit_failure(
+                        "update-unreleased failed.",
+                        [f"Message file not found: {parsed.message_file}"],
+                    )
+                try:
+                    subject = read_commit_subject(msg_path)
+                except (OSError, UnicodeDecodeError) as exc:
+                    return emit_failure(
+                        "update-unreleased failed.",
+                        [f"Could not read message file: {exc}"],
+                    )
+            elif parsed.subject is not None:
+                subject = parsed.subject
             else:
-                subject = ""
-        return run_update_unreleased(
-            Path.cwd(),
-            subject=subject,
-            changelog_file=parsed.changelog_file,
-            verbose=verbose,
-        )
-    if parsed.command == "changelog" and parsed.changelog_command == "post-correct":
-        ref = parsed.squash_commit or "HEAD"
-        return run_post_correct(
-            Path.cwd(),
-            ref=ref,
-            changelog_file=parsed.output,
-            commit=parsed.commit,
-        )
-    return run_changelog_check(
-        parsed.subject,
-        cwd=Path.cwd(),
-        changelog_file=parsed.changelog_file,
-        changed_files=parsed.changed_files,
-        ref=parsed.ref,
-        title="Changelog validation failed.",
-        strategy=parsed.strategy,
-        branch=parsed.branch,
-        verbose=verbose,
-    )
+                # Fall back to reading the commit message file that git sets during commit hooks.
+                commit_editmsg = Path.cwd() / ".git" / "COMMIT_EDITMSG"
+                if commit_editmsg.exists():
+                    subject = read_commit_subject(commit_editmsg)
+                else:
+                    subject = ""
+            return run_update_unreleased(
+                Path.cwd(),
+                subject=subject,
+                changelog_file=parsed.changelog_file,
+                verbose=verbose,
+            )
+        case "changelog" if parsed.changelog_command == "post-correct":
+            ref = parsed.squash_commit or "HEAD"
+            return run_post_correct(
+                Path.cwd(),
+                ref=ref,
+                changelog_file=parsed.output,
+                commit=parsed.commit,
+            )
+        case _:
+            return run_changelog_check(
+                parsed.subject,
+                cwd=Path.cwd(),
+                changelog_file=parsed.changelog_file,
+                changed_files=parsed.changed_files,
+                ref=parsed.ref,
+                title="Changelog validation failed.",
+                strategy=parsed.strategy,
+                branch=parsed.branch,
+                verbose=verbose,
+            )
 
 
 PRE_COMMIT_DOC = """# rrt hooks

@@ -36,22 +36,23 @@ CSPROJ_VERSION_PATTERN = re.compile(r"(<Version>)([^<]+)(</Version>)")
 
 def _compute_updated_content(target: VersionTarget, text: str, new_version: str) -> str:
     """Compute the updated file content for a version target without writing to disk."""
-    if target.kind == "pep621":
-        return PEP621_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-    if target.kind == "package_json":
-        return replace_package_json_version(text, new_version)
-    if target.kind == "python_version":
-        return PYTHON_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
-    if target.kind == "go_version":
-        return GO_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-    if target.kind == "cargo_toml":
-        return CARGO_TOML_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-    if target.kind == "maven_pom":
-        return MAVEN_POM_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-    if target.kind == "gemspec":
-        return GEMSPEC_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
-    if target.kind == "csproj":
-        return CSPROJ_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+    match target.kind:
+        case "pep621":
+            return PEP621_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+        case "package_json":
+            return replace_package_json_version(text, new_version)
+        case "python_version":
+            return PYTHON_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
+        case "go_version":
+            return GO_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+        case "cargo_toml":
+            return CARGO_TOML_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+        case "maven_pom":
+            return MAVEN_POM_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+        case "gemspec":
+            return GEMSPEC_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
+        case "csproj":
+            return CSPROJ_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
     if target.pattern:
         return replace_pattern_version(text, target.pattern, new_version)
     return replace_toml_field(
@@ -176,49 +177,50 @@ def read_version_string(target: VersionTarget) -> str:
     """Read the current version string from a target."""
     text = target.path.read_text(encoding="utf-8")
 
-    if target.kind == "pep621":
-        match = PEP621_PATTERN.search(text)
-        if match is None:
-            raise RuntimeError(f"Could not find [project].version in {target.path}")
-        return match.group(2)
-    if target.kind == "package_json":
-        return read_package_json_version(target.path)
-    if target.kind == "python_version":
-        match = PYTHON_VERSION_PATTERN.search(text)
-        if match is None:
-            raise RuntimeError(f"Could not find __version__ in {target.path}")
-        return match.group(3)
-    if target.kind == "go_version":
-        match = GO_VERSION_PATTERN.search(text)
-        if match is None:
-            raise RuntimeError(f"Could not find Version constant/variable in {target.path}")
-        return match.group(2)
-    if target.kind == "cargo_toml":
-        match = CARGO_TOML_PATTERN.search(text)
-        if match is None:
-            raise RuntimeError(f"Could not find [package].version in {target.path}")
-        return match.group(2)
-    if target.kind == "maven_pom":
-        match = MAVEN_POM_PATTERN.search(text)
-        if match is None:
-            raise RuntimeError(f"Could not find <version> in {target.path}")
-        return match.group(2)
-    if target.kind == "gemspec":
-        match = GEMSPEC_VERSION_PATTERN.search(text)
-        if match is None:
-            raise RuntimeError(f"Could not find .version in {target.path}")
-        return match.group(3)
-    if target.kind == "csproj":
-        match = CSPROJ_VERSION_PATTERN.search(text)
-        if match is None:
-            raise RuntimeError(f"Could not find <Version> in {target.path}")
-        return match.group(2)
+    match target.kind:
+        case "pep621":
+            m = PEP621_PATTERN.search(text)
+            if m is None:
+                raise RuntimeError(f"Could not find [project].version in {target.path}")
+            return m.group(2)
+        case "package_json":
+            return read_package_json_version(target.path)
+        case "python_version":
+            m = PYTHON_VERSION_PATTERN.search(text)
+            if m is None:
+                raise RuntimeError(f"Could not find __version__ in {target.path}")
+            return m.group(3)
+        case "go_version":
+            m = GO_VERSION_PATTERN.search(text)
+            if m is None:
+                raise RuntimeError(f"Could not find Version constant/variable in {target.path}")
+            return m.group(2)
+        case "cargo_toml":
+            m = CARGO_TOML_PATTERN.search(text)
+            if m is None:
+                raise RuntimeError(f"Could not find [package].version in {target.path}")
+            return m.group(2)
+        case "maven_pom":
+            m = MAVEN_POM_PATTERN.search(text)
+            if m is None:
+                raise RuntimeError(f"Could not find <version> in {target.path}")
+            return m.group(2)
+        case "gemspec":
+            m = GEMSPEC_VERSION_PATTERN.search(text)
+            if m is None:
+                raise RuntimeError(f"Could not find .version in {target.path}")
+            return m.group(3)
+        case "csproj":
+            m = CSPROJ_VERSION_PATTERN.search(text)
+            if m is None:
+                raise RuntimeError(f"Could not find <Version> in {target.path}")
+            return m.group(2)
 
     if target.pattern:
-        match = search_pattern(text, target.pattern)
-        if match is None:
+        m = search_pattern(text, target.pattern)
+        if m is None:
             raise RuntimeError(f"Could not match configured pattern in {target.path}")
-        return match.group(2)
+        return m.group(2)
 
     return read_toml_field(target.path, section=target.section or "", field=target.field or "")
 
