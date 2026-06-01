@@ -733,6 +733,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable all ANSI color output.",
     )
     parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase output verbosity (-v summary, -vv details, -vvv debug).",
+    )
+    parser.add_argument(
         "--generate-completion",
         choices=["bash", "zsh", "fish"],
         default=None,

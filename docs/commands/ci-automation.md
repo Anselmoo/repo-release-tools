@@ -16,6 +16,14 @@ permalink: "/commands/ci-automation/"
 <!-- Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. -->
 
 <!-- rrt:auto:start:toc -->
+- [`rrt action`](#rrt-action)
+  - [Overview](#overview)
+  - [Responsibilities](#responsibilities)
+  - [Workflow Content](#workflow-content)
+  - [Behavior](#behavior)
+  - [Examples](#examples)
+  - [Caveats](#caveats)
+  - [`rrt action init`](#rrt-action-init)
 <!-- rrt:auto:end:toc -->
 
 ## `rrt action`

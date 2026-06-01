@@ -16,6 +16,41 @@ permalink: "/commands/setup-tooling/"
 <!-- Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. -->
 
 <!-- rrt:auto:start:toc -->
+- [`rrt install`](#rrt-install)
+  - [Overview](#overview)
+  - [Responsibilities](#responsibilities)
+  - [Target roots](#target-roots)
+  - [Behavior](#behavior)
+  - [Examples](#examples)
+  - [Caveats](#caveats)
+- [`rrt init`](#rrt-init)
+  - [Overview](#overview-1)
+  - [Responsibilities](#responsibilities-1)
+  - [Target Surfaces](#target-surfaces)
+  - [Behavior](#behavior-1)
+  - [Examples](#examples-1)
+  - [Caveats](#caveats-1)
+- [`rrt skill`](#rrt-skill)
+  - [Overview](#overview-2)
+  - [Target surfaces](#target-surfaces-1)
+  - [Behavior](#behavior-2)
+  - [Examples](#examples-2)
+  - [Caveats](#caveats-2)
+  - [`rrt skill install`](#rrt-skill-install)
+- [`rrt agents`](#rrt-agents)
+  - [Overview](#overview-3)
+  - [Target surfaces](#target-surfaces-2)
+  - [Behavior](#behavior-3)
+  - [Examples](#examples-3)
+  - [Caveats](#caveats-3)
+  - [`rrt agents install`](#rrt-agents-install)
+- [`rrt hooks`](#rrt-hooks)
+  - [Overview](#overview-4)
+  - [Target surfaces](#target-surfaces-3)
+  - [Behavior](#behavior-4)
+  - [Examples](#examples-4)
+  - [Caveats](#caveats-4)
+  - [`rrt hooks install`](#rrt-hooks-install)
 <!-- rrt:auto:end:toc -->
 
 ## `rrt install`
@@ -388,6 +423,7 @@ Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help     Show this message and exit.
   --target DEST  Install target. Repeat to install into multiple locations: claude-local, claude-global, codex-local, codex-global, copilot-local, copilot-global, gemini-local, gemini-global.
+  --agent AGENT  Install a specific agent by name. When the agent declares a `family:` metadata, the entire family will be installed. Repeat for multiple agents.
   --dry-run      Preview without writing files.
   --force        Overwrite existing agent files.
 

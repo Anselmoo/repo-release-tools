@@ -65,3 +65,36 @@ def test_dry_run_printer_line_variants_and_blank_lines(monkeypatch: pytest.Monke
         f"{messaging.GLYPHS.bullet.error} bad\n"
         f"{messaging.GLYPHS.arrow.right} info\n\n"
     )
+
+
+def test_verbose_line_suppressed_at_level_zero() -> None:
+    stream = io.StringIO()
+    printer = messaging.DryRunPrinter(dry_run=False, verbose=0)
+    printer.verbose_line("should not appear", stream=stream)
+    assert stream.getvalue() == ""
+
+
+def test_verbose_line_emitted_at_matching_level() -> None:
+    stream = io.StringIO()
+    printer = messaging.DryRunPrinter(dry_run=False, verbose=1)
+    printer.verbose_line("hello", level=1, stream=stream)
+    assert "hello" in stream.getvalue()
+
+
+def test_verbose_line_suppressed_when_level_exceeds_verbosity() -> None:
+    stream = io.StringIO()
+    printer = messaging.DryRunPrinter(dry_run=False, verbose=1)
+    printer.verbose_line("too detailed", level=2, stream=stream)
+    assert stream.getvalue() == ""
+
+
+def test_verbose_line_emitted_at_all_higher_levels() -> None:
+    stream = io.StringIO()
+    printer = messaging.DryRunPrinter(dry_run=False, verbose=3)
+    printer.verbose_line("level1", level=1, stream=stream)
+    printer.verbose_line("level2", level=2, stream=stream)
+    printer.verbose_line("level3", level=3, stream=stream)
+    out = stream.getvalue()
+    assert "level1" in out
+    assert "level2" in out
+    assert "level3" in out

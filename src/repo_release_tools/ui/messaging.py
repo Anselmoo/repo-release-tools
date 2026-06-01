@@ -131,9 +131,10 @@ class DryRunPrinter:
     and :meth:`footer` appends the canonical dry-run completion line.
     """
 
-    def __init__(self, dry_run: bool) -> None:
+    def __init__(self, dry_run: bool, verbose: int = 0) -> None:
         """Initialize printer; pass ``dry_run=True`` to prefix commands with ``[DRY RUN]``."""
         self.dry_run = dry_run
+        self.verbose = verbose
         self._width = terminal_width()
 
     def header(self, title: str, **metadata: str) -> None:
@@ -225,6 +226,12 @@ class DryRunPrinter:
         """Print a warning line (▲ message)."""
         out = stream if stream is not None else sys.stdout
         print(f"{GLYPHS.bullet.warning} {_c_warning(message)}", file=out)
+
+    def verbose_line(self, message: str, *, level: int = 1, stream: IO[str] | None = None) -> None:
+        """Print message only when ``self.verbose >= level``."""
+        if self.verbose >= level:
+            out = stream if stream is not None else sys.stderr
+            print(f"{GLYPHS.arrow.right} {_c_subtle(message)}", file=out)
 
     def file_entry(self, kind: str, path_text: str, *, stream: IO[str] | None = None) -> None:
         """Print a git-status entry with a semantic diff glyph and path color.

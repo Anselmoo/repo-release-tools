@@ -108,6 +108,7 @@ from repo_release_tools.tools.platform import (
     detect_platform,
     render_badge,
 )
+from repo_release_tools.tools.toc import parse_headings, render_toc
 from repo_release_tools.ui import DryRunPrinter
 
 # ---------------------------------------------------------------------------
@@ -296,6 +297,7 @@ def _cmd_publish(args: argparse.Namespace) -> int:
             if target.anchor_id is None
             else content
         )
+        full_content = _embed_toc_in_content(full_content)
         exit_code = max(
             exit_code,
             apply_generated_docs(
@@ -564,6 +566,26 @@ def _embed_shared_blocks_in_content(
             content = replaced
 
     return content
+
+
+_TOC_ANCHOR = "toc"
+_TOC_START = f"<!-- rrt:auto:start:{_TOC_ANCHOR} -->"
+
+
+def _embed_toc_in_content(
+    content: str,
+    *,
+    min_level: int = 2,
+    max_level: int = 3,
+) -> str:
+    if _TOC_START not in content:
+        return content
+    headings = parse_headings(content)
+    if not headings:
+        return content
+    toc = render_toc(headings, min_level=min_level, max_level=max_level)
+    replaced = replace_anchored_block(content, anchor_id=_TOC_ANCHOR, content=toc)
+    return replaced if replaced is not None else content
 
 
 def _restore_shared_block_stubs(root: Path, rendered_targets: list) -> None:

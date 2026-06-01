@@ -15,6 +15,9 @@ existing workspace instructions. If yes, update instructions before closing.
   would have prevented the mistake.
 - When a new pattern, workaround, or convention is discovered mid-session, capture
   it in `.github/instructions/<domain>.instructions.md` before the session ends.
+- When documenting badge completeness or icon inventories, describe the full
+  label taxonomy in play (for example platform, registry, and language) rather
+  than saying "platform" if the table spans more than that one category.
 - When `rrt tree --check --strict` reports drift, first compare against a clean
   clone or clean checkout and remove any local-only empty directories (for
   example under `src/`) before regenerating `.rrt/tree.lock.toml`.

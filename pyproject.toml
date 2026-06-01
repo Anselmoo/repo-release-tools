@@ -113,7 +113,7 @@ sequence = [
 
 [tool.poe.groups.docs.tasks.docs-verify]
 help = "Verify generated docs and shared anchors are current."
-sequence = ["docs-check", "docs-inject-check"]
+sequence = ["docs-generate", "docs-check", "docs-inject-check"]
 
 [tool.poe.groups.docs.tasks.serve]
 help = "Serve the docs site locally with Jekyll at http://localhost:4000/ (requires Ruby)."

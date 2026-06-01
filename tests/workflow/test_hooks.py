@@ -286,7 +286,7 @@ def test_run_commit_msg_uses_read_commit_subject(
     monkeypatch.setattr(
         hooks,
         "run_commit_subject_check",
-        lambda subject, *, title: captured.append((subject, title)) or 7,
+        lambda subject, *, title, verbose=0: captured.append((subject, title)) or 7,
     )
 
     assert hooks.run_commit_msg(message_file) == 7
@@ -538,35 +538,41 @@ def test_run_post_correct_and_main_dispatch(
     )
 
     calls: list[tuple[str, object]] = []
-    monkeypatch.setattr(hooks, "run_pre_commit", lambda cwd: calls.append(("pre", cwd)) or 11)
+    monkeypatch.setattr(
+        hooks, "run_pre_commit", lambda cwd, verbose=0: calls.append(("pre", cwd)) or 11
+    )
     monkeypatch.setattr(
         hooks,
         "run_pre_commit_changelog",
-        lambda cwd, changelog_file=hooks.DEFAULT_CHANGELOG: (
+        lambda cwd, changelog_file=hooks.DEFAULT_CHANGELOG, verbose=0: (
             calls.append(("pre-changelog", cwd)) or 12
         ),
     )
     monkeypatch.setattr(
         hooks,
         "run_commit_msg",
-        lambda path: calls.append(("commit-msg", path)) or 13,
+        lambda path, verbose=0: calls.append(("commit-msg", path)) or 13,
     )
     monkeypatch.setattr(
         hooks,
         "run_branch_name_check",
-        lambda branch_name, *, title, extra_types=(): calls.append(("branch", branch_name)) or 14,
+        lambda branch_name, *, title, extra_types=(), verbose=0: (
+            calls.append(("branch", branch_name)) or 14
+        ),
     )
     monkeypatch.setattr(
         hooks,
         "run_commit_subject_check",
-        lambda subject, *, title: calls.append(("subject", subject)) or 15,
+        lambda subject, *, title, verbose=0: calls.append(("subject", subject)) or 15,
     )
     monkeypatch.setattr(
         hooks,
         "run_dirty_tree_check",
-        lambda cwd, *, title: calls.append(("dirty", cwd)) or 16,
+        lambda cwd, *, title, verbose=0: calls.append(("dirty", cwd)) or 16,
     )
-    monkeypatch.setattr(hooks, "run_docs_check", lambda cwd: calls.append(("docs", cwd)) or 17)
+    monkeypatch.setattr(
+        hooks, "run_docs_check", lambda cwd, verbose=0: calls.append(("docs", cwd)) or 17
+    )
     monkeypatch.setattr(hooks, "cmd_doctor", lambda parsed: calls.append(("doctor", parsed)) or 18)
     monkeypatch.setattr(
         hooks,
@@ -577,7 +583,7 @@ def test_run_post_correct_and_main_dispatch(
     monkeypatch.setattr(
         hooks,
         "run_update_unreleased",
-        lambda cwd, *, subject, changelog_file=hooks.DEFAULT_CHANGELOG: (
+        lambda cwd, *, subject, changelog_file=hooks.DEFAULT_CHANGELOG, verbose=0: (
             calls.append(("update", subject)) or 21
         ),
     )
@@ -863,6 +869,28 @@ def test_run_update_unreleased_handles_missing_file(
     )
 
 
+def test_run_update_unreleased_no_change_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    content = "# Changelog\n\n## [Unreleased]\n\n### Added\n- add parser\n"
+    changelog.write_text(content, encoding="utf-8")
+
+    monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "is_changelog_meta_commit", lambda subject: False)
+    monkeypatch.setattr(hooks, "detect_changelog_format", lambda f: "markdown")
+    monkeypatch.setattr(hooks, "append_to_unreleased", lambda original, subject, fmt: original)
+
+    assert (
+        hooks.run_update_unreleased(
+            tmp_path, subject="feat: add parser", changelog_file="CHANGELOG.md", verbose=1
+        )
+        == 0
+    )
+    assert "no change" in capsys.readouterr().err
+
+
 def test_run_post_correct_commits_when_requested(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -982,7 +1010,7 @@ def test_main_update_unreleased_uses_message_file_and_commit_editmsg(
     monkeypatch.setattr(
         hooks,
         "run_update_unreleased",
-        lambda cwd, *, subject, changelog_file=hooks.DEFAULT_CHANGELOG: (
+        lambda cwd, *, subject, changelog_file=hooks.DEFAULT_CHANGELOG, verbose=0: (
             captured.append((cwd, subject, changelog_file)) or 21
         ),
     )
@@ -1015,7 +1043,7 @@ def test_main_update_unreleased_handles_unreadable_message_file_and_empty_fallba
     monkeypatch.setattr(
         hooks,
         "run_update_unreleased",
-        lambda cwd, *, subject, changelog_file=hooks.DEFAULT_CHANGELOG: (
+        lambda cwd, *, subject, changelog_file=hooks.DEFAULT_CHANGELOG, verbose=0: (
             captured.append(subject) or 21
         ),
     )
@@ -1061,3 +1089,48 @@ def test_legacy_top_level_hooks_module_main_block_executes(monkeypatch: pytest.M
         runpy.run_module("repo_release_tools.hooks", run_name="__main__")
 
     assert excinfo.value.code == 0
+
+
+def test_run_branch_name_check_verbose_emits_on_success(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert hooks.run_branch_name_check("feat/foo", title="t", verbose=1) == 0
+    err = capsys.readouterr().err
+    assert "feat/foo" in err
+
+
+def test_run_branch_name_check_verbose_silent_at_zero(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert hooks.run_branch_name_check("feat/foo", title="t", verbose=0) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_run_commit_subject_check_verbose_emits_on_success(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert hooks.run_commit_subject_check("feat: add bar", title="t", verbose=1) == 0
+    err = capsys.readouterr().err
+    assert "feat: add bar" in err
+
+
+def test_run_commit_subject_check_verbose_silent_at_zero(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert hooks.run_commit_subject_check("feat: add bar", title="t", verbose=0) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_main_verbose_flag_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[int] = []
+    monkeypatch.setattr(
+        hooks,
+        "run_branch_name_check",
+        lambda branch_name, *, title, extra_types=(), verbose=0: captured.append(verbose) or 0,
+    )
+    hooks.main(["-v", "check-branch-name", "--branch", "feat/foo"])
+    assert captured == [1]
+
+    captured.clear()
+    hooks.main(["-vvv", "check-branch-name", "--branch", "feat/foo"])
+    assert captured == [3]

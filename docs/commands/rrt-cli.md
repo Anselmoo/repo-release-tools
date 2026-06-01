@@ -16,6 +16,8 @@ permalink: "/commands/rrt-cli/"
 <!-- Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. -->
 
 <!-- rrt:auto:start:toc -->
+- [Global help](#global-help)
+- [Command reference](#command-reference)
 <!-- rrt:auto:end:toc -->
 
 This reference is generated from the live `argparse` configuration in
@@ -42,6 +44,7 @@ Options
   --version                    Show version and exit.
   --format FORMAT              Output format. Defaults to text.
   --no-color                   Disable all ANSI color output.
+  -v, --verbose                Increase output verbosity (-v summary, -vv details, -vvv debug).
   --generate-completion SHELL  Print shell completion script for SHELL and exit.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

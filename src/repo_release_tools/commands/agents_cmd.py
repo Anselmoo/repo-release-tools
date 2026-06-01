@@ -157,7 +157,9 @@ def cmd_install(args: argparse.Namespace) -> int:
         for name in requested_names:
             match = next((a for a in BUNDLED_AGENTS if a.name == name), None)
             if match is None:
-                return _emit_install_error(f"Unknown agent: {name}. Available: {', '.join(a.name for a in BUNDLED_AGENTS)}")
+                return _emit_install_error(
+                    f"Unknown agent: {name}. Available: {', '.join(a.name for a in BUNDLED_AGENTS)}"
+                )
             if match.family:
                 interim.extend([a for a in BUNDLED_AGENTS if a.family == match.family])
             else:

@@ -1,0 +1,6 @@
+- Scope fixed: all keys in `ICON_DEFINITIONS`.
+- Replacement policy: use canonical Simple Icons path data where available; update metadata to source=Simple Icons, license=CC0-1.0.
+- Category policy: deterministic precedence `PLATFORM_LABELS > REGISTRY_LABELS > LANGUAGE_LABELS`.
+- `_SHIELDS_LOGO` must be reconciled to replacement matrix; omit unsupported/ambiguous slugs explicitly.
+- Known defect to gate: `ICON_DEFINITIONS["github"].path` must be non-empty after update.
+- Verification focus: `tests/commands/test_platform.py` + `tests/core/test_platform_registry.py`.

@@ -86,6 +86,7 @@ When working in `repo-release-tools`, follow these rules:
 - The repo currently reports low coverage in `src/repo_release_tools/ui/syntax.py`.
 - Use existing hook behavior as a guardrail: coverage below 85.71% should be treated as a blocker unless the user explicitly approves a follow-on test expansion.
 - When making CLI errors friendlier, preserve argparse semantics and exit codes while improving help text, suggestions, and examples.
+- When updating docs verification wiring in `pyproject.toml`, keep `docs-verify` warmed with `docs-generate` before `docs-check`; `docs-check` alone can report stale generated pages even when a direct `rrt docs publish --check` passes.
 - When you add or rename a top-level `rrt` subcommand, update the `Affected entrypoints` docstring block in `tests/test_user_experience_simulator.py` in the same change so the UX contract stays aligned with the live CLI surface.
 - When you add a new top-level `rrt` subcommand, update `docs/commands/rrt-cli.md` and the dedicated command doc page in the same change so the published docs stay aligned with the CLI.
 - Persist preferences and follow-up context in repo-scoped memory when they are specific to this repository's workflow.
