@@ -159,8 +159,9 @@ def _build_docs_lock_sources(entries: list[DocEntry]) -> list[dict[str, object]]
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
+    verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path(args.root)
-    p = DryRunPrinter(dry_run=args.dry_run)
+    p = DryRunPrinter(dry_run=args.dry_run, verbose=verbose)
     p.header("rrt docs generate")
 
     config = _config_for_cwd(cwd)
@@ -225,8 +226,9 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
+    verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path(args.root)
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     config = _config_for_cwd(cwd)
 
     lock_file = getattr(args, "lock_file", None) or config.lock_file
@@ -259,6 +261,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 def _cmd_publish(args: argparse.Namespace) -> int:
     """Write all generated CLI-reference doc files to disk (or check for staleness)."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools.docs import publisher as docs_publisher  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
@@ -285,7 +288,7 @@ def _cmd_publish(args: argparse.Namespace) -> int:
         return 1
 
     if dry_run:
-        p = DryRunPrinter(dry_run=True)
+        p = DryRunPrinter(dry_run=True, verbose=verbose)
         for target, _rendered in rendered_targets:
             p.would_write(str(target.output_path))
         return 0
@@ -440,6 +443,7 @@ def _expand_platform_vars(
 
 def _cmd_inject(args: argparse.Namespace) -> int:
     """Inject or verify all shared anchor blocks from [tool.rrt.docs.shared_blocks]."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools import __version__ as rrt_version  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
@@ -457,19 +461,19 @@ def _cmd_inject(args: argparse.Namespace) -> int:
             raise
 
     if cfg is None:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.action("No rrt config found; skipping shared_blocks injection.")
         return 0
 
     if cfg.docs is not None and cfg.docs.shared_blocks:
         if dry_run:
-            p = DryRunPrinter(dry_run=True)
+            p = DryRunPrinter(dry_run=True, verbose=verbose)
             for block in cfg.docs.shared_blocks:
                 p.would_write(", ".join(block.targets), detail=f"anchor: {block.anchor_id!r}")
             return 0
 
         repo_url = (cfg.docs.source_repo_url or "") if cfg.docs else ""
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
 
         exit_code = 0
         for block in cfg.docs.shared_blocks:
@@ -638,6 +642,7 @@ def _prepend_anchor_if_missing(
 
 def _cmd_badges(args: argparse.Namespace) -> int:
     """Generate platform SVG badge files into docs/assets/badges/."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools.tools.platform import KNOWN_LABEL_KEYS, get_badge_svg  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
@@ -669,7 +674,7 @@ def _cmd_badges(args: argparse.Namespace) -> int:
         else [variant_arg]
     )
 
-    p = DryRunPrinter(dry_run=dry_run)
+    p = DryRunPrinter(dry_run=dry_run, verbose=verbose)
     p.header("rrt docs badges")
 
     exit_code = 0
@@ -705,6 +710,7 @@ def _cmd_badges(args: argparse.Namespace) -> int:
 
 def _cmd_api(args: argparse.Namespace) -> int:
     """Emit a structured index of all rrt CLI commands and arguments."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools.cli import build_parser  # noqa: PLC0415
     from repo_release_tools.docs.api_index import (  # noqa: PLC0415
         build_api_index,
@@ -719,7 +725,7 @@ def _cmd_api(args: argparse.Namespace) -> int:
     dry_run: bool = getattr(args, "dry_run", False)
     root = Path(getattr(args, "root", ".")).resolve()
 
-    p = DryRunPrinter(dry_run=dry_run)
+    p = DryRunPrinter(dry_run=dry_run, verbose=verbose)
 
     # When the rendered payload goes directly to stdout, suppress the status
     # header/footer so callers can safely pipe output (e.g. to `jq`).
@@ -784,22 +790,24 @@ def _cmd_suggest(args: argparse.Namespace) -> int:
 
 def cmd_docs(args: argparse.Namespace) -> int:
     """Dispatch rrt docs sub-actions."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     sub = getattr(args, "docs_action", "generate")
-    if sub == "generate":
-        return _cmd_generate(args)
-    if sub == "check":
-        return _cmd_check(args)
-    if sub == "publish":
-        return _cmd_publish(args)
-    if sub == "inject":
-        return _cmd_inject(args)
-    if sub == "suggest":
-        return _cmd_suggest(args)
-    if sub == "badges":
-        return _cmd_badges(args)
-    if sub == "api":
-        return _cmd_api(args)
-    p = DryRunPrinter(False)
+    match sub:
+        case "generate":
+            return _cmd_generate(args)
+        case "check":
+            return _cmd_check(args)
+        case "publish":
+            return _cmd_publish(args)
+        case "inject":
+            return _cmd_inject(args)
+        case "suggest":
+            return _cmd_suggest(args)
+        case "badges":
+            return _cmd_badges(args)
+        case "api":
+            return _cmd_api(args)
+    p = DryRunPrinter(False, verbose=verbose)
     p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
 

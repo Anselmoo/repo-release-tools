@@ -127,6 +127,7 @@ def _show_available_targets() -> None:
 
 def cmd_install(args: argparse.Namespace) -> int:
     """Install one or more bundled surfaces into one or more targets."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     targets = _dedupe(args.targets or [])
     if not targets:
         if args.dry_run:
@@ -147,7 +148,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 f"{surface} does not support target(s): {joined}. Available: {available}.",
             )
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header("Install", Surfaces=str(len(surfaces)), Targets=str(len(targets)))
 

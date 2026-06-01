@@ -64,7 +64,8 @@ TOC_EPILOG = (
 
 def cmd_toc(args: argparse.Namespace) -> int:
     """Generate a Markdown TOC from FILE, optionally injecting it into TARGET."""
-    p = DryRunPrinter(getattr(args, "dry_run", False))
+    verbose: int = getattr(args, "verbose", 0) or 0
+    p = DryRunPrinter(getattr(args, "dry_run", False), verbose=verbose)
 
     inject_file: str | None = getattr(args, "inject", None)
     anchor_id: str | None = getattr(args, "anchor", None)

@@ -267,7 +267,7 @@ def format_registry_url(registry: str, *, template_key: str = "default", **value
     if missing:
         raise ValueError(f"missing required values for registry {registry}: {', '.join(missing)}")
 
-    if not isinstance(tmpl, str):
+    if not isinstance(tmpl, str):  # pragma: no cover
         tmpl = str(tmpl)
 
     try:

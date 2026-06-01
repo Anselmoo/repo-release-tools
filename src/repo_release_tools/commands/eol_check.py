@@ -319,7 +319,8 @@ def run_eol_checks(
 def cmd_eol(args: argparse.Namespace) -> int:
     """Check host runtimes and project minimums against EOL dates."""
     root = find_repo_root(Path.cwd())
-    p = DryRunPrinter(False)
+    verbose: int = getattr(args, "verbose", 0) or 0
+    p = DryRunPrinter(False, verbose=verbose)
 
     # Determine effective config: CLI flags override config-file values
     eol_cfg: EolConfig | None = None
@@ -352,6 +353,9 @@ def cmd_eol(args: argparse.Namespace) -> int:
     p.action(f"Warn threshold: {warn_days}d  Error threshold: {error_days}d")
     if fetch_live:
         p.action("Fetching live data from endoflife.date …")
+    p.verbose_line(f"eol: {root}", level=1)
+    p.verbose_line(f"  languages: {', '.join(languages)}", level=2)
+    p.verbose_line(f"  warn_days={warn_days} error_days={error_days}", level=2)
     p.blank_line()
 
     host_only = getattr(args, "host_only", False)

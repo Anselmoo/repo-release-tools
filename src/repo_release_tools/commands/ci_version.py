@@ -217,6 +217,8 @@ def cmd_ci_version_compute(args: argparse.Namespace) -> int:
 
         VERSION=$(rrt ci-version compute)
     """
+    verbose: int = getattr(args, "verbose", 0) or 0
+
     root = find_repo_root(Path.cwd())
     base = _resolve_base(args, root)
     if base is None:
@@ -226,7 +228,7 @@ def cmd_ci_version_compute(args: argparse.Namespace) -> int:
     try:
         version = compute_published_version(base, context)
     except ValueError as exc:
-        p = DryRunPrinter(dry_run=False)
+        p = DryRunPrinter(dry_run=False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     # Machine-readable output: keep raw version on stdout
@@ -241,39 +243,40 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     Cargo / TOML targets (``ci_format = "semver_pre"``) receive the version
     after conversion via :func:`to_semver`.
     """
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
 
     try:
         config = load_or_autodetect_config(root)
         if config.autodetected:
-            p = DryRunPrinter(dry_run=False)
+            p = DryRunPrinter(dry_run=False, verbose=verbose)
             p.line(format_autodetected_config_notice(config), ok=False, stream=sys.stderr)
         group = config.resolve_group(getattr(args, "group", None))
     except FileNotFoundError:
-        p = DryRunPrinter(dry_run=False)
+        p = DryRunPrinter(dry_run=False, verbose=verbose)
         p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
         p.action(format_missing_tool_rrt_guidance(root, []), stream=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            p = DryRunPrinter(dry_run=False)
+            p = DryRunPrinter(dry_run=False, verbose=verbose)
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
             p.action(
                 format_missing_tool_rrt_guidance(root, iter_config_files(root)),
                 stream=sys.stderr,
             )
             return 1
-        p = DryRunPrinter(dry_run=False)
+        p = DryRunPrinter(dry_run=False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     except RuntimeError as exc:
-        p = DryRunPrinter(dry_run=False)
+        p = DryRunPrinter(dry_run=False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     ci_targets = [t for t in group.version_targets if t.ci_format in VALID_CI_FORMATS]
     if not ci_targets:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             "No version targets with ci_format configured. "
             'Add ci_format = "pep440" or ci_format = "semver_pre" to the selected version group.',
@@ -285,7 +288,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     version: str = args.version
 
     progress = ProgressLine(file=sys.stdout)
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.line(rule("Applying CI versions", width=terminal_width()))
     total = len(ci_targets)
     for i, target in enumerate(ci_targets, 1):
@@ -296,7 +299,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             # rather than writing an invalid Cargo SemVer string.
             if version_str == version and ".dev" in version:
                 progress.clear()
-                p_err = DryRunPrinter(False)
+                p_err = DryRunPrinter(False, verbose=verbose)
                 p_err.line(
                     f"Cannot convert {version!r} to a Cargo-compatible SemVer prerelease. "
                     "Only versions ending in '.dev<digits>' are supported (e.g. 0.2.0.dev42).",
@@ -312,7 +315,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             replace_version_in_file(target, version_str, dry_run=args.dry_run)
         except (FileNotFoundError, RuntimeError) as exc:
             progress.clear()
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
         if total > 1:
@@ -336,6 +339,8 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
 
     Equivalent to running ``compute`` followed by ``apply`` with the result.
     """
+    verbose: int = getattr(args, "verbose", 0) or 0
+
     root = find_repo_root(Path.cwd())
     base = _resolve_base(args, root)
     if base is None:
@@ -345,10 +350,10 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
     try:
         version = compute_published_version(base, context)
     except ValueError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     p.action(f"Applying published version: {version}")
 
     apply_args = argparse.Namespace(

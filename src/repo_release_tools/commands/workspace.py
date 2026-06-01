@@ -125,6 +125,7 @@ def _update_changelog_for_package(
 
 def cmd_workspace_bump(args: argparse.Namespace) -> int:
     """Apply a unified version bump to all listed packages."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path.cwd()
     dry_run: bool = getattr(args, "dry_run", False)
     packages_str: str = getattr(args, "packages", "") or ""
@@ -132,7 +133,7 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
     no_changelog: bool = getattr(args, "no_changelog", False)
 
     if not packages_str:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             "--packages is required (comma-separated list of package paths).",
             ok=False,
@@ -146,14 +147,14 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
     loaded: list[tuple[Path, RrtConfig, object]] = []
     for pkg_path in pkg_paths:
         if not pkg_path.is_dir():
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.line(f"Package directory not found: {pkg_path}", ok=False, stream=sys.stderr)
             return 1
 
         try:
             config = load_or_autodetect_config(pkg_path)
         except FileNotFoundError:
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.line(f"No rrt config found in {pkg_path}.", ok=False, stream=sys.stderr)
             p.line(
                 format_missing_tool_rrt_guidance(pkg_path, iter_config_files(pkg_path)),
@@ -163,14 +164,14 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
             return 1
         except ValueError as exc:
             if is_missing_tool_rrt_error(exc):
-                p = DryRunPrinter(False)
+                p = DryRunPrinter(False, verbose=verbose)
                 p.line(f"No [tool.rrt] config in {pkg_path}.", ok=False, stream=sys.stderr)
                 return 1
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
         except RuntimeError as exc:
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
 
@@ -178,14 +179,14 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
         current = read_group_current_version(group)
         new = _compute_new_version(bump_kind, current)
         if new is None:
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.line(f"Invalid bump value: {bump_kind!r}", ok=False, stream=sys.stderr)
             return 1
 
         loaded.append((pkg_path, config, new))
 
     # --- Phase 2: apply all updates ------------------------------------------
-    pr = DryRunPrinter(dry_run)
+    pr = DryRunPrinter(dry_run, verbose=verbose)
     pr.blank_line()
     pr.header("Workspace bump", Packages=str(len(loaded)), Bump=bump_kind)
 

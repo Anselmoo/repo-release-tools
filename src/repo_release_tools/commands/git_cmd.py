@@ -250,9 +250,10 @@ def sync_problem(branch_name: str, *, base_ref: str | None, ahead: int, behind: 
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Show a compact repository status view."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
 
@@ -261,12 +262,12 @@ def cmd_status(args: argparse.Namespace) -> int:
     try:
         status_lines = load_status_lines(root)
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     summary = summarize_status(branch_name, status_lines, upstream=upstream)
 
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     p.blank_line()
     p.header(
         "Git status",
@@ -290,9 +291,10 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_log(args: argparse.Namespace) -> int:
     """Show a compact git log view using rrt glyphs."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
 
@@ -302,7 +304,7 @@ def cmd_log(args: argparse.Namespace) -> int:
     )
     lines = [line for line in raw.splitlines() if line.strip()]
 
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     p.blank_line()
     p.header("Git log", Count=str(len(lines)), Limit=str(args.limit))
 
@@ -321,9 +323,10 @@ def cmd_log(args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Run a compact repository health report for rrt workflows."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
 
@@ -332,7 +335,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     try:
         status_lines = load_status_lines(root)
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     conflicts = conflict_status_lines(status_lines)
@@ -369,7 +372,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             )
 
     summary = summarize_status(branch_name, status_lines, upstream=upstream)
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     p.blank_line()
     p.header(
         "Git doctor",
@@ -446,12 +449,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
     """Return non-zero when the working tree is dirty."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     if git.working_tree_clean(root):
         branch_name = git.current_branch(root) or "<detached>"
         upstream = git.upstream_branch(root)
@@ -464,7 +468,7 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
     try:
         changed = load_status_lines(root)
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     p.warn("Working tree has uncommitted changes.", stream=sys.stderr)
@@ -479,23 +483,24 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
 
 def cmd_sync_status(args: argparse.Namespace) -> int:
     """Analyze merge/rebase blockers and divergence against a sync base."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
 
     branch_name = git.current_branch(root) or "<detached>"
     base_ref = args.base_ref or git.upstream_branch(root)
     if base_ref is not None and not git.ref_exists(root, base_ref):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"Base ref {base_ref!r} does not exist.", ok=False, stream=sys.stderr)
         return 1
     operation = git.in_progress_operation(root)
     try:
         status_lines = load_status_lines(root)
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
@@ -503,7 +508,7 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
     ahead, behind = (0, 0) if base_ref is None else git.ahead_behind(root, base_ref)
     relation = describe_sync_relation(ahead=ahead, behind=behind, base_ref=base_ref)
 
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     p.blank_line()
     p.header(
         "Sync status",
@@ -601,15 +606,16 @@ def cmd_commit_all(args: argparse.Namespace) -> int:
 
 def cmd_sync(args: argparse.Namespace) -> int:
     """Fetch, stash when needed, and pull the current branch."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
     branch_name = git.current_branch(root) or "<detached>"
     upstream = git.upstream_branch(root)
     if upstream is None:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             "No upstream branch is configured for the current branch. Set one first or use git push -u.",
             ok=False,
@@ -621,13 +627,13 @@ def cmd_sync(args: argparse.Namespace) -> int:
     try:
         status_lines = load_status_lines(root)
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     conflicts = conflict_status_lines(status_lines)
     operation = git.in_progress_operation(root)
     if operation is not None:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             f"Cannot sync while a {operation} is in progress. Resolve or abort it first.",
             ok=False,
@@ -635,7 +641,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         )
         return 1
     if conflicts:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line("Cannot sync with unresolved merge conflicts.", ok=False, stream=sys.stderr)
         shown = conflicts[:STATUS_MAX]
         for line in shown:
@@ -643,7 +649,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         if len(conflicts) > STATUS_MAX:
             p.action(f"…and {len(conflicts) - STATUS_MAX} more", stream=sys.stderr)
         return 1
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     strategy = "merge" if args.merge else "rebase"
     p.blank_line()
     p.header(
@@ -692,12 +698,13 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 def cmd_move(args: argparse.Namespace) -> int:
     """Switch branches safely by stashing and restoring local changes."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     current = git.current_branch(root) or "<detached>"
     dirty = not git.working_tree_clean(root)
     target_label = f"new branch {args.target}" if args.create else args.target
@@ -741,9 +748,10 @@ def cmd_move(args: argparse.Namespace) -> int:
 
 def cmd_squash_local(args: argparse.Namespace) -> int:
     """Squash local commits since a base ref into one conventional commit."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not args.dry_run and not git.working_tree_clean(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             "Working tree has uncommitted changes. Commit or stash them first.",
             ok=False,
@@ -753,7 +761,7 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
 
     base_ref = args.base_ref or git.upstream_branch(root)
     if base_ref is None:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             "No upstream branch is configured and no --base-ref was provided.",
             ok=False,
@@ -764,13 +772,13 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
     try:
         branch_name, subject = resolve_commit_subject(args, root)
     except ValueError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     commits = git.commits_ahead(root, base_ref)
     if not commits:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             f"No commits found ahead of {base_ref!r}. Nothing to squash.",
             ok=False,
@@ -780,7 +788,7 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
 
     squash_base = git.merge_base(root, base_ref)
     if squash_base is None:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             f"Could not determine merge-base for {base_ref!r} and HEAD.",
             ok=False,
@@ -788,7 +796,7 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
         )
         return 1
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Squash local",
@@ -817,8 +825,9 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
 
 def cmd_undo_safe(args: argparse.Namespace) -> int:
     """Undo the last commit while keeping work in the index or working tree."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     mode = "--soft" if args.keep_staged else "--mixed"
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Undo safe",
@@ -839,14 +848,15 @@ def cmd_undo_safe(args: argparse.Namespace) -> int:
 
 def cmd_rebootstrap(args: argparse.Namespace) -> int:
     """Remove repository history and create a fresh initial history."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     git_dir = git.git_dir(root) or (root / ".git")
     if not git_dir.exists():
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} does not look like a Git repository.", ok=False, stream=sys.stderr)
         return 1
     if not require_explicit_confirmation(args):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             "Refusing to destroy repository history without --yes-i-know-this-destroys-history.",
             ok=False,
@@ -855,13 +865,13 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
         return 1
 
     if args.hard_init and args.empty_first:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line("Use either --hard-init or --empty-first, not both.", ok=False, stream=sys.stderr)
         return 1
 
     remotes = git.remote_names(root)
     if remotes and not args.allow_remote:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             "Refusing to rebootstrap a repository with configured remotes. Use --allow-remote if that is intentional.",
             ok=False,
@@ -876,7 +886,7 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
         commit_message = (
             DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE if args.hard_init else DEFAULT_REBOOTSTRAP_MESSAGE
         )
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Rebootstrap history",
@@ -940,7 +950,7 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
                 label="git commit",
             )
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(
             f"Rebootstrap failed. Original git data is backed up at {backup_path}.",
             ok=False,
@@ -960,14 +970,15 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
 
 def cmd_purge_cache(args: argparse.Namespace) -> int:
     """Expire reflogs and run git garbage collection."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
 
     dirty = not git.working_tree_clean(root)
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Purge cache",
@@ -1022,9 +1033,10 @@ def _parse_diff_hunk_header(raw: str) -> tuple[int, int] | None:
 
 def cmd_diff(args: argparse.Namespace) -> int:
     """Show a compact git diff using DiffGlyphs."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     if not git.is_git_repository(root):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
 
@@ -1037,11 +1049,11 @@ def cmd_diff(args: argparse.Namespace) -> int:
     try:
         raw = git.capture_checked(cmd, root)
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     if not raw.strip():
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.ok("No diff to show.")
         return 0
 
@@ -1049,7 +1061,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
     old_lineno: int | None = None
     new_lineno: int | None = None
 
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     p.blank_line()
     for raw_line in raw.splitlines():
         if raw_line.startswith("diff --git "):
@@ -1064,7 +1076,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
             continue
         if raw_line.startswith("+++ b/"):
             current_file = raw_line[6:]
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.blank_line()
             p.section(current_file)
             old_lineno = None
@@ -1072,7 +1084,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
             continue
         if raw_line.startswith("+++ /dev/null"):
             if current_file:
-                p = DryRunPrinter(False)
+                p = DryRunPrinter(False, verbose=verbose)
                 p.blank_line()
                 p.section(current_file)
             old_lineno = None
@@ -1089,13 +1101,13 @@ def cmd_diff(args: argparse.Namespace) -> int:
         hunk_lines = _parse_diff_hunk_header(raw_line)
         if hunk_lines is not None:
             old_lineno, new_lineno = hunk_lines
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.action(f"  {GLYPHS.typography.mdash} {raw_line.strip()}")
             continue
 
         kind, text, hunk_start = _parse_diff_line(raw_line)
         if hunk_start is not None:
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.action(f"  {GLYPHS.typography.mdash} {text.strip()}")
             continue
 
@@ -1118,7 +1130,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
             text.rstrip(),
             lineno=rendered_lineno if kind != "unchanged" else None,
         )
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"  {rendered}")
 
     p.blank_line()

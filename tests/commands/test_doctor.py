@@ -748,3 +748,24 @@ def test_doctor_check_missing_lock_exits_1_strict(
     rc = doctor.cmd_doctor(_args_snapshot(check=True, strict=True))
 
     assert rc == 1
+
+
+def test_doctor_verbose_emits_level1_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """verbose=1 emits check-level summary lines to stderr."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    args = argparse.Namespace(
+        fix=False, fix_dry_run=False, snapshot=False, check=False, strict=False, verbose=1
+    )
+    rc = doctor.cmd_doctor(args)
+
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "doctor:" in err
+    assert "pre_commit:" in err

@@ -134,6 +134,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     agent by name. When the requested agent declares a `family:` metadata key,
     the entire family is installed instead.
     """
+    verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path.cwd()
     home = Path.home()
     if not args.targets:
@@ -171,7 +172,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 requested_set.add(a.name)
         selected_agents = ordered
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Agent install",

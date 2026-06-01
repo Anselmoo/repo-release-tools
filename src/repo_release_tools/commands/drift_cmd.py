@@ -135,10 +135,13 @@ def cmd_generate(args: argparse.Namespace) -> int:
     sources = _collect_drift_sources(root)
     lock_data = build_lock(sources)
     lock_path = _lock_path(root, args.lock_file)
+    verbose: int = getattr(args, "verbose", 0) or 0
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header("Drift lock", Lock=str(lock_path), Surfaces=str(len(sources)))
+    p.verbose_line(f"drift generate: {root}", level=1)
+    p.verbose_line(f"  surfaces: {len(sources)}", level=2)
 
     if args.dry_run:
         p.would_write(str(lock_path), "drift lockfile (dry-run, not written)")
@@ -155,8 +158,10 @@ def cmd_check(args: argparse.Namespace) -> int:
     root = Path(args.root)
     sources = _collect_drift_sources(root)
     lock_path = _lock_path(root, args.lock_file)
+    verbose: int = getattr(args, "verbose", 0) or 0
 
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
+    p.verbose_line(f"drift check: {root}", level=1)
     is_current, messages = lock_is_current(lock_path, sources)
     if is_current:
         p.ok("drift lockfile is current")

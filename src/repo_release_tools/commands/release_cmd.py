@@ -124,33 +124,34 @@ def _check_pin_target(pin: PinTarget, root: Path) -> tuple[str, bool, str]:
 
 def cmd_release_check(args: argparse.Namespace) -> int:  # noqa: ARG001
     """Check release-oriented version, pin, and changelog targets."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
 
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
         checked = iter_config_files(root)
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(format_missing_tool_rrt_guidance(root, checked), ok=False, stream=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.warn("No [tool.rrt] configuration found.", stream=sys.stderr)
             p.action(
                 format_missing_tool_rrt_guidance(root, iter_config_files(root)),
                 stream=sys.stderr,
             )
             return 1
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
-    p = DryRunPrinter(False)
+    p = DryRunPrinter(False, verbose=verbose)
     if config.autodetected:
         p.warn(format_autodetected_config_notice(config), stream=sys.stderr)
 

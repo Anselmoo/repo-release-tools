@@ -91,15 +91,19 @@ INIT_EPILOG = (
 
 def cmd_init(args: argparse.Namespace) -> int:
     """Write a recommended rrt configuration block."""
+    _: int = getattr(args, "verbose", 0) or 0
     target_fmt = getattr(args, "target", "rrt-toml")
-    if target_fmt == "pyproject":
-        return _init_manifest(args, manifest="pyproject.toml", section_label="[tool.rrt]")
-    if target_fmt == "cargo":
-        return _init_manifest(args, manifest="Cargo.toml", section_label="[package.metadata.rrt]")
-    if target_fmt == "node":
-        return _init_package_json(args)
-    if target_fmt == "go":
-        return _init_rrt_toml(args, go=True)
+    match target_fmt:
+        case "pyproject":
+            return _init_manifest(args, manifest="pyproject.toml", section_label="[tool.rrt]")
+        case "cargo":
+            return _init_manifest(
+                args, manifest="Cargo.toml", section_label="[package.metadata.rrt]"
+            )
+        case "node":
+            return _init_package_json(args)
+        case "go":
+            return _init_rrt_toml(args, go=True)
     return _init_rrt_toml(args)
 
 

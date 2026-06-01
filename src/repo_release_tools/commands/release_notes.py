@@ -117,6 +117,7 @@ def _format_gh_release(body: str, contributors: list[str]) -> str:
 
 def cmd_release_notes(args: argparse.Namespace) -> int:
     """Emit the [Unreleased] changelog section as a formatted release body."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
     output_format = getattr(args, "notes_format", "md")
 
@@ -124,12 +125,12 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
         checked = iter_config_files(root)
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(format_missing_tool_rrt_guidance(root, checked), ok=False, stream=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            p = DryRunPrinter(False)
+            p = DryRunPrinter(False, verbose=verbose)
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
             p.line(
                 format_missing_tool_rrt_guidance(root, iter_config_files(root)),
@@ -137,24 +138,24 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
                 stream=sys.stderr,
             )
             return 1
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     try:
         group = config.resolve_group(getattr(args, "group", None))
     except ValueError as exc:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     path = group.changelog_file
     if not path.exists():
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line(f"Changelog not found: {path}", ok=False, stream=sys.stderr)
         return 1
 
@@ -162,13 +163,13 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
     fmt = detect_changelog_format(path.name)
 
     if not has_unreleased_section(existing, fmt):
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line("No [Unreleased] section found in the changelog.", ok=False, stream=sys.stderr)
         return 1
 
     body = get_unreleased_section_body(existing, fmt)
     if not body:
-        p = DryRunPrinter(False)
+        p = DryRunPrinter(False, verbose=verbose)
         p.line("[Unreleased] section is empty — nothing to emit.", ok=False, stream=sys.stderr)
         return 1
 

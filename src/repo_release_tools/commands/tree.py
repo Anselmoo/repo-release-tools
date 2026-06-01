@@ -714,7 +714,8 @@ def _inject_rendered_tree(
 
 def cmd_tree(args: argparse.Namespace) -> int:
     """Render a project tree from the selected root."""
-    p = DryRunPrinter(getattr(args, "dry_run", False))
+    verbose: int = getattr(args, "verbose", 0) or 0
+    p = DryRunPrinter(getattr(args, "dry_run", False), verbose=verbose)
 
     inject_file: str | None = getattr(args, "inject", None)
     anchor_id: str | None = getattr(args, "anchor", None)
@@ -735,6 +736,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
         p.line(f"Root path is not a directory: {root}", ok=False, stream=sys.stderr)
         return 1
 
+    p.verbose_line(f"tree: {root}", level=1)
     repo_root = _resolve_git_root(root)
     ignore_cache: dict[str, bool] = {}
     warnings: list[str] = []

@@ -176,6 +176,7 @@ def _count_status_changes(status_lines: list[str]) -> tuple[int, int]:
 
 def cmd_new(args: argparse.Namespace) -> int:
     """Create a new branch."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     description = join_description(args.description)
     branch = BranchName(type=args.type, description=description, scope=args.scope)
@@ -183,7 +184,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     commit_title = branch.commit_title()
 
     base = "<current>" if args.dry_run else git.current_branch(root)
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header("New branch", Base=base, Branch=branch_name, Title=commit_title)
 
@@ -250,6 +251,7 @@ def _parse_current_branch(branch: str) -> tuple[str, str]:
 
 def cmd_rename(args: argparse.Namespace) -> int:
     """Rename the current branch, changing any combination of type / scope / description."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     no_scope: bool = getattr(args, "no_scope", False)
     new_type_arg: str | None = getattr(args, "type", None)
@@ -258,7 +260,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
     # Validate: at least one change must be requested
     if not new_type_arg and not scope and not no_scope and not description_words:
-        DryRunPrinter(False).line(
+        DryRunPrinter(False, verbose=verbose).line(
             "Nothing to rename. Specify --type, --scope, --no-scope, or new description words.",
             ok=False,
             stream=sys.stderr,
@@ -267,7 +269,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
     # --no-scope without description means we can't strip the embedded scope from the slug
     if no_scope and not description_words:
-        DryRunPrinter(False).line(
+        DryRunPrinter(False, verbose=verbose).line(
             "--no-scope requires description words so the slug can be rebuilt without a scope.",
             ok=False,
             stream=sys.stderr,
@@ -279,7 +281,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
     try:
         current_type, current_slug = _parse_current_branch(current_branch)
     except ValueError as exc:
-        DryRunPrinter(False).line(str(exc), ok=False, stream=sys.stderr)
+        DryRunPrinter(False, verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     new_type = new_type_arg or current_type
@@ -301,7 +303,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
         # Validate the resulting slug against the same rules used by branch creation
         if len(new_slug) > SLUG_MAX:
-            DryRunPrinter(False).line(
+            DryRunPrinter(False, verbose=verbose).line(
                 f"Computed slug {new_slug!r} is too long ({len(new_slug)} > {SLUG_MAX}). "
                 "Provide a new description to rebuild the slug.",
                 ok=False,
@@ -309,7 +311,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
             )
             return 1
         if not BRANCH_SLUG_RE.fullmatch(new_slug):
-            DryRunPrinter(False).line(
+            DryRunPrinter(False, verbose=verbose).line(
                 f"Computed slug {new_slug!r} is not valid kebab-case. "
                 "Provide a new description to rebuild the slug.",
                 ok=False,
@@ -322,14 +324,14 @@ def cmd_rename(args: argparse.Namespace) -> int:
         commit_title = f"{new_type}{scope_part}: <preserved description>"
 
     if new_name == current_branch:
-        DryRunPrinter(False).line(
+        DryRunPrinter(False, verbose=verbose).line(
             "Branch name is unchanged. Nothing to do.",
             ok=False,
             stream=sys.stderr,
         )
         return 1
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Rename branch",
@@ -362,6 +364,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
 def cmd_rescue(args: argparse.Namespace) -> int:
     """Rescue commits into a new branch."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     description = join_description(args.description)
     branch = BranchName(type=args.type, description=description, scope=args.scope)
@@ -377,7 +380,7 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         log_lines = [] if args.dry_run else git.commits_ahead(root, remote_ref)
         reset_target = remote_ref
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Rescue commits",
