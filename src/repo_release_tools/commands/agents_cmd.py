@@ -49,7 +49,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS, BundledAgent
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 AGENT_TARGET_PATHS = {
     "claude-global": lambda cwd, home: home / ".claude" / "agents",
@@ -100,7 +100,7 @@ def _display_path(path: Path, *, cwd: Path, home: Path) -> str:
 
 
 def _emit_install_error(message: str) -> int:
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.line(message, ok=False, stream=sys.stderr)
     return 1
 

@@ -70,7 +70,7 @@ from repo_release_tools.state import (
     lock_is_current,
     write_lock,
 )
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 DRIFT_LOCK_EXAMPLES = "  $ rrt drift generate --dry-run\n  $ rrt drift check"
 DRIFT_LOCK_FILE = "drift.lock.toml"
@@ -160,7 +160,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     lock_path = _lock_path(root, args.lock_file)
     verbose: int = getattr(args, "verbose", 0) or 0
 
-    p = DryRunPrinter(False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"drift check: {root}", level=1)
     is_current, messages = lock_is_current(lock_path, sources)
     if is_current:

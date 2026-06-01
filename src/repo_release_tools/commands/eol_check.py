@@ -92,7 +92,7 @@ from repo_release_tools.eol import (
     resolve_override_eol,
 )
 from repo_release_tools.state import health_lock_path, upsert_health_lock_checks
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import VerbosePrinter
 
 EOL_EPILOG = (
     "  $ rrt eol\n"
@@ -190,13 +190,13 @@ def _status_label(status: EolStatus) -> str:
 
 
 def _emit_check(
-    p: DryRunPrinter,
+    p: VerbosePrinter,
     label: str,
     version: str | None,
     status: EolStatus,
     record: EolRecord | None,
 ) -> None:
-    """Emit a single EOL check line using the DryRunPrinter."""
+    """Emit a single EOL check line using the VerbosePrinter."""
     if version is None:
         p.warn(f"  {label}: not detected")
         return
@@ -228,7 +228,7 @@ def run_eol_checks(
     fetch_live: bool,
     allow_eol: bool,
     overrides: tuple[EolOverride, ...],
-    p: DryRunPrinter,
+    p: VerbosePrinter,
     today: date | None = None,
     host_only: bool = False,
     project_only: bool = False,
@@ -320,7 +320,7 @@ def cmd_eol(args: argparse.Namespace) -> int:
     """Check host runtimes and project minimums against EOL dates."""
     root = find_repo_root(Path.cwd())
     verbose: int = getattr(args, "verbose", 0) or 0
-    p = DryRunPrinter(False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
 
     # Determine effective config: CLI flags override config-file values
     eol_cfg: EolConfig | None = None

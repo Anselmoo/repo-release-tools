@@ -53,7 +53,7 @@ from pathlib import Path
 from sysconfig import get_path
 from typing import Any, cast
 
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 HOOK_TARGET_PATHS = {
     "claude-global": lambda cwd, home: home / ".claude" / "hooks",
@@ -156,7 +156,7 @@ def _display_path(path: Path, *, cwd: Path, home: Path) -> str:
 
 
 def _emit_install_error(message: str) -> int:
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.line(message, ok=False, stream=sys.stderr)
     return 1
 

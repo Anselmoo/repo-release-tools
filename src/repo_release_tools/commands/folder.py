@@ -43,7 +43,7 @@ from repo_release_tools.folders import (
     scaffold_folders,
 )
 from repo_release_tools.state import health_lock_path, upsert_health_lock_checks
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 FOLDER_EPILOG = (
     "  $ rrt folder check --template python-package\n"
@@ -91,14 +91,14 @@ def cmd_folder_check(args: argparse.Namespace) -> int:
             for target in report.targets
         ]
         upsert_health_lock_checks(health_lock_path(root), check_entries)
-        p_snap = DryRunPrinter(False, verbose=verbose)
+        p_snap = VerbosePrinter(verbose=verbose)
         p_snap.ok(f"Folder results merged into .rrt/health.lock.toml ({len(check_entries)} checks)")
 
     if getattr(args, "format", "text") == "json":
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
         return 0 if report.ok or args.report_only else 1
 
-    p = DryRunPrinter(False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.blank_line()
     p.header("Folder check", Root=str(root))
     for target in report.targets:
@@ -149,7 +149,7 @@ def cmd_folder_design(args: argparse.Namespace) -> int:
     verbose: int = getattr(args, "verbose", 0) or 0
     root = Path(args.root).resolve()
     if not root.exists() or not root.is_dir():
-        p = DryRunPrinter(False, verbose=verbose)
+        p = VerbosePrinter(verbose=verbose)
         p.line(f"Design root must be an existing directory: {root}", ok=False, stream=sys.stderr)
         return 1
 

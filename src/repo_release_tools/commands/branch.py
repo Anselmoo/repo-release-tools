@@ -78,7 +78,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools.ui import GLYPHS, DryRunPrinter
+from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.workflow import git
 
 SEMANTIC_BRANCHES_DOC = (
@@ -260,7 +260,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
     # Validate: at least one change must be requested
     if not new_type_arg and not scope and not no_scope and not description_words:
-        DryRunPrinter(False, verbose=verbose).line(
+        VerbosePrinter(verbose=verbose).line(
             "Nothing to rename. Specify --type, --scope, --no-scope, or new description words.",
             ok=False,
             stream=sys.stderr,
@@ -269,7 +269,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
     # --no-scope without description means we can't strip the embedded scope from the slug
     if no_scope and not description_words:
-        DryRunPrinter(False, verbose=verbose).line(
+        VerbosePrinter(verbose=verbose).line(
             "--no-scope requires description words so the slug can be rebuilt without a scope.",
             ok=False,
             stream=sys.stderr,
@@ -281,7 +281,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
     try:
         current_type, current_slug = _parse_current_branch(current_branch)
     except ValueError as exc:
-        DryRunPrinter(False, verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
+        VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     new_type = new_type_arg or current_type
@@ -303,7 +303,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
         # Validate the resulting slug against the same rules used by branch creation
         if len(new_slug) > SLUG_MAX:
-            DryRunPrinter(False, verbose=verbose).line(
+            VerbosePrinter(verbose=verbose).line(
                 f"Computed slug {new_slug!r} is too long ({len(new_slug)} > {SLUG_MAX}). "
                 "Provide a new description to rebuild the slug.",
                 ok=False,
@@ -311,7 +311,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
             )
             return 1
         if not BRANCH_SLUG_RE.fullmatch(new_slug):
-            DryRunPrinter(False, verbose=verbose).line(
+            VerbosePrinter(verbose=verbose).line(
                 f"Computed slug {new_slug!r} is not valid kebab-case. "
                 "Provide a new description to rebuild the slug.",
                 ok=False,
@@ -324,7 +324,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
         commit_title = f"{new_type}{scope_part}: <preserved description>"
 
     if new_name == current_branch:
-        DryRunPrinter(False, verbose=verbose).line(
+        VerbosePrinter(verbose=verbose).line(
             "Branch name is unchanged. Nothing to do.",
             ok=False,
             stream=sys.stderr,

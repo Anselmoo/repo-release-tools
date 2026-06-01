@@ -49,7 +49,7 @@ import json
 import os
 import sys
 
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import VerbosePrinter
 
 ENV_EPILOG = "  $ rrt env\n  $ rrt env --json"
 
@@ -71,7 +71,7 @@ def cmd_env(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(dict(values), indent=2) + "\n")
         return 0
 
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.ok("Environment")
     for name, value in values:
         p.meta(name, str(value))
@@ -101,7 +101,7 @@ def cmd_env_check(args: argparse.Namespace) -> int:
     """
     verbose: int = getattr(args, "verbose", 0) or 0
 
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
 
     path = os.environ.get("PATH", "")
     pythonpath = os.environ.get("PYTHONPATH", "")

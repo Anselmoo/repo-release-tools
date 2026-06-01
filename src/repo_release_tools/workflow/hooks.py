@@ -34,7 +34,7 @@ from repo_release_tools.config import (
     load_extra_branch_types,
     load_or_autodetect_config,
 )
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import VerbosePrinter
 from repo_release_tools.version.semver import Version
 from repo_release_tools.workflow import git
 
@@ -500,7 +500,7 @@ def apply_dedup_to_changelog(
 
 def emit_failure(title: str, details: list[str]) -> int:
     """Render a hook failure message and return a non-zero exit code."""
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter()
     p.line(title, ok=False, stream=sys.stderr)
     for detail in details:
         p.action(detail, stream=sys.stderr)
@@ -515,7 +515,7 @@ def run_branch_name_check(
     verbose: int = 0,
 ) -> int:
     """Validate an explicit branch name."""
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"check-branch-name: {branch_name!r}")
     problem = validate_branch_name(branch_name, extra_types=extra_types)
     if problem is None:
@@ -542,7 +542,7 @@ def run_branch_name_check(
 
 def run_commit_subject_check(subject: str, *, title: str, verbose: int = 0) -> int:
     """Validate an explicit commit subject."""
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"check-commit-subject: {subject!r}")
     parsed_commit = parse_conventional_commit(subject)
     if parsed_commit is not None:
@@ -566,7 +566,7 @@ def run_commit_subject_check(subject: str, *, title: str, verbose: int = 0) -> i
 
 def run_dirty_tree_check(cwd: Path, *, title: str, verbose: int = 0) -> int:
     """Validate that the working tree is clean."""
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line("check-dirty-tree")
     if not git.is_git_repository(cwd):
         return emit_failure(
@@ -593,7 +593,7 @@ def run_dirty_tree_check(cwd: Path, *, title: str, verbose: int = 0) -> int:
 
 def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml", verbose: int = 0) -> int:
     """Fail if source-owned docs have drifted from the lockfile."""
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line("check-docs")
     from collections import defaultdict
 
@@ -647,7 +647,7 @@ def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml", verbose: i
 
 def run_pre_commit(cwd: Path, *, verbose: int = 0) -> int:
     """Validate the active branch during pre-commit."""
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     branch_name = git.current_branch(cwd)
     p.verbose_line(f"pre-commit: branch={branch_name!r}")
     extra_types = load_extra_branch_types(cwd)
@@ -664,7 +664,7 @@ def run_pre_commit_changelog(
     cwd: Path, *, changelog_file: str = DEFAULT_CHANGELOG, verbose: int = 0
 ) -> int:
     """Validate staged changelog updates during pre-commit."""
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line("pre-commit-changelog")
     try:
         workflow = _detect_changelog_workflow(cwd)
@@ -700,7 +700,7 @@ def run_pre_commit_changelog(
 def run_commit_msg(message_path: Path, *, verbose: int = 0) -> int:
     """Validate the commit subject during commit-msg."""
     subject = read_commit_subject(message_path)
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"commit-msg: file={message_path!s}", level=2)
     return run_commit_subject_check(
         subject,
@@ -724,7 +724,7 @@ def run_update_unreleased(
     updates, but returns ``emit_failure(...)`` if the changelog file is
     missing.
     """
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"update-unreleased: subject={subject!r}")
     try:
         workflow = _detect_changelog_workflow(cwd)
@@ -756,7 +756,7 @@ def run_update_unreleased(
     if updated != original:
         changelog_path.write_text(updated, encoding="utf-8")
         git.run(["git", "add", changelog_file], cwd, dry_run=False, label="stage changelog")
-        p = DryRunPrinter(dry_run=False, verbose=verbose)
+        p = VerbosePrinter(verbose=verbose)
         p.line(f"[Unreleased] section updated in {changelog_file}.", ok=True, stream=sys.stderr)
     else:
         p.verbose_line("  no change (already up to date)")
@@ -792,7 +792,7 @@ def run_changelog_check(
     When *branch* matches a known bot prefix (``renovate/*``,
     ``dependabot/*``) the check is also skipped.
     """
-    p = DryRunPrinter(dry_run=False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"check-changelog: subject={subject!r}")
     if not commit_subject_requires_changelog(subject):
         p.verbose_line("  skipped (non-changelog commit type)")
@@ -887,7 +887,7 @@ def run_post_correct(
     except RuntimeError as exc:
         return emit_failure("Changelog post-correction failed.", [str(exc)])
     if not added_lines:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(
             f"No changelog changes found in {ref!r}. Nothing to correct.",
             ok=True,
@@ -904,13 +904,13 @@ def run_post_correct(
         added_line_positions=positions,
     )
     if not changed:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line("Changelog is already clean. Nothing to correct.", ok=True, stream=sys.stderr)
         return 0
 
     removed_count = len(added_lines) - len(deduped_lines)
     noun = "entry" if removed_count == 1 else "entries"
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.line(
         f"Post-correction: removed {removed_count} duplicate/contradicting changelog {noun}.",
         ok=True,

@@ -78,7 +78,7 @@ from repo_release_tools.config import (
     recommend_init_section_for_node,
     recommend_init_section_for_pyproject,
 )
-from repo_release_tools.ui import DryRunPrinter, highlight_terminal
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter, highlight_terminal
 from repo_release_tools.ui import cli_error as render_error
 
 INIT_EPILOG = (
@@ -115,7 +115,7 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     try:
         explicit_config = find_explicit_config_file(root)
     except (ValueError, RuntimeError) as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(f"Could not read existing configuration: {exc}", ok=False, stream=sys.stderr)
         return 1
 
@@ -126,7 +126,7 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
         and not args.dry_run
     ):
         relative = explicit_config.relative_to(root)
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(
             render_error(
                 f"configuration already exists in {relative}",
@@ -139,7 +139,7 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
         return 1
 
     if target.exists() and not args.force and not args.dry_run:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(
             render_error(
                 f"{DEFAULT_INIT_CONFIG} already exists",
@@ -154,7 +154,7 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
     try:
         config_text = recommend_init_config_for_go(root) if go else recommend_init_config(root)
     except (ValueError, RuntimeError) as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(f"Could not generate init config: {exc}", ok=False, stream=sys.stderr)
         return 1
 
@@ -190,7 +190,7 @@ def _init_manifest(
     manifest_path = root / manifest
 
     if not manifest_path.exists():
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(
             f"{manifest} does not exist in the current directory. "
             f"Create it first, or run `rrt init` (without --target) to write {DEFAULT_INIT_CONFIG}.",
@@ -204,11 +204,11 @@ def _init_manifest(
     try:
         already_present = _has_rrt_section(manifest, existing_text)
     except ValueError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     if already_present and not args.dry_run:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(
             f"{manifest} already contains rrt configuration. "
             "Edit the existing rrt section manually instead of appending a duplicate table.",
@@ -223,7 +223,7 @@ def _init_manifest(
         else:
             section_text = recommend_init_section_for_cargo(root)
     except (ValueError, RuntimeError) as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(f"Could not generate init config: {exc}", ok=False, stream=sys.stderr)
         return 1
 
@@ -250,7 +250,7 @@ def _init_package_json(args: argparse.Namespace) -> int:
     manifest_path = root / "package.json"
 
     if not manifest_path.exists():
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(
             "package.json does not exist in the current directory. "
             f"Create it first, or run `rrt init` (without --target) to write {DEFAULT_INIT_CONFIG}.",
@@ -262,17 +262,17 @@ def _init_package_json(args: argparse.Namespace) -> int:
     try:
         data: dict = _json.loads(manifest_path.read_text(encoding="utf-8"))
     except _json.JSONDecodeError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(f"Could not parse package.json: {exc}", ok=False, stream=sys.stderr)
         return 1
 
     if not isinstance(data, dict):
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line("package.json must contain a top-level object.", ok=False, stream=sys.stderr)
         return 1
 
     if "rrt" in data and not args.force:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(
             'package.json already contains an "rrt" key. Use --force to overwrite it.',
             ok=False,
@@ -283,7 +283,7 @@ def _init_package_json(args: argparse.Namespace) -> int:
     try:
         rrt_dict = recommend_init_section_for_node(root)
     except (ValueError, RuntimeError) as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(f"Could not generate init config: {exc}", ok=False, stream=sys.stderr)
         return 1
 

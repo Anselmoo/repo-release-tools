@@ -109,7 +109,7 @@ from repo_release_tools.tools.platform import (
     render_badge,
 )
 from repo_release_tools.tools.toc import parse_headings, render_toc
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 # ---------------------------------------------------------------------------
 # Source-owned topic docs
@@ -228,7 +228,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 def _cmd_check(args: argparse.Namespace) -> int:
     verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path(args.root)
-    p = DryRunPrinter(False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     config = _config_for_cwd(cwd)
 
     lock_file = getattr(args, "lock_file", None) or config.lock_file
@@ -461,7 +461,7 @@ def _cmd_inject(args: argparse.Namespace) -> int:
             raise
 
     if cfg is None:
-        p = DryRunPrinter(False, verbose=verbose)
+        p = VerbosePrinter(verbose=verbose)
         p.action("No rrt config found; skipping shared_blocks injection.")
         return 0
 
@@ -473,7 +473,7 @@ def _cmd_inject(args: argparse.Namespace) -> int:
             return 0
 
         repo_url = (cfg.docs.source_repo_url or "") if cfg.docs else ""
-        p = DryRunPrinter(False, verbose=verbose)
+        p = VerbosePrinter(verbose=verbose)
 
         exit_code = 0
         for block in cfg.docs.shared_blocks:
@@ -807,7 +807,7 @@ def cmd_docs(args: argparse.Namespace) -> int:
             return _cmd_badges(args)
         case "api":
             return _cmd_api(args)
-    p = DryRunPrinter(False, verbose=verbose)
+    p = VerbosePrinter(verbose=verbose)
     p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
 

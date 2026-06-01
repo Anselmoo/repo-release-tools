@@ -55,7 +55,7 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
-from repo_release_tools.ui import GLYPHS, DryRunPrinter
+from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, Version
 from repo_release_tools.version.targets import (
@@ -133,7 +133,7 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
     no_changelog: bool = getattr(args, "no_changelog", False)
 
     if not packages_str:
-        p = DryRunPrinter(False, verbose=verbose)
+        p = VerbosePrinter(verbose=verbose)
         p.line(
             "--packages is required (comma-separated list of package paths).",
             ok=False,
@@ -147,14 +147,14 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
     loaded: list[tuple[Path, RrtConfig, object]] = []
     for pkg_path in pkg_paths:
         if not pkg_path.is_dir():
-            p = DryRunPrinter(False, verbose=verbose)
+            p = VerbosePrinter(verbose=verbose)
             p.line(f"Package directory not found: {pkg_path}", ok=False, stream=sys.stderr)
             return 1
 
         try:
             config = load_or_autodetect_config(pkg_path)
         except FileNotFoundError:
-            p = DryRunPrinter(False, verbose=verbose)
+            p = VerbosePrinter(verbose=verbose)
             p.line(f"No rrt config found in {pkg_path}.", ok=False, stream=sys.stderr)
             p.line(
                 format_missing_tool_rrt_guidance(pkg_path, iter_config_files(pkg_path)),
@@ -164,14 +164,14 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
             return 1
         except ValueError as exc:
             if is_missing_tool_rrt_error(exc):
-                p = DryRunPrinter(False, verbose=verbose)
+                p = VerbosePrinter(verbose=verbose)
                 p.line(f"No [tool.rrt] config in {pkg_path}.", ok=False, stream=sys.stderr)
                 return 1
-            p = DryRunPrinter(False, verbose=verbose)
+            p = VerbosePrinter(verbose=verbose)
             p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
         except RuntimeError as exc:
-            p = DryRunPrinter(False, verbose=verbose)
+            p = VerbosePrinter(verbose=verbose)
             p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
 
@@ -179,7 +179,7 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
         current = read_group_current_version(group)
         new = _compute_new_version(bump_kind, current)
         if new is None:
-            p = DryRunPrinter(False, verbose=verbose)
+            p = VerbosePrinter(verbose=verbose)
             p.line(f"Invalid bump value: {bump_kind!r}", ok=False, stream=sys.stderr)
             return 1
 

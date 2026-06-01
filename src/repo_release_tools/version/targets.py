@@ -8,7 +8,7 @@ import tomllib
 from pathlib import Path
 
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
-from repo_release_tools.ui import GLYPHS, DryRunPrinter
+from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.semver import Version
 
 PEP621_PATTERN = re.compile(r'(?ms)(^\[project\]\s.*?^version\s*=\s*")([^"]+)(")')
@@ -85,7 +85,7 @@ def replace_version_in_file(
 
     path.write_text(updated, encoding="utf-8")
     msg = f'{path}  {GLYPHS.arrow.right}  version = "{new_version}"'
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter()
     p.ok(msg)
 
 
@@ -131,7 +131,7 @@ def replace_all_versions_atomic(
                 pass
         raise
 
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter()
     for path, _, _ in pending:
         p.ok(f'{path}  {GLYPHS.arrow.right}  version = "{new_version}"')
 
@@ -372,5 +372,5 @@ def replace_pin_in_file(
 
     path.write_text(updated, encoding="utf-8")
     msg = f'{path}  {GLYPHS.arrow.right}  pin = "{new_version}"'
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter()
     p.ok(msg)

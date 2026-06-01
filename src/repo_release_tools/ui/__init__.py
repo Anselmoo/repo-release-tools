@@ -41,6 +41,7 @@ from repo_release_tools.ui.layout import (
 )
 from repo_release_tools.ui.messaging import (
     DryRunPrinter,
+    VerbosePrinter,
     render_action,
     render_dry_run,
     render_dry_run_complete,
@@ -79,6 +80,7 @@ __all__ = [
     "OutputContext",
     "ProgressLine",
     "Style",
+    "VerbosePrinter",
     "align",
     "apply",
     "apply_style",

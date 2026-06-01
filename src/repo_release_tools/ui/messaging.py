@@ -112,35 +112,33 @@ def render_dry_run_complete(message: str) -> str:
     return render_dry_run(f"complete {GLYPHS.typography.mdash} {message}", indent=0)
 
 
-class DryRunPrinter:
-    """Consistent glyph-prefixed output for rrt subcommands.
+class BasePrinter:
+    """Common glyph-prefixed structured output for rrt subcommands.
 
     All lines are emitted at column 0 (no leading indent).  Glyphs degrade
     automatically to ASCII equivalents on legacy terminals and when
     ``NO_COLOR`` is set.
 
-    Usage::
+    This is the shared implementation behind :class:`DryRunPrinter` (which adds
+    dry-run preview rendering) and :class:`VerbosePrinter` (the named printer for
+    non-dry-run flows).  It is an implementation detail and is intentionally not
+    part of the public ``repo_release_tools.ui`` surface.
 
-        p = DryRunPrinter(dry_run=args.dry_run)
-        p.header("Version bump", current=f"{old} → {new}", branch=branch_name)
-        p.section("Updating version strings")
-        p.would_run(f"git checkout -b {branch_name}")
-        p.footer("Done.")
-
-    When ``dry_run=True``, :meth:`header` prepends ``[DRY RUN]`` to the title
-    and :meth:`footer` appends the canonical dry-run completion line.
+    Verbose diagnostics live here because verbosity is a cross-cutting capability
+    shared by every printer: both dry-run and non-dry-run flows may emit
+    ``-v/-vv/-vvv`` output "on top" of their normal rendering.  The ``-v`` count
+    maps to gating levels ``-v`` → 1 (:meth:`debug`), ``-vv`` → 2 (:meth:`trace`),
+    ``-vvv`` → 3 (``verbose_line(..., level=3)``).
     """
 
-    def __init__(self, dry_run: bool, verbose: int = 0) -> None:
-        """Initialize printer; pass ``dry_run=True`` to prefix commands with ``[DRY RUN]``."""
-        self.dry_run = dry_run
+    def __init__(self, verbose: int = 0) -> None:
+        """Initialize the printer with an optional ``verbose`` gating level."""
         self.verbose = verbose
         self._width = terminal_width()
 
     def header(self, title: str, **metadata: str) -> None:
         """Print the command header with optional key→value metadata lines."""
-        label = f"[DRY RUN] {title}" if self.dry_run else title
-        print(f"{GLYPHS.bullet.ok} {_c_success(label)}")
+        print(f"{GLYPHS.bullet.ok} {_c_success(title)}")
         for key, value in metadata.items():
             print(f"{GLYPHS.arrow.right} {bold(key)}: {_c_info(value)}")
         print()
@@ -148,31 +146,6 @@ class DryRunPrinter:
     def section(self, name: str) -> None:
         """Print a full-width section rule."""
         print(rule(name, width=self._width))
-
-    def would_run(self, cmd: str) -> None:
-        """Print a dry-run 'Would run: <cmd>' line with shell syntax highlighting."""
-        from repo_release_tools.ui.syntax import highlight_terminal
-
-        prefix = _c_subtle(f"{GLYPHS.bullet.skip} [dry-run] Would run: ")
-        print(f"{prefix}{highlight_terminal(cmd, 'shell')}")
-
-    def would_write(self, path: str, detail: str = "") -> None:
-        """Print a dry-run 'Would update <path>' line with path underlined."""
-        from repo_release_tools.ui.font import underline
-
-        suffix = f": {detail}" if detail else ""
-        print(_c_subtle(f"{GLYPHS.bullet.skip} [dry-run] Would update {underline(path)}{suffix}"))
-
-    def would_install(self, name: str, target: str, location: str) -> None:
-        """Print a dry-run 'Would install <name> to <target>' line with location underlined."""
-        from repo_release_tools.ui.font import underline
-
-        print(
-            _c_subtle(
-                f"{GLYPHS.bullet.skip} [dry-run] Would install {name} to {target}: "
-                f"{underline(location)}",
-            ),
-        )
 
     def action(self, message: str, *, stream: IO[str] | None = None) -> None:
         """Print an informational action line (→ message)."""
@@ -233,6 +206,14 @@ class DryRunPrinter:
             out = stream if stream is not None else sys.stderr
             print(f"{GLYPHS.arrow.right} {_c_subtle(message)}", file=out)
 
+    def debug(self, message: str, *, stream: IO[str] | None = None) -> None:
+        """Print *message* only when ``self.verbose >= 1`` (``-v``, level-1 diagnostics)."""
+        self.verbose_line(message, level=1, stream=stream)
+
+    def trace(self, message: str, *, stream: IO[str] | None = None) -> None:
+        """Print *message* only when ``self.verbose >= 2`` (``-vv``, level-2 diagnostics)."""
+        self.verbose_line(message, level=2, stream=stream)
+
     def file_entry(self, kind: str, path_text: str, *, stream: IO[str] | None = None) -> None:
         """Print a git-status entry with a semantic diff glyph and path color.
 
@@ -269,12 +250,81 @@ class DryRunPrinter:
         print(f"  {GLYPHS.bullet.dot} {_c_subtle(text)}", file=out)
 
     def footer(self, message: str) -> None:
-        """Print the command footer and, when dry_run=True, the completion line."""
+        """Print the command footer."""
         print(f"{GLYPHS.bullet.ok} {_c_success(message)}")
         print()
+
+
+class DryRunPrinter(BasePrinter):
+    """Structured output with dry-run preview rendering for rrt subcommands.
+
+    Usage::
+
+        p = DryRunPrinter(dry_run=args.dry_run)
+        p.header("Version bump", current=f"{old} → {new}", branch=branch_name)
+        p.section("Updating version strings")
+        p.would_run(f"git checkout -b {branch_name}")
+        p.footer("Done.")
+
+    When ``dry_run=True``, :meth:`header` prepends ``[DRY RUN]`` to the title
+    and :meth:`footer` appends the canonical dry-run completion line.
+    """
+
+    def __init__(self, dry_run: bool, verbose: int = 0) -> None:
+        """Initialize printer; pass ``dry_run=True`` to prefix commands with ``[DRY RUN]``."""
+        super().__init__(verbose=verbose)
+        self.dry_run = dry_run
+
+    def header(self, title: str, **metadata: str) -> None:
+        """Print the command header, prefixing ``[DRY RUN]`` when ``dry_run=True``."""
+        label = f"[DRY RUN] {title}" if self.dry_run else title
+        super().header(label, **metadata)
+
+    def would_run(self, cmd: str) -> None:
+        """Print a dry-run 'Would run: <cmd>' line with shell syntax highlighting."""
+        from repo_release_tools.ui.syntax import highlight_terminal
+
+        prefix = _c_subtle(f"{GLYPHS.bullet.skip} [dry-run] Would run: ")
+        print(f"{prefix}{highlight_terminal(cmd, 'shell')}")
+
+    def would_write(self, path: str, detail: str = "") -> None:
+        """Print a dry-run 'Would update <path>' line with path underlined."""
+        from repo_release_tools.ui.font import underline
+
+        suffix = f": {detail}" if detail else ""
+        print(_c_subtle(f"{GLYPHS.bullet.skip} [dry-run] Would update {underline(path)}{suffix}"))
+
+    def would_install(self, name: str, target: str, location: str) -> None:
+        """Print a dry-run 'Would install <name> to <target>' line with location underlined."""
+        from repo_release_tools.ui.font import underline
+
+        print(
+            _c_subtle(
+                f"{GLYPHS.bullet.skip} [dry-run] Would install {name} to {target}: "
+                f"{underline(location)}",
+            ),
+        )
+
+    def footer(self, message: str) -> None:
+        """Print the command footer and, when dry_run=True, the completion line."""
+        super().footer(message)
         if self.dry_run:
             print(
                 _c_subtle(
                     f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no changes made",
                 ),
             )
+
+
+class VerbosePrinter(BasePrinter):
+    """Structured output for non-dry-run flows, carrying ``-v/-vv/-vvv`` verbosity.
+
+    Use this as the default printer for any command path that does **not** render
+    dry-run previews.  It is the named, intent-revealing counterpart to
+    :class:`DryRunPrinter`: both inherit the same verbosity-aware API
+    (:meth:`verbose_line`, :meth:`debug`, :meth:`trace`) from :class:`BasePrinter`,
+    so output stays uniform whether or not a flow is a dry run.
+
+    Verbosity remains opt-in: with the default ``verbose=0`` nothing from
+    :meth:`debug`, :meth:`trace`, or :meth:`verbose_line` is emitted.
+    """

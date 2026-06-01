@@ -66,7 +66,7 @@ from argparse import Namespace
 from collections.abc import Callable, Iterable, Mapping
 
 from repo_release_tools.commands import agents_cmd, hooks_cmd, skill
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 INSTALL_EXAMPLES = (
     "  $ rrt install --target claude-local\n"
@@ -78,7 +78,7 @@ SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("install", __doc__ or "
 
 
 def _emit_install_error(message: str) -> int:
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.line(message, ok=False, stream=sys.stderr)
     return 1
 

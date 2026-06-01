@@ -151,7 +151,14 @@ serena_agent.search_for_pattern(substring_pattern="print\\(", relative_path="src
 ```
 
 - Migration pattern:
-  - Replace `print()` with `p = DryRunPrinter(dry_run=args.dry_run)` and use `p.header()`, `p.section()`, `p.ok()`, `p.warn()`, `p.footer()`.
+  - For dry-run-capable flows, use `p = DryRunPrinter(dry_run=args.dry_run, verbose=verbose)`.
+  - For non-dry-run flows, use `p = VerbosePrinter(verbose=verbose)` (the named printer for
+    output that never renders dry-run previews) and use `p.header()`, `p.section()`, `p.ok()`,
+    `p.warn()`, `p.footer()`.
+  - Both printers are verbosity-aware (`-v/-vv/-vvv`): call `p.debug(msg)` (level 1),
+    `p.trace(msg)` (level 2), or `p.verbose_line(msg, level=3)` — these are inherited from the
+    shared base, so dry-run flows get verbose output "on top".
+  - Do not pass `dry_run=False`; use `VerbosePrinter` instead.
   - For in-place progress, prefer `ProgressLine`.
   - Preserve machine-readable stdout exactly (use `sys.stdout.write(version + "\n")`).
 
