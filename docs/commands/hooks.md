@@ -93,6 +93,9 @@ Pair it with:
 | `rrt-docs-publish` | manual | Regenerate CLI reference documentation and topic pages |
 | `rrt-docs-inject` | manual | Synchronize shared anchor blocks across documentation |
 | `rrt-docstring-suggest` | manual | Apply scaffolded docstrings to missing or thin module docstrings |
+| `rrt-folder-check` | pre-commit / pre-push | Validate repository folder structure against `[tool.rrt.folders]` config |
+| `rrt-artifacts-check` | pre-commit / pre-push | Verify artifact hashes match the committed lock (strict by default) |
+| `rrt-artifacts-snapshot` | manual | Hash all configured `artifact_targets` and write `.rrt/artifacts.lock.toml` |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
 incremental workflow. You usually want one or the other, not both.

@@ -138,3 +138,23 @@
   always_run: true
   stages: [pre-commit, pre-push]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-artifacts-check
+  name: repo-release-tools artifacts check
+  description: Verify generated artifact hashes match the committed .rrt/artifacts.lock.toml
+  entry: rrt-hooks artifacts-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit, pre-push]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-artifacts-snapshot
+  name: repo-release-tools artifacts snapshot
+  description: Hash all configured artifact_targets and write .rrt/artifacts.lock.toml
+  entry: rrt-hooks artifacts-snapshot
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
