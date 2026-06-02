@@ -504,6 +504,18 @@ after_blank_lines = 1
 targets = ["README.md"]
 
 [[tool.rrt.docs.shared_blocks]]
+anchor_id = "readme-banner"
+content = """<p><a href="{repo_url}"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="{repo_url}/blob/main/docs/assets/banner-dark.png?raw=true">
+  <source media="(prefers-color-scheme: light)" srcset="{repo_url}/blob/main/docs/assets/banner-light.png?raw=true">
+  <img alt="REPO-RELEASE-TOOLS pipeline banner" src="{repo_url}/blob/main/docs/assets/banner-dark.png?raw=true">
+</picture></a></p>
+"""
+before_blank_lines = 0
+after_blank_lines = 1
+targets = ["README.md"]
+
+[[tool.rrt.docs.shared_blocks]]
 anchor_id = "doc-footer"
 position = "append"
 content = """
