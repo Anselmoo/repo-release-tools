@@ -26,6 +26,7 @@ from repo_release_tools.commands.docs_cmd import cmd_docs
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
+from repo_release_tools.commands.folder import cmd_folder_check
 from repo_release_tools.commands.release_cmd import cmd_release_check
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
@@ -1102,6 +1103,33 @@ def main(argv: list[str] | None = None) -> int:
         "docstring-suggest",
         help="Apply scaffolded docstrings to missing or thin module docstrings.",
     )
+
+    folder_check_parser = subparsers.add_parser(
+        "folder-check",
+        help="Validate repository folder structure against configured rules or templates.",
+    )
+    folder_check_parser.add_argument(
+        "--root", default=".", metavar="PATH", help="Root to validate."
+    )
+    folder_check_parser.add_argument(
+        "--template",
+        action="append",
+        default=[],
+        help="Built-in or custom template name to apply at the root.",
+    )
+    folder_check_parser.add_argument(
+        "--report-only",
+        action="store_true",
+        default=False,
+        help="Downgrade violations to warnings.",
+    )
+    folder_check_parser.add_argument(
+        "--snapshot",
+        action="store_true",
+        default=False,
+        help="Merge results into .rrt/health.lock.toml.",
+    )
+
     changelog_subparsers = changelog_parser.add_subparsers(
         dest="changelog_command",
         required=True,
@@ -1202,6 +1230,10 @@ def main(argv: list[str] | None = None) -> int:
             parsed.min_chars = None
             parsed.apply = True
             return cmd_docs_suggest(parsed)
+        case "folder-check":
+            parsed.verbose = verbose
+            parsed.format = "text"
+            return cmd_folder_check(parsed)
         case "update-unreleased":
             if parsed.message_file is not None:
                 # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
