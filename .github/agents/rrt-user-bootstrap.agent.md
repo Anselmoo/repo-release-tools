@@ -1,5 +1,6 @@
 ---
 name: rrt-user-bootstrap
+family: rrt-user
 description: >-
   Guides rrt users through first-time setup, install target selection, and safe
   bootstrap checks. Use when a repository or workstation needs an initial rrt

@@ -72,7 +72,7 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.targets import read_group_current_version
 
 
@@ -89,7 +89,7 @@ def _load_config_and_version(root: Path, group_name: str | None) -> tuple[object
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(
             format_missing_tool_rrt_guidance(root, iter_config_files(root)),
             ok=False,
@@ -98,21 +98,21 @@ def _load_config_and_version(root: Path, group_name: str | None) -> tuple[object
         return None
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            p = DryRunPrinter(False)
+            p = VerbosePrinter()
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
             return None
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(str(exc), ok=False, stream=sys.stderr)
         return None
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(str(exc), ok=False, stream=sys.stderr)
         return None
 
     try:
         group = config.resolve_group(group_name)
     except ValueError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(str(exc), ok=False, stream=sys.stderr)
         return None
 
@@ -131,6 +131,7 @@ def _existing_tags(root: Path) -> list[str]:
 
 def cmd_tag_create(args: argparse.Namespace) -> int:
     """Create an annotated git tag matching the current configured version."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
     dry_run: bool = getattr(args, "dry_run", False)
     push: bool = getattr(args, "push", False)
@@ -145,13 +146,13 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
     tag = _tag_name(version, prefix)
     msg = message or f"Release {tag}"
 
-    p = DryRunPrinter(dry_run)
+    p = DryRunPrinter(dry_run, verbose=verbose)
     p.blank_line()
     p.header("Tag create", Tag=tag, Message=msg)
 
     existing = _existing_tags(root)
     if tag in existing and not getattr(args, "force", False):
-        p2 = DryRunPrinter(False)
+        p2 = VerbosePrinter(verbose=verbose)
         p2.line(
             f"Tag '{tag}' already exists. Use --force to overwrite.",
             ok=False,
@@ -169,7 +170,7 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
             _git(["git", "tag", "-d", tag], root)
         _git(["git", "tag", "-a", tag, "-m", msg], root)
     except subprocess.CalledProcessError as exc:
-        p2 = DryRunPrinter(False)
+        p2 = VerbosePrinter(verbose=verbose)
         p2.line(f"git tag failed: {exc.stderr.strip()}", ok=False, stream=sys.stderr)
         return 1
 
@@ -180,7 +181,7 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
             _git(["git", "push", "origin", tag], root)
             p.ok(f"Pushed {tag!r} to origin")
         except subprocess.CalledProcessError as exc:
-            p2 = DryRunPrinter(False)
+            p2 = VerbosePrinter(verbose=verbose)
             p2.line(f"git push failed: {exc.stderr.strip()}", ok=False, stream=sys.stderr)
             return 1
 
@@ -189,6 +190,7 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
 
 def cmd_tag_check(args: argparse.Namespace) -> int:
     """Validate existing tags match the configured naming convention."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
     strict: bool = getattr(args, "strict", False)
     prefix: str = getattr(args, "prefix", "v")
@@ -201,7 +203,7 @@ def cmd_tag_check(args: argparse.Namespace) -> int:
     expected_tag = _tag_name(version, prefix)
     existing_tags = _existing_tags(root)
 
-    p = DryRunPrinter(False)
+    p = VerbosePrinter(verbose=verbose)
     p.blank_line()
     p.header("Tag check", Expected=expected_tag, Total=str(len(existing_tags)))
 

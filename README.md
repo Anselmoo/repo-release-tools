@@ -5,6 +5,10 @@
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-light.svg?raw=true">
   <img alt="GitHub" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
+</picture></a> <a href="https://pypi.org/project/repo-release-tools/"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/pypi-reto-dark.svg?raw=true">
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/pypi-reto-light.svg?raw=true">
+  <img alt="PyPI" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/pypi-reto-dark.svg?raw=true">
 </picture></a></p>
 <!-- rrt:auto:end:readme-header -->
 
@@ -68,6 +72,8 @@ See the full CLI and commands reference:
 
 Choose the package if you want the developer-side tools: branch helpers,
 version bumps, config inspection, pre-commit hooks, and release automation.
+The Python package is published on [PyPI](https://pypi.org/project/repo-release-tools/)
+and has a CI counterpart in the [GitHub Action guide](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/action.md).
 
 ```bash
 pip install repo-release-tools

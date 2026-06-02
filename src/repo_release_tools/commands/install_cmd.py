@@ -66,7 +66,7 @@ from argparse import Namespace
 from collections.abc import Callable, Iterable, Mapping
 
 from repo_release_tools.commands import agents_cmd, hooks_cmd, skill
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 INSTALL_EXAMPLES = (
     "  $ rrt install --target claude-local\n"
@@ -78,7 +78,7 @@ SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("install", __doc__ or "
 
 
 def _emit_install_error(message: str) -> int:
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.line(message, ok=False, stream=sys.stderr)
     return 1
 
@@ -127,6 +127,7 @@ def _show_available_targets() -> None:
 
 def cmd_install(args: argparse.Namespace) -> int:
     """Install one or more bundled surfaces into one or more targets."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     targets = _dedupe(args.targets or [])
     if not targets:
         if args.dry_run:
@@ -147,7 +148,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 f"{surface} does not support target(s): {joined}. Available: {available}.",
             )
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header("Install", Surfaces=str(len(surfaces)), Targets=str(len(targets)))
 

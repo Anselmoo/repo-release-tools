@@ -1,0 +1,5 @@
+- Follow-up scope: docs-only polish for the platform badge work.
+- Place the completeness note in `docs/index.md`, not `docs/_layouts/default.html`, unless a later pass needs it site-wide.
+- Refresh `README.md` wording so the PyPI/local Python path and the GitHub Action path are both obvious and cross-linked.
+- Extend the `src/repo_release_tools/tools/platform.py` module docstring to describe source-code-anchor badge generation and the completeness/self-check expectation.
+- No functional icon logic changes are part of this follow-up.

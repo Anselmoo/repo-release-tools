@@ -1,5 +1,6 @@
 ---
 name: rrt-user-branch-guard
+family: rrt-user
 description: >-
   Checks branch naming problems and recommends the shortest compliant fix with
   rrt. Use when a branch name fails policy or a user wants the safest branch command.

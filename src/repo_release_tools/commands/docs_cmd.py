@@ -108,7 +108,8 @@ from repo_release_tools.tools.platform import (
     detect_platform,
     render_badge,
 )
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.tools.toc import parse_headings, render_toc
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 # ---------------------------------------------------------------------------
 # Source-owned topic docs
@@ -158,8 +159,9 @@ def _build_docs_lock_sources(entries: list[DocEntry]) -> list[dict[str, object]]
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
+    verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path(args.root)
-    p = DryRunPrinter(dry_run=args.dry_run)
+    p = DryRunPrinter(dry_run=args.dry_run, verbose=verbose)
     p.header("rrt docs generate")
 
     config = _config_for_cwd(cwd)
@@ -224,8 +226,9 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
+    verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path(args.root)
-    p = DryRunPrinter(False)
+    p = VerbosePrinter(verbose=verbose)
     config = _config_for_cwd(cwd)
 
     lock_file = getattr(args, "lock_file", None) or config.lock_file
@@ -258,6 +261,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 def _cmd_publish(args: argparse.Namespace) -> int:
     """Write all generated CLI-reference doc files to disk (or check for staleness)."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools.docs import publisher as docs_publisher  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
@@ -284,7 +288,7 @@ def _cmd_publish(args: argparse.Namespace) -> int:
         return 1
 
     if dry_run:
-        p = DryRunPrinter(dry_run=True)
+        p = DryRunPrinter(dry_run=True, verbose=verbose)
         for target, _rendered in rendered_targets:
             p.would_write(str(target.output_path))
         return 0
@@ -296,6 +300,7 @@ def _cmd_publish(args: argparse.Namespace) -> int:
             if target.anchor_id is None
             else content
         )
+        full_content = _embed_toc_in_content(full_content)
         exit_code = max(
             exit_code,
             apply_generated_docs(
@@ -378,10 +383,10 @@ def _expand_platform_vars(
     target_path: Path | None = None,
 ) -> str:
     """Expand {platform}, {platform_label}, {platform_badge}, {platform_badge_inline}."""
-    from repo_release_tools.tools.platform import PLATFORM_LABELS  # noqa: PLC0415
+    from repo_release_tools.tools.platform import get_display_label  # noqa: PLC0415
 
     platform = _effective_platform(docs)
-    label = PLATFORM_LABELS.get(platform, platform.title())
+    label = get_display_label(platform)
     repo_url = docs.source_repo_url or ""
     badge_assets_dir = _badge_assets_dir_for_target(docs, root=root, target_path=target_path)
 
@@ -438,6 +443,7 @@ def _expand_platform_vars(
 
 def _cmd_inject(args: argparse.Namespace) -> int:
     """Inject or verify all shared anchor blocks from [tool.rrt.docs.shared_blocks]."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools import __version__ as rrt_version  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
@@ -455,19 +461,19 @@ def _cmd_inject(args: argparse.Namespace) -> int:
             raise
 
     if cfg is None:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.action("No rrt config found; skipping shared_blocks injection.")
         return 0
 
     if cfg.docs is not None and cfg.docs.shared_blocks:
         if dry_run:
-            p = DryRunPrinter(dry_run=True)
+            p = DryRunPrinter(dry_run=True, verbose=verbose)
             for block in cfg.docs.shared_blocks:
                 p.would_write(", ".join(block.targets), detail=f"anchor: {block.anchor_id!r}")
             return 0
 
         repo_url = (cfg.docs.source_repo_url or "") if cfg.docs else ""
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
 
         exit_code = 0
         for block in cfg.docs.shared_blocks:
@@ -566,6 +572,29 @@ def _embed_shared_blocks_in_content(
     return content
 
 
+_TOC_ANCHOR = "toc"
+_TOC_START = f"<!-- rrt:auto:start:{_TOC_ANCHOR} -->"
+
+
+def _embed_toc_in_content(
+    content: str,
+    *,
+    min_level: int = 2,
+    max_level: int = 3,
+) -> str:
+    if _TOC_START not in content:
+        return content
+    headings = parse_headings(content)
+    if not headings:
+        return content
+    toc = render_toc(headings, min_level=min_level, max_level=max_level)
+    try:
+        replaced = replace_anchored_block(content, anchor_id=_TOC_ANCHOR, content=toc)
+    except ValueError:
+        return content
+    return replaced if replaced is not None else content
+
+
 def _restore_shared_block_stubs(root: Path, rendered_targets: list) -> None:
     """Re-add anchor stubs for full-replacement targets after publish."""
     cfg = None
@@ -616,7 +645,8 @@ def _prepend_anchor_if_missing(
 
 def _cmd_badges(args: argparse.Namespace) -> int:
     """Generate platform SVG badge files into docs/assets/badges/."""
-    from repo_release_tools.tools.platform import PLATFORM_LABELS, get_badge_svg  # noqa: PLC0415
+    verbose: int = getattr(args, "verbose", 0) or 0
+    from repo_release_tools.tools.platform import KNOWN_LABEL_KEYS, get_badge_svg  # noqa: PLC0415
 
     check: bool = getattr(args, "check", False)
     dry_run: bool = getattr(args, "dry_run", False)
@@ -637,7 +667,7 @@ def _cmd_badges(args: argparse.Namespace) -> int:
     output_path = root / assets_dir
 
     if all_platforms or platform_arg is None:
-        platforms = list(PLATFORM_LABELS.keys())
+        platforms = list(KNOWN_LABEL_KEYS)
     else:
         platforms = [platform_arg]
 
@@ -647,7 +677,7 @@ def _cmd_badges(args: argparse.Namespace) -> int:
         else [variant_arg]
     )
 
-    p = DryRunPrinter(dry_run=dry_run)
+    p = DryRunPrinter(dry_run=dry_run, verbose=verbose)
     p.header("rrt docs badges")
 
     exit_code = 0
@@ -683,6 +713,7 @@ def _cmd_badges(args: argparse.Namespace) -> int:
 
 def _cmd_api(args: argparse.Namespace) -> int:
     """Emit a structured index of all rrt CLI commands and arguments."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools.cli import build_parser  # noqa: PLC0415
     from repo_release_tools.docs.api_index import (  # noqa: PLC0415
         build_api_index,
@@ -697,7 +728,7 @@ def _cmd_api(args: argparse.Namespace) -> int:
     dry_run: bool = getattr(args, "dry_run", False)
     root = Path(getattr(args, "root", ".")).resolve()
 
-    p = DryRunPrinter(dry_run=dry_run)
+    p = DryRunPrinter(dry_run=dry_run, verbose=verbose)
 
     # When the rendered payload goes directly to stdout, suppress the status
     # header/footer so callers can safely pipe output (e.g. to `jq`).
@@ -762,22 +793,24 @@ def _cmd_suggest(args: argparse.Namespace) -> int:
 
 def cmd_docs(args: argparse.Namespace) -> int:
     """Dispatch rrt docs sub-actions."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     sub = getattr(args, "docs_action", "generate")
-    if sub == "generate":
-        return _cmd_generate(args)
-    if sub == "check":
-        return _cmd_check(args)
-    if sub == "publish":
-        return _cmd_publish(args)
-    if sub == "inject":
-        return _cmd_inject(args)
-    if sub == "suggest":
-        return _cmd_suggest(args)
-    if sub == "badges":
-        return _cmd_badges(args)
-    if sub == "api":
-        return _cmd_api(args)
-    p = DryRunPrinter(False)
+    match sub:
+        case "generate":
+            return _cmd_generate(args)
+        case "check":
+            return _cmd_check(args)
+        case "publish":
+            return _cmd_publish(args)
+        case "inject":
+            return _cmd_inject(args)
+        case "suggest":
+            return _cmd_suggest(args)
+        case "badges":
+            return _cmd_badges(args)
+        case "api":
+            return _cmd_api(args)
+    p = VerbosePrinter(verbose=verbose)
     p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
 

@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Added
+
+- `rrt tree --strict-empty-dirs` flag that exits 1 when untrackable empty
+  directories are present (git cannot track empty directories, so these cause
+  local/CI manifest drift).
+- `rrt tree --fix-empty-dirs` interactive mode that adds `.gitkeep` or removes
+  empty directories. Supports `--dry-run` and `--yes`.
+- `phantom_empty_dirs` counter persisted in `.rrt/tree.lock.toml [snapshot]`
+  for drift diagnostics.
+
+### Changed
+
+- `rrt tree` no longer warns about directories that already contain `.gitkeep`;
+  the warning is reserved for truly untrackable empty directories.
+- CI workflows now invoke `rrt tree --check --strict --strict-empty-dirs`
+  so phantom-empty-dir drift fails fast in PRs.
+
 ## [1.7.0] - 2026-05-26
 
 ### Added

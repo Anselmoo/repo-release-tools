@@ -1,5 +1,6 @@
 ---
 name: rrt-user-ci-failure-triage
+family: rrt-user
 description: >-
   Turns failing rrt-related CI signals into a focused local fix plan. Use when a
   user sees policy, docs, changelog, or release-check failures in CI and wants

@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from repo_release_tools.tools.platform import PLATFORM_LABELS, make_badge_svg
+from repo_release_tools.tools.platform import KNOWN_LABEL_KEYS, make_badge_svg
 
 __all__ = ["export_all_badges"]
 
@@ -15,7 +15,7 @@ def export_all_badges(out_dir: Path, *, check: bool = False) -> int:
     from repo_release_tools.tools.inject import apply_generated_docs
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    platforms = list(PLATFORM_LABELS.keys())
+    platforms = list(KNOWN_LABEL_KEYS)
     variants = ["color", "dark", "light", "reto-dark", "reto-light"]
 
     exit_code = 0

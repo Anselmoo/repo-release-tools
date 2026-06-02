@@ -61,6 +61,10 @@ inputs:
       Detects source files added, modified, or deleted without regenerating
       .rrt/docs.lock.toml.
     default: "false"
+  verbose:
+    description: "Verbosity level for rrt-hooks output (0=quiet, 1=-v summary, 2=-vv details, 3=-vvv debug). Default: 0."
+    required: false
+    default: "0"
 
 outputs:
   detected-version:
@@ -85,6 +89,16 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
       run: python -m pip install .
+
+    - name: Build verbosity flag
+      shell: bash
+      run: |
+        case "${{ inputs.verbose }}" in
+          1) echo "_rrt_verbose_flag=-v" >> "$GITHUB_ENV" ;;
+          2) echo "_rrt_verbose_flag=-vv" >> "$GITHUB_ENV" ;;
+          3) echo "_rrt_verbose_flag=-vvv" >> "$GITHUB_ENV" ;;
+          *) echo "_rrt_verbose_flag=" >> "$GITHUB_ENV" ;;
+        esac
 
     - name: Detect project version and changelog status
       id: detect-version
@@ -138,7 +152,7 @@ runs:
           exit 0
         fi
         branch_name="${INPUT_BRANCH_NAME:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}"
-        rrt-hooks check-branch-name --branch "$branch_name" || \
+        rrt-hooks ${_rrt_verbose_flag:-} check-branch-name --branch "$branch_name" || \
           (echo "::error::Branch name policy violation: $branch_name" && exit 1)
 
     - name: Validate commit subject
@@ -150,7 +164,7 @@ runs:
       run: |
         set -euo pipefail
         commit_subject="${INPUT_COMMIT_SUBJECT:-$(git log -1 --pretty=%s)}"
-        rrt-hooks check-commit-subject --subject "$commit_subject" || \
+        rrt-hooks ${_rrt_verbose_flag:-} check-commit-subject --subject "$commit_subject" || \
           (echo "::error::Commit subject policy violation: $commit_subject" && exit 1)
 
     - name: Validate changelog update
@@ -168,7 +182,7 @@ runs:
         set -euo pipefail
         commit_subject="${INPUT_COMMIT_SUBJECT:-$(git log -1 --pretty=%s)}"
         branch_name="${INPUT_BRANCH_NAME:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}}"
-        rrt-hooks check-changelog \
+        rrt-hooks ${_rrt_verbose_flag:-} check-changelog \
           --subject "$commit_subject" \
           --changelog-file "$INPUT_CHANGELOG_FILE" \
           --strategy "${INPUT_CHANGELOG_STRATEGY:-auto}" \
@@ -182,7 +196,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt-hooks check-dirty-tree || \
+        rrt-hooks ${_rrt_verbose_flag:-} check-dirty-tree || \
           (echo "::error::Working tree is dirty. Commit or stash changes before merging." && exit 1)
 
     - name: Run rrt doctor health checks
@@ -191,7 +205,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt-hooks doctor || \
+        rrt-hooks ${_rrt_verbose_flag:-} doctor || \
           (echo "::error::rrt doctor reported automation health issues — see output above." && exit 1)
 
     - name: Run rrt release health checks
@@ -209,7 +223,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt-hooks check-eol || \
+        rrt-hooks ${_rrt_verbose_flag:-} check-eol || \
           (echo "::warning::Runtime EOL check detected end-of-life or near-EOL dependencies." && exit 1)
 
     - name: Check docs lockfile consistency
@@ -218,5 +232,5 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        rrt-hooks check-docs || \
+        rrt-hooks ${_rrt_verbose_flag:-} check-docs || \
           (echo "::error::Docs lockfile is out of sync. Run 'rrt docs build' to regenerate." && exit 1)

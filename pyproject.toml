@@ -45,7 +45,13 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = "src"
-source-include = [".github/agents/**", ".github/hooks/**", ".github/skills/**"]
+source-include = [
+    ".github/agents/**",
+    ".github/hooks/**",
+    ".github/skills/**",
+    "src/repo_release_tools/assets/**",
+    "src/repo_release_tools/_data/**",
+]
 
 [tool.uv.build-backend.data]
 purelib = ".github/skills"
@@ -62,6 +68,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.14.0",
     "ty>=0.0.26",
+    "libcst>=0.4.0",
 ]
 
 [tool.poe.groups.docs]
@@ -106,7 +113,7 @@ sequence = [
 
 [tool.poe.groups.docs.tasks.docs-verify]
 help = "Verify generated docs and shared anchors are current."
-sequence = ["docs-check", "docs-inject-check"]
+sequence = ["docs-generate", "docs-check", "docs-inject-check"]
 
 [tool.poe.groups.docs.tasks.serve]
 help = "Serve the docs site locally with Jekyll at http://localhost:4000/ (requires Ruby)."
@@ -486,6 +493,10 @@ content = """<p><a href="{repo_url}"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="{repo_url}/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
   <source media="(prefers-color-scheme: light)" srcset="{repo_url}/blob/main/docs/assets/readme-badges/github-reto-light.svg?raw=true">
   <img alt="GitHub" src="{repo_url}/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
+</picture></a> <a href="https://pypi.org/project/repo-release-tools/"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="{repo_url}/blob/main/docs/assets/readme-badges/pypi-reto-dark.svg?raw=true">
+  <source media="(prefers-color-scheme: light)" srcset="{repo_url}/blob/main/docs/assets/readme-badges/pypi-reto-light.svg?raw=true">
+  <img alt="PyPI" src="{repo_url}/blob/main/docs/assets/readme-badges/pypi-reto-dark.svg?raw=true">
 </picture></a></p>
 """
 before_blank_lines = 0

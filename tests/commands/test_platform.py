@@ -5,9 +5,14 @@ from __future__ import annotations
 import pytest
 
 from repo_release_tools.tools.platform import (
+    _SHIELDS_LOGO,
+    ICON_DEFINITIONS,
+    KNOWN_LABEL_KEYS,
+    LANGUAGE_LABELS,
     PLATFORM_COLORS,
     PLATFORM_LABELS,
     PLATFORM_URL_TEMPLATES,
+    REGISTRY_LABELS,
     detect_platform,
     get_badge_svg,
     make_badge_svg,
@@ -53,8 +58,9 @@ def test_detect_platform(url: str, expected: str) -> None:
 
 
 def test_all_platforms_have_templates() -> None:
-    for platform in PLATFORM_LABELS:
-        assert platform in PLATFORM_URL_TEMPLATES or platform == "generic"
+    all_labels = {**PLATFORM_LABELS, **REGISTRY_LABELS, **LANGUAGE_LABELS}
+    for platform in PLATFORM_URL_TEMPLATES:
+        assert platform in all_labels, f"{platform!r} has a URL template but no display label"
 
 
 @pytest.mark.parametrize(
@@ -141,7 +147,7 @@ def test_make_badge_svg_contains_color() -> None:
 def test_make_badge_svg_is_valid_xml() -> None:
     import xml.etree.ElementTree as ET
 
-    for platform in PLATFORM_LABELS:
+    for platform in KNOWN_LABEL_KEYS:
         svg = make_badge_svg(platform)
         ET.fromstring(svg)  # raises if invalid XML
 
@@ -176,6 +182,42 @@ def test_make_badge_svg_special_chars_label() -> None:
     svg = make_badge_svg("github", label='C&C <repo> "x"')
     ET.fromstring(svg)
     assert "C&amp;C &lt;repo&gt; &quot;x&quot;" in svg
+
+
+def _expected_icon_category(key: str) -> str:
+    if key == "generic":
+        return "generic"
+    elif key in PLATFORM_LABELS:
+        return "hosting"
+    elif key in REGISTRY_LABELS:
+        return "registry"
+    elif key in LANGUAGE_LABELS:
+        return "language"
+    else:
+        return "ecosystem"
+
+
+def test_icon_definitions_have_non_empty_path_data() -> None:
+    assert all(definition.path.strip() for definition in ICON_DEFINITIONS.values())
+
+
+def test_icon_categories_follow_label_precedence() -> None:
+    for key, definition in ICON_DEFINITIONS.items():
+        assert definition.category == _expected_icon_category(key)
+
+
+def test_shields_logo_mapping_for_icon_definition_keys() -> None:
+    missing_logo_keys = set(ICON_DEFINITIONS) - set(_SHIELDS_LOGO)
+    assert missing_logo_keys == {"cargo", "generic"}
+
+
+def test_shields_badge_url_logo_param_follows_mapping_exemptions() -> None:
+    for key in ICON_DEFINITIONS:
+        url = shields_badge_url(key)
+        if key in {"cargo", "generic"}:
+            assert "logo=" not in url
+        else:
+            assert "logo=" in url
 
 
 # ---------------------------------------------------------------------------

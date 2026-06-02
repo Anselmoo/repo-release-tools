@@ -453,24 +453,45 @@ def _build_entries(
     return result
 
 
-def _warn_for_empty_directories(entries: list[TreeEntry], warnings: list[str]) -> None:
-    """Append warnings for directories that are effectively empty.
+def _warn_for_empty_directories(
+    entries: list[TreeEntry],
+    warnings: list[str],
+    root: Path | None = None,
+) -> list[str]:
+    """Append warnings for truly-empty directories and return their paths.
 
-    A directory is treated as effectively empty when it has no visible child
-    entries or when its only visible child is a ``.gitkeep`` placeholder.
+    A directory containing only a ``.gitkeep`` placeholder is considered
+    intentionally preserved and is silently skipped (no warning, not returned).
+    A directory with no visible children is "phantom": git cannot track it,
+    so it causes manifest drift between local and CI checkouts.
+
+    When *root* is supplied, the filesystem is consulted to recognise
+    ``.gitkeep`` placeholders even when the scan filtered hidden files.
+
+    Returns the list of truly-empty (phantom) directory paths, posix-style,
+    relative to the scan root. Callers can use this list to drive
+    ``--strict-empty-dirs`` escalation or the ``--fix-empty-dirs`` interactive
+    mode.
     """
+    phantom: list[str] = []
 
     def visit(nodes: list[TreeEntry], prefix: str = "") -> None:
         for name, is_dir, children in nodes:
             current = f"{prefix}{name}"
             if not is_dir:
                 continue
-            if children == [] or (
+            has_only_gitkeep = (
                 children is not None
                 and len(children) == 1
                 and children[0][0] == ".gitkeep"
                 and not children[0][1]
-            ):
+            )
+            if has_only_gitkeep:
+                continue
+            if children == []:
+                if root is not None and (root / current / ".gitkeep").exists():
+                    continue
+                phantom.append(current)
                 warnings.append(
                     f"Empty directory detected: {current}/. Git does not track empty directories; "
                     f"if this folder should stay in the repository and tree snapshots, "
@@ -481,6 +502,7 @@ def _warn_for_empty_directories(entries: list[TreeEntry], warnings: list[str]) -
                 visit(children, prefix=f"{current}/")
 
     visit(entries)
+    return phantom
 
 
 def _compute_sha256(path: Path) -> str | None:
@@ -714,7 +736,8 @@ def _inject_rendered_tree(
 
 def cmd_tree(args: argparse.Namespace) -> int:
     """Render a project tree from the selected root."""
-    p = DryRunPrinter(getattr(args, "dry_run", False))
+    verbose: int = getattr(args, "verbose", 0) or 0
+    p = DryRunPrinter(getattr(args, "dry_run", False), verbose=verbose)
 
     inject_file: str | None = getattr(args, "inject", None)
     anchor_id: str | None = getattr(args, "anchor", None)
@@ -735,6 +758,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
         p.line(f"Root path is not a directory: {root}", ok=False, stream=sys.stderr)
         return 1
 
+    p.verbose_line(f"tree: {root}", level=1)
     repo_root = _resolve_git_root(root)
     ignore_cache: dict[str, bool] = {}
     warnings: list[str] = []
@@ -750,8 +774,21 @@ def cmd_tree(args: argparse.Namespace) -> int:
         ignore_cache=ignore_cache,
         warnings=warnings,
     )
+    phantom_empty_dirs: list[str] = []
     if repo_root is not None:
-        _warn_for_empty_directories(entries, warnings)
+        phantom_empty_dirs = _warn_for_empty_directories(entries, warnings, root=root)
+
+    do_fix_empty_dirs: bool = getattr(args, "fix_empty_dirs", False)
+    if do_fix_empty_dirs:
+        from repo_release_tools.commands._tree_fix import fix_empty_dirs
+
+        return fix_empty_dirs(
+            root,
+            phantom_empty_dirs,
+            printer=p,
+            dry_run=getattr(args, "dry_run", False),
+            assume_yes=getattr(args, "yes", False),
+        )
 
     fmt = args.format
     rendered: str
@@ -776,7 +813,19 @@ def cmd_tree(args: argparse.Namespace) -> int:
         "entry_count": entry_count,
         "tree_hash": hash_content(_canonical_entry_repr(entries)),
         "ignored_count": ignored_count,
+        "phantom_empty_dirs": [str(d) for d in phantom_empty_dirs],
     }
+
+    strict_empty: bool = getattr(args, "strict_empty_dirs", False)
+    if strict_empty and phantom_empty_dirs:
+        for path in phantom_empty_dirs:
+            p.line(f"Phantom empty directory (untrackable by git): {path}/", ok=False)
+        p.line(
+            "Run `rrt tree --fix-empty-dirs` to add .gitkeep placeholders "
+            "or remove the directories.",
+            ok=False,
+        )
+        return 1
 
     do_snapshot: bool = getattr(args, "snapshot", False)
     do_check: bool = getattr(args, "check", False)
@@ -979,7 +1028,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--dry-run",
         action="store_true",
         default=False,
-        help="Print the result instead of writing (only effective with --inject).",
+        help="Print planned actions instead of writing (with --inject or --fix-empty-dirs).",
     )
     snapshot_group = parser.add_mutually_exclusive_group()
     snapshot_group.add_argument(
@@ -1018,5 +1067,31 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         default=False,
         help="With --check: exit 1 on structural drift (default: advisory, exit 0).",
+    )
+    parser.add_argument(
+        "--strict-empty-dirs",
+        action="store_true",
+        default=False,
+        help=(
+            "Exit 1 when truly-empty (non-.gitkept) directories are present. "
+            "Such directories cannot be tracked by git and cause local/CI manifest "
+            "drift. Use --fix-empty-dirs to resolve interactively."
+        ),
+    )
+    parser.add_argument(
+        "--fix-empty-dirs",
+        action="store_true",
+        default=False,
+        help=(
+            "Interactively resolve truly-empty directories by adding a .gitkeep "
+            "placeholder or removing the directory. Honors --dry-run and --yes."
+        ),
+    )
+    parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        default=False,
+        help="With --fix-empty-dirs: assume yes (add .gitkeep) for every prompt.",
     )
     parser.set_defaults(handler=cmd_tree)

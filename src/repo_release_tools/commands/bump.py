@@ -90,6 +90,7 @@ from repo_release_tools.ui import (
     GLYPHS,
     DryRunPrinter,
     ProgressLine,
+    VerbosePrinter,
     spinner_lines,
 )
 from repo_release_tools.version.calver import CALVER_SCHEMES, CalVersion
@@ -154,7 +155,7 @@ def update_changelog(
     """
     path = config.changelog_file
     if not path.exists():
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.line(f"{path} not found {GLYPHS.typography.mdash} skipping", ok=False)
         return
 
@@ -167,7 +168,7 @@ def update_changelog(
         do_promote = False
     elif changelog_mode == "promote":
         if not has_entries:
-            p = DryRunPrinter(False)
+            p = VerbosePrinter()
             if has_unreleased_section(existing, fmt):
                 p.line(
                     f"[Unreleased] section in {path} is empty {GLYPHS.typography.mdash} nothing to promote.",
@@ -195,7 +196,7 @@ def update_changelog(
                 p.list_item(f"> {GLYPHS.typography.ellipsis}")
             return
         path.write_text(section_text, encoding="utf-8")
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.ok(f"{path} updated (promoted [Unreleased] to [{version}])")
         return
 
@@ -220,24 +221,25 @@ def update_changelog(
         return
 
     path.write_text(section_text, encoding="utf-8")
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.ok(f"{path} updated")
 
 
 def cmd_bump(args: argparse.Namespace) -> int:
     """Bump project version using [tool.rrt]."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
     force = getattr(args, "force", False)
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
         p.line(format_missing_tool_rrt_guidance(root, []), ok=False, stream=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            p = DryRunPrinter(False)
+            p = VerbosePrinter(verbose=verbose)
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
             p.line(
                 format_missing_tool_rrt_guidance(root, iter_config_files(root)),
@@ -245,16 +247,16 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 stream=sys.stderr,
             )
             return 1
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     if config.autodetected:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(format_autodetected_config_notice(config), ok=False, stream=sys.stderr)
         if mismatch := check_autodetected_version_consistency(config):
             p.line(mismatch, ok=False, stream=sys.stderr)
@@ -263,7 +265,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
     try:
         group = config.resolve_group(args.group)
     except ValueError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
@@ -289,7 +291,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
             try:
                 new = CalVersion.parse(args.bump)  # type: ignore[assignment]
             except ValueError:
-                p = DryRunPrinter(False)
+                p = VerbosePrinter(verbose=verbose)
                 p.line(f"Invalid bump value: {args.bump!r}", ok=False, stream=sys.stderr)
                 return 1
 
@@ -297,7 +299,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
     current_branch = "<current>" if args.dry_run else git.current_branch(root)
     base = args.base_branch or current_branch
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Version bump",
@@ -310,14 +312,14 @@ def cmd_bump(args: argparse.Namespace) -> int:
     try:
         run_preflight(config, dry_run=args.dry_run, group=group)
     except PreflightError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
     if not args.dry_run:
         branch_exists = git.branch_exists(root, branch_name)
         if branch_exists and not force:
-            p = DryRunPrinter(False)
+            p = VerbosePrinter(verbose=verbose)
             p.line(
                 f"Branch '{branch_name}' already exists. Delete it first or choose a different version.",
                 ok=False,
@@ -328,7 +330,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
             git.run(["git", "checkout", base], root, dry_run=False, label="git checkout base")
         if branch_exists:
             msg = f"Branch '{branch_name}' already exists. Resetting it with --force."
-            p = DryRunPrinter(False)
+            p = VerbosePrinter(verbose=verbose)
             p.line(msg)
 
     version_progress = ProgressLine(file=sys.stdout)

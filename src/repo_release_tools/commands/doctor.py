@@ -93,7 +93,7 @@ from repo_release_tools.state import (
     health_lock_path,
     write_lock,
 )
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import VerbosePrinter
 
 DOCTOR_EPILOG = "  $ rrt doctor\n  $ rrt release check\n  $ rrt docs check"
 
@@ -249,32 +249,33 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     do_snapshot: bool = getattr(args, "snapshot", False)
     do_check: bool = getattr(args, "check", False)
     strict: bool = getattr(args, "strict", False)
+    verbose: int = getattr(args, "verbose", 0) or 0
 
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
         checked = iter_config_files(root)
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(format_missing_tool_rrt_guidance(root, checked), ok=False, stream=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            p = DryRunPrinter(False)
+            p = VerbosePrinter(verbose=verbose)
             p.warn("No [tool.rrt] configuration found.", stream=sys.stderr)
             p.action(
                 format_missing_tool_rrt_guidance(root, iter_config_files(root)),
                 stream=sys.stderr,
             )
             return 1
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
-    p = DryRunPrinter(False)
+    p = VerbosePrinter(verbose=verbose)
     if config.autodetected:
         p.warn(format_autodetected_config_notice(config), stream=sys.stderr)
 
@@ -284,6 +285,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     p.ok("rrt doctor")
     p.action(f"Config file: {source}")
     p.action(f"Version groups: {group_count} {plural}")
+    p.verbose_line(f"doctor: {root}", level=1)
+    p.verbose_line(f"  config: {source}", level=2)
+    p.verbose_line(f"  groups: {group_count}", level=2)
     p.blank_line()
 
     named_checks: list[tuple[str, tuple[str, bool, str]]] = [
@@ -341,12 +345,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     all_ok = True
     p.section("Core automation checks")
     for _name, (message, ok, severity) in named_checks:
-        if severity == "ok":
-            p.line(f"  {message}", ok=True)
-        elif severity == "warning":
-            p.warn(f"  {message}")
-        else:
-            p.line(f"  {message}", ok=False)
+        p.verbose_line(f"  {_name}: {severity}", level=1)
+        match severity:
+            case "ok":
+                p.line(f"  {message}", ok=True)
+            case "warning":
+                p.warn(f"  {message}")
+            case _:
+                p.line(f"  {message}", ok=False)
         if not ok:
             all_ok = False
 

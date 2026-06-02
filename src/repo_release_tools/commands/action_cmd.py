@@ -57,7 +57,7 @@ import sys
 from pathlib import Path
 
 from repo_release_tools import __version__
-from repo_release_tools.ui import DryRunPrinter, highlight_terminal
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter, highlight_terminal
 
 WORKFLOW_PATH = Path(".github/workflows/rrt.yml")
 
@@ -91,12 +91,13 @@ jobs:
 
 def cmd_init(args: argparse.Namespace) -> int:
     """Write a starter GitHub Actions workflow using repo-release-tools."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path.cwd()
     workflow_path = root / WORKFLOW_PATH
     workflow_text = _workflow_text()
 
     if workflow_path.exists() and not args.force and not args.dry_run:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(
             f"{WORKFLOW_PATH} already exists. Use --force to overwrite it.",
             ok=False,
@@ -104,7 +105,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         )
         return 1
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header("Action init", File=str(WORKFLOW_PATH))
 

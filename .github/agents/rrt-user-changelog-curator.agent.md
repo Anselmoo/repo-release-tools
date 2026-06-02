@@ -1,5 +1,6 @@
 ---
 name: rrt-user-changelog-curator
+family: rrt-user
 description: >-
   Curates rrt changelog state for end users by checking `[Unreleased]`, commit
   relevance, and the safest next changelog command. Use when changelog policy or

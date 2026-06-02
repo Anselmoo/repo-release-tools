@@ -43,7 +43,7 @@ from repo_release_tools.folders import (
     scaffold_folders,
 )
 from repo_release_tools.state import health_lock_path, upsert_health_lock_checks
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 FOLDER_EPILOG = (
     "  $ rrt folder check --template python-package\n"
@@ -66,6 +66,7 @@ def _load_folder_policy_config() -> RrtConfig | None:
 
 def cmd_folder_check(args: argparse.Namespace) -> int:
     """Run folder supervision checks."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path(args.root).resolve()
     config = _load_folder_policy_config()
     report = check_folders(
@@ -90,14 +91,14 @@ def cmd_folder_check(args: argparse.Namespace) -> int:
             for target in report.targets
         ]
         upsert_health_lock_checks(health_lock_path(root), check_entries)
-        p_snap = DryRunPrinter(False)
+        p_snap = VerbosePrinter(verbose=verbose)
         p_snap.ok(f"Folder results merged into .rrt/health.lock.toml ({len(check_entries)} checks)")
 
     if getattr(args, "format", "text") == "json":
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
         return 0 if report.ok or args.report_only else 1
 
-    p = DryRunPrinter(False)
+    p = VerbosePrinter(verbose=verbose)
     p.blank_line()
     p.header("Folder check", Root=str(root))
     for target in report.targets:
@@ -116,6 +117,7 @@ def cmd_folder_check(args: argparse.Namespace) -> int:
 
 def cmd_folder_scaffold(args: argparse.Namespace) -> int:
     """Scaffold folder structure from templates or config."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path(args.root).resolve()
     config = _load_folder_policy_config()
     report = scaffold_folders(
@@ -130,7 +132,7 @@ def cmd_folder_scaffold(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
         return 0
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header("Folder scaffold", Root=str(root))
     for action in report.actions:
@@ -144,9 +146,10 @@ def cmd_folder_scaffold(args: argparse.Namespace) -> int:
 
 def cmd_folder_design(args: argparse.Namespace) -> int:
     """Infer a folder template from an existing directory tree."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = Path(args.root).resolve()
     if not root.exists() or not root.is_dir():
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(f"Design root must be an existing directory: {root}", ok=False, stream=sys.stderr)
         return 1
 

@@ -1,0 +1,226 @@
+{
+  "bash": {
+    "slug": "bash",
+    "source": "local",
+    "source_url": "https://github.com/simple-icons/simple-icons/blob/master/icons/bash.svg",
+    "sha": "cb251483c3c56668e3dddb7a8066f989436bb044",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "MIT"
+  },
+  "cpan": {
+    "slug": "cpan",
+    "source": "simple-icons",
+    "source_url": "https://github.com/simple-icons/simple-icons/blob/master/icons/cpan.svg",
+    "sha": null,
+    "retrieved_at": "2026-05-31T10:58:36.464974+00:00",
+    "license": "CC0-1.0"
+  },
+  "cplusplus": {
+    "slug": "cplusplus",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/cplusplus.svg",
+    "sha": "ef085f9ef7de520094139d2c6c890917296ee4c3",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "crates-io": {
+    "slug": "crates-io",
+    "source": "simple-icons",
+    "source_url": "https://github.com/simple-icons/simple-icons/blob/master/icons/crates-io.svg",
+    "sha": null,
+    "retrieved_at": "2026-05-31T10:58:36.464974+00:00",
+    "license": "CC0-1.0"
+  },
+  "csharp": {
+    "slug": "csharp",
+    "source": "simple-icons",
+    "source_url": "https://github.com/simple-icons/simple-icons/blob/master/icons/csharp.svg",
+    "sha": null,
+    "retrieved_at": "2026-05-31T10:58:36.464974+00:00",
+    "license": "CC0-1.0"
+  },
+  "dart": {
+    "slug": "dart",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/dart.svg",
+    "sha": "66408338f189e13a1ba2f8f4ee8a0f64f5598b6d",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "docker": {
+    "slug": "docker",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/docker.svg",
+    "sha": "9b03ea8bb62767a4f7c87b58a807fa5452d30a4f",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "github": {
+    "slug": "github",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/github.svg",
+    "sha": "f8c68ae2a4afa9659f4202a32fc0c42faa82d5da",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "MIT"
+  },
+  "githubactions": {
+    "slug": "githubactions",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/githubactions.svg",
+    "sha": "0cec0268b2ed580ccdc69afe8cca20a9ef27daf7",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "go": {
+    "slug": "go",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/go.svg",
+    "sha": "cf8e62bd753df8b16f5344ccfeb89355d09e4066",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "haskell": {
+    "slug": "haskell",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/haskell.svg",
+    "sha": "bff6f91b16d58a2e2ebdde3b3cec79cf7e4d0c69",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "hex": {
+    "slug": "hex",
+    "source": "simple-icons",
+    "source_url": "https://github.com/simple-icons/simple-icons/blob/master/icons/hex.svg",
+    "sha": null,
+    "retrieved_at": "2026-05-31T10:58:36.464974+00:00",
+    "license": "CC0-1.0"
+  },
+  "java": {
+    "slug": "java",
+    "source": "local",
+    "source_url": "https://github.com/simple-icons/simple-icons/blob/master/icons/java.svg",
+    "sha": "82e2c3fdf99fd53db034f025eb5c83b2a56a0304",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "MIT"
+  },
+  "kotlin": {
+    "slug": "kotlin",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/kotlin.svg",
+    "sha": "49f58b1fbd1786fa0dc605541a69506a89e4409e",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "npm": {
+    "slug": "npm",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/npm.svg",
+    "sha": "ebb329746419be6251b4942e2f650248d4666eb6",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "nuget": {
+    "slug": "nuget",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/nuget.svg",
+    "sha": "00f628e40fd7b8621a1f7af8e733a40cd35ba2ff",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "packagist": {
+    "slug": "packagist",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/packagist.svg",
+    "sha": "7007c260fb542436a37a71f8e29bedde996fc70c",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "perl": {
+    "slug": "perl",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/perl.svg",
+    "sha": "fa018956cd0e8e70255caf17ead914a8af1d97c5",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "php": {
+    "slug": "php",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/php.svg",
+    "sha": "bfb6278f6ece53cf012ba320402edaa9bdf9352c",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "pub": {
+    "slug": "pub",
+    "source": "simple-icons",
+    "source_url": "https://github.com/simple-icons/simple-icons/blob/master/icons/pub.svg",
+    "sha": null,
+    "retrieved_at": "2026-05-31T10:58:36.464974+00:00",
+    "license": "CC0-1.0"
+  },
+  "pypi": {
+    "slug": "pypi",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/pypi.svg",
+    "sha": "ef4f96ef2c777a98304d67771b7ed03edf9e84bd",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "python": {
+    "slug": "python",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/python.svg",
+    "sha": "2534029baaadbe99c3c890edfeacfa0b72cf3b7e",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "ruby": {
+    "slug": "ruby",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/ruby.svg",
+    "sha": "e78b754f7504b5b2cdd4be6262a38f5d341b3385",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "rubygems": {
+    "slug": "rubygems",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/rubygems.svg",
+    "sha": "afe2d0eddd7d564f2cfbfb94f578b55c61546fa0",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "rust": {
+    "slug": "rust",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/rust.svg",
+    "sha": "87d9a35966964fc2941990eb079e1e0471e3aff4",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "scala": {
+    "slug": "scala",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/scala.svg",
+    "sha": "0229741fbffeef53f79924fa6de6684dae299c9b",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "swift": {
+    "slug": "swift",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/swift.svg",
+    "sha": "f537e45e1db759e18b66079765e9e0cfbf759146",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  },
+  "typescript": {
+    "slug": "typescript",
+    "source": "simple-icons",
+    "source_url": "https://raw.githubusercontent.com/simple-icons/simple-icons/master/icons/typescript.svg",
+    "sha": "11442c1b8c166ec5519192b237700ae41f05d289",
+    "retrieved_at": "2026-05-31T11:02:16.928312+00:00",
+    "license": "CC0-1.0"
+  }
+}

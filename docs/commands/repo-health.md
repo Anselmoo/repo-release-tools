@@ -16,6 +16,88 @@ permalink: "/commands/repo-health/"
 <!-- Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. -->
 
 <!-- rrt:auto:start:toc -->
+- [`rrt doctor`](#rrt-doctor)
+  - [Overview](#overview)
+  - [What it checks](#what-it-checks)
+  - [Output and severity](#output-and-severity)
+  - [Config discovery behavior](#config-discovery-behavior)
+  - [Examples](#examples)
+  - [Caveats](#caveats)
+  - [Related docs](#related-docs)
+- [`rrt artifacts`](#rrt-artifacts)
+  - [Overview](#overview-1)
+  - [Configuration](#configuration)
+  - [Subcommands](#subcommands)
+  - [Examples](#examples-1)
+- [`rrt config`](#rrt-config)
+  - [Overview](#overview-2)
+  - [What the command reports](#what-the-command-reports)
+  - [Raw mode](#raw-mode)
+  - [Validate mode](#validate-mode)
+  - [Schema mode](#schema-mode)
+  - [Failure behavior](#failure-behavior)
+  - [Examples](#examples-2)
+  - [Caveats](#caveats-1)
+- [`rrt env`](#rrt-env)
+  - [Overview](#overview-3)
+  - [What it reports](#what-it-reports)
+  - [JSON mode](#json-mode)
+  - [Examples](#examples-3)
+  - [Caveats](#caveats-2)
+  - [`rrt env check`](#rrt-env-check)
+- [`rrt eol`](#rrt-eol)
+  - [Overview](#overview-4)
+  - [What the command checks](#what-the-command-checks)
+  - [Data sources](#data-sources)
+  - [Policy behavior](#policy-behavior)
+  - [Output](#output)
+  - [Examples](#examples-4)
+  - [Caveats](#caveats-3)
+  - [`rrt eol check`](#rrt-eol-check)
+- [`rrt toc`](#rrt-toc)
+  - [Overview](#overview-5)
+  - [Usage](#usage)
+  - [Anchors](#anchors)
+  - [Options](#options)
+- [`rrt tree`](#rrt-tree)
+  - [Overview](#overview-6)
+  - [Ignore behavior](#ignore-behavior)
+  - [Output formats](#output-formats)
+  - [Common options](#common-options)
+  - [Failure behavior](#failure-behavior-1)
+  - [Examples](#examples-5)
+  - [Embedding a tree into a Markdown file](#embedding-a-tree-into-a-markdown-file)
+  - [Caveats](#caveats-4)
+  - [Related docs](#related-docs-1)
+- [`rrt docs`](#rrt-docs)
+  - [Overview](#overview-7)
+  - [Responsibilities](#responsibilities)
+  - [Sub-actions](#sub-actions)
+  - [Extraction modes](#extraction-modes)
+  - [Supported languages](#supported-languages)
+  - [Lockfile](#lockfile)
+  - [Examples](#examples-6)
+  - [Related docs](#related-docs-2)
+  - [`rrt docs generate`](#rrt-docs-generate)
+  - [`rrt docs check`](#rrt-docs-check)
+  - [`rrt docs publish`](#rrt-docs-publish)
+  - [`rrt docs inject`](#rrt-docs-inject)
+  - [`rrt docs suggest`](#rrt-docs-suggest)
+  - [`rrt docs badges`](#rrt-docs-badges)
+  - [`rrt docs api`](#rrt-docs-api)
+- [`rrt drift`](#rrt-drift)
+  - [Overview](#overview-8)
+  - [Responsibilities](#responsibilities-1)
+  - [Tracked Surfaces](#tracked-surfaces)
+  - [Behavior](#behavior)
+  - [Examples](#examples-7)
+  - [Caveats](#caveats-5)
+  - [`rrt drift generate`](#rrt-drift-generate)
+  - [`rrt drift check`](#rrt-drift-check)
+- [`rrt folder`](#rrt-folder)
+  - [`rrt folder check`](#rrt-folder-check)
+  - [`rrt folder scaffold`](#rrt-folder-scaffold)
+  - [`rrt folder design`](#rrt-folder-design)
 <!-- rrt:auto:end:toc -->
 
 ## `rrt doctor`
@@ -723,20 +805,23 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help     Show this message and exit.
-  --format       Output format. Defaults to classic.
-  --max-depth N  Maximum recursion depth (default: unlimited).
-  --dirs-only    Show directories only.
-  --show-hidden  Include dotfiles and dot-directories.
-  --root PATH    Root directory to render (default: current directory).
-  --inject FILE  Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
-  --anchor ID    Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
-  --dry-run      Print the result instead of writing (only effective with --inject).
-  --snapshot     Write a tree structure snapshot to .rrt/tree.lock.toml as a baseline.
-  --check        Compare current tree against .rrt/tree.lock.toml and report structural drift.
-  --manifest     Write a machine-readable manifest to .rrt/tree.manifest.json containing per-file metadata (size, mtime, sha256, mode, uid, gid, symlink_target). This enables deterministic, atomic manifest generation and implies hashing of file contents.
-  --compressed   Write the manifest as a compressed gzip file (.rrt/tree.manifest.json.gz). Implied: --manifest.
-  --strict       With --check: exit 1 on structural drift (default: advisory, exit 0).
+  -h, --help           Show this message and exit.
+  --format             Output format. Defaults to classic.
+  --max-depth N        Maximum recursion depth (default: unlimited).
+  --dirs-only          Show directories only.
+  --show-hidden        Include dotfiles and dot-directories.
+  --root PATH          Root directory to render (default: current directory).
+  --inject FILE        Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
+  --anchor ID          Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
+  --dry-run            Print planned actions instead of writing (with --inject or --fix-empty-dirs).
+  --snapshot           Write a tree structure snapshot to .rrt/tree.lock.toml as a baseline.
+  --check              Compare current tree against .rrt/tree.lock.toml and report structural drift.
+  --manifest           Write a machine-readable manifest to .rrt/tree.manifest.json containing per-file metadata (size, mtime, sha256, mode, uid, gid, symlink_target). This enables deterministic, atomic manifest generation and implies hashing of file contents.
+  --compressed         Write the manifest as a compressed gzip file (.rrt/tree.manifest.json.gz). Implied: --manifest.
+  --strict             With --check: exit 1 on structural drift (default: advisory, exit 0).
+  --strict-empty-dirs  Exit 1 when truly-empty (non-.gitkept) directories are present. Such directories cannot be tracked by git and cause local/CI manifest drift. Use --fix-empty-dirs to resolve interactively.
+  --fix-empty-dirs     Interactively resolve truly-empty directories by adding a .gitkeep placeholder or removing the directory. Honors --dry-run and --yes.
+  --yes, -y            With --fix-empty-dirs: assume yes (add .gitkeep) for every prompt.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples

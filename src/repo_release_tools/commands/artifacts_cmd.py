@@ -62,7 +62,7 @@ from repo_release_tools.state import (
     write_lock,
 )
 from repo_release_tools.ui import (
-    DryRunPrinter,
+    VerbosePrinter,
     rule,
     terminal_width,
 )
@@ -80,13 +80,14 @@ def _target_dicts(config: RrtConfig) -> list[dict[str, str]]:
 
 def cmd_artifacts(args: argparse.Namespace) -> int:
     """Run artifact integrity check, snapshot, or list."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
     do_snapshot: bool = getattr(args, "snapshot", False)
     do_check: bool = getattr(args, "check", False)
     do_list: bool = getattr(args, "list", False)
     strict: bool = getattr(args, "strict", False)
 
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter(verbose=verbose)
 
     try:
         config = load_or_autodetect_config(root)
@@ -157,7 +158,7 @@ def _print_artifact_list(
     locked = read_lock(lock_path).get("files", {})
     width = terminal_width()
 
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter()
     p.line(f"[ARTIFACTS] Lock: {lock_path.relative_to(root)}", ok=True)
     p.blank_line()
 

@@ -64,7 +64,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from repo_release_tools.integrations.skill_assets import BUNDLED_SKILLS
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 TARGET_PATHS = {
     "claude-global": lambda cwd, home: home / ".claude" / "skills",
@@ -117,7 +117,7 @@ def _display_path(path: Path, *, cwd: Path, home: Path) -> str:
 
 
 def _emit_install_error(message: str) -> int:
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.line(message, ok=False, stream=sys.stderr)
     return 1
 
@@ -146,6 +146,7 @@ def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
 
 def cmd_install(args: argparse.Namespace) -> int:
     """Install the bundled rrt user skills into one or more agent skill dirs."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path.cwd()
     home = Path.home()
     if not args.targets:
@@ -159,7 +160,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Skill install",

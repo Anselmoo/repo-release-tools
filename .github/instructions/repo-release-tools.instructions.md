@@ -86,6 +86,7 @@ When working in `repo-release-tools`, follow these rules:
 - The repo currently reports low coverage in `src/repo_release_tools/ui/syntax.py`.
 - Use existing hook behavior as a guardrail: coverage below 85.71% should be treated as a blocker unless the user explicitly approves a follow-on test expansion.
 - When making CLI errors friendlier, preserve argparse semantics and exit codes while improving help text, suggestions, and examples.
+- When updating docs verification wiring in `pyproject.toml`, keep `docs-verify` warmed with `docs-generate` before `docs-check`; `docs-check` alone can report stale generated pages even when a direct `rrt docs publish --check` passes.
 - When you add or rename a top-level `rrt` subcommand, update the `Affected entrypoints` docstring block in `tests/test_user_experience_simulator.py` in the same change so the UX contract stays aligned with the live CLI surface.
 - When you add a new top-level `rrt` subcommand, update `docs/commands/rrt-cli.md` and the dedicated command doc page in the same change so the published docs stay aligned with the CLI.
 - Persist preferences and follow-up context in repo-scoped memory when they are specific to this repository's workflow.
@@ -150,7 +151,14 @@ serena_agent.search_for_pattern(substring_pattern="print\\(", relative_path="src
 ```
 
 - Migration pattern:
-  - Replace `print()` with `p = DryRunPrinter(dry_run=args.dry_run)` and use `p.header()`, `p.section()`, `p.ok()`, `p.warn()`, `p.footer()`.
+  - For dry-run-capable flows, use `p = DryRunPrinter(dry_run=args.dry_run, verbose=verbose)`.
+  - For non-dry-run flows, use `p = VerbosePrinter(verbose=verbose)` (the named printer for
+    output that never renders dry-run previews) and use `p.header()`, `p.section()`, `p.ok()`,
+    `p.warn()`, `p.footer()`.
+  - Both printers are verbosity-aware (`-v/-vv/-vvv`): call `p.debug(msg)` (level 1),
+    `p.trace(msg)` (level 2), or `p.verbose_line(msg, level=3)` — these are inherited from the
+    shared base, so dry-run flows get verbose output "on top".
+  - Do not pass `dry_run=False`; use `VerbosePrinter` instead.
   - For in-place progress, prefer `ProgressLine`.
   - Preserve machine-readable stdout exactly (use `sys.stdout.write(version + "\n")`).
 

@@ -40,8 +40,8 @@ from repo_release_tools.commands import (
 from repo_release_tools.commands.action_cmd import register as action_register
 from repo_release_tools.ui import (
     IS_LEGACY_TERMINAL,
-    DryRunPrinter,
     Style,
+    VerbosePrinter,
     apply_style,
     bold,
     chrome,
@@ -465,7 +465,7 @@ class RrtArgumentParser(argparse.ArgumentParser):
         use_color = supports_color(sys.stderr)
         suggestion = self._suggestion_for(message)
 
-        p = DryRunPrinter(False)
+        p = VerbosePrinter()
         p.blank_line(stream=sys.stderr)
         if use_color:
             prefix = apply_style("✖  error:", color="error", bold=True, stream=sys.stderr)
@@ -731,6 +731,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Disable all ANSI color output.",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase output verbosity (-v summary, -vv details, -vvv debug).",
     )
     parser.add_argument(
         "--generate-completion",

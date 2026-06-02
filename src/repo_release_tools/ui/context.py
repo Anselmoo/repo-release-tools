@@ -17,6 +17,7 @@ class OutputContext:
 
     format: Literal["text", "json"] = "text"
     no_color: bool = False
+    verbose: int = 0
     stream: IO[str] | None = None
     _extras: dict[str, object] = field(default_factory=dict, repr=False)
 

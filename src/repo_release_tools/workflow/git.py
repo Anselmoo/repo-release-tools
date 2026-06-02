@@ -56,7 +56,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 # Ordered source-owned topic docs for future generic docs generation.
 GIT_DOC = (
@@ -85,7 +85,7 @@ def run(
         p.would_run(pretty)
         return ""
     if not suppress_announce:
-        p = DryRunPrinter(dry_run=False)
+        p = VerbosePrinter()
         p.action(f"$ {pretty}")
     result = subprocess.run(
         cmd,
@@ -95,7 +95,7 @@ def run(
         check=False,
     )
     if result.returncode != 0:
-        p = DryRunPrinter(dry_run=False)
+        p = VerbosePrinter()
         if result.stdout.strip():
             for line in result.stdout.strip().splitlines():
                 p.action(line)
@@ -106,7 +106,7 @@ def run(
         detail = f": {first_err}" if first_err else ""
         raise RuntimeError(f"{label} failed (exit {result.returncode}){detail}")
     if result.stdout.strip():
-        p = DryRunPrinter(dry_run=False)
+        p = VerbosePrinter()
         for line in result.stdout.strip().splitlines():
             p.action(line)
     return result.stdout.strip()

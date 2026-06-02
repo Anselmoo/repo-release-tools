@@ -1,8 +1,0 @@
-[meta]
-generated_at = "2026-05-30T09:52:13+00:00"
-rrt_version = "1.7.0"
-
-[snapshot]
-entry_count = 10
-tree_hash = "sha256:oldhash"
-updated_at = "2026-05-30T09:52:13+00:00"

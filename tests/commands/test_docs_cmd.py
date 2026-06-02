@@ -22,6 +22,7 @@ from repo_release_tools.commands.docs_cmd import (
     _effective_platform,
     _effective_source_url_template,
     _embed_shared_blocks_in_content,
+    _embed_toc_in_content,
     _expand_platform_vars,
     _prepend_anchor_if_missing,
     _restore_shared_block_stubs,
@@ -1108,7 +1109,7 @@ class TestCmdBadges:
         assert (out_dir / "github.svg").exists()
 
     def test_cmd_badges_all_platforms(self, tmp_path: Path) -> None:
-        from repo_release_tools.tools.platform import PLATFORM_LABELS
+        from repo_release_tools.tools.platform import KNOWN_LABEL_KEYS
 
         out_dir = tmp_path / "badges"
         args = argparse.Namespace(
@@ -1120,7 +1121,7 @@ class TestCmdBadges:
             platform=None,
         )
         assert _cmd_badges(args) == 0
-        for plat in PLATFORM_LABELS:
+        for plat in KNOWN_LABEL_KEYS:
             assert (out_dir / f"{plat}.svg").exists()
 
     def test_cmd_badges_dry_run(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1380,3 +1381,48 @@ class TestBadgesMain:
             _main()
         mock_exit.assert_called_once_with(0)
         assert out_dir.exists()
+
+
+class TestEmbedTocInContent:
+    """Tests for _embed_toc_in_content."""
+
+    def test_no_toc_stub_returns_unchanged(self) -> None:
+        content = "# Heading\n\nSome content with no TOC stub.\n"
+        assert _embed_toc_in_content(content) == content
+
+    def test_toc_stub_with_no_headings_returns_unchanged(self) -> None:
+        content = "<!-- rrt:auto:start:toc -->\n<!-- rrt:auto:end:toc -->\n\nNo headings here.\n"
+        assert _embed_toc_in_content(content) == content
+
+    def test_toc_stub_with_headings_populates_toc(self) -> None:
+        content = (
+            "# Title\n\n"
+            "<!-- rrt:auto:start:toc -->\n"
+            "<!-- rrt:auto:end:toc -->\n\n"
+            "## Section One\n\n"
+            "Some text.\n\n"
+            "### Subsection\n\n"
+            "More text.\n"
+        )
+        result = _embed_toc_in_content(content)
+        assert "- [`Section One`](#section-one)" in result or "Section One" in result
+        assert "<!-- rrt:auto:start:toc -->" in result
+        assert "<!-- rrt:auto:end:toc -->" in result
+
+    def test_missing_end_anchor_returns_content_unchanged(self) -> None:
+        # Start anchor present but end anchor missing → ValueError caught → content unchanged.
+        content = "# Title\n\n<!-- rrt:auto:start:toc -->\n\n## Section\n\nText.\n"
+        assert _embed_toc_in_content(content) == content
+
+    def test_toc_stub_replaces_existing_toc_content(self) -> None:
+        content = (
+            "# Title\n\n"
+            "<!-- rrt:auto:start:toc -->\n"
+            "- [Old entry](#old)\n"
+            "<!-- rrt:auto:end:toc -->\n\n"
+            "## New Section\n\n"
+            "Text.\n"
+        )
+        result = _embed_toc_in_content(content)
+        assert "Old entry" not in result
+        assert "New Section" in result

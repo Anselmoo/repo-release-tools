@@ -14,7 +14,7 @@ from repo_release_tools.commands.agents_cmd import (
     main,
     register,
 )
-from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS
+from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS, _parse_family
 
 EXPECTED_AGENT_NAMES = {
     "rrt-user-bootstrap",
@@ -246,3 +246,115 @@ def test_main_executes_install_and_exits_zero(
         main()
 
     assert exc.value.code == 0
+
+
+# ---------------------------------------------------------------------------
+# _parse_family edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_parse_family_empty_markdown_returns_none() -> None:
+    assert _parse_family("") is None
+
+
+def test_parse_family_frontmatter_with_family_key() -> None:
+    md = "---\nfamily: rrt-user\ntitle: My Agent\n---\n# body"
+    assert _parse_family(md) == "rrt-user"
+
+
+def test_parse_family_unclosed_frontmatter_falls_back_to_scan() -> None:
+    # Frontmatter opened but never closed → ValueError, end=None, then fallback scan
+    md = "---\nfamily: scan-family\ntitle: no closing"
+    assert _parse_family(md) == "scan-family"
+
+
+def test_parse_family_fallback_scan_finds_family_line() -> None:
+    md = "# Heading\nsome content\nfamily: fallback-fam\nmore content"
+    assert _parse_family(md) == "fallback-fam"
+
+
+def test_parse_family_no_family_returns_none() -> None:
+    md = "# Just a heading\nNo family info here."
+    assert _parse_family(md) is None
+
+
+def test_parse_family_closed_frontmatter_without_family_key_returns_none() -> None:
+    # Closed frontmatter with no family key must not fall through to body scan.
+    # The body contains "family:" to verify the early-return prevents a false match.
+    md = "---\ntitle: My Agent\n---\nfamily: body-prose"
+    assert _parse_family(md) is None
+
+
+# ---------------------------------------------------------------------------
+# --agent filter in cmd_install
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_install_agent_filter_selects_named_agent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, home)
+    args = Namespace(
+        targets=["claude-local"], dry_run=True, force=False, agents=[BUNDLED_AGENTS[0].name]
+    )
+
+    result = cmd_install(args)
+
+    assert result == 0
+
+
+def test_cmd_install_agent_filter_unknown_agent_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, home)
+    args = Namespace(targets=["claude-local"], dry_run=False, force=False, agents=["no-such-agent"])
+
+    result = cmd_install(args)
+
+    assert result == 1
+
+
+def test_cmd_install_agent_filter_with_family_expands_family(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, home)
+    family_agent = next((a for a in BUNDLED_AGENTS if a.family is not None), None)
+    if family_agent is None:
+        pytest.skip("no bundled agents with a family")
+    args = Namespace(
+        targets=["claude-local"], dry_run=True, force=False, agents=[family_agent.name]
+    )
+
+    result = cmd_install(args)
+
+    assert result == 0
+
+
+def test_cmd_install_agent_filter_no_family_selects_single(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Cover the else branch (line 166) for an agent with family=None."""
+    import repo_release_tools.commands.agents_cmd as agents_cmd_mod
+    from repo_release_tools.integrations.agent_assets import BundledAgent
+
+    solo = BundledAgent(name="solo-agent", markdown="# Solo\n", family=None)
+    monkeypatch.setattr(agents_cmd_mod, "BUNDLED_AGENTS", [solo])
+
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    _mock_home(monkeypatch, home)
+    args = Namespace(targets=["claude-local"], dry_run=True, force=False, agents=["solo-agent"])
+
+    result = cmd_install(args)
+
+    assert result == 0

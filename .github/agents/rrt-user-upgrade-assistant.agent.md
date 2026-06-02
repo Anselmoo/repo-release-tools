@@ -1,5 +1,6 @@
 ---
 name: rrt-user-upgrade-assistant
+family: rrt-user
 description: >-
   Helps users upgrade their rrt workflow from older habits or ad-hoc commands to
   the current bundled install surfaces. Use when a user needs a safe migration

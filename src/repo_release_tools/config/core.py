@@ -380,14 +380,15 @@ def _json_string_field_exists(path: Path, *, field: str) -> bool:
 def _describe_version_target(target: VersionTarget, *, root: Path) -> str:
     """Render a short human label for a version target."""
     relative = str(target.path.relative_to(root))
-    if target.kind == "pep621":
-        return f"{relative} ([project].version)"
-    if target.kind == "package_json":
-        return f"{relative} (version)"
-    if target.kind == "python_version":
-        return f"{relative} (__version__)"
-    if target.kind == "go_version":
-        return f"{relative} (Version)"
+    match target.kind:
+        case "pep621":
+            return f"{relative} ([project].version)"
+        case "package_json":
+            return f"{relative} (version)"
+        case "python_version":
+            return f"{relative} (__version__)"
+        case "go_version":
+            return f"{relative} (Version)"
     if target.section and target.field:
         return f"{relative} ([{target.section}].{target.field})"
     if target.pattern:
@@ -574,16 +575,17 @@ def _recommended_lock_settings(
 
 def _target_ecosystem(target: VersionTarget) -> str | None:
     """Classify a version target by ecosystem for config recommendations."""
-    if target.kind == "pep621":
-        return "python-pep621"
-    if target.kind == "package_json":
-        return "node"
-    if target.kind == "python_version":
-        # Ecosystem-neutral: a secondary __version__ file inherits the lock
-        # settings of whatever primary target (pep621/poetry) it accompanies.
-        return None
-    if target.kind == "go_version":
-        return "go"
+    match target.kind:
+        case "pep621":
+            return "python-pep621"
+        case "package_json":
+            return "node"
+        case "python_version":
+            # Ecosystem-neutral: a secondary __version__ file inherits the lock
+            # settings of whatever primary target (pep621/poetry) it accompanies.
+            return None
+        case "go_version":
+            return "go"
     if target.section == "tool.poetry":
         return "python-poetry"
     if target.path.name == "Cargo.toml" and target.section in {"package", "workspace.package"}:

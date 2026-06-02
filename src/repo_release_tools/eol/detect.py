@@ -50,31 +50,32 @@ def detect_host_version(language: str) -> str | None:
 
 def _extract_version(output: str, slug: str) -> str | None:
     """Extract the version string from command output for the given slug."""
-    if slug == "nodejs":
-        return m[1] if (m := re.match(r"v?(\d+\.\d+\.\d+)", output)) else None
-
-    if slug == "go":
-        return m[1] if (m := re.search(r"go(\d+\.\d+(?:\.\d+)?)", output)) else None
-
-    if slug == "rust":
-        return m[1] if (m := re.search(r"rustc (\d+\.\d+\.\d+)", output)) else None
-
-    return None
+    match slug:
+        case "nodejs":
+            return m[1] if (m := re.match(r"v?(\d+\.\d+\.\d+)", output)) else None
+        case "go":
+            return m[1] if (m := re.search(r"go(\d+\.\d+(?:\.\d+)?)", output)) else None
+        case "rust":
+            return m[1] if (m := re.search(r"rustc (\d+\.\d+\.\d+)", output)) else None
+        case _:
+            return None
 
 
 def detect_project_minimum(language: str, root: Path) -> str | None:
     """Return the project's declared minimum version for *language*."""
     slug = _canonical_slug(language)
 
-    if slug == "python":
-        return _detect_python_minimum(root)
-    if slug == "go":
-        return _detect_go_minimum(root)
-    if slug == "nodejs":
-        return _detect_node_minimum(root)
-    if slug == "rust":
-        return _detect_rust_minimum(root)
-    return None
+    match slug:
+        case "python":
+            return _detect_python_minimum(root)
+        case "go":
+            return _detect_go_minimum(root)
+        case "nodejs":
+            return _detect_node_minimum(root)
+        case "rust":
+            return _detect_rust_minimum(root)
+        case _:
+            return None
 
 
 def _detect_python_minimum(root: Path) -> str | None:

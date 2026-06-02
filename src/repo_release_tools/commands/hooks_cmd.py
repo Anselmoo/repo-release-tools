@@ -53,7 +53,7 @@ from pathlib import Path
 from sysconfig import get_path
 from typing import Any, cast
 
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 HOOK_TARGET_PATHS = {
     "claude-global": lambda cwd, home: home / ".claude" / "hooks",
@@ -156,7 +156,7 @@ def _display_path(path: Path, *, cwd: Path, home: Path) -> str:
 
 
 def _emit_install_error(message: str) -> int:
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.line(message, ok=False, stream=sys.stderr)
     return 1
 
@@ -511,6 +511,7 @@ def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
 
 def cmd_install(args: argparse.Namespace) -> int:
     """Install bundled hook scripts into one or more hook directories."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     cwd = Path.cwd()
     home = Path.home()
     if not args.targets:
@@ -524,7 +525,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
 
-    p = DryRunPrinter(args.dry_run)
+    p = DryRunPrinter(args.dry_run, verbose=verbose)
     p.blank_line()
     total_files = sum(len(hook_files) for _, _, hook_files in install_plan)
     p.header(

@@ -90,7 +90,7 @@ from pathlib import Path
 from repo_release_tools import config as cfg
 from repo_release_tools.ui import (
     GLYPHS,
-    DryRunPrinter,
+    VerbosePrinter,
     highlight_terminal,
 )
 
@@ -143,7 +143,7 @@ def _load_schema() -> dict:
 
 def _cmd_validate(root: Path) -> int:
     """Run all config validation checks and report results."""
-    p = DryRunPrinter(False)
+    p = VerbosePrinter()
     p.blank_line()
     p.section("Config validation")
     errors: list[str] = []
@@ -213,12 +213,13 @@ def _cmd_validate(root: Path) -> int:
 
 def cmd_config(args: argparse.Namespace) -> int:
     """Print the resolved rrt config as a tree."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = cfg.find_repo_root(Path.cwd())
 
     if getattr(args, "schema", False):
         schema = _load_schema()
         if not schema:
-            p = DryRunPrinter(False)
+            p = VerbosePrinter(verbose=verbose)
             p.line(
                 "Schema not found. Run rrt from the project source directory.",
                 ok=False,
@@ -235,11 +236,11 @@ def cmd_config(args: argparse.Namespace) -> int:
         conf = cfg.load_or_autodetect_config(root)
     except FileNotFoundError:
         checked = cfg.iter_config_files(root)
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(cfg.format_missing_tool_rrt_guidance(root, checked), ok=False, stream=sys.stderr)
         return 1
     except (ValueError, cfg.MissingRrtConfigError) as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
@@ -249,7 +250,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         try:
             raw_text = config_path.read_text(encoding="utf-8")
         except OSError as exc:
-            p = DryRunPrinter(False)
+            p = VerbosePrinter(verbose=verbose)
             p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
         lang = "toml" if config_path.suffix in {".toml"} else "text"
@@ -261,7 +262,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     group_count = len(conf.version_groups)
     plural = "group" if group_count == 1 else "groups"
 
-    p = DryRunPrinter(False)
+    p = VerbosePrinter(verbose=verbose)
     p.line("rrt config", ok=True)
     p.meta("Config file", source)
     p.meta("Version groups", f"{group_count} {plural}")

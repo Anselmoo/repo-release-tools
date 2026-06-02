@@ -707,12 +707,12 @@ def test_cmd_tree_reports_warnings_for_unreadable_dirs(
     assert "Cannot read /secret" in out
 
 
-def test_cmd_tree_warns_on_gitkeep_only_directories(
+def test_cmd_tree_silent_on_gitkeep_only_directories(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Directories kept alive only by .gitkeep should warn and suggest the placeholder."""
+    """Directories preserved via .gitkeep are intentionally tracked — no warning."""
     (tmp_path / "src" / "mcp").mkdir(parents=True)
     (tmp_path / "src" / "mcp" / ".gitkeep").write_text("", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -725,7 +725,38 @@ def test_cmd_tree_warns_on_gitkeep_only_directories(
 
     out = capsys.readouterr().out
     assert rc == 0
-    assert "Empty directory detected: src/mcp/" in out
+    assert "Empty directory detected: src/mcp/" not in out
+
+
+def test_warn_for_empty_directories_skips_inline_gitkeep_only() -> None:
+    """When .gitkeep is visible in children (e.g. --show-hidden), skip silently."""
+    entries: list[tree.TreeEntry] = [
+        ("kept", True, [(".gitkeep", False, None)]),
+    ]
+    warnings: list[str] = []
+    phantom = tree._warn_for_empty_directories(entries, warnings)
+    assert phantom == []
+    assert warnings == []
+
+
+def test_cmd_tree_warns_on_truly_empty_directories(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Directories with no children at all warn — they cause local/CI drift."""
+    (tmp_path / "src" / "icons").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        tree, "_batch_ignored_by_git", lambda paths_from_repo_root, repo_root: set()
+    )
+
+    rc = tree.cmd_tree(_args())
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Empty directory detected: src/icons/" in out
     assert ".gitkeep" in out
 
 
@@ -1016,3 +1047,115 @@ def test_canonical_entry_repr_stable_across_formats(tmp_path: Path) -> None:
         hashes.append(lock_data["snapshot"]["tree_hash"])
 
     assert hashes[0] == hashes[1]
+
+
+# ---------------------------------------------------------------------------
+# Empty-directory drift: --strict-empty-dirs, --fix-empty-dirs, lock persistence
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_tree_strict_empty_dirs_exits_nonzero(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--strict-empty-dirs returns exit 1 and names the offender when phantoms exist."""
+    (tmp_path / "src" / "icons").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        tree, "_batch_ignored_by_git", lambda paths_from_repo_root, repo_root: set()
+    )
+
+    rc = tree.cmd_tree(_args(strict_empty_dirs=True))
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "src/icons" in out
+    assert "fix-empty-dirs" in out
+
+
+def test_cmd_tree_strict_empty_dirs_passes_when_gitkept(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--strict-empty-dirs returns 0 when empty dirs are preserved with .gitkeep."""
+    (tmp_path / "src" / "mcp").mkdir(parents=True)
+    (tmp_path / "src" / "mcp" / ".gitkeep").write_text("", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        tree, "_batch_ignored_by_git", lambda paths_from_repo_root, repo_root: set()
+    )
+
+    rc = tree.cmd_tree(_args(strict_empty_dirs=True))
+
+    assert rc == 0
+
+
+def test_cmd_tree_fix_empty_dirs_dry_run_yes_previews_gitkeep(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--fix-empty-dirs --dry-run --yes previews .gitkeep creation without writing."""
+    target = tmp_path / "src" / "icons"
+    target.mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        tree, "_batch_ignored_by_git", lambda paths_from_repo_root, repo_root: set()
+    )
+
+    rc = tree.cmd_tree(
+        _args(fix_empty_dirs=True, dry_run=True, yes=True),
+    )
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "src/icons" in out
+    assert "Would create" in out or "dry-run" in out.lower()
+    assert not (target / ".gitkeep").exists()
+
+
+def test_cmd_tree_fix_empty_dirs_yes_creates_gitkeep(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--fix-empty-dirs --yes (non dry-run) writes .gitkeep for every phantom."""
+    target = tmp_path / "src" / "icons"
+    target.mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        tree, "_batch_ignored_by_git", lambda paths_from_repo_root, repo_root: set()
+    )
+
+    rc = tree.cmd_tree(_args(fix_empty_dirs=True, yes=True))
+
+    assert rc == 0
+    assert (target / ".gitkeep").exists()
+
+
+def test_cmd_tree_snapshot_persists_phantom_empty_dirs_count(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """build_tree_lock writes phantom_empty_dirs into [snapshot] for CI diagnosis."""
+    import tomllib as _tomllib
+
+    (tmp_path / "src" / "icons").mkdir(parents=True)
+    (tmp_path / "README.md").write_text("# x\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        tree, "_batch_ignored_by_git", lambda paths_from_repo_root, repo_root: set()
+    )
+
+    rc = tree.cmd_tree(_args(snapshot=True))
+
+    assert rc == 0
+    lock_data = _tomllib.loads(
+        (tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8"),
+    )
+    assert lock_data["snapshot"]["phantom_empty_dirs"] == ["src/icons"]

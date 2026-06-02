@@ -16,6 +16,27 @@ permalink: "/commands/git-workflow/"
 <!-- Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. -->
 
 <!-- rrt:auto:start:toc -->
+- [`rrt branch`](#rrt-branch)
+  - [rrt branch](#rrt-branch-1)
+  - [`rrt branch new`](#rrt-branch-new)
+  - [`rrt branch rescue`](#rrt-branch-rescue)
+  - [`rrt branch rename`](#rrt-branch-rename)
+- [`rrt git`](#rrt-git)
+  - [rrt git](#rrt-git-1)
+  - [`rrt git status`](#rrt-git-status)
+  - [`rrt git diff`](#rrt-git-diff)
+  - [`rrt git log`](#rrt-git-log)
+  - [`rrt git doctor`](#rrt-git-doctor)
+  - [`rrt git sync-status`](#rrt-git-sync-status)
+  - [`rrt git check-dirty-tree`](#rrt-git-check-dirty-tree)
+  - [`rrt git commit`](#rrt-git-commit)
+  - [`rrt git commit-all`](#rrt-git-commit-all)
+  - [`rrt git sync`](#rrt-git-sync)
+  - [`rrt git move`](#rrt-git-move)
+  - [`rrt git squash-local`](#rrt-git-squash-local)
+  - [`rrt git undo-safe`](#rrt-git-undo-safe)
+  - [`rrt git rebootstrap`](#rrt-git-rebootstrap)
+  - [`rrt git purge-cache`](#rrt-git-purge-cache)
 <!-- rrt:auto:end:toc -->
 
 ## `rrt branch`

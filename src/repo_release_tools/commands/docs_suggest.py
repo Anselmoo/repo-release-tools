@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
 
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import VerbosePrinter
 
 DEFAULT_MIN_CHARS = 150
 EXEMPT_FILES = frozenset({"__init__.py", "__main__.py"})
@@ -198,6 +198,7 @@ def scan(
 
 def cmd_docs_suggest(args: argparse.Namespace) -> int:
     """Suggest or apply rich module docstrings for command modules."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools.config import load_config
 
     root = Path(getattr(args, "root", ".")).resolve()
@@ -234,7 +235,7 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
     )
     apply = bool(getattr(args, "apply", False))
 
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter(verbose=verbose)
     findings = scan(paths, min_chars=min_chars, exempt_files=exempt_files)
 
     if not findings:

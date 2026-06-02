@@ -49,13 +49,14 @@ import json
 import os
 import sys
 
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import VerbosePrinter
 
 ENV_EPILOG = "  $ rrt env\n  $ rrt env --json"
 
 
 def cmd_env(args: argparse.Namespace) -> int:
     """Render environment details for the current process."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     values = [
         ("Platform", sys.platform),
         ("Python", sys.version.split()[0]),
@@ -70,7 +71,7 @@ def cmd_env(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(dict(values), indent=2) + "\n")
         return 0
 
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter(verbose=verbose)
     p.ok("Environment")
     for name, value in values:
         p.meta(name, str(value))
@@ -98,7 +99,9 @@ def cmd_env_check(args: argparse.Namespace) -> int:
     Currently checks for duplicate entries in PATH and PYTHONPATH. Returns
     exit code 0 when no issues are found and 1 when any duplicate is detected.
     """
-    p = DryRunPrinter(dry_run=False)
+    verbose: int = getattr(args, "verbose", 0) or 0
+
+    p = VerbosePrinter(verbose=verbose)
 
     path = os.environ.get("PATH", "")
     pythonpath = os.environ.get("PYTHONPATH", "")

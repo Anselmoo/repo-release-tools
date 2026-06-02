@@ -1,5 +1,6 @@
 ---
 name: rrt-user-version-planner
+family: rrt-user
 description: >-
   Plans safe rrt version bumps, semver decisions, and dry-run validation steps.
   Use when a user needs help choosing or previewing a version change before writing files.

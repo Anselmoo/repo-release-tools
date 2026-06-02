@@ -79,7 +79,7 @@ from repo_release_tools.config import (
     iter_config_files,
     load_or_autodetect_config,
 )
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import VerbosePrinter
 from repo_release_tools.version.targets import read_version_string
 
 RELEASE_CHECK_EPILOG = "  $ rrt release check"
@@ -124,33 +124,34 @@ def _check_pin_target(pin: PinTarget, root: Path) -> tuple[str, bool, str]:
 
 def cmd_release_check(args: argparse.Namespace) -> int:  # noqa: ARG001
     """Check release-oriented version, pin, and changelog targets."""
+    verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
 
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError:
         checked = iter_config_files(root)
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(format_missing_tool_rrt_guidance(root, checked), ok=False, stream=sys.stderr)
         return 1
     except ValueError as exc:
         if is_missing_tool_rrt_error(exc):
-            p = DryRunPrinter(False)
+            p = VerbosePrinter(verbose=verbose)
             p.warn("No [tool.rrt] configuration found.", stream=sys.stderr)
             p.action(
                 format_missing_tool_rrt_guidance(root, iter_config_files(root)),
                 stream=sys.stderr,
             )
             return 1
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     except RuntimeError as exc:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
-    p = DryRunPrinter(False)
+    p = VerbosePrinter(verbose=verbose)
     if config.autodetected:
         p.warn(format_autodetected_config_notice(config), stream=sys.stderr)
 
@@ -203,12 +204,13 @@ def cmd_release_check(args: argparse.Namespace) -> int:  # noqa: ARG001
         else:
             p.line(f"[{group.name}]", ok=False)
         for msg, severity in statuses:
-            if severity == "ok":
-                p.line(f"  {msg}", ok=True)
-            elif severity == "warning":
-                p.warn(f"  {msg}")
-            else:
-                p.line(f"  {msg}", ok=False)
+            match severity:
+                case "ok":
+                    p.line(f"  {msg}", ok=True)
+                case "warning":
+                    p.warn(f"  {msg}")
+                case _:
+                    p.line(f"  {msg}", ok=False)
         p.blank_line()
 
         if not group_ok:

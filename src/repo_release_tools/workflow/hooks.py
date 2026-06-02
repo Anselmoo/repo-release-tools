@@ -34,7 +34,7 @@ from repo_release_tools.config import (
     load_extra_branch_types,
     load_or_autodetect_config,
 )
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import VerbosePrinter
 from repo_release_tools.version.semver import Version
 from repo_release_tools.workflow import git
 
@@ -500,7 +500,7 @@ def apply_dedup_to_changelog(
 
 def emit_failure(title: str, details: list[str]) -> int:
     """Render a hook failure message and return a non-zero exit code."""
-    p = DryRunPrinter(dry_run=False)
+    p = VerbosePrinter()
     p.line(title, ok=False, stream=sys.stderr)
     for detail in details:
         p.action(detail, stream=sys.stderr)
@@ -512,13 +512,18 @@ def run_branch_name_check(
     *,
     title: str,
     extra_types: tuple[str, ...] = (),
+    verbose: int = 0,
 ) -> int:
     """Validate an explicit branch name."""
+    p = VerbosePrinter(verbose=verbose)
+    p.verbose_line(f"check-branch-name: {branch_name!r}")
     problem = validate_branch_name(branch_name, extra_types=extra_types)
     if problem is None:
+        p.verbose_line("  branch name OK")
         return 0
 
     all_types = (*ALLOWED_BRANCH_TYPES, *extra_types)
+    p.verbose_line(f"  allowed types: {', '.join(all_types)}", level=2)
     return emit_failure(
         title,
         [
@@ -535,10 +540,19 @@ def run_branch_name_check(
     )
 
 
-def run_commit_subject_check(subject: str, *, title: str) -> int:
+def run_commit_subject_check(subject: str, *, title: str, verbose: int = 0) -> int:
     """Validate an explicit commit subject."""
+    p = VerbosePrinter(verbose=verbose)
+    p.verbose_line(f"check-commit-subject: {subject!r}")
+    parsed_commit = parse_conventional_commit(subject)
+    if parsed_commit is not None:
+        p.verbose_line(
+            f"  type={parsed_commit.type!r}, scope={parsed_commit.scope!r}",
+            level=2,
+        )
     problem = validate_commit_subject(subject)
     if problem is None:
+        p.verbose_line("  subject OK")
         return 0
 
     return emit_failure(
@@ -550,8 +564,10 @@ def run_commit_subject_check(subject: str, *, title: str) -> int:
     )
 
 
-def run_dirty_tree_check(cwd: Path, *, title: str) -> int:
+def run_dirty_tree_check(cwd: Path, *, title: str, verbose: int = 0) -> int:
     """Validate that the working tree is clean."""
+    p = VerbosePrinter(verbose=verbose)
+    p.verbose_line("check-dirty-tree")
     if not git.is_git_repository(cwd):
         return emit_failure(
             title,
@@ -559,6 +575,7 @@ def run_dirty_tree_check(cwd: Path, *, title: str) -> int:
         )
 
     if git.working_tree_clean(cwd):
+        p.verbose_line("  working tree clean")
         return 0
 
     try:
@@ -574,8 +591,10 @@ def run_dirty_tree_check(cwd: Path, *, title: str) -> int:
     )
 
 
-def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml") -> int:
+def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml", verbose: int = 0) -> int:
     """Fail if source-owned docs have drifted from the lockfile."""
+    p = VerbosePrinter(verbose=verbose)
+    p.verbose_line("check-docs")
     from collections import defaultdict
 
     from repo_release_tools.config import DocsConfig
@@ -618,6 +637,7 @@ def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml") -> int:
     lock_path = docs_lock_path(cwd, effective_lock)
     is_current, messages = lock_is_current(lock_path, sources)
     if is_current:
+        p.verbose_line("  docs lockfile up to date")
         return 0
     return emit_failure(
         "Docs lockfile is stale — run 'rrt docs generate --format toml' to update.",
@@ -625,31 +645,45 @@ def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml") -> int:
     )
 
 
-def run_pre_commit(cwd: Path) -> int:
+def run_pre_commit(cwd: Path, *, verbose: int = 0) -> int:
     """Validate the active branch during pre-commit."""
+    p = VerbosePrinter(verbose=verbose)
     branch_name = git.current_branch(cwd)
+    p.verbose_line(f"pre-commit: branch={branch_name!r}")
     extra_types = load_extra_branch_types(cwd)
+    p.verbose_line(f"  extra branch types: {extra_types}", level=3)
     return run_branch_name_check(
         branch_name,
         title="Commit blocked by branch naming policy.",
         extra_types=extra_types,
+        verbose=verbose,
     )
 
 
-def run_pre_commit_changelog(cwd: Path, *, changelog_file: str = DEFAULT_CHANGELOG) -> int:
+def run_pre_commit_changelog(
+    cwd: Path, *, changelog_file: str = DEFAULT_CHANGELOG, verbose: int = 0
+) -> int:
     """Validate staged changelog updates during pre-commit."""
+    p = VerbosePrinter(verbose=verbose)
+    p.verbose_line("pre-commit-changelog")
     try:
-        if _detect_changelog_workflow(cwd) == "squash":
+        workflow = _detect_changelog_workflow(cwd)
+        p.verbose_line(f"  workflow: {workflow}", level=2)
+        if workflow == "squash":
+            p.verbose_line("  skipped (squash workflow)")
             return 0
     except RuntimeError as exc:
         return emit_failure("Commit blocked by changelog policy.", [str(exc)])
 
     branch_name = git.current_branch(cwd)
     if not branch_requires_changelog(branch_name):
+        p.verbose_line(f"  skipped (branch {branch_name!r} does not require changelog)")
         return 0
 
     changed_files = staged_files(cwd)
+    p.verbose_line(f"  staged files: {changed_files}", level=2)
     if changelog_is_updated(changed_files, changelog_file=changelog_file, cwd=cwd):
+        p.verbose_line("  changelog updated in staged files")
         return 0
 
     normalized_path = _normalize_repo_path(changelog_file, cwd=cwd)
@@ -663,12 +697,15 @@ def run_pre_commit_changelog(cwd: Path, *, changelog_file: str = DEFAULT_CHANGEL
     )
 
 
-def run_commit_msg(message_path: Path) -> int:
+def run_commit_msg(message_path: Path, *, verbose: int = 0) -> int:
     """Validate the commit subject during commit-msg."""
     subject = read_commit_subject(message_path)
+    p = VerbosePrinter(verbose=verbose)
+    p.verbose_line(f"commit-msg: file={message_path!s}", level=2)
     return run_commit_subject_check(
         subject,
         title="Commit blocked by commit message policy.",
+        verbose=verbose,
     )
 
 
@@ -677,6 +714,7 @@ def run_update_unreleased(
     *,
     subject: str,
     changelog_file: str = DEFAULT_CHANGELOG,
+    verbose: int = 0,
 ) -> int:
     """Append a parsed bullet to the [Unreleased] section for changelog-relevant commits.
 
@@ -686,15 +724,22 @@ def run_update_unreleased(
     updates, but returns ``emit_failure(...)`` if the changelog file is
     missing.
     """
+    p = VerbosePrinter(verbose=verbose)
+    p.verbose_line(f"update-unreleased: subject={subject!r}")
     try:
-        if _detect_changelog_workflow(cwd) == "squash":
+        workflow = _detect_changelog_workflow(cwd)
+        p.verbose_line(f"  workflow: {workflow}", level=2)
+        if workflow == "squash":
+            p.verbose_line("  skipped (squash workflow)")
             return 0
     except RuntimeError as exc:
         return emit_failure("Changelog update failed.", [str(exc)])
 
     if not commit_subject_requires_changelog(subject):
+        p.verbose_line("  skipped (non-changelog commit type)")
         return 0
     if is_changelog_meta_commit(subject):
+        p.verbose_line("  skipped (changelog meta-commit)")
         return 0
 
     changelog_path = cwd / changelog_file
@@ -706,12 +751,15 @@ def run_update_unreleased(
 
     original = changelog_path.read_text(encoding="utf-8")
     fmt = detect_changelog_format(changelog_file)
+    p.verbose_line(f"  format: {fmt}", level=2)
     updated = append_to_unreleased(original, subject, fmt)
     if updated != original:
         changelog_path.write_text(updated, encoding="utf-8")
         git.run(["git", "add", changelog_file], cwd, dry_run=False, label="stage changelog")
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(f"[Unreleased] section updated in {changelog_file}.", ok=True, stream=sys.stderr)
+    else:
+        p.verbose_line("  no change (already up to date)")
     return 0
 
 
@@ -725,6 +773,7 @@ def run_changelog_check(
     title: str,
     strategy: str = "auto",
     branch: str = "",
+    verbose: int = 0,
 ) -> int:
     """Validate that changelog-relevant commits update the changelog file.
 
@@ -743,13 +792,17 @@ def run_changelog_check(
     When *branch* matches a known bot prefix (``renovate/*``,
     ``dependabot/*``) the check is also skipped.
     """
+    p = VerbosePrinter(verbose=verbose)
+    p.verbose_line(f"check-changelog: subject={subject!r}")
     if not commit_subject_requires_changelog(subject):
+        p.verbose_line("  skipped (non-changelog commit type)")
         return 0
 
     # Skip for automated bot branches regardless of strategy.
     if branch:
         branch_prefix = branch.split("/", 1)[0]
         if branch_prefix in BOT_BRANCH_TYPES:
+            p.verbose_line(f"  skipped (bot branch: {branch!r})")
             return 0
 
     try:
@@ -757,10 +810,13 @@ def run_changelog_check(
     except RuntimeError as exc:
         return emit_failure(title, [str(exc)])
 
+    p.verbose_line(f"  strategy: {strategy} → {effective_strategy}", level=2)
     if effective_strategy == "release-only":
+        p.verbose_line("  skipped (release-only strategy)")
         return 0
 
     normalized_path = _normalize_repo_path(changelog_file, cwd=cwd)
+    p.verbose_line(f"  changelog: {normalized_path}", level=2)
 
     if effective_strategy == "unreleased":
         changelog_path = cwd / changelog_file
@@ -768,6 +824,7 @@ def run_changelog_check(
             content = changelog_path.read_text(encoding="utf-8")
             fmt = detect_changelog_format(changelog_file)
             if get_unreleased_entries(content, fmt):
+                p.verbose_line("  [Unreleased] section OK")
                 return 0
         return emit_failure(
             title,
@@ -782,7 +839,9 @@ def run_changelog_check(
     effective_changed_files = (
         changed_files if changed_files is not None else changed_files_for_ref(cwd, ref)
     )
+    p.verbose_line(f"  changed files: {effective_changed_files}", level=2)
     if changelog_is_updated(effective_changed_files, changelog_file=changelog_file, cwd=cwd):
+        p.verbose_line("  changelog updated OK")
         return 0
 
     return emit_failure(
@@ -804,6 +863,7 @@ def run_post_correct(
     ref: str = "HEAD",
     changelog_file: str = DEFAULT_CHANGELOG,
     commit: bool = False,
+    verbose: int = 0,
 ) -> int:
     """Consolidate fragmented changelog entries after a squash merge.
 
@@ -828,7 +888,7 @@ def run_post_correct(
     except RuntimeError as exc:
         return emit_failure("Changelog post-correction failed.", [str(exc)])
     if not added_lines:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line(
             f"No changelog changes found in {ref!r}. Nothing to correct.",
             ok=True,
@@ -845,13 +905,13 @@ def run_post_correct(
         added_line_positions=positions,
     )
     if not changed:
-        p = DryRunPrinter(False)
+        p = VerbosePrinter(verbose=verbose)
         p.line("Changelog is already clean. Nothing to correct.", ok=True, stream=sys.stderr)
         return 0
 
     removed_count = len(added_lines) - len(deduped_lines)
     noun = "entry" if removed_count == 1 else "entries"
-    p = DryRunPrinter(False)
+    p = VerbosePrinter(verbose=verbose)
     p.line(
         f"Post-correction: removed {removed_count} duplicate/contradicting changelog {noun}.",
         ok=True,
@@ -886,6 +946,13 @@ def run_post_correct(
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint for git hook execution."""
     parser = argparse.ArgumentParser(prog="python -m repo_release_tools.workflow.hooks")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase output verbosity (-v summary, -vv details, -vvv debug).",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     pre_commit_parser = subparsers.add_parser("pre-commit", help="Validate the active branch.")
@@ -1063,110 +1130,130 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     parsed = parser.parse_args(sys.argv[1:] if argv is None else argv)
-    if parsed.command == "pre-commit":
-        return run_pre_commit(Path.cwd())
-    if parsed.command == "pre-commit-changelog":
-        return run_pre_commit_changelog(Path.cwd(), changelog_file=parsed.changelog_file)
-    if parsed.command == "commit-msg":
-        return run_commit_msg(Path(parsed.message_file))
-    if parsed.command == "check-branch-name":
-        extra_types = load_extra_branch_types(Path.cwd())
-        return run_branch_name_check(
-            parsed.branch,
-            title="Branch name validation failed.",
-            extra_types=extra_types,
-        )
-    if parsed.command == "check-commit-subject":
-        return run_commit_subject_check(parsed.subject, title="Commit subject validation failed.")
-    if parsed.command == "check-dirty-tree":
-        return run_dirty_tree_check(Path.cwd(), title="Dirty tree validation failed.")
-    if parsed.command == "check-docs":
-        return run_docs_check(Path.cwd())
-    if parsed.command == "doctor":
-        return cmd_doctor(parsed)
-    if parsed.command == "release-check":
-        return cmd_release_check(parsed)
-    if parsed.command == "check-eol":
-        return cmd_eol_check(parsed)
-    if parsed.command == "docs-generate":
-        parsed.docs_action = "generate"
-        parsed.format = "toml"
-        parsed.lang = None
-        parsed.root = "."
-        parsed.dry_run = False
-        return cmd_docs(parsed)
-    if parsed.command == "docs-publish":
-        parsed.docs_action = "publish"
-        parsed.format = None
-        parsed.lang = None
-        parsed.root = "."
-        parsed.check = False
-        parsed.dry_run = False
-        parsed.fail_on_change = False
-        return cmd_docs(parsed)
-    if parsed.command == "docs-inject":
-        parsed.docs_action = "inject"
-        parsed.format = None
-        parsed.lang = None
-        parsed.root = "."
-        parsed.check = False
-        parsed.dry_run = False
-        parsed.add_anchors = True
-        return cmd_docs(parsed)
-    if parsed.command == "docstring-suggest":
-        parsed.root = "."
-        parsed.paths = []
-        parsed.min_chars = None
-        parsed.apply = True
-        return cmd_docs_suggest(parsed)
-    if parsed.command == "update-unreleased":
-        if parsed.message_file is not None:
-            # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
-            msg_path = Path(parsed.message_file)
-            if not msg_path.exists():
-                return emit_failure(
-                    "update-unreleased failed.",
-                    [f"Message file not found: {parsed.message_file}"],
-                )
-            try:
-                subject = read_commit_subject(msg_path)
-            except (OSError, UnicodeDecodeError) as exc:
-                return emit_failure(
-                    "update-unreleased failed.",
-                    [f"Could not read message file: {exc}"],
-                )
-        elif parsed.subject is not None:
-            subject = parsed.subject
-        else:
-            # Fall back to reading the commit message file that git sets during commit hooks.
-            commit_editmsg = Path.cwd() / ".git" / "COMMIT_EDITMSG"
-            if commit_editmsg.exists():
-                subject = read_commit_subject(commit_editmsg)
+    verbose: int = parsed.verbose
+    match parsed.command:
+        case "pre-commit":
+            return run_pre_commit(Path.cwd(), verbose=verbose)
+        case "pre-commit-changelog":
+            return run_pre_commit_changelog(
+                Path.cwd(), changelog_file=parsed.changelog_file, verbose=verbose
+            )
+        case "commit-msg":
+            return run_commit_msg(Path(parsed.message_file), verbose=verbose)
+        case "check-branch-name":
+            extra_types = load_extra_branch_types(Path.cwd())
+            return run_branch_name_check(
+                parsed.branch,
+                title="Branch name validation failed.",
+                extra_types=extra_types,
+                verbose=verbose,
+            )
+        case "check-commit-subject":
+            return run_commit_subject_check(
+                parsed.subject, title="Commit subject validation failed.", verbose=verbose
+            )
+        case "check-dirty-tree":
+            return run_dirty_tree_check(
+                Path.cwd(), title="Dirty tree validation failed.", verbose=verbose
+            )
+        case "check-docs":
+            return run_docs_check(Path.cwd(), verbose=verbose)
+        case "doctor":
+            parsed.verbose = verbose
+            return cmd_doctor(parsed)
+        case "release-check":
+            parsed.verbose = verbose
+            return cmd_release_check(parsed)
+        case "check-eol":
+            parsed.verbose = verbose
+            return cmd_eol_check(parsed)
+        case "docs-generate":
+            parsed.verbose = verbose
+            parsed.docs_action = "generate"
+            parsed.format = "toml"
+            parsed.lang = None
+            parsed.root = "."
+            parsed.dry_run = False
+            return cmd_docs(parsed)
+        case "docs-publish":
+            parsed.verbose = verbose
+            parsed.docs_action = "publish"
+            parsed.format = None
+            parsed.lang = None
+            parsed.root = "."
+            parsed.check = False
+            parsed.dry_run = False
+            parsed.fail_on_change = False
+            return cmd_docs(parsed)
+        case "docs-inject":
+            parsed.verbose = verbose
+            parsed.docs_action = "inject"
+            parsed.format = None
+            parsed.lang = None
+            parsed.root = "."
+            parsed.check = False
+            parsed.dry_run = False
+            parsed.add_anchors = True
+            return cmd_docs(parsed)
+        case "docstring-suggest":
+            parsed.verbose = verbose
+            parsed.root = "."
+            parsed.paths = []
+            parsed.min_chars = None
+            parsed.apply = True
+            return cmd_docs_suggest(parsed)
+        case "update-unreleased":
+            if parsed.message_file is not None:
+                # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
+                msg_path = Path(parsed.message_file)
+                if not msg_path.exists():
+                    return emit_failure(
+                        "update-unreleased failed.",
+                        [f"Message file not found: {parsed.message_file}"],
+                    )
+                try:
+                    subject = read_commit_subject(msg_path)
+                except (OSError, UnicodeDecodeError) as exc:
+                    return emit_failure(
+                        "update-unreleased failed.",
+                        [f"Could not read message file: {exc}"],
+                    )
+            elif parsed.subject is not None:
+                subject = parsed.subject
             else:
-                subject = ""
-        return run_update_unreleased(
-            Path.cwd(),
-            subject=subject,
-            changelog_file=parsed.changelog_file,
-        )
-    if parsed.command == "changelog" and parsed.changelog_command == "post-correct":
-        ref = parsed.squash_commit or "HEAD"
-        return run_post_correct(
-            Path.cwd(),
-            ref=ref,
-            changelog_file=parsed.output,
-            commit=parsed.commit,
-        )
-    return run_changelog_check(
-        parsed.subject,
-        cwd=Path.cwd(),
-        changelog_file=parsed.changelog_file,
-        changed_files=parsed.changed_files,
-        ref=parsed.ref,
-        title="Changelog validation failed.",
-        strategy=parsed.strategy,
-        branch=parsed.branch,
-    )
+                # Fall back to reading the commit message file that git sets during commit hooks.
+                commit_editmsg = Path.cwd() / ".git" / "COMMIT_EDITMSG"
+                if commit_editmsg.exists():
+                    subject = read_commit_subject(commit_editmsg)
+                else:
+                    subject = ""
+            return run_update_unreleased(
+                Path.cwd(),
+                subject=subject,
+                changelog_file=parsed.changelog_file,
+                verbose=verbose,
+            )
+        case "changelog" if parsed.changelog_command == "post-correct":
+            ref = parsed.squash_commit or "HEAD"
+            return run_post_correct(
+                Path.cwd(),
+                ref=ref,
+                changelog_file=parsed.output,
+                commit=parsed.commit,
+                verbose=verbose,
+            )
+        case _:
+            return run_changelog_check(
+                parsed.subject,
+                cwd=Path.cwd(),
+                changelog_file=parsed.changelog_file,
+                changed_files=parsed.changed_files,
+                ref=parsed.ref,
+                title="Changelog validation failed.",
+                strategy=parsed.strategy,
+                branch=parsed.branch,
+                verbose=verbose,
+            )
 
 
 PRE_COMMIT_DOC = """# rrt hooks

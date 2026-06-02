@@ -233,6 +233,8 @@ def build_tree_lock(tree_meta: dict[str, Any]) -> dict[str, Any]:
     }
     if "ignored_count" in tree_meta:
         snapshot["ignored_count"] = tree_meta["ignored_count"]
+    if "phantom_empty_dirs" in tree_meta:
+        snapshot["phantom_empty_dirs"] = tree_meta["phantom_empty_dirs"]
     return {
         "meta": {
             "generated_at": ts,
