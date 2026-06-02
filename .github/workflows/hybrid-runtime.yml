@@ -1,4 +1,4 @@
-name: Hybrid Runtime
+name: 🧬 Hybrid Runtime
 
 on:
   push:
@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   runtime:
-    name: Hybrid runtime examples
+    name: 🧬 Hybrid runtime examples
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
