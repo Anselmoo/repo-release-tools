@@ -58,8 +58,9 @@ def test_detect_platform(url: str, expected: str) -> None:
 
 
 def test_all_platforms_have_templates() -> None:
+    all_labels = {**PLATFORM_LABELS, **REGISTRY_LABELS, **LANGUAGE_LABELS}
     for platform in PLATFORM_URL_TEMPLATES:
-        assert platform in PLATFORM_URL_TEMPLATES or platform == "generic"
+        assert platform in all_labels, f"{platform!r} has a URL template but no display label"
 
 
 @pytest.mark.parametrize(

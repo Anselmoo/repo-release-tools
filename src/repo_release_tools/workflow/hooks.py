@@ -863,6 +863,7 @@ def run_post_correct(
     ref: str = "HEAD",
     changelog_file: str = DEFAULT_CHANGELOG,
     commit: bool = False,
+    verbose: int = 0,
 ) -> int:
     """Consolidate fragmented changelog entries after a squash merge.
 
@@ -887,7 +888,7 @@ def run_post_correct(
     except RuntimeError as exc:
         return emit_failure("Changelog post-correction failed.", [str(exc)])
     if not added_lines:
-        p = VerbosePrinter()
+        p = VerbosePrinter(verbose=verbose)
         p.line(
             f"No changelog changes found in {ref!r}. Nothing to correct.",
             ok=True,
@@ -904,13 +905,13 @@ def run_post_correct(
         added_line_positions=positions,
     )
     if not changed:
-        p = VerbosePrinter()
+        p = VerbosePrinter(verbose=verbose)
         p.line("Changelog is already clean. Nothing to correct.", ok=True, stream=sys.stderr)
         return 0
 
     removed_count = len(added_lines) - len(deduped_lines)
     noun = "entry" if removed_count == 1 else "entries"
-    p = VerbosePrinter()
+    p = VerbosePrinter(verbose=verbose)
     p.line(
         f"Post-correction: removed {removed_count} duplicate/contradicting changelog {noun}.",
         ok=True,
@@ -1239,6 +1240,7 @@ def main(argv: list[str] | None = None) -> int:
                 ref=ref,
                 changelog_file=parsed.output,
                 commit=parsed.commit,
+                verbose=verbose,
             )
         case _:
             return run_changelog_check(

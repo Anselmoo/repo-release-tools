@@ -1409,6 +1409,11 @@ class TestEmbedTocInContent:
         assert "<!-- rrt:auto:start:toc -->" in result
         assert "<!-- rrt:auto:end:toc -->" in result
 
+    def test_missing_end_anchor_returns_content_unchanged(self) -> None:
+        # Start anchor present but end anchor missing → ValueError caught → content unchanged.
+        content = "# Title\n\n<!-- rrt:auto:start:toc -->\n\n## Section\n\nText.\n"
+        assert _embed_toc_in_content(content) == content
+
     def test_toc_stub_replaces_existing_toc_content(self) -> None:
         content = (
             "# Title\n\n"

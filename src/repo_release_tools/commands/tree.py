@@ -813,7 +813,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
         "entry_count": entry_count,
         "tree_hash": hash_content(_canonical_entry_repr(entries)),
         "ignored_count": ignored_count,
-        "phantom_empty_dirs": len(phantom_empty_dirs),
+        "phantom_empty_dirs": [str(d) for d in phantom_empty_dirs],
     }
 
     strict_empty: bool = getattr(args, "strict_empty_dirs", False)

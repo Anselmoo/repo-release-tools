@@ -278,6 +278,13 @@ def test_parse_family_no_family_returns_none() -> None:
     assert _parse_family(md) is None
 
 
+def test_parse_family_closed_frontmatter_without_family_key_returns_none() -> None:
+    # Closed frontmatter with no family key must not fall through to body scan.
+    # The body contains "family:" to verify the early-return prevents a false match.
+    md = "---\ntitle: My Agent\n---\nfamily: body-prose"
+    assert _parse_family(md) is None
+
+
 # ---------------------------------------------------------------------------
 # --agent filter in cmd_install
 # ---------------------------------------------------------------------------

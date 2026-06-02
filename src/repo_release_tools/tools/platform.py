@@ -138,7 +138,7 @@ KNOWN_PLATFORM_KEYS: tuple[str, ...] = tuple(PLATFORM_LABELS)
 KNOWN_REGISTRY_KEYS: tuple[str, ...] = tuple(REGISTRY_LABELS)
 KNOWN_LANGUAGE_KEYS: tuple[str, ...] = tuple(LANGUAGE_LABELS)
 KNOWN_LABEL_KEYS: tuple[str, ...] = tuple(
-    list(PLATFORM_LABELS) + list(REGISTRY_LABELS) + list(LANGUAGE_LABELS)
+    dict.fromkeys(list(PLATFORM_LABELS) + list(REGISTRY_LABELS) + list(LANGUAGE_LABELS))
 )
 
 
@@ -244,7 +244,7 @@ def validate_registry_template(registry: str, template_key: str = "default") -> 
     if registry not in REGISTRY_TEMPLATES:
         raise ValueError(f"unknown registry: {registry!r}")
     template = REGISTRY_TEMPLATES[registry]
-    if template_key not in template.templates and "default" not in template.templates:
+    if template_key not in template.templates:
         raise ValueError(f"registry {registry!r} has no template {template_key!r}")
 
 

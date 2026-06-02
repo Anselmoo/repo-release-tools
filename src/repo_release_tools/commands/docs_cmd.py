@@ -588,7 +588,10 @@ def _embed_toc_in_content(
     if not headings:
         return content
     toc = render_toc(headings, min_level=min_level, max_level=max_level)
-    replaced = replace_anchored_block(content, anchor_id=_TOC_ANCHOR, content=toc)
+    try:
+        replaced = replace_anchored_block(content, anchor_id=_TOC_ANCHOR, content=toc)
+    except ValueError:
+        return content
     return replaced if replaced is not None else content
 
 

@@ -590,7 +590,7 @@ def test_run_post_correct_and_main_dispatch(
     monkeypatch.setattr(
         hooks,
         "run_post_correct",
-        lambda cwd, *, ref="HEAD", changelog_file=hooks.DEFAULT_CHANGELOG, commit=False: (
+        lambda cwd, *, ref="HEAD", changelog_file=hooks.DEFAULT_CHANGELOG, commit=False, verbose=0: (
             calls.append(("post", ref)) or 22
         ),
     )

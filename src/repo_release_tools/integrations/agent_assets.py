@@ -53,6 +53,7 @@ def _parse_family(markdown: str) -> Optional[str]:
             for line in lines[1:end]:
                 if line.strip().startswith("family:"):
                     return line.split(":", 1)[1].strip()
+            return None
     # Fallback: scan first 40 lines for `family:`
     for line in lines[:40]:
         if line.strip().startswith("family:"):

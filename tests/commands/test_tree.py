@@ -1158,4 +1158,4 @@ def test_cmd_tree_snapshot_persists_phantom_empty_dirs_count(
     lock_data = _tomllib.loads(
         (tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8"),
     )
-    assert lock_data["snapshot"]["phantom_empty_dirs"] == 1
+    assert lock_data["snapshot"]["phantom_empty_dirs"] == ["src/icons"]

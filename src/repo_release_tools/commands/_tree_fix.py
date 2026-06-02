@@ -39,7 +39,7 @@ def fix_empty_dirs(
         return 0
 
     prefix = "[DRY RUN] " if dry_run else ""
-    printer.line(f"{prefix}Empty-directory fix", ok=True)
+    printer.ok(f"{prefix}Empty-directory fix")
     printer.meta("Root", str(root))
     printer.meta(
         "Found", f"{len(phantom_dirs)} empty director{'y' if len(phantom_dirs) == 1 else 'ies'}"
@@ -58,31 +58,31 @@ def fix_empty_dirs(
         match choice:
             case "gitkeep":
                 if dry_run:
-                    printer.line(f"[dry-run] Would create {rel}/.gitkeep")
+                    printer.action(f"[dry-run] Would create {rel}/.gitkeep")
                     added.append(rel)
                 else:
                     try:
                         target.mkdir(parents=True, exist_ok=True)
                         (target / ".gitkeep").write_text("", encoding="utf-8")
-                        printer.line(f"Created {rel}/.gitkeep", ok=True)
+                        printer.ok(f"Created {rel}/.gitkeep")
                         added.append(rel)
                     except OSError as exc:
                         printer.line(f"Failed to create {rel}/.gitkeep: {exc}", ok=False)
                         failed.append((rel, str(exc)))
             case "delete":
                 if dry_run:
-                    printer.line(f"[dry-run] Would remove {rel}/")
+                    printer.action(f"[dry-run] Would remove {rel}/")
                     removed.append(rel)
                 else:
                     try:
                         target.rmdir()
-                        printer.line(f"Removed {rel}/", ok=True)
+                        printer.ok(f"Removed {rel}/")
                         removed.append(rel)
                     except OSError as exc:
                         printer.line(f"Failed to remove {rel}/: {exc}", ok=False)
                         failed.append((rel, str(exc)))
             case _:
-                printer.line(f"Skipped {rel}/")
+                printer.action(f"Skipped {rel}/")
                 skipped.append(rel)
 
     printer.blank_line()
@@ -92,7 +92,7 @@ def fix_empty_dirs(
     if failed:
         printer.meta("Failed", str(len(failed)))
     if dry_run:
-        printer.line("[dry-run] complete – no changes made", ok=True)
+        printer.action("[dry-run] complete – no changes made")
     return 1 if failed else 0
 
 
