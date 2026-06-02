@@ -248,6 +248,38 @@ jobs:
       - name: Install repo-release-tools from source
         run: uv pip install --system -e .
 
+      - name: Set up test git repo
+        run: |
+          mkdir /tmp/rrt-husky-test
+          cd /tmp/rrt-husky-test
+          git init -b feat/test-branch
+          git config user.name "RRT CI"
+          git config user.email "rrt@example.invalid"
+          git config commit.gpgsign false
+          cat > package.json << 'EOF'
+          {
+            "name": "test-project",
+            "version": "0.1.0",
+            "description": "test project for husky"
+          }
+          EOF
+          cat > pyproject.toml << 'EOF'
+          [build-system]
+          requires = ["setuptools"]
+          build-backend = "setuptools.backends.legacy:build"
+
+          [project]
+          name = "test-project"
+          version = "0.1.0"
+          EOF
+          cat > CHANGELOG.md << 'EOF'
+          # Changelog
+
+          ## [Unreleased]
+          EOF
+          git add .
+          git commit -m "chore: initial commit"
+
       - name: Install husky
         working-directory: /tmp/rrt-husky-test
         run: npm install --save-dev husky
