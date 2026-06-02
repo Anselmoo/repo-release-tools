@@ -1,5 +1,5 @@
 # Sample workflow for building and deploying a Jekyll site to GitHub Pages
-name: Deploy Jekyll with GitHub Pages dependencies preinstalled
+name: 📖 Deploy Jekyll with GitHub Pages dependencies preinstalled
 
 on:
   # Runs on pushes targeting the default branch
@@ -24,6 +24,7 @@ concurrency:
 jobs:
   # Verify job: lock-based drift checks before building
   verify:
+    name: ✅ Verify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -49,6 +50,7 @@ jobs:
 
   # Build job
   build:
+    name: 🏗️ Build
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -78,6 +80,7 @@ jobs:
 
   # Deployment job
   deploy:
+    name: 🚀 Deploy
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

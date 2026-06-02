@@ -1,4 +1,4 @@
-name: Hook Runners
+name: ⚓ Hook Runners
 
 on:
   push:
@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   pre-commit:
-    name: pre-commit hook runner
+    name: ⚓ pre-commit hook runner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -132,7 +132,7 @@ jobs:
           echo "OK: changelog updated correctly"
 
   lefthook:
-    name: lefthook hook runner
+    name: ⚓ lefthook hook runner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -224,7 +224,7 @@ jobs:
           fi
 
   husky:
-    name: husky hook runner
+    name: ⚓ husky hook runner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -247,40 +247,6 @@ jobs:
 
       - name: Install repo-release-tools from source
         run: uv pip install --system -e .
-
-      - name: Set up test git repo
-        run: |
-          mkdir /tmp/rrt-husky-test
-          cd /tmp/rrt-husky-test
-          git init -b feat/test-branch
-          git config user.name "RRT CI"
-          git config user.email "rrt@example.invalid"
-          git config commit.gpgsign false
-          cat > pyproject.toml << 'EOF'
-          [build-system]
-          requires = ["setuptools"]
-          build-backend = "setuptools.backends.legacy:build"
-
-          [project]
-          name = "test-project"
-          version = "0.1.0"
-          EOF
-          cat > CHANGELOG.md << 'EOF'
-          # Changelog
-
-          ## [Unreleased]
-          EOF
-          cat > package.json << 'EOF'
-          {
-            "name": "test-project",
-            "version": "0.1.0",
-            "scripts": {
-              "prepare": "husky"
-            }
-          }
-          EOF
-          git add .
-          git commit -m "chore: initial commit"
 
       - name: Install husky
         working-directory: /tmp/rrt-husky-test

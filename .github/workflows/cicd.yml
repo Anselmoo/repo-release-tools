@@ -1,4 +1,4 @@
-name: CI/CD
+name: 🚀 CI/CD
 
 on:
   push:
@@ -33,7 +33,7 @@ env:
 
 jobs:
   lint:
-    name: Lint
+    name: 🔍 Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -56,7 +56,7 @@ jobs:
         run: uvx pre-commit run --all-files --show-diff-on-failure
 
   verify:
-    name: Snapshot drift checks
+    name: ✅ Snapshot drift checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -89,7 +89,7 @@ jobs:
         run: uv run rrt artifacts --check --strict
 
   test:
-    name: Tests (${{ matrix.python-version }})
+    name: 🧪 Tests (${{ matrix.python-version }})
     needs: [lint, verify]
     runs-on: ubuntu-latest
     strategy:
@@ -130,7 +130,7 @@ jobs:
           verbose: false
 
   docker-image-check:
-    name: Docker image smoke check
+    name: 🐳 Docker image smoke check
     needs: test
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -154,7 +154,7 @@ jobs:
         run: docker run --rm repo-release-tools:ci --help
 
   docker-publish:
-    name: Publish Docker image
+    name: 🐳 Publish Docker image
     needs: docker-image-check
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -196,7 +196,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   build:
-    name: Build package
+    name: 📦 Build package
     needs: test
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -227,7 +227,7 @@ jobs:
           path: dist/
 
   sbom:
-    name: Generate SBOM
+    name: 📜 Generate SBOM
     needs: build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -251,7 +251,7 @@ jobs:
           path: sbom.spdx.json
 
   attest:
-    name: Attest build provenance
+    name: 🛡️ Attest build provenance
     needs: build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -272,7 +272,7 @@ jobs:
           subject-path: dist/*
 
   publish-testpypi:
-    name: Publish to TestPyPI
+    name: 🧪 Publish to TestPyPI
     needs: [build, sbom, attest]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
@@ -295,7 +295,7 @@ jobs:
           skip-existing: true
 
   verify-testpypi:
-    name: Verify TestPyPI package
+    name: 🧪 Verify TestPyPI package
     needs: publish-testpypi
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -332,7 +332,7 @@ jobs:
         run: rrt --help
 
   publish-pypi:
-    name: Publish to PyPI
+    name: 🚀 Publish to PyPI
     needs: [build, sbom, attest, publish-testpypi, verify-testpypi]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -352,7 +352,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
   github-release:
-    name: Create GitHub release
+    name: 🎁 Create GitHub release
     needs: [publish-pypi, sbom, docker-publish]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
