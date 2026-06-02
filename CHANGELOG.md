@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [1.8.1] - 2026-06-02
+
+### Fixed
+- readme banner reto style (#91)
+
 ## [1.8.0] - 2026-06-02
 ### Added
 
