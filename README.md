@@ -12,11 +12,13 @@
 </picture></a></p>
 <!-- rrt:auto:end:readme-header -->
 
-<picture>
+<!-- rrt:auto:start:readme-banner -->
+<p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-dark.png?raw=true">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-light.png?raw=true">
   <img alt="REPO-RELEASE-TOOLS pipeline banner" src="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-dark.png?raw=true">
-</picture>
+</picture></a></p>
+<!-- rrt:auto:end:readme-banner -->
 
 `repo-release-tools` keeps release policy boring in the best possible way.
 

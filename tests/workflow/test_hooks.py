@@ -711,6 +711,69 @@ def test_main_docs_hook_commands_set_explicit_defaults(monkeypatch: pytest.Monke
     assert suggest_args.apply is True
 
 
+def test_main_folder_check_hook_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    folder_calls: list[SimpleNamespace] = []
+
+    monkeypatch.setattr(
+        hooks,
+        "cmd_folder_check",
+        lambda parsed: folder_calls.append(parsed) or 42,
+    )
+
+    assert hooks.main(["folder-check"]) == 42
+    assert hooks.main(["folder-check", "--root", "/tmp", "--report-only", "--snapshot"]) == 42
+
+    default_args, custom_args = folder_calls
+    assert default_args.format == "text"
+    assert default_args.root == "."
+    assert default_args.template == []
+    assert default_args.report_only is False
+    assert default_args.snapshot is False
+
+    assert custom_args.root == "/tmp"
+    assert custom_args.report_only is True
+    assert custom_args.snapshot is True
+
+
+def test_main_artifacts_check_hook_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    artifact_calls: list[SimpleNamespace] = []
+
+    monkeypatch.setattr(
+        hooks,
+        "cmd_artifacts",
+        lambda parsed: artifact_calls.append(parsed) or 0,
+    )
+
+    assert hooks.main(["artifacts-check"]) == 0
+    assert hooks.main(["artifacts-check", "--no-strict"]) == 0
+
+    strict_args, no_strict_args = artifact_calls
+    assert strict_args.check is True
+    assert strict_args.snapshot is False
+    assert strict_args.list is False
+    assert strict_args.strict is True
+
+    assert no_strict_args.strict is False
+
+
+def test_main_artifacts_snapshot_hook_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    artifact_calls: list[SimpleNamespace] = []
+
+    monkeypatch.setattr(
+        hooks,
+        "cmd_artifacts",
+        lambda parsed: artifact_calls.append(parsed) or 0,
+    )
+
+    assert hooks.main(["artifacts-snapshot"]) == 0
+
+    (snap_args,) = artifact_calls
+    assert snap_args.snapshot is True
+    assert snap_args.check is False
+    assert snap_args.strict is False
+    assert snap_args.list is False
+
+
 def test_detect_changelog_workflow_falls_back_and_raises(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
