@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.8.0] - 2026-06-02
 ### Added
 
 - `rrt tree --strict-empty-dirs` flag that exits 1 when untrackable empty
