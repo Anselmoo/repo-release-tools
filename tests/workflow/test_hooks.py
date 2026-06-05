@@ -382,6 +382,39 @@ def test_run_changelog_check_covers_non_changelog_and_unreleased_failure(
     )
 
 
+def test_run_changelog_check_incremental_alias_uses_per_commit(tmp_path: Path) -> None:
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n", encoding="utf-8")
+
+    assert (
+        hooks.run_changelog_check(
+            "feat: add parser",
+            cwd=tmp_path,
+            changelog_file="CHANGELOG.md",
+            changed_files=["CHANGELOG.md"],
+            ref="HEAD",
+            title="Changelog",
+            strategy="incremental",
+            branch="feat/add-parser",
+        )
+        == 0
+    )
+
+    assert (
+        hooks.run_changelog_check(
+            "feat: add parser",
+            cwd=tmp_path,
+            changelog_file="CHANGELOG.md",
+            changed_files=["src/app.py"],
+            ref="HEAD",
+            title="Changelog",
+            strategy="incremental",
+            branch="feat/add-parser",
+        )
+        == 1
+    )
+
+
 def test_run_update_unreleased_and_changelog_check_error_branches(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -646,6 +679,8 @@ def test_run_post_correct_and_main_dispatch(
                 "feat: add parser",
                 "--changelog-file",
                 "CHANGELOG.md",
+                "--strategy",
+                "incremental",
             ],
         )
         == 23
@@ -809,6 +844,7 @@ def test_resolve_changelog_strategy_handles_auto_and_passthrough(
     tmp_path: Path,
 ) -> None:
     assert hooks._resolve_changelog_strategy(tmp_path, "per-commit") == "per-commit"
+    assert hooks._resolve_changelog_strategy(tmp_path, "incremental") == "per-commit"
 
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "squash")
     assert hooks._resolve_changelog_strategy(tmp_path, "auto") == "release-only"
