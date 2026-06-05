@@ -58,29 +58,11 @@ def register(mcp: FastMCP) -> None:
         """Run rrt health checks (pre-commit, lefthook, husky, workflows) and return structured results."""
         from repo_release_tools.commands.doctor import (
             _check_github_workflows,
-            _check_husky,
-            _check_text_integration,
+            _check_hook_integrations,
         )
 
         root: Path = ctx.lifespan_context.get("root", Path.cwd())
-        raw = {
-            "pre_commit": _check_text_integration(
-                root,
-                ".pre-commit-config.yaml",
-                markers=("repo-release-tools", "rrt-"),
-                success_message=".pre-commit-config.yaml includes repo-release-tools hooks",
-                warning_message=".pre-commit-config.yaml exists but no repo-release-tools hooks detected",
-            ),
-            "lefthook": _check_text_integration(
-                root,
-                "lefthook.yml",
-                markers=("rrt-hooks", "repo-release-tools"),
-                success_message="lefthook.yml includes repo-release-tools hooks",
-                warning_message="lefthook.yml exists but no repo-release-tools hooks detected",
-            ),
-            "husky": _check_husky(root),
-            "workflows": _check_github_workflows(root),
-        }
+        raw = {**_check_hook_integrations(root), "workflows": _check_github_workflows(root)}
         return DoctorResponse(
             **{
                 name: CheckResult(message=msg, ok=ok, severity=sev)

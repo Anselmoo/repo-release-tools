@@ -13,6 +13,9 @@ from repo_release_tools.ui.color import (
     info as _c_info,
 )
 from repo_release_tools.ui.color import (
+    obsolete as _c_obsolete,
+)
+from repo_release_tools.ui.color import (
     subtle as _c_subtle,
 )
 from repo_release_tools.ui.color import (
@@ -79,6 +82,11 @@ def render_hint(message: str, *, indent: int = 2, stream: IO[str] | None = None)
 def render_ok(message: str, *, indent: int = 2, stream: IO[str] | None = None) -> str:
     """Render a success line: ``✔ <message>``."""
     return render_status(GLYPHS.bullet.ok, _c_success(message, stream=stream), indent=indent)
+
+
+def render_obsolete(message: str, *, indent: int = 2, stream: IO[str] | None = None) -> str:
+    """Render an obsolete line: ``○ <message>``."""
+    return render_status(GLYPHS.bullet.obsolete, _c_obsolete(message, stream=stream), indent=indent)
 
 
 def render_warning(message: str, *, indent: int = 2, stream: IO[str] | None = None) -> str:
@@ -160,6 +168,11 @@ class BasePrinter:
     def ok(self, message: str) -> None:
         """Print a success line (✔ message)."""
         print(f"{GLYPHS.bullet.ok} {_c_success(message)}")
+
+    def obsolete(self, message: str, *, stream: IO[str] | None = None) -> None:
+        """Print an obsolete line (○ message)."""
+        out = stream if stream is not None else sys.stdout
+        print(f"{GLYPHS.bullet.obsolete} {_c_obsolete(message)}", file=out)
 
     def line(
         self,

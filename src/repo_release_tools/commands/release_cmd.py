@@ -207,6 +207,8 @@ def cmd_release_check(args: argparse.Namespace) -> int:  # noqa: ARG001
             match severity:
                 case "ok":
                     p.line(f"  {msg}", ok=True)
+                case "obsolete":
+                    p.obsolete(f"  {msg}")
                 case "warning":
                     p.warn(f"  {msg}")
                 case _:

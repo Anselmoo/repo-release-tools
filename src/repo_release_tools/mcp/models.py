@@ -22,7 +22,7 @@ Result of a single automation health check (pre-commit, lefthook, husky, or CI w
 Fields:
 - `message` — human-readable outcome text
 - `ok` — `True` when the check passed
-- `severity` — one of `"ok"`, `"warning"`, `"error"`
+- `severity` — one of `"ok"`, `"obsolete"`, `"warning"`, `"error"`
 
 ### `DoctorResponse`
 Aggregated result of `rrt_doctor`, which checks whether a project's automation tooling

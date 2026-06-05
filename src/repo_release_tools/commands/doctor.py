@@ -27,7 +27,8 @@ The command prints one grouped report for the core automation surfaces and an
 overall status at the end.
 
 - unreadable automation files are errors
-- missing optional integration surfaces are warnings
+- missing hook-manager surfaces are obsolete when another hook manager is active
+- missing optional integration surfaces are warnings when no equivalent surface is active
 - surfaces that exist but do not appear to reference repo-release-tools are warnings
 - readable, recognized surfaces are reported as OK
 
@@ -205,6 +206,47 @@ def _check_husky(root: Path) -> tuple[str, bool, str]:
     return ".husky exists but no repo-release-tools hooks were detected", True, "warning"
 
 
+def _obsolete_hook_check(message: str, active_names: list[str]) -> tuple[str, bool, str]:
+    """Return an obsolete hook-manager result for a missing inactive surface."""
+    active = ", ".join(active_names)
+    return f"{message} (obsolete: {active} already configured)", True, "obsolete"
+
+
+def _check_hook_integrations(root: Path) -> dict[str, tuple[str, bool, str]]:
+    """Inspect hook-manager integrations and mark inactive alternatives obsolete."""
+    checks: dict[str, tuple[str, bool, str]] = {
+        "pre_commit": _check_text_integration(
+            root,
+            ".pre-commit-config.yaml",
+            markers=("repo-release-tools", "rrt-"),
+            success_message=".pre-commit-config.yaml includes repo-release-tools hooks",
+            warning_message=(
+                ".pre-commit-config.yaml exists but no repo-release-tools hooks were detected"
+            ),
+        ),
+        "lefthook": _check_text_integration(
+            root,
+            "lefthook.yml",
+            markers=("rrt-hooks", "repo-release-tools"),
+            success_message="lefthook.yml includes repo-release-tools hooks",
+            warning_message="lefthook.yml exists but no repo-release-tools hooks were detected",
+        ),
+        "husky": _check_husky(root),
+    }
+    active_names = [name for name, (_message, _ok, severity) in checks.items() if severity == "ok"]
+    if not active_names:
+        return checks
+
+    return {
+        name: (
+            _obsolete_hook_check(message, active_names)
+            if severity == "warning" and message.endswith(" not configured")
+            else (message, ok, severity)
+        )
+        for name, (message, ok, severity) in checks.items()
+    }
+
+
 def _fix_missing_unreleased(root: Path, config: object, *, dry_run: bool) -> list[str]:
     """Add a missing [Unreleased] section to each group's changelog.
 
@@ -290,30 +332,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     p.verbose_line(f"  groups: {group_count}", level=2)
     p.blank_line()
 
+    hook_checks = _check_hook_integrations(root)
     named_checks: list[tuple[str, tuple[str, bool, str]]] = [
-        (
-            "pre_commit",
-            _check_text_integration(
-                root,
-                ".pre-commit-config.yaml",
-                markers=("repo-release-tools", "rrt-"),
-                success_message=".pre-commit-config.yaml includes repo-release-tools hooks",
-                warning_message=(
-                    ".pre-commit-config.yaml exists but no repo-release-tools hooks were detected"
-                ),
-            ),
-        ),
-        (
-            "lefthook",
-            _check_text_integration(
-                root,
-                "lefthook.yml",
-                markers=("rrt-hooks", "repo-release-tools"),
-                success_message="lefthook.yml includes repo-release-tools hooks",
-                warning_message="lefthook.yml exists but no repo-release-tools hooks were detected",
-            ),
-        ),
-        ("husky", _check_husky(root)),
+        ("pre_commit", hook_checks["pre_commit"]),
+        ("lefthook", hook_checks["lefthook"]),
+        ("husky", hook_checks["husky"]),
         ("workflows", _check_github_workflows(root)),
     ]
 
@@ -349,6 +372,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         match severity:
             case "ok":
                 p.line(f"  {message}", ok=True)
+            case "obsolete":
+                p.obsolete(f"  {message}")
             case "warning":
                 p.warn(f"  {message}")
             case _:

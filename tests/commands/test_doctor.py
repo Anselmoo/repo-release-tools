@@ -214,6 +214,54 @@ def test_doctor_pre_commit_surface_detected(
     assert "includes repo-release-tools hooks" in out
 
 
+def test_doctor_missing_alternative_hook_managers_are_obsolete(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A configured hook manager makes missing alternatives obsolete, not warnings."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    (tmp_path / ".pre-commit-config.yaml").write_text(
+        "repos:\n  - repo: https://github.com/Anselmoo/repo-release-tools\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "lefthook.yml not configured (obsolete: pre_commit already configured)" in out
+    assert ".husky not configured (obsolete: pre_commit already configured)" in out
+
+
+def test_doctor_existing_alternative_hook_manager_without_markers_still_warns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Existing alternative hook config still warns when it lacks rrt markers."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    (tmp_path / ".pre-commit-config.yaml").write_text(
+        "repos:\n  - repo: https://github.com/Anselmoo/repo-release-tools\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "lefthook.yml").write_text(
+        "pre-commit:\n  commands:\n    lint:\n      run: pytest\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "lefthook.yml exists but no repo-release-tools hooks were detected" in out
+    assert "lefthook.yml not configured (obsolete:" not in out
+
+
 def test_doctor_pre_commit_surface_missing_markers_warns(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -648,6 +696,29 @@ def test_doctor_snapshot_writes_health_lock(
     assert "meta" in data
     assert "checks" in data
     assert "pre_commit" in data["checks"]
+
+
+def test_doctor_snapshot_writes_obsolete_hook_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Snapshots preserve obsolete hook-manager status."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    (tmp_path / ".pre-commit-config.yaml").write_text(
+        "repos:\n  - repo: https://github.com/Anselmoo/repo-release-tools\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_args_snapshot(snapshot=True))
+
+    assert rc == 0
+    import tomllib
+
+    data = tomllib.loads((tmp_path / ".rrt" / "health.lock.toml").read_text())
+    assert data["checks"]["lefthook"]["status"] == "obsolete"
+    assert data["checks"]["husky"]["status"] == "obsolete"
 
 
 def test_doctor_check_exits_0_when_no_regression(

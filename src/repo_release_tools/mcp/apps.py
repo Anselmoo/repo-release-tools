@@ -35,7 +35,7 @@ the current version string (or an error message when the file is missing).
 ### `rrt_doctor_dashboard`
 
 Health check cards for the automation tooling: pre-commit, lefthook, husky, and GitHub
-Actions workflows.  Each card shows a severity badge (ok / warning / error) and the
+Actions workflows.  Each card shows a severity badge (ok / obsolete / warning / error) and the
 diagnostic message.  An overall badge summarises the worst severity across all checks.
 
 ### `rrt_tree_dashboard`
@@ -70,7 +70,7 @@ writing files unless the user explicitly disables dry-run.
 
 ### `_severity_icon(severity)`
 
-Maps `"ok"` → `"✓"`, `"warning"` → `"⚠"`, `"error"` → `"✗"`, anything else → `"?"`.
+Maps `"ok"` → `"✓"`, `"obsolete"` → `"○"`, `"warning"` → `"⚠"`, `"error"` → `"✗"`, anything else → `"?"`.
 
 ### `_badge_variant(severity)`
 
@@ -134,13 +134,20 @@ from repo_release_tools import __version__ as _PKG_VERSION
 
 
 def _severity_icon(severity: str) -> str:
-    return {"ok": "✓", "warning": "⚠", "error": "✗"}.get(severity, "?")
+    return {"ok": "✓", "obsolete": "○", "warning": "⚠", "error": "✗"}.get(severity, "?")
 
 
 def _badge_variant(severity: str) -> str:
-    return {"ok": "success", "warning": "warning", "error": "destructive"}.get(
-        severity, "secondary"
-    )
+    return {
+        "ok": "success",
+        "obsolete": "secondary",
+        "warning": "warning",
+        "error": "destructive",
+    }.get(severity, "secondary")
+
+
+def _healthy_status_count(severities: list[str]) -> int:
+    return sum(1 for severity in severities if severity in {"ok", "obsolete"})
 
 
 def _overall_badge(severities: list[str]) -> tuple[str, str]:
@@ -190,7 +197,7 @@ def register_apps(mcp: FastMCP) -> None:
         check_entries: list[dict[str, Any]] = []
 
         health = read_lock(health_lock_path(root))
-        hc: dict[str, int] = {"ok": 0, "warning": 0, "error": 0}
+        hc: dict[str, int] = {"ok": 0, "obsolete": 0, "warning": 0, "error": 0}
         for name, entry in health.get("checks", {}).items():
             sev = entry.get("status", "ok")
             hc[sev if sev in hc else "ok"] += 1
@@ -260,7 +267,7 @@ def register_apps(mcp: FastMCP) -> None:
 
         all_sevs = [r["severity"] for r in rows if isinstance(r, dict)]
         badge_label, badge_variant = _overall_badge(all_sevs)
-        ok_n = all_sevs.count("ok")
+        ok_n = _healthy_status_count(all_sevs)
         warn_n = all_sevs.count("warning")
         err_n = all_sevs.count("error")
         total = len(rows)
@@ -301,6 +308,7 @@ def register_apps(mcp: FastMCP) -> None:
                             data=chart_data,
                             series=[
                                 ChartSeries(dataKey="ok", label="OK"),
+                                ChartSeries(dataKey="obsolete", label="Obsolete"),
                                 ChartSeries(dataKey="warning", label="Warning"),
                                 ChartSeries(dataKey="error", label="Error"),
                             ],
@@ -410,7 +418,7 @@ def register_apps(mcp: FastMCP) -> None:
             for name, entry in health.get("checks", {}).items()
         ]
         badge_label, badge_variant = _overall_badge([ce["severity"] for ce in check_entries])
-        ok_n = sum(1 for ce in check_entries if ce["severity"] == "ok")
+        ok_n = _healthy_status_count([ce["severity"] for ce in check_entries])
         total = max(len(check_entries), 1)
         ok_pct = round(ok_n / total * 100)
         ring_variant = "success" if ok_pct == 100 else ("warning" if ok_pct > 0 else "destructive")
@@ -628,7 +636,8 @@ def register_apps(mcp: FastMCP) -> None:
 
         health = read_lock(health_lock_path(root))
         h_checks = health.get("checks", {})
-        h_ok = sum(1 for e in h_checks.values() if e.get("status") == "ok")
+        h_ok = sum(1 for e in h_checks.values() if e.get("status") in {"ok", "obsolete"})
+        h_obsolete = sum(1 for e in h_checks.values() if e.get("status") == "obsolete")
         h_warn = sum(1 for e in h_checks.values() if e.get("status") == "warning")
         h_err = sum(1 for e in h_checks.values() if e.get("status") == "error")
         for name, entry in h_checks.items():
@@ -647,7 +656,10 @@ def register_apps(mcp: FastMCP) -> None:
         lock_summaries.append(
             {
                 "lock": "Health",
-                "desc": f"{len(h_checks)} checks: {h_ok} ok, {h_warn} warn, {h_err} err",
+                "desc": (
+                    f"{len(h_checks)} checks: {h_ok} healthy, "
+                    f"{h_obsolete} obsolete, {h_warn} warn, {h_err} err"
+                ),
                 "severity": overall_sev,
                 "value": str(h_ok),
                 "delta": f"{h_warn + h_err} issues" if h_warn + h_err else "all clear",
@@ -737,11 +749,13 @@ def register_apps(mcp: FastMCP) -> None:
 
         all_sevs = [r["severity"] for r in rows if isinstance(r, dict)]
         badge_label, badge_variant = _overall_badge(all_sevs)
-        ok_n = all_sevs.count("ok")
+        ok_n = _healthy_status_count(all_sevs)
+        obsolete_n = all_sevs.count("obsolete")
         warn_n = all_sevs.count("warning")
         err_n = all_sevs.count("error")
         pie_data = [
             {"status": "ok", "count": ok_n},
+            {"status": "obsolete", "count": obsolete_n},
             {"status": "warning", "count": warn_n},
             {"status": "error", "count": err_n},
         ]

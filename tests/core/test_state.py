@@ -254,16 +254,18 @@ class TestBuildHealthLock:
         assert result["checks"] == {}
 
     def test_status_stored(self) -> None:
-        """Should preserve ok/warning/error status values."""
+        """Should preserve ok/obsolete/warning/error status values."""
         checks = [
             {"name": "a", "status": "ok"},
-            {"name": "b", "status": "warning"},
-            {"name": "c", "status": "error"},
+            {"name": "b", "status": "obsolete"},
+            {"name": "c", "status": "warning"},
+            {"name": "d", "status": "error"},
         ]
         result = build_health_lock(checks)
         assert result["checks"]["a"]["status"] == "ok"
-        assert result["checks"]["b"]["status"] == "warning"
-        assert result["checks"]["c"]["status"] == "error"
+        assert result["checks"]["b"]["status"] == "obsolete"
+        assert result["checks"]["c"]["status"] == "warning"
+        assert result["checks"]["d"]["status"] == "error"
 
     def test_message_preserved(self) -> None:
         """Should store the optional message field."""
@@ -304,6 +306,22 @@ class TestHealthLockIsCurrent:
         """ok → warning is a regression."""
         lock_path = tmp_path / "health.lock.toml"
         write_lock(lock_path, build_health_lock([{"name": "x", "status": "ok"}]))
+        ok, msgs = health_lock_is_current(lock_path, [{"name": "x", "status": "warning"}])
+        assert not ok
+        assert any("x" in m for m in msgs)
+
+    def test_obsolete_is_not_regression_from_ok(self, tmp_path: Path) -> None:
+        """ok → obsolete is not a regression."""
+        lock_path = tmp_path / "health.lock.toml"
+        write_lock(lock_path, build_health_lock([{"name": "x", "status": "ok"}]))
+        ok, msgs = health_lock_is_current(lock_path, [{"name": "x", "status": "obsolete"}])
+        assert ok
+        assert msgs == []
+
+    def test_obsolete_to_warning_is_regression(self, tmp_path: Path) -> None:
+        """obsolete → warning is a regression."""
+        lock_path = tmp_path / "health.lock.toml"
+        write_lock(lock_path, build_health_lock([{"name": "x", "status": "obsolete"}]))
         ok, msgs = health_lock_is_current(lock_path, [{"name": "x", "status": "warning"}])
         assert not ok
         assert any("x" in m for m in msgs)
