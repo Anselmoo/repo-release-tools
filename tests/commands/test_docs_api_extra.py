@@ -58,7 +58,7 @@ def test_build_api_index_skips_non_parser_choice_value() -> None:
 
     sp_action = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
     # Ensure choices is a dict and inject a non-parser value under a key
-    raw_choices = dict(sp_action.choices)
+    raw_choices: dict[str, object] = dict(sp_action.choices)
     raw_choices["broken"] = "not-a-parser"
     setattr(sp_action, "choices", raw_choices)  # type: ignore[arg-type]
 
