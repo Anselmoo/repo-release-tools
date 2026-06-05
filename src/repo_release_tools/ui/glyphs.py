@@ -353,6 +353,7 @@ class BulletGlyphs:
 
     dot: Glyph = field(default_factory=lambda: Glyph(_g("*", "•"), "dot"))
     ok: Glyph = field(default_factory=lambda: Glyph(_g("[OK]", "✔"), "ok"))
+    obsolete: Glyph = field(default_factory=lambda: Glyph(_g("( )", "○"), "obsolete"))
     skip: Glyph = field(default_factory=lambda: Glyph(_g("[-]", "⊖"), "skip"))
     warning: Glyph = field(default_factory=lambda: Glyph(_g("/!\\", "▲"), "warning"))
     error: Glyph = field(default_factory=lambda: Glyph(_g("[E]", "✖"), "error"))

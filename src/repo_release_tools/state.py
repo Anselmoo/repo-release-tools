@@ -164,8 +164,8 @@ def upsert_health_lock_checks(lock_path: Path, checks: list[dict[str, Any]]) -> 
 def build_health_lock(checks: list[dict[str, Any]]) -> dict[str, Any]:
     """Construct a health snapshot lock dict from a list of check result dicts.
 
-    Each entry must have ``name`` (str) and ``status`` (``"ok"``, ``"warning"``,
-    or ``"error"``).  An optional ``message`` field is preserved verbatim.
+    Each entry must have ``name`` (str) and ``status`` (``"ok"``, ``"obsolete"``,
+    ``"warning"``, or ``"error"``).  An optional ``message`` field is preserved verbatim.
     """
     ts = now_utc()
     result: dict[str, Any] = {
@@ -191,15 +191,15 @@ def health_lock_is_current(
 ) -> tuple[bool, list[str]]:
     """Compare current check statuses against the health lockfile.
 
-    Only regressions are reported (ok→warning/error, or new check added).
-    Improvements (warning→ok) are silently accepted.
+    Only regressions are reported (ok/obsolete→warning/error, or new check added).
+    Improvements (warning→ok/obsolete) are silently accepted.
 
     Returns ``(is_current, list_of_regression_messages)``.
     """
     current = read_lock(lock_path)
     locked_checks: dict[str, Any] = current.get("checks", {})
 
-    _SEVERITY = {"ok": 0, "warning": 1, "error": 2}
+    _SEVERITY = {"ok": 0, "obsolete": 0, "warning": 1, "error": 2}
 
     regressions: list[str] = []
     for entry in checks:

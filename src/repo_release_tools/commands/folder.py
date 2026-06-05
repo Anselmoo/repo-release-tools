@@ -107,10 +107,13 @@ def cmd_folder_check(args: argparse.Namespace) -> int:
             continue
         p.warn(f"{target.rule_name}: {target.base_path}")
         for violation in target.violations:
-            if violation.severity == "warning":
-                p.warn(f"{violation.path}: {violation.message}")
-            else:
-                p.line(f"{violation.path}: {violation.message}", ok=False, stream=sys.stderr)
+            match violation.severity:
+                case "warning":
+                    p.warn(f"{violation.path}: {violation.message}")
+                case "obsolete":
+                    p.obsolete(f"{violation.path}: {violation.message}")
+                case _:
+                    p.line(f"{violation.path}: {violation.message}", ok=False, stream=sys.stderr)
 
     return 0 if report.ok or args.report_only else 1
 

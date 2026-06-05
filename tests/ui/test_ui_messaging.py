@@ -34,10 +34,16 @@ def test_render_helpers_use_expected_glyphs(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(messaging, "_c_info", lambda message, stream=None: message)
     monkeypatch.setattr(messaging, "_c_subtle", lambda message, stream=None: message)
     monkeypatch.setattr(messaging, "_c_success", lambda message, stream=None: message)
+    monkeypatch.setattr(messaging, "_c_obsolete", lambda message, stream=None: message)
     monkeypatch.setattr(messaging, "_c_warning", lambda message, stream=None: message)
     monkeypatch.setattr("repo_release_tools.ui.color.error", lambda message, stream=None: message)
 
     assert messaging.render_ok("done").strip().startswith(str(messaging.GLYPHS.bullet.ok))
+    assert (
+        messaging.render_obsolete("obsolete")
+        .strip()
+        .startswith(str(messaging.GLYPHS.bullet.obsolete))
+    )
     assert (
         messaging.render_warning("careful").strip().startswith(str(messaging.GLYPHS.bullet.warning))
     )

@@ -17,6 +17,7 @@ from prefab_ui.app import PrefabApp
 from repo_release_tools.mcp.apps import (
     RrtInitForm,
     _badge_variant,
+    _healthy_status_count,
     _overall_badge,
     _severity_icon,
     register_apps,
@@ -62,7 +63,7 @@ def _registered(tmp_path: Path) -> dict[str, Any]:
 
 @pytest.mark.parametrize(
     "sev, expected",
-    [("ok", "✓"), ("warning", "⚠"), ("error", "✗"), ("unknown", "?")],
+    [("ok", "✓"), ("obsolete", "○"), ("warning", "⚠"), ("error", "✗"), ("unknown", "?")],
 )
 def test_severity_icon(sev: str, expected: str) -> None:
     assert _severity_icon(sev) == expected
@@ -73,10 +74,20 @@ def test_severity_icon(sev: str, expected: str) -> None:
 
 @pytest.mark.parametrize(
     "sev, expected",
-    [("ok", "success"), ("warning", "warning"), ("error", "destructive"), ("other", "secondary")],
+    [
+        ("ok", "success"),
+        ("obsolete", "secondary"),
+        ("warning", "warning"),
+        ("error", "destructive"),
+        ("other", "secondary"),
+    ],
 )
 def test_badge_variant(sev: str, expected: str) -> None:
     assert _badge_variant(sev) == expected
+
+
+def test_healthy_status_count_includes_obsolete() -> None:
+    assert _healthy_status_count(["ok", "obsolete", "warning", "error"]) == 2
 
 
 # ── _overall_badge ────────────────────────────────────────────────────────────

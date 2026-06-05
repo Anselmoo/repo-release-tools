@@ -312,6 +312,58 @@ def test_release_check_global_pins_deduplicated(
     assert out.count("page.md") == 1
 
 
+def test_release_check_version_target_obsolete_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Obsolete status is rendered for version targets."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(release_cmd, "load_or_autodetect_config", lambda _: conf)
+
+    def mock_check_version(_: object, __: Path) -> tuple[str, bool, str]:
+        return ("1.2.3 (obsolete: other manager active)", True, "obsolete")
+
+    monkeypatch.setattr(release_cmd, "_check_version_target", mock_check_version)
+
+    rc = release_cmd.cmd_release_check(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "obsolete: other manager active" in out
+
+
+def test_release_check_pin_target_obsolete_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Obsolete status is rendered for pin targets."""
+    monkeypatch.chdir(tmp_path)
+    pin_file = tmp_path / "docs" / "page.md"
+    pin_file.parent.mkdir(parents=True)
+    pin_file.write_text("uses: Anselmoo/repo-release-tools@v1.2.3\n", encoding="utf-8")
+    pin = PinTarget(path=pin_file, pattern=_VALID_PIN_PATTERN)
+    conf = _make_config(tmp_path, pin_targets=[pin])
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(release_cmd, "load_or_autodetect_config", lambda _: conf)
+
+    def mock_check_pin(_: object, __: Path) -> tuple[str, bool, str]:
+        return ("docs/page.md (obsolete: deprecated)", True, "obsolete")
+
+    monkeypatch.setattr(release_cmd, "_check_pin_target", mock_check_pin)
+
+    rc = release_cmd.cmd_release_check(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "obsolete: deprecated" in out
+
+
 # ---------------------------------------------------------------------------
 # release notes tests
 # ---------------------------------------------------------------------------

@@ -131,7 +131,8 @@ The command prints one grouped report for the core automation surfaces and an
 overall status at the end.
 
 - unreadable automation files are errors
-- missing optional integration surfaces are warnings
+- missing hook-manager surfaces are obsolete when another hook manager is active
+- missing optional integration surfaces are warnings when no equivalent surface is active
 - surfaces that exist but do not appear to reference repo-release-tools are warnings
 - readable, recognized surfaces are reported as OK
 

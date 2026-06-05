@@ -154,9 +154,11 @@ def test_rrt_doctor(tmp_path: Path) -> None:
     register_config(mcp)  # ty: ignore[invalid-argument-type]
     ctx = _ctx(tmp_path)
     ok_check = ("all good", True, "ok")
+    hook_checks = {"pre_commit": ok_check, "lefthook": ok_check, "husky": ok_check}
     with (
-        patch("repo_release_tools.commands.doctor._check_text_integration", return_value=ok_check),
-        patch("repo_release_tools.commands.doctor._check_husky", return_value=ok_check),
+        patch(
+            "repo_release_tools.commands.doctor._check_hook_integrations", return_value=hook_checks
+        ),
         patch("repo_release_tools.commands.doctor._check_github_workflows", return_value=ok_check),
     ):
         result = mcp._tools["rrt_doctor"](ctx)

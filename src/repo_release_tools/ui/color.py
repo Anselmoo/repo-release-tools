@@ -210,6 +210,11 @@ def success(text: str, *, stream: IO[str] | None = None) -> str:
     return apply(text, Style(fg=32, bold=True), stream=stream)
 
 
+def obsolete(text: str, *, stream: IO[str] | None = None) -> str:
+    """Render obsolete-themed text."""
+    return apply(text, Style(fg=90), stream=stream)
+
+
 def warning(text: str, *, stream: IO[str] | None = None) -> str:
     """Render warning-themed text."""
     return apply(text, Style(fg=33, bold=True), stream=stream)
@@ -248,6 +253,7 @@ def chrome(text: str, *, stream: IO[str] | None = None) -> str:
 THEMES: dict[str, dict[str, Style]] = {
     "default": {
         "success": Style(fg=32, bold=True),
+        "obsolete": Style(fg=90),
         "warning": Style(fg=33, bold=True),
         "error": Style(fg=31, bold=True),
         "info": Style(fg=36, italic=True),
@@ -257,6 +263,7 @@ THEMES: dict[str, dict[str, Style]] = {
     },
     "monochrome": {
         "success": Style(bold=True),
+        "obsolete": Style(dim=True),
         "warning": Style(bold=True, underline=True),
         "error": Style(bold=True),
         "info": Style(italic=True),
@@ -266,6 +273,7 @@ THEMES: dict[str, dict[str, Style]] = {
     },
     "pastel": {
         "success": Style(fg=114, bold=True),  # soft green
+        "obsolete": Style(fg=102),  # muted grey
         "warning": Style(fg=221, bold=True),  # soft yellow
         "error": Style(fg=203, bold=True),  # soft red
         "info": Style(fg=117, italic=True),  # soft blue
@@ -310,6 +318,7 @@ def get_theme() -> dict[str, Style]:
 _NAMED_STYLES.update(
     {
         "success": Style(fg=32, bold=True),
+        "obsolete": Style(fg=90),
         "warning": Style(fg=33, bold=True),
         "error": Style(fg=31, bold=True),
         "info": Style(fg=36, italic=True),
