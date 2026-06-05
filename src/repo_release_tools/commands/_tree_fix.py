@@ -8,6 +8,7 @@ the directory and CI manifests match local) or delete the directory. Honors
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from repo_release_tools.ui import DryRunPrinter
@@ -81,6 +82,18 @@ def fix_empty_dirs(
                     except OSError as exc:
                         printer.line(f"Failed to remove {rel}/: {exc}", ok=False)
                         failed.append((rel, str(exc)))
+            case "hard-delete":
+                if dry_run:
+                    printer.action(f"[dry-run] Would hard-remove {rel}/")
+                    removed.append(rel)
+                else:
+                    try:
+                        shutil.rmtree(target)
+                        printer.ok(f"Removed {rel}/")
+                        removed.append(rel)
+                    except OSError as exc:
+                        printer.line(f"Failed to remove {rel}/: {exc}", ok=False)
+                        failed.append((rel, str(exc)))
             case _:
                 printer.action(f"Skipped {rel}/")
                 skipped.append(rel)
@@ -97,19 +110,23 @@ def fix_empty_dirs(
 
 
 def _choose_action(rel: str, *, assume_yes: bool) -> str:
-    """Return one of: 'gitkeep', 'delete', 'skip'."""
+    """Return one of: 'gitkeep', 'delete', 'hard-delete', 'skip'."""
     if assume_yes:
         return "gitkeep"
     answer = (
         ask(
-            f"  {rel}/ — (k)eep+gitkeep, (d)elete, (s)kip",
+            f"  {rel}/ — (k)eep+gitkeep, (d)elete, (h)ard-delete, (s)kip",
             default="k",
         )
         .strip()
         .lower()
     )
-    if answer in {"d", "delete"}:
-        return "delete"
-    if answer in {"s", "skip"}:
-        return "skip"
-    return "gitkeep"
+    match answer:
+        case "d" | "delete":
+            return "delete"
+        case "h" | "hard" | "hard-delete":
+            return "hard-delete"
+        case "s" | "skip":
+            return "skip"
+        case _:
+            return "gitkeep"

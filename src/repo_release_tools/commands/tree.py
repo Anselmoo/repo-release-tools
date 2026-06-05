@@ -489,7 +489,11 @@ def _warn_for_empty_directories(
             if has_only_gitkeep:
                 continue
             if children == []:
-                if root is not None and (root / current / ".gitkeep").exists():
+                if (
+                    root is not None
+                    and (root / current).exists()
+                    and any((root / current).iterdir())
+                ):
                     continue
                 phantom.append(current)
                 warnings.append(

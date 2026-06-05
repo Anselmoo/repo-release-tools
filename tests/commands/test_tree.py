@@ -739,6 +739,23 @@ def test_warn_for_empty_directories_skips_inline_gitkeep_only() -> None:
     assert warnings == []
 
 
+def test_warn_for_empty_directories_skips_dir_with_gitignored_content(
+    tmp_path: Path,
+) -> None:
+    """A dir that appears empty in the tree because all its contents are gitignored
+    must not be flagged as phantom — it has real files on disk."""
+    pycache = tmp_path / "src" / "__pycache__"
+    pycache.mkdir(parents=True)
+    (pycache / "module.cpython-313.pyc").write_text("", encoding="utf-8")
+    entries: list[tree.TreeEntry] = [
+        ("src", True, [("__pycache__", True, [])]),
+    ]
+    warnings: list[str] = []
+    phantom = tree._warn_for_empty_directories(entries, warnings, root=tmp_path)
+    assert phantom == []
+    assert warnings == []
+
+
 def test_cmd_tree_warns_on_truly_empty_directories(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
