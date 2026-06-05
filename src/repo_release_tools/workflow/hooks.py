@@ -259,6 +259,8 @@ def _detect_changelog_workflow(cwd: Path) -> str:
 
 def _resolve_changelog_strategy(cwd: Path, strategy: str) -> str:
     """Resolve an explicit or workflow-derived changelog enforcement strategy."""
+    if strategy == "incremental":
+        return "per-commit"
     if strategy != "auto":
         return strategy
     workflow = _detect_changelog_workflow(cwd)
@@ -784,6 +786,8 @@ def run_changelog_check(
     ``auto`` (default)
         Derives the strategy from ``changelog_workflow``. ``incremental`` maps
         to ``per-commit`` and ``squash`` maps to ``release-only``.
+    ``incremental``
+        Compatibility alias for ``per-commit``.
     ``per-commit``
         The changelog file must appear in the commit's changed file list.
     ``unreleased``
@@ -1018,10 +1022,11 @@ def main(argv: list[str] | None = None) -> int:
     changelog_check_parser.add_argument(
         "--strategy",
         default="auto",
-        choices=["auto", "per-commit", "unreleased", "release-only"],
+        choices=["auto", "incremental", "per-commit", "unreleased", "release-only"],
         help=(
             "Changelog enforcement strategy: "
             "'auto' (default) derives from changelog_workflow; "
+            "'incremental' is an alias for 'per-commit'; "
             "'per-commit' requires the changelog in the changed-file list; "
             "'unreleased' requires a non-empty [Unreleased] section; "
             "'release-only' skips the check entirely."

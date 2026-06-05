@@ -110,7 +110,7 @@ hooks with CI `changelog-strategy: "unreleased"`.
 | `check-branch-name` | `"true"` | Validate branch naming convention |
 | `check-commit-subject` | `"true"` | Validate Conventional Commit subject |
 | `check-changelog` | `"true"` | Validate changelog policy for changelog-relevant commits |
-| `changelog-strategy` | `"auto"` | `auto` / `per-commit` / `unreleased` / `release-only` |
+| `changelog-strategy` | `"auto"` | `auto` / `incremental` / `per-commit` / `unreleased` / `release-only` |
 | `changelog-file` | `"CHANGELOG.md"` | Path to changelog file |
 | `check-dirty-tree` | `"false"` | Fail when generated files leave the work tree dirty |
 | `check-doctor` | `"false"` | Run `rrt doctor` core automation checks |
