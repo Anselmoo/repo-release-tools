@@ -285,3 +285,45 @@ def test_folder_check_snapshot_writes_health_lock(tmp_path: Path) -> None:
     assert "checks" in data
     folder_checks = [k for k in data["checks"] if k.startswith("folder.")]
     assert folder_checks
+
+
+def test_folder_check_renders_obsolete_violations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Obsolete severity violations are rendered correctly."""
+    from repo_release_tools.folders.data import (
+        FolderCheckReport,
+        FolderTargetReport,
+        FolderViolation,
+    )
+
+    monkeypatch.chdir(tmp_path)
+    violation = FolderViolation(
+        code="deprecated_dir",
+        path="old_files",
+        message="This directory is obsolete",
+        severity="obsolete",
+    )
+    target = FolderTargetReport(
+        rule_name="legacy",
+        selector=".",
+        base_path=str(tmp_path),
+        violations=(violation,),
+    )
+    report = FolderCheckReport(
+        mode="strict",
+        targets=(target,),
+    )
+
+    def mock_check(*args: object, **kwargs: object) -> FolderCheckReport:
+        return report
+
+    monkeypatch.setattr(folder, "check_folders", mock_check)
+
+    rc = folder.cmd_folder_check(_args(root=str(tmp_path), template=["python-package"]))
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "This directory is obsolete" in out
