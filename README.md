@@ -57,7 +57,7 @@ drifts from your release policy.
   with:
     fetch-depth: 0
 
-- uses: Anselmoo/repo-release-tools@v1.8.2
+- uses: Anselmoo/repo-release-tools@v1.8.3
   with:
     check-branch-name: "true"
     check-commit-subject: "true"
