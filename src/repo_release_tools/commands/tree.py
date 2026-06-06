@@ -489,8 +489,12 @@ def _warn_for_empty_directories(
             if has_only_gitkeep:
                 continue
             if children == []:
-                if root is not None and (root / current / ".gitkeep").exists():
-                    continue
+                if root is not None and (root / current).is_dir():
+                    try:
+                        if any((root / current).iterdir()):
+                            continue
+                    except OSError:
+                        pass
                 phantom.append(current)
                 warnings.append(
                     f"Empty directory detected: {current}/. Git does not track empty directories; "

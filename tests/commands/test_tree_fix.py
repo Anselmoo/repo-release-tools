@@ -35,6 +35,9 @@ def test_choose_action_assume_yes_returns_gitkeep() -> None:
     [
         ("d", "delete"),
         ("delete", "delete"),
+        ("h", "hard-delete"),
+        ("hard", "hard-delete"),
+        ("hard-delete", "hard-delete"),
         ("s", "skip"),
         ("skip", "skip"),
         ("k", "gitkeep"),
@@ -143,3 +146,43 @@ def test_fix_empty_dirs_singular_plural(
     rc = _tree_fix.fix_empty_dirs(tmp_path, ["a", "b"], printer=_printer())
     assert rc == 0
     assert "2 empty directories" in capsys.readouterr().out
+
+
+def test_fix_empty_dirs_hard_delete_real(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "to_hard_delete"
+    target.mkdir()
+    (target / "ignored.pyc").write_text("", encoding="utf-8")
+    monkeypatch.setattr(_tree_fix, "_choose_action", lambda _rel, *, assume_yes: "hard-delete")
+    rc = _tree_fix.fix_empty_dirs(tmp_path, ["to_hard_delete"], printer=_printer())
+    assert rc == 0
+    assert not target.exists()
+
+
+def test_fix_empty_dirs_hard_delete_dry_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "still_here"
+    target.mkdir()
+    (target / "ignored.pyc").write_text("", encoding="utf-8")
+    monkeypatch.setattr(_tree_fix, "_choose_action", lambda _rel, *, assume_yes: "hard-delete")
+    rc = _tree_fix.fix_empty_dirs(
+        tmp_path, ["still_here"], printer=DryRunPrinter(dry_run=True), dry_run=True
+    )
+    assert rc == 0
+    assert target.exists()
+    assert "Would hard-remove still_here" in capsys.readouterr().out
+
+
+def test_fix_empty_dirs_hard_delete_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "stubborn").mkdir()
+    monkeypatch.setattr(_tree_fix, "_choose_action", lambda _rel, *, assume_yes: "hard-delete")
+
+    def failing_rmtree(path: Path) -> None:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(_tree_fix.shutil, "rmtree", failing_rmtree)
+    rc = _tree_fix.fix_empty_dirs(tmp_path, ["stubborn"], printer=_printer())
+    assert rc == 1
+    assert "Failed" in capsys.readouterr().out
