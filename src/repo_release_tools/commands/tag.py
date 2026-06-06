@@ -215,7 +215,7 @@ def cmd_tag_check(args: argparse.Namespace) -> int:
 
     if expected_tag not in existing_tags:
         if strict:
-            errors.append(f"Expected tag '{expected_tag}' not found")
+            errors.append(f"Expected tag '{expected_tag}' not found (run `rrt tag create`)")
         else:
             p.line(f"  Expected tag '{expected_tag}' not found (run `rrt tag create`)", ok=False)
 

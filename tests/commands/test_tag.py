@@ -323,6 +323,7 @@ def test_tag_check_tag_missing_strict(
     rc = cmd_tag_check(_args_check(strict=True))
 
     assert rc == 1
+    assert "rrt tag create" in capsys.readouterr().out
 
 
 def test_tag_check_prefix_mismatch(

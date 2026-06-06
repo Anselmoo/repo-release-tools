@@ -1025,14 +1025,18 @@ def test_cmd_tree_check_drift_advisory(
     assert "drift" in capsys.readouterr().out.lower()
 
 
-def test_cmd_tree_check_drift_strict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """--check --strict exits 1 on drift."""
+def test_cmd_tree_check_drift_strict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """--check --strict exits 1 on drift and shows snapshot recommendation."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
     tree.cmd_tree(_args(root=str(tmp_path), snapshot=True))
     (tmp_path / "b.txt").write_text("y", encoding="utf-8")
     rc = tree.cmd_tree(_args(root=str(tmp_path), check=True, strict=True))
     assert rc == 1
+    captured = capsys.readouterr()
+    assert "rrt tree --snapshot" in captured.err
 
 
 # ---------------------------------------------------------------------------
