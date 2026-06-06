@@ -106,7 +106,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.8.2
+    rev: v1.8.3
     hooks:
       - id: rrt-branch-name
       - id: rrt-update-unreleased

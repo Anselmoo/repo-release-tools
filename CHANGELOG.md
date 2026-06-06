@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [1.8.3] - 2026-06-06
+
+### Added
+- introduce obsolete status for hook-manager integrations and update related messaging (#95)
+
 ## [1.8.2] - 2026-06-05
 
 ### Added
