@@ -756,6 +756,30 @@ def test_warn_for_empty_directories_skips_dir_with_gitignored_content(
     assert warnings == []
 
 
+def test_warn_for_empty_directories_handles_oserror_on_iterdir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When .iterdir() raises OSError (e.g., permission denied), treat as empty."""
+    unreadable = tmp_path / "src" / "unreadable"
+    unreadable.mkdir(parents=True)
+    entries: list[tree.TreeEntry] = [
+        ("src", True, [("unreadable", True, [])]),
+    ]
+    warnings: list[str] = []
+
+    def raise_oserror(self: object) -> None:  # type: ignore[override]
+        raise OSError("Permission denied")
+
+    monkeypatch.setattr(
+        "pathlib.Path.iterdir",
+        raise_oserror,
+    )
+    phantom = tree._warn_for_empty_directories(entries, warnings, root=tmp_path)
+    assert "src/unreadable" in phantom
+    assert any("Empty directory detected" in w for w in warnings)
+
+
 def test_cmd_tree_warns_on_truly_empty_directories(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
