@@ -886,3 +886,84 @@ def test_get_latest_released_version_returns_none_when_empty() -> None:
     from repo_release_tools.changelog import get_latest_released_version
 
     assert get_latest_released_version("# Changelog\n\n## [Unreleased]\n") is None
+
+
+# ---------------------------------------------------------------------------
+# clear_unreleased_section
+# ---------------------------------------------------------------------------
+
+
+def test_clear_unreleased_section_md_wipes_bullets() -> None:
+    """Bullets under `[Unreleased]` are removed; the `[VERSION]` section stays."""
+    from repo_release_tools.changelog import clear_unreleased_section
+
+    content = (
+        "# Changelog\n\n"
+        "## [Unreleased]\n"
+        "- forgotten cleanup\n"
+        "- another one\n\n"
+        "## [1.9.0] - 2026-06-10\n### Added\n- shipped\n"
+    )
+    cleared = clear_unreleased_section(content)
+    assert "forgotten cleanup" not in cleared
+    assert "another one" not in cleared
+    # [VERSION] survives untouched, including its body.
+    assert "## [1.9.0]" in cleared
+    assert "- shipped" in cleared
+    # The placeholder header is preserved.
+    assert "## [Unreleased]" in cleared
+
+
+def test_clear_unreleased_section_md_no_unreleased_is_noop() -> None:
+    """Missing `[Unreleased]` header → content returned unchanged."""
+    from repo_release_tools.changelog import clear_unreleased_section
+
+    content = "# Changelog\n\n## [1.9.0] - 2026-06-10\n- shipped\n"
+    assert clear_unreleased_section(content) == content
+
+
+def test_clear_unreleased_section_md_without_next_section() -> None:
+    """`[Unreleased]` with bullets and no following section gets trimmed cleanly."""
+    from repo_release_tools.changelog import clear_unreleased_section
+
+    content = "# Changelog\n\n## [Unreleased]\n- stuff\n- more stuff\n"
+    cleared = clear_unreleased_section(content)
+    assert "## [Unreleased]" in cleared
+    assert "stuff" not in cleared
+    # No spurious trailing artefacts.
+    assert cleared.endswith("\n")
+
+
+def test_clear_unreleased_section_rst() -> None:
+    """RST notation: dash-underlined header is preserved, body wiped."""
+    from repo_release_tools.changelog import ChangelogFormat, clear_unreleased_section
+
+    content = (
+        "Changelog\n=========\n\n"
+        "Unreleased\n----------\n"
+        "- forgotten\n\n"
+        "1.9.0 - 2026-06-10\n------------------\nAdded\n~~~~~\n- shipped\n"
+    )
+    cleared = clear_unreleased_section(content, ChangelogFormat.RST)
+    assert "forgotten" not in cleared
+    assert "1.9.0 - 2026-06-10" in cleared
+    assert "- shipped" in cleared
+    assert "Unreleased\n----------" in cleared
+
+
+def test_clear_unreleased_section_rst_missing_unreleased_is_noop() -> None:
+    """RST: missing Unreleased header → unchanged content."""
+    from repo_release_tools.changelog import ChangelogFormat, clear_unreleased_section
+
+    content = "Changelog\n=========\n\n1.0.0 - 2026-01-01\n------------------\n- shipped\n"
+    assert clear_unreleased_section(content, ChangelogFormat.RST) == content
+
+
+def test_clear_unreleased_section_rst_no_following_section() -> None:
+    """RST: `[Unreleased]` with no follow-up section drops the body cleanly."""
+    from repo_release_tools.changelog import ChangelogFormat, clear_unreleased_section
+
+    content = "Changelog\n=========\n\nUnreleased\n----------\n- stale\n"
+    cleared = clear_unreleased_section(content, ChangelogFormat.RST)
+    assert "stale" not in cleared
+    assert "Unreleased\n----------" in cleared

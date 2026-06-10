@@ -48,6 +48,7 @@ from pathlib import Path
 
 from repo_release_tools.changelog import (
     ChangelogFormat,
+    clear_unreleased_section,
     detect_changelog_format,
     get_release_section_body,
     get_unreleased_entries,
@@ -228,13 +229,7 @@ def _recreate(
         replace_all_versions_atomic(targets_to_rewrite, declared_version, dry_run=False)
 
     all_pins = _unique_pins(group, config)
-    for pin in all_pins:
-        replace_pin_in_file(
-            pin,
-            declared_version,
-            dry_run=False,
-            pin_target_missing=config.pin_target_missing,
-        )
+    _rewrite_matching_pins(all_pins, declared_version, config)
 
     base_changelog = (
         group.changelog_file.read_text(encoding="utf-8") if group.changelog_file.exists() else ""
@@ -316,6 +311,19 @@ def _verify_and_fix(
     apply = bool(getattr(args, "yes", False) or getattr(args, "hotfix", False))
     if not apply:
         p.warn("Preview only. Re-run with --yes to apply fixes.")
+        return 1
+
+    # When the changelog is missing the [VERSION] section, applying without
+    # a body would silently rewrite the section as empty and drop the
+    # intended release notes. Match the recreate-mode safety: refuse unless
+    # the caller provided --changelog-from PATH.
+    if any(d.kind == "changelog_missing_section" for d in drifts) and version_body is None:
+        p.line(
+            f"Repair refused: CHANGELOG.md has no [{declared_version}] section "
+            "on this branch. Re-run with --changelog-from PATH.",
+            ok=False,
+            stream=sys.stderr,
+        )
         return 1
 
     _apply_drift_fixes(
@@ -428,15 +436,23 @@ def _apply_drift_fixes(
 ) -> None:
     """Apply every fix implied by *drifts*.
 
-    Version-target and pin-target drift rewrite the offending files via the
-    same helpers used by ``rrt bump``. Changelog drift uses the saved
-    ``version_body`` (or the existing one) to rebuild the section.
+    Version-target drift writes via :func:`replace_all_versions_atomic`,
+    pin-target drift via :func:`_rewrite_matching_pins` (which silently
+    skips files whose pattern does not match, matching the drift-detection
+    rule). Changelog drift is split:
+
+    - ``changelog_missing_section`` requires *version_body*; the caller is
+      expected to refuse earlier when no body is available so this function
+      only runs when a body exists. The body is stamped via
+      :func:`_stamp_version_section`.
+    - ``changelog_unreleased_dirty`` calls :func:`clear_unreleased_section`
+      to wipe ``[Unreleased]`` without touching the already-promoted
+      versioned section below.
     """
     needs_version_rewrite = any(d.kind == "version_target" for d in drifts)
     needs_pin_rewrite = any(d.kind == "pin_target" for d in drifts)
-    needs_changelog_rewrite = any(
-        d.kind in {"changelog_missing_section", "changelog_unreleased_dirty"} for d in drifts
-    )
+    missing_section = any(d.kind == "changelog_missing_section" for d in drifts)
+    unreleased_dirty = any(d.kind == "changelog_unreleased_dirty" for d in drifts)
 
     if needs_version_rewrite:
         targets_to_rewrite = _targets_needing_rewrite(group.version_targets, declared_version)
@@ -444,18 +460,19 @@ def _apply_drift_fixes(
             replace_all_versions_atomic(targets_to_rewrite, declared_version, dry_run=False)
 
     if needs_pin_rewrite:
-        for pin in _unique_pins(group, config):
-            replace_pin_in_file(
-                pin,
-                declared_version,
-                dry_run=False,
-                pin_target_missing=config.pin_target_missing,
-            )
+        _rewrite_matching_pins(_unique_pins(group, config), declared_version, config)
 
-    if needs_changelog_rewrite and group.changelog_file.exists():
-        body = version_body or ""
-        rebuilt = _stamp_version_section(existing_changelog, declared_version, body, fmt)
-        group.changelog_file.write_text(rebuilt, encoding="utf-8")
+    if (missing_section or unreleased_dirty) and group.changelog_file.exists():
+        content = existing_changelog
+        if missing_section:
+            assert version_body is not None, (
+                "missing_section drift reached _apply_drift_fixes without a body; "
+                "the caller must refuse with --changelog-from guidance before this point."
+            )
+            content = _stamp_version_section(content, declared_version, version_body, fmt)
+        if unreleased_dirty:
+            content = clear_unreleased_section(content, fmt)
+        group.changelog_file.write_text(content, encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -536,6 +553,30 @@ def _unique_pins(group: VersionGroup, config: RrtConfig) -> list[PinTarget]:
         seen.add(key)
         result.append(pin)
     return result
+
+
+def _rewrite_matching_pins(pins: list[PinTarget], declared_version: str, config: RrtConfig) -> None:
+    """Rewrite each pin target whose pattern actually matches.
+
+    Mirrors the no-match policy used by :func:`_collect_drifts`: a pin file
+    that exists but does not match its configured pattern is treated as
+    non-drift and silently skipped. Without this guard,
+    :func:`replace_pin_in_file` would raise ``RuntimeError`` under the
+    default ``pin_target_missing="error"`` policy, aborting the entire
+    repair even though there is nothing to fix for that pin.
+    """
+    for pin in pins:
+        if not pin.path.exists():
+            continue
+        text = pin.path.read_text(encoding="utf-8")
+        if search_pattern(text, pin.pattern) is None:
+            continue
+        replace_pin_in_file(
+            pin,
+            declared_version,
+            dry_run=False,
+            pin_target_missing=config.pin_target_missing,
+        )
 
 
 def _files_to_stage(group: VersionGroup, root: Path, pins: list[PinTarget]) -> list[str]:

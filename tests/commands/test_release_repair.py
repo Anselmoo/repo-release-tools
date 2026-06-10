@@ -886,10 +886,15 @@ def test_verify_with_yes_rewrites_version_target_when_lagging(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A primary version-target lagging declared version is rewritten in place."""
-    _seed_repo(tmp_path)
+    # Changelog already has a [9.9.9] section so the only drift is the version
+    # target — the new safety check refuses verify+yes when [VERSION] is
+    # missing without a --changelog-from override.
+    changelog_with_9990 = (
+        "# Changelog\n\n## [Unreleased]\n\n## [9.9.9] - 2026-06-10\n### Added\n- already shipped\n"
+    )
+    _seed_repo(tmp_path, changelog=changelog_with_9990)
     monkeypatch.chdir(tmp_path)
     _patch_git(monkeypatch)
-    # Declared version (from primary target) is overridden to differ on purpose.
     monkeypatch.setattr(
         "repo_release_tools.commands.release_repair.read_group_current_version",
         lambda group: "9.9.9",
@@ -952,6 +957,144 @@ def test_targets_needing_rewrite_skips_missing_and_keeps_unreadable(
     assert "py.toml" not in names  # already at declared version
     assert "gone.toml" not in names  # missing files are skipped
     assert "bad.toml" in names  # unreadable becomes drift
+
+
+# ---------------------------------------------------------------------------
+# Review-driven safety cases (PR #100)
+# ---------------------------------------------------------------------------
+
+
+def test_recreate_skips_pin_when_pattern_does_not_match(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A pin file whose pattern doesn't match must not abort the recreate.
+
+    The default ``pin_target_missing="error"`` policy on `replace_pin_in_file`
+    would raise; the rewrite helper guards with `search_pattern` first.
+    """
+    _seed_repo(tmp_path)
+    (tmp_path / "docs" / "install.md").write_text("no version pin here at all\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    calls = _patch_git(monkeypatch)
+    rc = release_repair.cmd_release_repair(_args(from_ref="main", yes=True, no_backup=True))
+    assert rc == 0
+    commit_calls = [c for c in calls if c[:2] == ["git", "commit"]]
+    assert commit_calls  # commit went through; no abort
+    _ = capsys.readouterr()
+
+
+def test_verify_with_yes_skips_pin_when_pattern_does_not_match(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Same no-match guard for `_apply_drift_fixes`.
+
+    The drift in this scenario is a version-target mismatch; the pin file
+    has no matching pattern so applying fixes must not raise even though
+    `needs_pin_rewrite` is False (the helper is still called from the
+    recreate path tested above, so this test ensures the symmetry).
+    """
+    changelog_with_9990 = (
+        "# Changelog\n\n## [Unreleased]\n\n## [9.9.9] - 2026-06-10\n### Added\n- shipped\n"
+    )
+    _seed_repo(tmp_path, changelog=changelog_with_9990)
+    (tmp_path / "docs" / "install.md").write_text("totally unrelated content\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    _patch_git(monkeypatch)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_repair.read_group_current_version",
+        lambda group: "9.9.9",
+    )
+    rc = release_repair.cmd_release_repair(_args(yes=True))
+    assert rc == 0
+    _ = capsys.readouterr()
+
+
+def test_verify_with_yes_refuses_changelog_missing_section_without_body(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Verify+yes mode mirrors recreate's safety: refuses to silently empty notes.
+
+    When `[VERSION]` is absent and the caller passed no `--changelog-from`,
+    proceeding would write the section with an empty body and silently
+    discard the intended release notes. Refuse instead.
+    """
+    polluted = "# Changelog\n\n## [Unreleased]\n\n## [1.8.3] - 2026-06-06\n"
+    _seed_repo(tmp_path, changelog=polluted)
+    monkeypatch.chdir(tmp_path)
+    _patch_git(monkeypatch)
+    rc = release_repair.cmd_release_repair(_args(yes=True))
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "no [1.9.0] section" in err.lower()
+    # Changelog must be untouched after refuse.
+    assert "## [1.9.0]" not in (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+
+
+def test_verify_with_yes_clears_unreleased_when_only_unreleased_dirty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A non-empty `[Unreleased]` is wiped without duplicating the `[VERSION]` section."""
+    polluted = (
+        "# Changelog\n\n"
+        "## [Unreleased]\n"
+        "- forgotten cleanup\n\n"
+        "## [1.9.0] - 2026-06-10\n### Added\n- shipped\n"
+    )
+    _seed_repo(tmp_path, changelog=polluted)
+    monkeypatch.chdir(tmp_path)
+    _patch_git(monkeypatch)
+    rc = release_repair.cmd_release_repair(_args(yes=True))
+    assert rc == 0
+    rebuilt = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    # Forgotten bullet is wiped.
+    assert "forgotten cleanup" not in rebuilt
+    # The shipped section was not duplicated.
+    assert rebuilt.count("## [1.9.0]") == 1
+    # Shipped content is still there.
+    assert "- shipped" in rebuilt
+    _ = capsys.readouterr()
+
+
+def test_rewrite_matching_pins_skips_missing_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_rewrite_matching_pins` silently skips pin files that don't exist."""
+    pin = PinTarget(path=tmp_path / "absent.md", pattern=r"(rrt@v)(\d+\.\d+\.\d+)()")
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[
+            VersionGroup(
+                name="default",
+                release_branch="release/v{version}",
+                changelog_file=tmp_path / "CHANGELOG.md",
+                lock_command=[],
+                generated_files=[],
+                version_targets=[VersionTarget(path=tmp_path / "py.toml", kind="pep621")],
+            )
+        ],
+        default_group_name="default",
+    )
+    called: list[str] = []
+
+    def fake_replace_pin_in_file(*args: object, **kwargs: object) -> None:
+        called.append("called")
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_repair.replace_pin_in_file",
+        fake_replace_pin_in_file,
+    )
+    release_repair._rewrite_matching_pins([pin], "1.9.0", config)
+    assert called == []
 
 
 def test_files_to_stage_deduplicates_overlapping_paths(tmp_path: Path) -> None:
