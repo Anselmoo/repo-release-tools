@@ -46,6 +46,7 @@ permalink: "/commands/version-release/"
   - [Related docs](#related-docs-1)
   - [`rrt release check`](#rrt-release-check)
   - [`rrt release notes`](#rrt-release-notes)
+  - [`rrt release repair`](#rrt-release-repair)
 - [`rrt workspace`](#rrt-workspace)
   - [Overview](#overview-3)
   - [When to use this](#when-to-use-this)
@@ -525,6 +526,7 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   check       Validate version targets, pin targets, and changelog files.
   notes       Emit a changelog release section as a formatted release body.
+  repair      Fix drift or recreate a release branch cleanly.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -583,6 +585,38 @@ Examples
   $ rrt release notes --format md > RELEASE_BODY.md
   $ rrt release notes --latest-released --output RELEASE_CHANGELOG.md
   $ rrt release notes --version 1.2.3
+```
+
+### `rrt release repair`
+
+```text
+Usage:  rrt release repair [OPTIONS]
+
+Verify (and optionally fix) version target / pin target / changelog drift on the current branch, or recreate the branch cleanly from a base ref while preserving the declared version and its [VERSION] changelog body.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help             Show this message and exit.
+  --from BASE            Recreate mode: rewind the current branch to BASE (commit, branch, or tag) and replay the version bump. Without this flag the command runs in verify-and-fix mode.
+  --yes, -y              Required to apply changes; otherwise the command only previews.
+  --hotfix               Implies --yes and tags the commit as `chore(release): repair v{ver}` so hotfix recoveries are distinguishable from regular bumps.
+  --changelog-from PATH  Read the [VERSION] body from PATH instead of the current branch's CHANGELOG.md. Useful when the polluted HEAD has lost the section.
+  --force-allow-pushed   Allow recreate when the branch is ahead of origin/<branch>. The new history must then be force-pushed with `git push --force-with-lease`.
+  --no-backup            Skip the `repair/backup/<branch>-<ts>` ref that is otherwise written before any destructive operation.
+  --group GROUP          Pick the version group when multiple are configured.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt release repair
+  $ rrt release repair --yes
+  $ rrt release repair --from main --yes
+  $ rrt release repair --from main --hotfix
 ```
 
 ## `rrt workspace`

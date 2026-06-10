@@ -288,6 +288,39 @@ def get_unreleased_entries(
     return [line for line in section_body.splitlines() if line.strip().startswith("- ")]
 
 
+def clear_unreleased_section(
+    content: str,
+    fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
+) -> str:
+    """Remove every entry under ``[Unreleased]``, keeping the header line.
+
+    Used by post-release cleanup tooling (``rrt release repair`` for the
+    ``changelog_unreleased_dirty`` drift case): a forgotten bullet under
+    ``[Unreleased]`` after a bump is wiped without touching the already-
+    promoted versioned section below.
+
+    Returns the content unchanged when no ``[Unreleased]`` header is
+    present. When a versioned section follows the header, a single blank
+    line is left between the header and that next section.
+    """
+    if fmt == ChangelogFormat.RST:
+        m = _RST_UNRELEASED_HEADER_RE.search(content)
+        if not m:
+            return content
+        section_start = m.end()
+        next_section = _RST_SECTION_BOUNDARY_RE.search(content, section_start)
+    else:
+        m = _UNRELEASED_HEADER_RE.search(content)
+        if not m:
+            return content
+        section_start = m.end()
+        next_section = _SECTION_HEADER_RE.search(content, section_start)
+
+    if next_section is None:
+        return content[:section_start].rstrip() + "\n"
+    return content[:section_start].rstrip() + "\n\n" + content[next_section.start() :]
+
+
 # ---------------------------------------------------------------------------
 # Versioned section helpers
 # ---------------------------------------------------------------------------

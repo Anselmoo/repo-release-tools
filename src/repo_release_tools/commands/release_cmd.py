@@ -68,6 +68,7 @@ import sys
 from pathlib import Path
 
 from repo_release_tools.commands.release_notes import register_subcommand as _register_notes
+from repo_release_tools.commands.release_repair import register_subcommand as _register_repair
 from repo_release_tools.config import (
     PinTarget,
     VersionTarget,
@@ -256,3 +257,4 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     check_parser.set_defaults(handler=cmd_release_check)
 
     _register_notes(release_subparsers)
+    _register_repair(release_subparsers)

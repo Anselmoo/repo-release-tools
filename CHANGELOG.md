@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### Added
+
+- `rrt release repair` — fix or recreate a release branch after a polluted PR. Verify mode (`rrt release repair`) walks every version target, pin target, and `[VERSION]`/`[Unreleased]` section and prints drift; `--yes` rewrites the drifted files and commits `chore(release): repair v{ver}`. Recreate mode (`--from BASE --yes`) rewinds the current branch to `BASE`, restores the `[VERSION]` body from HEAD (or `--changelog-from PATH`), and replays the bump as a single `chore: bump version to v{ver}` commit. Safety: writes a `repair/backup/<branch>-<ts>` ref before any destructive operation, refuses when the working tree is dirty or the branch is ahead of `origin/<branch>` (use `--force-allow-pushed`), and supports a `--hotfix` mode that implies `--yes` and tags the commit as `chore(release): repair v{ver}` for express recovery.
+- `clear_unreleased_section(content, fmt)` public helper in `changelog.py` — removes every entry under `[Unreleased]` while keeping the header. Used by `rrt release repair` for the `changelog_unreleased_dirty` drift case.
+
+### Fixed
+
+- `rrt release repair` no longer aborts when a pin file exists but its configured pattern does not match. Both `_recreate` and `_apply_drift_fixes` now guard pin rewrites with `search_pattern`, mirroring the drift-detection rule and matching the verify-mode "no-match is not drift" policy.
+- `rrt release repair` no longer duplicates the `[VERSION]` section when fixing `changelog_unreleased_dirty` drift. The two changelog drift kinds now take distinct fix paths: `changelog_missing_section` stamps a new section from the resolved body; `changelog_unreleased_dirty` clears `[Unreleased]` via the new `clear_unreleased_section` helper without touching the already-promoted versioned section below.
+- `rrt release repair --yes` (verify+fix mode) now refuses to apply when the changelog lacks a `[VERSION]` section and no `--changelog-from PATH` was provided, instead of silently writing an empty release section and dropping the intended notes. The refuse message mirrors recreate mode's safety guard.
+
 ## [1.9.0] - 2026-06-10
 ### Added
 
