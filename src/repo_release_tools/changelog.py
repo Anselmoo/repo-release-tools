@@ -122,6 +122,8 @@ def detect_changelog_format(path: Path | str) -> ChangelogFormat:
 _UNRELEASED_HEADER_RE = re.compile(r"^## \[Unreleased\]\s*$", re.IGNORECASE | re.MULTILINE)
 # Matches any "## [version]" or "## [Unreleased]" header used as a section boundary.
 _SECTION_HEADER_RE = re.compile(r"^## \[", re.MULTILINE)
+# Captures the version label inside any "## [LABEL] ..." header line.
+_MD_RELEASE_HEADER_RE = re.compile(r"^## \[([^\]]+)\][^\n]*$", re.MULTILINE)
 # Matches a leading "# Changelog" or "# CHANGELOG" title line.
 _CHANGELOG_TITLE_RE = re.compile(r"^# .+\n", re.MULTILINE)
 
@@ -145,6 +147,8 @@ _RST_UNRELEASED_HEADER_RE = re.compile(
 # Any section at the version/unreleased level: text line + dash underline (3+ dashes,
 # end-of-line anchored so that bullet points starting with "- " don't match).
 _RST_SECTION_BOUNDARY_RE = re.compile(r"^\S[^\n]*\n-{3,}$\n?", re.MULTILINE)
+# Captures the label of any RST section header (text line + dash underline).
+_RST_RELEASE_HEADER_RE = re.compile(r"^(\S[^\n]*)\n-{3,}$\n?", re.MULTILINE)
 # Document title: text line + equals underline (3+ chars, end-of-line anchored).
 _RST_TITLE_RE = re.compile(r"^.+\n={3,}$\n?", re.MULTILINE)
 
@@ -282,6 +286,91 @@ def get_unreleased_entries(
 
     section_body = content[section_start : next_section.start() if next_section else len(content)]
     return [line for line in section_body.splitlines() if line.strip().startswith("- ")]
+
+
+# ---------------------------------------------------------------------------
+# Versioned section helpers
+# ---------------------------------------------------------------------------
+
+
+def _normalize_version_label(label: str) -> str:
+    """Normalize a version label for case- and "v"-prefix-insensitive matching."""
+    return label.strip().lower().lstrip("v")
+
+
+def list_versioned_sections(
+    content: str,
+    fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
+) -> list[str]:
+    """Return labels of every release section in *content* in document order.
+
+    The ``[Unreleased]`` / ``Unreleased`` placeholder is excluded. Labels are
+    returned exactly as written (case and punctuation preserved); only date
+    suffixes such as ``" - 2026-01-01"`` are stripped from the RST form.
+    """
+    if fmt == ChangelogFormat.RST:
+        labels: list[str] = []
+        for match in _RST_RELEASE_HEADER_RE.finditer(content):
+            raw = match.group(1).strip()
+            label = raw.split(" - ", 1)[0].strip().strip("[]")
+            if label.lower() == "unreleased":
+                continue
+            labels.append(label)
+        return labels
+
+    labels = []
+    for match in _MD_RELEASE_HEADER_RE.finditer(content):
+        label = match.group(1).strip()
+        if label.lower() == "unreleased":
+            continue
+        labels.append(label)
+    return labels
+
+
+def get_release_section_body(
+    content: str,
+    version: str,
+    fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
+) -> str | None:
+    """Return the body of a versioned ``[VERSION]`` section.
+
+    Matching is case-insensitive and ignores a leading ``v`` so callers can
+    pass either ``"1.2.3"`` or ``"v1.2.3"``. Returns ``None`` when no
+    matching section exists. The returned text excludes the header line and
+    is stripped of leading/trailing whitespace.
+    """
+    needle = _normalize_version_label(version)
+
+    if fmt == ChangelogFormat.RST:
+        for match in _RST_RELEASE_HEADER_RE.finditer(content):
+            raw = match.group(1).strip()
+            label = raw.split(" - ", 1)[0].strip().strip("[]")
+            if _normalize_version_label(label) != needle:
+                continue
+            section_start = match.end()
+            next_match = _RST_RELEASE_HEADER_RE.search(content, section_start)
+            end = next_match.start() if next_match else len(content)
+            return content[section_start:end].strip()
+        return None
+
+    for match in _MD_RELEASE_HEADER_RE.finditer(content):
+        label = match.group(1).strip()
+        if _normalize_version_label(label) != needle:
+            continue
+        section_start = match.end()
+        next_match = _SECTION_HEADER_RE.search(content, section_start)
+        end = next_match.start() if next_match else len(content)
+        return content[section_start:end].strip()
+    return None
+
+
+def get_latest_released_version(
+    content: str,
+    fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
+) -> str | None:
+    """Return the topmost versioned label (excluding ``[Unreleased]``) or ``None``."""
+    labels = list_versioned_sections(content, fmt)
+    return labels[0] if labels else None
 
 
 def append_to_unreleased(

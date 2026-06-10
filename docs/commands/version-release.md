@@ -524,7 +524,7 @@ Use `rrt release check` to validate version targets, pin targets, and changelog 
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   check       Validate version targets, pin targets, and changelog files.
-  notes       Emit the [Unreleased] changelog section as a formatted release body.
+  notes       Emit a changelog release section as a formatted release body.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -559,7 +559,7 @@ Examples
 ```text
 Usage:  rrt release notes [OPTIONS]
 
-Extract the current [Unreleased] section from the configured changelog and emit it as a formatted release body ready for GitHub, GitLab, or any markdown editor.
+Extract a section from the configured changelog and emit it as a formatted release body ready for GitHub, GitLab, or any markdown editor. Defaults to [Unreleased]; use --version or --latest-released to target a published section.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -568,9 +568,12 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help       Show this message and exit.
-  --format FORMAT  Output format: md (default) or gh-release.
-  --group GROUP    Version group to read from when multiple groups are configured.
+  -h, --help         Show this message and exit.
+  --format FORMAT    Output format: md (default) or gh-release.
+  --group GROUP      Version group to read from when multiple groups are configured.
+  --version VERSION  Extract notes for a specific released section (e.g. 1.2.3 or v1.2.3). Matching is case- and v-prefix-insensitive.
+  --latest-released  Extract notes for the topmost released section (the one just below [Unreleased]). Useful in tag-triggered CI release jobs.
+  --output PATH      Write the release body to PATH instead of stdout.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -578,6 +581,8 @@ Examples
   $ rrt release notes
   $ rrt release notes --format gh-release
   $ rrt release notes --format md > RELEASE_BODY.md
+  $ rrt release notes --latest-released --output RELEASE_CHANGELOG.md
+  $ rrt release notes --version 1.2.3
 ```
 
 ## `rrt workspace`

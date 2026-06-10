@@ -793,36 +793,40 @@ Valid examples: `project-tree`, `src.layout`, `tree_v2`
 - [rrt git](git_cmd.md)
 
 ```text
-Usage:  rrt tree [OPTIONS]
+Usage:  rrt tree [OPTIONS] PATH
 
 Render a directory tree from the selected root while respecting gitignore rules.
 
-Formats: classic, ascii, markdown, rich. Rich output falls back to classic if the optional rich package is unavailable.
+Formats: classic, ascii, markdown, rich, json, flat. Rich output falls back to classic if the optional rich package is unavailable. json/flat emit machine-consumable output (a nested document or one path per line, respectively).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  PATH                   Root directory to render. Equivalent to --root and takes precedence when both are supplied.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help           Show this message and exit.
-  --format             Output format. Defaults to classic.
-  --max-depth N        Maximum recursion depth (default: unlimited).
-  --dirs-only          Show directories only.
-  --show-hidden        Include dotfiles and dot-directories.
-  --root PATH          Root directory to render (default: current directory).
-  --inject FILE        Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
-  --anchor ID          Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
-  --dry-run            Print planned actions instead of writing (with --inject or --fix-empty-dirs).
-  --snapshot           Write a tree structure snapshot to .rrt/tree.lock.toml as a baseline.
-  --check              Compare current tree against .rrt/tree.lock.toml and report structural drift.
-  --manifest           Write a machine-readable manifest to .rrt/tree.manifest.json containing per-file metadata (size, mtime, sha256, mode, uid, gid, symlink_target). This enables deterministic, atomic manifest generation and implies hashing of file contents.
-  --compressed         Write the manifest as a compressed gzip file (.rrt/tree.manifest.json.gz). Implied: --manifest.
-  --strict             With --check: exit 1 on structural drift (default: advisory, exit 0).
-  --strict-empty-dirs  Exit 1 when truly-empty (non-.gitkept) directories are present. Such directories cannot be tracked by git and cause local/CI manifest drift. Use --fix-empty-dirs to resolve interactively.
-  --fix-empty-dirs     Interactively resolve truly-empty directories by adding a .gitkeep placeholder or removing the directory. Honors --dry-run and --yes.
-  --yes, -y            With --fix-empty-dirs: assume yes (add .gitkeep) for every prompt.
+  -h, --help             Show this message and exit.
+  --format               Output format. Defaults to classic.
+  --max-depth N          Maximum recursion depth (default: unlimited).
+  --dirs-only            Show directories only.
+  --show-hidden          Include dotfiles and dot-directories.
+  --root PATH            Root directory to render (default: current directory).
+  --inject FILE          Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
+  --anchor ID            Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
+  --dry-run              Print planned actions instead of writing (with --inject or --fix-empty-dirs).
+  --snapshot             Write a tree structure snapshot to .rrt/tree.lock.toml as a baseline.
+  --check                Compare current tree against .rrt/tree.lock.toml and report structural drift.
+  --manifest             Write a machine-readable manifest to .rrt/tree.manifest.json containing per-file metadata (size, mtime, sha256, mode, uid, gid, symlink_target). This enables deterministic, atomic manifest generation and implies hashing of file contents.
+  --compressed           Write the manifest as a compressed gzip file (.rrt/tree.manifest.json.gz). Implied: --manifest.
+  --strict               With --check: exit 1 on structural drift (default: advisory, exit 0).
+  --strict-empty-dirs    Exit 1 when truly-empty (non-.gitkept) directories are present. Such directories cannot be tracked by git and cause local/CI manifest drift. Use --fix-empty-dirs to resolve interactively.
+  --fix-empty-dirs       Interactively resolve truly-empty directories by adding a .gitkeep placeholder or removing the directory. Honors --dry-run and --yes.
+  --yes, -y              With --fix-empty-dirs: assume yes (add .gitkeep) for every prompt.
+  --auto-resolve ACTION  With --fix-empty-dirs: apply ACTION to every phantom directory without prompting. 'git-rm' stages the removal via `git rm -rf`.
+  --absolute             Emit absolute paths in the json and flat formats (and in the manifest). Default: paths are relative to the scan root.
+  --output PATH          Write the rendered tree to PATH instead of stdout. Honors --format. Ignored when --inject, --snapshot, --check, or --fix-empty-dirs is used (those have their own targets).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples

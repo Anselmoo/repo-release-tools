@@ -1200,3 +1200,192 @@ def test_cmd_tree_snapshot_persists_phantom_empty_dirs_count(
         (tmp_path / ".rrt" / "tree.lock.toml").read_text(encoding="utf-8"),
     )
     assert lock_data["snapshot"]["phantom_empty_dirs"] == ["src/icons"]
+
+
+# ---------------------------------------------------------------------------
+# F2 — positional path, json/flat formats, --absolute, --output
+# ---------------------------------------------------------------------------
+
+
+def _f2_args(**overrides: object) -> argparse.Namespace:
+    """Args factory with the F2 fields wired in."""
+    base: dict[str, object] = {
+        "format": "classic",
+        "max_depth": None,
+        "dirs_only": False,
+        "show_hidden": False,
+        "root": ".",
+        "inject": None,
+        "anchor": None,
+        "dry_run": False,
+        "path": None,
+        "absolute": False,
+        "output": None,
+    }
+    base.update(overrides)
+    return argparse.Namespace(**base)
+
+
+def test_cmd_tree_positional_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A positional path argument selects the traversal root."""
+    _make_fixture_tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc = tree.cmd_tree(_f2_args(path=str(tmp_path / "src")))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "pkg" in out
+    assert "README.md" not in out  # README lives at repo root, not under src/
+
+
+def test_cmd_tree_positional_overrides_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When both positional path and --root are given, positional wins."""
+    _make_fixture_tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc = tree.cmd_tree(
+        _f2_args(path=str(tmp_path / "src"), root=str(tmp_path)),
+    )
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "pkg" in out
+    assert "README.md" not in out
+
+
+def test_cmd_tree_format_json_nested(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--format json emits a nested document with name/is_dir/path/children."""
+    import json as _json
+
+    _make_fixture_tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc = tree.cmd_tree(_f2_args(format="json"))
+    out = capsys.readouterr().out
+    assert rc == 0
+    # The tree section banner precedes the JSON; strip the printed JSON line.
+    json_lines = [line for line in out.splitlines() if line.startswith("[")]
+    assert json_lines, f"expected a JSON line in: {out!r}"
+    data = _json.loads(json_lines[0])
+    names = [entry["name"] for entry in data]
+    assert "src" in names
+    src = next(e for e in data if e["name"] == "src")
+    assert src["is_dir"] is True
+    assert src["path"] == "src"
+    assert any(child["name"] == "pkg" for child in src["children"])
+
+
+def test_cmd_tree_format_flat_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--format flat emits one path per line, directories with trailing /."""
+    _make_fixture_tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc = tree.cmd_tree(_f2_args(format="flat"))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "src/" in out
+    assert "src/pkg/" in out
+    assert "src/pkg/module.py" in out
+    assert "README.md" in out
+
+
+def test_cmd_tree_flat_dirs_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--format flat + --dirs-only produces the pure folder skeleton."""
+    _make_fixture_tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc = tree.cmd_tree(_f2_args(format="flat", dirs_only=True))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "src/pkg/" in out
+    assert "module.py" not in out
+    assert "README.md" not in out
+
+
+def test_cmd_tree_absolute_paths_flat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--absolute prefixes flat paths with the resolved root."""
+    _make_fixture_tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc = tree.cmd_tree(_f2_args(format="flat", absolute=True))
+    out = capsys.readouterr().out
+    assert rc == 0
+    resolved = tmp_path.resolve().as_posix()
+    assert f"{resolved}/src/" in out
+    assert f"{resolved}/README.md" in out
+
+
+def test_cmd_tree_output_writes_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--output writes the rendered tree to a file and skips stdout."""
+    _make_fixture_tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "tree.txt"
+    rc = tree.cmd_tree(_f2_args(format="flat", output=str(target)))
+    assert rc == 0
+    body = target.read_text(encoding="utf-8")
+    assert "src/" in body
+    # The "Project tree" banner is suppressed when writing to a file.
+    assert "Project tree" not in capsys.readouterr().out
+
+
+def test_cmd_tree_json_deterministic_ordering(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--format json output is byte-stable across runs."""
+    _make_fixture_tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc1 = tree.cmd_tree(_f2_args(format="json"))
+    out1 = capsys.readouterr().out
+    rc2 = tree.cmd_tree(_f2_args(format="json"))
+    out2 = capsys.readouterr().out
+    assert rc1 == rc2 == 0
+    json1 = next(line for line in out1.splitlines() if line.startswith("["))
+    json2 = next(line for line in out2.splitlines() if line.startswith("["))
+    assert json1 == json2
+
+
+def test_cmd_tree_output_replays_warnings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--output mode forwards any warnings (e.g. phantom empty dirs) to the printer."""
+    (tmp_path / "src" / "empty_widget").mkdir(parents=True)
+    (tmp_path / "README.md").write_text("x", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tree, "_resolve_git_root", lambda cwd: tmp_path)
+    monkeypatch.setattr(
+        tree, "_batch_ignored_by_git", lambda paths_from_repo_root, repo_root: set()
+    )
+
+    target = tmp_path / "out.flat"
+    rc = tree.cmd_tree(_f2_args(format="flat", output=str(target)))
+
+    assert rc == 0
+    # The warning text gets relayed via the printer even though stdout was
+    # diverted to a file.
+    captured = capsys.readouterr().out + capsys.readouterr().err
+    assert "Empty directory" in captured or "empty_widget" in captured
