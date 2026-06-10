@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.9.0] - 2026-06-10
 ### Added
 
 - `rrt release notes --version VERSION` and `rrt release notes --latest-released` so CI release jobs can emit notes for the just-promoted section after `rrt bump`. Closes the failure mode where a tag-triggered release job ran `release notes` against an already-empty `[Unreleased]` section.
