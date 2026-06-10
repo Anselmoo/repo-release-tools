@@ -186,3 +186,112 @@ def test_fix_empty_dirs_hard_delete_failure(
     rc = _tree_fix.fix_empty_dirs(tmp_path, ["stubborn"], printer=_printer())
     assert rc == 1
     assert "Failed" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# F3 — git-rm action + --auto-resolve
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        ("g", "git-rm"),
+        ("git", "git-rm"),
+        ("git-rm", "git-rm"),
+        ("gitrm", "git-rm"),
+        ("G", "git-rm"),  # case-insensitive via .lower() in _choose_action
+    ],
+)
+def test_choose_action_recognises_git_rm(
+    monkeypatch: pytest.MonkeyPatch, answer: str, expected: str
+) -> None:
+    monkeypatch.setattr(_tree_fix, "ask", lambda *_a, **_k: answer)
+    assert _tree_fix._choose_action("rel", assume_yes=False) == expected
+
+
+def _init_git_repo(root: Path) -> None:
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "Tester"], cwd=root, check=True)
+
+
+def test_fix_empty_dirs_git_rm_real(tmp_path: Path) -> None:
+    """`git-rm` action runs `git rm -rf` and stages the removal."""
+    import subprocess
+
+    _init_git_repo(tmp_path)
+    tracked = tmp_path / "stale"
+    tracked.mkdir()
+    (tracked / "file.txt").write_text("doomed\n", encoding="utf-8")
+    subprocess.run(["git", "add", "stale/file.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "seed"], cwd=tmp_path, check=True)
+
+    rc = _tree_fix.fix_empty_dirs(tmp_path, ["stale"], printer=_printer(), auto_resolve="git-rm")
+    assert rc == 0
+    assert not tracked.exists()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=tmp_path, check=True, capture_output=True, text=True
+    ).stdout
+    assert "D  stale/file.txt" in status or "stale/file.txt" in status
+
+
+def test_fix_empty_dirs_git_rm_dry_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`--auto-resolve git-rm --dry-run` only prints the planned action."""
+    (tmp_path / "untouched").mkdir()
+    rc = _tree_fix.fix_empty_dirs(
+        tmp_path,
+        ["untouched"],
+        printer=DryRunPrinter(dry_run=True),
+        dry_run=True,
+        auto_resolve="git-rm",
+    )
+    assert rc == 0
+    assert (tmp_path / "untouched").exists()
+    assert "Would git-rm untouched" in capsys.readouterr().out
+
+
+def test_fix_empty_dirs_git_rm_failure_outside_repo(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Running `git-rm` outside a git repo records a failure."""
+    (tmp_path / "lonely").mkdir()
+    rc = _tree_fix.fix_empty_dirs(tmp_path, ["lonely"], printer=_printer(), auto_resolve="git-rm")
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "Failed to git-rm lonely" in out
+
+
+def test_auto_resolve_unknown_choice_returns_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unknown --auto-resolve value is rejected up-front."""
+    rc = _tree_fix.fix_empty_dirs(tmp_path, ["anything"], printer=_printer(), auto_resolve="bogus")
+    assert rc == 1
+    assert "Unknown --auto-resolve" in capsys.readouterr().out
+
+
+def test_auto_resolve_hard_maps_to_hard_delete(
+    tmp_path: Path,
+) -> None:
+    """`--auto-resolve hard` is the rmtree path (alias for hard-delete)."""
+    target = tmp_path / "wipe"
+    target.mkdir()
+    (target / "x").write_text("", encoding="utf-8")
+    rc = _tree_fix.fix_empty_dirs(tmp_path, ["wipe"], printer=_printer(), auto_resolve="hard")
+    assert rc == 0
+    assert not target.exists()
+
+
+def test_auto_resolve_gitkeep_skips_prompt(
+    tmp_path: Path,
+) -> None:
+    """`--auto-resolve gitkeep` writes .gitkeep with no prompt and no --yes."""
+    (tmp_path / "anchored").mkdir()
+    rc = _tree_fix.fix_empty_dirs(
+        tmp_path, ["anchored"], printer=_printer(), auto_resolve="gitkeep"
+    )
+    assert rc == 0
+    assert (tmp_path / "anchored" / ".gitkeep").exists()

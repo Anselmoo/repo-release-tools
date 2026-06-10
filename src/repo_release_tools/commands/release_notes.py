@@ -67,6 +67,8 @@ from pathlib import Path
 
 from repo_release_tools.changelog import (
     detect_changelog_format,
+    get_latest_released_version,
+    get_release_section_body,
     get_unreleased_section_body,
     has_unreleased_section,
 )
@@ -116,10 +118,28 @@ def _format_gh_release(body: str, contributors: list[str]) -> str:
 
 
 def cmd_release_notes(args: argparse.Namespace) -> int:
-    """Emit the [Unreleased] changelog section as a formatted release body."""
+    """Emit a changelog section as a formatted release body.
+
+    By default the section is ``[Unreleased]``. Pass ``--version VERSION`` to
+    target a specific released section (case- and ``v``-prefix-insensitive),
+    or ``--latest-released`` to auto-pick the topmost versioned section. Use
+    ``--output PATH`` to write the body to a file instead of stdout.
+    """
     verbose: int = getattr(args, "verbose", 0) or 0
     root = find_repo_root(Path.cwd())
     output_format = getattr(args, "notes_format", "md")
+    requested_version: str | None = getattr(args, "version", None)
+    latest_released: bool = getattr(args, "latest_released", False)
+    output_path: str | None = getattr(args, "output", None)
+
+    if requested_version and latest_released:
+        p = VerbosePrinter(verbose=verbose)
+        p.line(
+            "--version and --latest-released are mutually exclusive.",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
 
     try:
         config = load_or_autodetect_config(root)
@@ -162,15 +182,47 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
     existing = path.read_text(encoding="utf-8")
     fmt = detect_changelog_format(path.name)
 
-    if not has_unreleased_section(existing, fmt):
-        p = VerbosePrinter(verbose=verbose)
-        p.line("No [Unreleased] section found in the changelog.", ok=False, stream=sys.stderr)
-        return 1
+    section_label: str
+    body: str | None
+    if latest_released:
+        resolved = get_latest_released_version(existing, fmt)
+        if resolved is None:
+            p = VerbosePrinter(verbose=verbose)
+            p.line(
+                "No released sections found in the changelog "
+                "(only [Unreleased] or nothing at all).",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        section_label = resolved
+        body = get_release_section_body(existing, resolved, fmt)
+    elif requested_version:
+        section_label = requested_version
+        body = get_release_section_body(existing, requested_version, fmt)
+        if body is None:
+            p = VerbosePrinter(verbose=verbose)
+            p.line(
+                f"Release section [{requested_version}] not found in {path}.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+    else:
+        section_label = "Unreleased"
+        if not has_unreleased_section(existing, fmt):
+            p = VerbosePrinter(verbose=verbose)
+            p.line("No [Unreleased] section found in the changelog.", ok=False, stream=sys.stderr)
+            return 1
+        body = get_unreleased_section_body(existing, fmt)
 
-    body = get_unreleased_section_body(existing, fmt)
     if not body:
         p = VerbosePrinter(verbose=verbose)
-        p.line("[Unreleased] section is empty — nothing to emit.", ok=False, stream=sys.stderr)
+        p.line(
+            f"[{section_label}] section is empty — nothing to emit.",
+            ok=False,
+            stream=sys.stderr,
+        )
         return 1
 
     if output_format == "gh-release":
@@ -179,14 +231,22 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
     else:
         output = body + "\n"
 
-    sys.stdout.write(output)
+    if output_path:
+        Path(output_path).write_text(output, encoding="utf-8")
+        VerbosePrinter(verbose=verbose).verbose_line(
+            f"release notes ({section_label}) → {output_path}", level=1
+        )
+    else:
+        sys.stdout.write(output)
     return 0
 
 
 _RELEASE_NOTES_EPILOG = (
     "  $ rrt release notes\n"
     "  $ rrt release notes --format gh-release\n"
-    "  $ rrt release notes --format md > RELEASE_BODY.md"
+    "  $ rrt release notes --format md > RELEASE_BODY.md\n"
+    "  $ rrt release notes --latest-released --output RELEASE_CHANGELOG.md\n"
+    "  $ rrt release notes --version 1.2.3"
 )
 
 
@@ -196,11 +256,12 @@ def register_subcommand(
     """Register the ``release notes`` subcommand on *release_subparsers*."""
     parser = release_subparsers.add_parser(
         "notes",
-        help="Emit the [Unreleased] changelog section as a formatted release body.",
+        help="Emit a changelog release section as a formatted release body.",
         description=(
-            "Extract the current [Unreleased] section from the configured changelog "
-            "and emit it as a formatted release body ready for GitHub, GitLab, or "
-            "any markdown editor."
+            "Extract a section from the configured changelog and emit it as a "
+            "formatted release body ready for GitHub, GitLab, or any markdown "
+            "editor. Defaults to [Unreleased]; use --version or "
+            "--latest-released to target a published section."
         ),
         epilog=_RELEASE_NOTES_EPILOG,
     )
@@ -217,5 +278,30 @@ def register_subcommand(
         default=None,
         metavar="GROUP",
         help="Version group to read from when multiple groups are configured.",
+    )
+    section_group = parser.add_mutually_exclusive_group()
+    section_group.add_argument(
+        "--version",
+        default=None,
+        metavar="VERSION",
+        help=(
+            "Extract notes for a specific released section (e.g. 1.2.3 or "
+            "v1.2.3). Matching is case- and v-prefix-insensitive."
+        ),
+    )
+    section_group.add_argument(
+        "--latest-released",
+        action="store_true",
+        default=False,
+        help=(
+            "Extract notes for the topmost released section (the one just "
+            "below [Unreleased]). Useful in tag-triggered CI release jobs."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        metavar="PATH",
+        help="Write the release body to PATH instead of stdout.",
     )
     parser.set_defaults(handler=cmd_release_notes)

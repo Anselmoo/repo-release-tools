@@ -311,6 +311,71 @@ def _render_markdown_tree(entries: list[TreeEntry]) -> str:
     return "\n".join(lines)
 
 
+def _path_string(parent_rel: str, name: str, *, root: Path, absolute: bool) -> str:
+    """Build a posix-style path string for a tree entry.
+
+    *parent_rel* is the posix path of the parent relative to *root* (or empty
+    for the root's direct children). When *absolute* is True the returned path
+    is rooted at the resolved *root* directory.
+    """
+    rel = f"{parent_rel}/{name}" if parent_rel else name
+    if absolute:
+        return (root / rel).as_posix()
+    return rel
+
+
+def _render_json_tree(
+    entries: list[TreeEntry],
+    *,
+    root: Path,
+    absolute: bool = False,
+) -> str:
+    """Render entries as a deterministic nested JSON document.
+
+    Each node carries ``name``, ``is_dir``, ``path``, and (for directories)
+    ``children``. Path values respect ``absolute``. The output uses stable
+    separators and sorted keys to keep diffs minimal.
+    """
+
+    def visit(nodes: list[TreeEntry], parent_rel: str) -> list[dict[str, object]]:
+        out: list[dict[str, object]] = []
+        for name, is_dir, children in nodes:
+            path_str = _path_string(parent_rel, name, root=root, absolute=absolute)
+            entry: dict[str, object] = {"name": name, "is_dir": is_dir, "path": path_str}
+            if children is not None:
+                entry["children"] = visit(children, f"{parent_rel}/{name}" if parent_rel else name)
+            out.append(entry)
+        return out
+
+    payload = visit(entries, "")
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _render_flat_tree(
+    entries: list[TreeEntry],
+    *,
+    root: Path,
+    absolute: bool = False,
+) -> str:
+    """Render entries as one posix path per line.
+
+    Directories are emitted with a trailing ``/`` so they stay visually
+    distinguishable from files. Honors ``absolute``; ``--dirs-only`` is
+    applied earlier during tree construction.
+    """
+    lines: list[str] = []
+
+    def visit(nodes: list[TreeEntry], parent_rel: str) -> None:
+        for name, is_dir, children in nodes:
+            path_str = _path_string(parent_rel, name, root=root, absolute=absolute)
+            lines.append(f"{path_str}/" if is_dir else path_str)
+            if children:
+                visit(children, f"{parent_rel}/{name}" if parent_rel else name)
+
+    visit(entries, "")
+    return "\n".join(lines)
+
+
 def _render_rich_tree(entries: list[TreeEntry]) -> str | None:
     """Render entries through Rich when available.
 
@@ -754,7 +819,10 @@ def cmd_tree(args: argparse.Namespace) -> int:
         )
         return 1
 
-    root = Path(args.root).resolve()
+    # The positional `path` argument, when given, takes precedence over `--root`.
+    positional_path: str | None = getattr(args, "path", None)
+    root_input = positional_path if positional_path else args.root
+    root = Path(root_input).resolve()
     if not root.exists():
         p.line(f"Root path does not exist: {root}", ok=False, stream=sys.stderr)
         return 1
@@ -792,9 +860,11 @@ def cmd_tree(args: argparse.Namespace) -> int:
             printer=p,
             dry_run=getattr(args, "dry_run", False),
             assume_yes=getattr(args, "yes", False),
+            auto_resolve=getattr(args, "auto_resolve", None),
         )
 
     fmt = args.format
+    absolute_paths: bool = getattr(args, "absolute", False)
     rendered: str
     match fmt:
         case "ascii":
@@ -808,6 +878,10 @@ def cmd_tree(args: argparse.Namespace) -> int:
                 rendered = GLYPHS.tree.render(entries)
             else:
                 rendered = rich_rendered
+        case "json":
+            rendered = _render_json_tree(entries, root=root, absolute=absolute_paths)
+        case "flat":
+            rendered = _render_flat_tree(entries, root=root, absolute=absolute_paths)
         case _:
             rendered = GLYPHS.tree.render(entries)
 
@@ -938,7 +1012,16 @@ def cmd_tree(args: argparse.Namespace) -> int:
             p, inject_file=inject_file, anchor_id=anchor_id, rendered=rendered
         )
 
-    # --- default mode: print tree to stdout ---
+    # --- default mode: print tree to stdout or write to --output ---
+    output_path: str | None = getattr(args, "output", None)
+    if output_path:
+        body = (rendered + "\n") if rendered else ""
+        Path(output_path).write_text(body, encoding="utf-8")
+        p.ok(f"Tree written to {output_path} ({entry_count} entries).")
+        for warning in warnings:
+            p.warn(warning)
+        return 0
+
     p.ok("Project tree")
     p.meta("Root", str(root))
     p.meta("Format", fmt)
@@ -973,14 +1056,25 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Show a project tree with gitignore-aware filtering.",
         description=(
             "Render a directory tree from the selected root while respecting gitignore rules.\n\n"
-            "Formats: classic, ascii, markdown, rich. Rich output falls back to classic if "
-            "the optional rich package is unavailable."
+            "Formats: classic, ascii, markdown, rich, json, flat. Rich output falls back to "
+            "classic if the optional rich package is unavailable. json/flat emit machine-"
+            "consumable output (a nested document or one path per line, respectively)."
         ),
         epilog=TREE_EPILOG,
     )
     parser.add_argument(
+        "path",
+        nargs="?",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Root directory to render. Equivalent to --root and takes precedence "
+            "when both are supplied."
+        ),
+    )
+    parser.add_argument(
         "--format",
-        choices=["classic", "ascii", "markdown", "rich"],
+        choices=["classic", "ascii", "markdown", "rich", "json", "flat"],
         default="classic",
         help="Output format. Defaults to classic.",
     )
@@ -1097,5 +1191,34 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         default=False,
         help="With --fix-empty-dirs: assume yes (add .gitkeep) for every prompt.",
+    )
+    parser.add_argument(
+        "--auto-resolve",
+        choices=["gitkeep", "delete", "hard", "git-rm"],
+        default=None,
+        metavar="ACTION",
+        help=(
+            "With --fix-empty-dirs: apply ACTION to every phantom directory "
+            "without prompting. 'git-rm' stages the removal via `git rm -rf`."
+        ),
+    )
+    parser.add_argument(
+        "--absolute",
+        action="store_true",
+        default=False,
+        help=(
+            "Emit absolute paths in the json and flat formats (and in the "
+            "manifest). Default: paths are relative to the scan root."
+        ),
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Write the rendered tree to PATH instead of stdout. Honors --format. "
+            "Ignored when --inject, --snapshot, --check, or --fix-empty-dirs is "
+            "used (those have their own targets)."
+        ),
     )
     parser.set_defaults(handler=cmd_tree)

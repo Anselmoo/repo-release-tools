@@ -818,3 +818,71 @@ def test_get_unreleased_section_body_rst_with_entries() -> None:
 
     result = get_unreleased_section_body(_RST_UNRELEASED_WITH_ENTRIES, fmt=ChangelogFormat.RST)
     assert "fix connection timeout" in result
+
+
+# ---------------------------------------------------------------------------
+# list_versioned_sections / get_release_section_body
+# ---------------------------------------------------------------------------
+
+
+_RST_CHANGELOG_WITH_RELEASES = """\
+Changelog
+=========
+
+Unreleased
+----------
+
+[1.7.1] - 2026-06-10
+--------------------
+Fixed
+~~~~~
+- correct workflow pipeline
+
+[1.7.0] - 2026-06-09
+--------------------
+Added
+~~~~~
+- earlier feature
+"""
+
+
+def test_list_versioned_sections_rst_skips_unreleased() -> None:
+    """RST: returns released labels in document order, excluding Unreleased."""
+    from repo_release_tools.changelog import ChangelogFormat, list_versioned_sections
+
+    labels = list_versioned_sections(_RST_CHANGELOG_WITH_RELEASES, ChangelogFormat.RST)
+    assert labels == ["1.7.1", "1.7.0"]
+
+
+def test_list_versioned_sections_md_returns_labels_in_order() -> None:
+    """Markdown: returns released labels in document order."""
+    from repo_release_tools.changelog import list_versioned_sections
+
+    md = "## [Unreleased]\n\n## [2.0.0] - 2026-01-01\n\n## [1.9.0] - 2025-12-01\n"
+    assert list_versioned_sections(md) == ["2.0.0", "1.9.0"]
+
+
+def test_get_release_section_body_rst_returns_body() -> None:
+    """RST: extracts the body of a versioned section."""
+    from repo_release_tools.changelog import ChangelogFormat, get_release_section_body
+
+    body = get_release_section_body(_RST_CHANGELOG_WITH_RELEASES, "1.7.0", ChangelogFormat.RST)
+    assert body is not None
+    assert "earlier feature" in body
+
+
+def test_get_release_section_body_rst_missing_returns_none() -> None:
+    """RST: unknown version returns None."""
+    from repo_release_tools.changelog import ChangelogFormat, get_release_section_body
+
+    assert (
+        get_release_section_body(_RST_CHANGELOG_WITH_RELEASES, "99.0.0", ChangelogFormat.RST)
+        is None
+    )
+
+
+def test_get_latest_released_version_returns_none_when_empty() -> None:
+    """An empty changelog has no latest released version."""
+    from repo_release_tools.changelog import get_latest_released_version
+
+    assert get_latest_released_version("# Changelog\n\n## [Unreleased]\n") is None

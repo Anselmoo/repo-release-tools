@@ -63,6 +63,8 @@ Affected entrypoints:
 -   hooks   Install boilerplate lifecycle hook scripts for Claude and Codex
 -   init    Generate a recommended rrt configuration for the current repository
 -   skill   Install the bundled repo-release-tools agent skill
+-   project Project metadata utilities (read pyproject/Cargo/package.json)
+-   mcp     MCP server scaffolding helpers (e.g. `mcp tool new`)
 
 ## CI & Automation
 -   action  Scaffold a starter GitHub Actions workflow for repo-release-tools

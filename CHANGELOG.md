@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Added
+
+- `rrt release notes --version VERSION` and `rrt release notes --latest-released` so CI release jobs can emit notes for the just-promoted section after `rrt bump`. Closes the failure mode where a tag-triggered release job ran `release notes` against an already-empty `[Unreleased]` section.
+- `rrt release notes --output PATH` writes the rendered body to a file instead of stdout.
+- `rrt tree PATH` positional argument as an ergonomic shorthand for `--root PATH`; the positional wins when both are given.
+- `rrt tree --format json` emits a deterministic nested document with `name`, `is_dir`, `path`, and `children`.
+- `rrt tree --format flat` emits one POSIX path per line and pairs with `--dirs-only` to render a pure folder skeleton for prompts.
+- `rrt tree --absolute` switches `json` and `flat` outputs to absolute paths.
+- `rrt tree --output PATH` writes the rendered tree to a file instead of stdout (warnings still surface on the printer).
+- `rrt tree --fix-empty-dirs` gains a `git-rm` resolution action that stages the removal via `git rm -rf`, plus an `--auto-resolve {gitkeep,delete,hard,git-rm}` flag for unattended runs.
+- `rrt project info` reads `name`, `version`, `description`, `authors`, `license`, and `urls` from `pyproject.toml`, `Cargo.toml`, or `package.json`. Supports `--format {text,json}`, `--key KEY`, and `--output PATH`.
+- `rrt mcp tool new <name>` scaffolds a starter `mcp/tools/<name>_tools.py` mirroring the existing register pattern; supports `--title`, `--description`, `--into`, `--dry-run`, and `--force`.
+
+### Changed
+
+- `rrt release notes` empty-section error now names the requested section so CI logs make the failure obvious.
+
 ## [1.8.3] - 2026-06-06
 
 ### Added
