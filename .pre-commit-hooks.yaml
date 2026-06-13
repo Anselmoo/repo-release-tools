@@ -119,6 +119,30 @@
   stages: [manual]
   minimum_pre_commit_version: "3.2.0"
 
+- id: rrt-docs-map-update
+  name: repo-release-tools docs map update
+  description: >-
+    Regenerate per-directory purpose docs (README.md or configured file name)
+    via `rrt docs map` and refresh the lockfile at .rrt/docs_map.lock.toml.
+  entry: rrt-hooks docs-map-update
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-docs-map-check
+  name: repo-release-tools docs map check
+  description: >-
+    Fail in CI when any per-directory purpose doc disagrees with
+    .rrt/docs_map.lock.toml. Run `rrt docs map` locally to refresh.
+  entry: rrt-hooks docs-map-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
+
 - id: rrt-docstring-suggest
   name: repo-release-tools docstring suggest
   description: Apply scaffolded docstrings to missing or thin module docstrings

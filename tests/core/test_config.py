@@ -13,6 +13,7 @@ from repo_release_tools.config import (
     DocsConfig,
     EolConfig,
     EolOverride,
+    MapConfig,
     MissingRrtConfigError,
     RrtConfig,
     SharedBlock,
@@ -2160,6 +2161,184 @@ def test_shared_block_validate_rejects_negative_trailing_blank_lines() -> None:
     )
     with pytest.raises(ValueError, match="after_blank_lines must be >= 0"):
         block.validate()
+
+
+# ---------------------------------------------------------------------------
+# _load_map_config — [tool.rrt.docs.map]
+# ---------------------------------------------------------------------------
+
+
+def test_load_config_map_section_absent(tmp_path: Path) -> None:
+    """When [tool.rrt.docs.map] is absent, docs.map is None."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\n")
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.map is None
+
+
+def test_load_config_map_defaults(tmp_path: Path) -> None:
+    """Empty [tool.rrt.docs.map] table uses all defaults."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\n\n[tool.rrt.docs.map]\n")
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert isinstance(cfg.docs.map, MapConfig)
+    assert cfg.docs.map.root == "src"
+    assert cfg.docs.map.file_name == "README.md"
+    assert cfg.docs.map.on_conflict == "merge"
+    assert cfg.docs.map.tree_max_depth == 2
+    assert cfg.docs.map.prompts == ()
+    assert cfg.docs.map.purpose == {}
+    assert cfg.docs.map.include == ()
+    assert cfg.docs.map.exclude == ()
+    assert cfg.docs.map.lock_file == ".rrt/docs_map.lock.toml"
+
+
+def test_load_config_map_lock_file_override(tmp_path: Path) -> None:
+    """A custom lock_file path overrides the default."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs.map]\nlock_file = ".rrt/custom_map.lock.toml"\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None and cfg.docs.map is not None
+    assert cfg.docs.map.lock_file == ".rrt/custom_map.lock.toml"
+
+
+def test_load_config_map_lock_file_empty_string(tmp_path: Path) -> None:
+    """lock_file rejects an empty string."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\nlock_file = ""\n')
+    with pytest.raises(ValueError, match="lock_file must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_map_config_validate_rejects_blank_lock_file() -> None:
+    """MapConfig.validate raises when lock_file is whitespace-only."""
+    with pytest.raises(ValueError, match="lock_file must be a non-empty string"):
+        MapConfig(lock_file="   ").validate()
+
+
+def test_load_config_map_full(tmp_path: Path) -> None:
+    """[tool.rrt.docs.map] with all fields populated."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs]\n\n[tool.rrt.docs.map]\nroot = "lib"\n'
+        'file_name = "PURPOSE.md"\non_conflict = "skip"\ntree_max_depth = 4\n'
+        'prompts = ["self-check", "auto-update"]\n'
+        'include = ["lib/**/*.py"]\nexclude = ["lib/vendor/**"]\n'
+        '\n[tool.rrt.docs.map.purpose]\n"lib/commands" = "Command handlers."\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.map is not None
+    assert cfg.docs.map.root == "lib"
+    assert cfg.docs.map.file_name == "PURPOSE.md"
+    assert cfg.docs.map.on_conflict == "skip"
+    assert cfg.docs.map.tree_max_depth == 4
+    assert cfg.docs.map.prompts == ("self-check", "auto-update")
+    assert cfg.docs.map.include == ("lib/**/*.py",)
+    assert cfg.docs.map.exclude == ("lib/vendor/**",)
+    assert cfg.docs.map.purpose == {"lib/commands": "Command handlers."}
+
+
+def test_load_config_map_not_a_table(tmp_path: Path) -> None:
+    """[tool.rrt.docs.map] must be a table."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nmap = "oops"\n')
+    with pytest.raises(ValueError, match="tool.rrt.docs.map must be a table"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_root_empty(tmp_path: Path) -> None:
+    """root must be a non-empty string."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\nroot = ""\n')
+    with pytest.raises(ValueError, match="map.root must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_file_name_not_string(tmp_path: Path) -> None:
+    """file_name must be a non-empty string."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs.map]\nfile_name = 123\n")
+    with pytest.raises(ValueError, match="map.file_name must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_on_conflict_invalid(tmp_path: Path) -> None:
+    """on_conflict must be one of merge/skip/error."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\non_conflict = "overwrite"\n')
+    with pytest.raises(ValueError, match="on_conflict must be one of"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_tree_max_depth_not_int(tmp_path: Path) -> None:
+    """tree_max_depth must be an integer."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\ntree_max_depth = "2"\n')
+    with pytest.raises(ValueError, match="tree_max_depth must be an integer"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_tree_max_depth_rejects_bool(tmp_path: Path) -> None:
+    """tree_max_depth must reject booleans (which are int subclasses in Python)."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs.map]\ntree_max_depth = true\n")
+    with pytest.raises(ValueError, match="tree_max_depth must be an integer"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_tree_max_depth_negative(tmp_path: Path) -> None:
+    """tree_max_depth must be non-negative."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs.map]\ntree_max_depth = -1\n")
+    with pytest.raises(ValueError, match="tree_max_depth must be >= 0"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_prompts_invalid_entry(tmp_path: Path) -> None:
+    """Unknown prompt names are rejected."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\nprompts = ["mystery-block"]\n')
+    with pytest.raises(ValueError, match="prompts contains unsupported entries"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_prompts_not_a_list(tmp_path: Path) -> None:
+    """prompts must be a list of strings."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\nprompts = "self-check"\n')
+    with pytest.raises(ValueError, match="prompts must be a list of strings"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_purpose_not_a_table(tmp_path: Path) -> None:
+    """purpose must be a table."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\npurpose = "nope"\n')
+    with pytest.raises(ValueError, match="purpose must be a table"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_purpose_non_string_value(tmp_path: Path) -> None:
+    """purpose values must be strings."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map.purpose]\n"src/commands" = 42\n')
+    with pytest.raises(ValueError, match="purpose keys and values must be strings"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_include_not_a_list(tmp_path: Path) -> None:
+    """include must be a list of strings."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\ninclude = "src/**/*.py"\n')
+    with pytest.raises(ValueError, match="include must be a list of strings"):
+        load_config(tmp_path)
+
+
+def test_load_config_map_exclude_not_a_list(tmp_path: Path) -> None:
+    """exclude must be a list of strings."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\nexclude = "vendor"\n')
+    with pytest.raises(ValueError, match="exclude must be a list of strings"):
+        load_config(tmp_path)
+
+
+def test_map_config_validate_direct() -> None:
+    """MapConfig.validate raises on enum / range violations when constructed directly."""
+    with pytest.raises(ValueError, match="on_conflict must be one of"):
+        MapConfig(on_conflict="bogus").validate()
+    with pytest.raises(ValueError, match="prompts contains unsupported entries"):
+        MapConfig(prompts=("not-a-real-prompt",)).validate()
+    with pytest.raises(ValueError, match="tree_max_depth must be >= 0"):
+        MapConfig(tree_max_depth=-5).validate()
 
 
 # ---------------------------------------------------------------------------

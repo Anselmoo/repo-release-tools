@@ -38,7 +38,9 @@ Three product surfaces share the same codebase:
 | `version_targets.py` | Read/write versions across pep621, package.json, go_version, python_version, and custom regex targets |
 | `versioning.py` | Semver bump logic |
 | `git.py` | Low-level git helpers |
-| `tools/inject.py` | Anchor-based file injection — shared by `rrt tree --inject` and `rrt docs inject` |
+| `tools/inject.py` | Anchor-based file injection — shared by `rrt tree --inject`, `rrt docs inject`, and `rrt docs map` |
+| `commands/docs_map.py` | Per-directory purpose-doc generator backing `rrt docs map`. Walks `[tool.rrt.docs.map].root`, emits anchor-wrapped Purpose + Tree + optional prompt blocks into `README.md` (configurable). Pure-functional core; no I/O outside `apply_to_file`. |
+| `commands/docs_map_lock.py` | Drift detection for `rrt docs map`. Hashes each generated block and tracks it in `.rrt/docs_map.lock.toml` (separate from `docs.lock.toml`). `rrt docs map --check` exits non-zero on drift. |
 | `ui/` | **Canonical public rendering API** — `color`, `font`, `glyphs`, `layout`, `syntax`, `prompt`, `messaging`, `progress`. Import from `repo_release_tools.ui` in all new code. |
 
 ### UI layer
@@ -61,6 +63,7 @@ New CLI output uses `DryRunPrinter` from `ui/messaging.py` (re-exported via `ui/
 - **Dry-run**: all mutating commands accept `--dry-run`; prototype with it first
 - **No new runtime dependencies** for CLI/UI work
 - **Coverage floor**: 85.71% — treat drops as a blocker; add tests before opening a PR. Low-coverage files: `ui/syntax.py`, `ui/color.py`, `ui/layout.py`, `ui/font.py`, `cli.py`
+- **Per-directory purpose docs**: when `[tool.rrt.docs.map]` is configured, `rrt docs map` generates an anchor-wrapped README.md per source directory and writes `.rrt/docs_map.lock.toml`. CI runs `rrt docs map --check` (via the `rrt-docs-map-check` hook) to fail on drift; the `rrt-docs-map-update` hook keeps files fresh on commit. Prose outside the `rrt-docs-map` anchors is preserved verbatim.
 
 ## Config
 

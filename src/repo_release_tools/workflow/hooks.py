@@ -1106,6 +1106,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Synchronize shared anchor blocks across documentation.",
     )
     subparsers.add_parser(
+        "docs-map-update",
+        help="Regenerate per-directory purpose docs (rrt docs map).",
+    )
+    subparsers.add_parser(
+        "docs-map-check",
+        help="Fail if any per-directory purpose doc is stale.",
+    )
+    subparsers.add_parser(
         "docstring-suggest",
         help="Apply scaffolded docstrings to missing or thin module docstrings.",
     )
@@ -1245,6 +1253,20 @@ def main(argv: list[str] | None = None) -> int:
             parsed.check = False
             parsed.dry_run = False
             parsed.add_anchors = True
+            return cmd_docs(parsed)
+        case "docs-map-update":
+            parsed.verbose = verbose
+            parsed.docs_action = "map"
+            parsed.root = "."
+            parsed.check = False
+            parsed.dry_run = False
+            return cmd_docs(parsed)
+        case "docs-map-check":
+            parsed.verbose = verbose
+            parsed.docs_action = "map"
+            parsed.root = "."
+            parsed.check = True
+            parsed.dry_run = False
             return cmd_docs(parsed)
         case "docstring-suggest":
             parsed.verbose = verbose

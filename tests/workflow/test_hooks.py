@@ -746,6 +746,28 @@ def test_main_docs_hook_commands_set_explicit_defaults(monkeypatch: pytest.Monke
     assert suggest_args.apply is True
 
 
+def test_main_docs_map_hook_commands_set_explicit_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """docs-map-update and docs-map-check route to cmd_docs with map defaults."""
+    docs_calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(hooks, "cmd_docs", lambda parsed: docs_calls.append(parsed) or 41)
+
+    assert hooks.main(["docs-map-update"]) == 41
+    assert hooks.main(["docs-map-check"]) == 41
+
+    update_args, check_args = docs_calls
+    assert update_args.docs_action == "map"
+    assert update_args.root == "."
+    assert update_args.check is False
+    assert update_args.dry_run is False
+
+    assert check_args.docs_action == "map"
+    assert check_args.root == "."
+    assert check_args.check is True
+    assert check_args.dry_run is False
+
+
 def test_main_folder_check_hook_command(monkeypatch: pytest.MonkeyPatch) -> None:
     folder_calls: list[SimpleNamespace] = []
 
