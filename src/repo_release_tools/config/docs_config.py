@@ -478,6 +478,7 @@ def _load_map_config(raw: object) -> MapConfig | None:
         purpose=_load_map_purpose(d),
         include=_load_map_string_tuple(d, "include"),
         exclude=_load_map_string_tuple(d, "exclude"),
+        lock_file=_load_map_string(d, "lock_file", default=".rrt/docs_map.lock.toml"),
     )
     cfg.validate()
     return cfg

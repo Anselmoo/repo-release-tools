@@ -432,6 +432,7 @@ class MapConfig:
     purpose: dict[str, str] = field(default_factory=dict)
     include: tuple[str, ...] = ()
     exclude: tuple[str, ...] = ()
+    lock_file: str = ".rrt/docs_map.lock.toml"
 
     def validate(self) -> None:
         """Validate enumerated fields."""
@@ -450,6 +451,8 @@ class MapConfig:
             raise ValueError(
                 f"docs.map.tree_max_depth must be >= 0, got {self.tree_max_depth}",
             )
+        if not self.lock_file.strip():
+            raise ValueError("docs.map.lock_file must be a non-empty string")
 
 
 @dataclass(frozen=True)

@@ -2190,6 +2190,31 @@ def test_load_config_map_defaults(tmp_path: Path) -> None:
     assert cfg.docs.map.purpose == {}
     assert cfg.docs.map.include == ()
     assert cfg.docs.map.exclude == ()
+    assert cfg.docs.map.lock_file == ".rrt/docs_map.lock.toml"
+
+
+def test_load_config_map_lock_file_override(tmp_path: Path) -> None:
+    """A custom lock_file path overrides the default."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs.map]\nlock_file = ".rrt/custom_map.lock.toml"\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None and cfg.docs.map is not None
+    assert cfg.docs.map.lock_file == ".rrt/custom_map.lock.toml"
+
+
+def test_load_config_map_lock_file_empty_string(tmp_path: Path) -> None:
+    """lock_file rejects an empty string."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.map]\nlock_file = ""\n')
+    with pytest.raises(ValueError, match="lock_file must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_map_config_validate_rejects_blank_lock_file() -> None:
+    """MapConfig.validate raises when lock_file is whitespace-only."""
+    with pytest.raises(ValueError, match="lock_file must be a non-empty string"):
+        MapConfig(lock_file="   ").validate()
 
 
 def test_load_config_map_full(tmp_path: Path) -> None:
