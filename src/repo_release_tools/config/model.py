@@ -416,6 +416,42 @@ class SharedBlock:
             )
 
 
+VALID_MAP_ON_CONFLICT = frozenset({"merge", "skip", "error"})
+VALID_MAP_PROMPTS = frozenset({"self-check", "auto-update"})
+
+
+@dataclass(frozen=True)
+class MapConfig:
+    """Per-directory purpose-doc generator under [tool.rrt.docs.map]."""
+
+    root: str = "src"
+    file_name: str = "README.md"
+    on_conflict: str = "merge"
+    tree_max_depth: int = 2
+    prompts: tuple[str, ...] = ()
+    purpose: dict[str, str] = field(default_factory=dict)
+    include: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = ()
+
+    def validate(self) -> None:
+        """Validate enumerated fields."""
+        if self.on_conflict not in VALID_MAP_ON_CONFLICT:
+            allowed = ", ".join(sorted(VALID_MAP_ON_CONFLICT))
+            raise ValueError(
+                f"docs.map.on_conflict must be one of {allowed}, got {self.on_conflict!r}",
+            )
+        unknown = [p for p in self.prompts if p not in VALID_MAP_PROMPTS]
+        if unknown:
+            allowed = ", ".join(sorted(VALID_MAP_PROMPTS))
+            raise ValueError(
+                f"docs.map.prompts contains unsupported entries: {unknown}. Allowed: {allowed}",
+            )
+        if self.tree_max_depth < 0:
+            raise ValueError(
+                f"docs.map.tree_max_depth must be >= 0, got {self.tree_max_depth}",
+            )
+
+
 @dataclass(frozen=True)
 class DocsConfig:
     """Documentation tree configuration under [tool.rrt.docs]."""
@@ -447,6 +483,8 @@ class DocsConfig:
     command_groups: tuple[CommandGroupEntry, ...] = ()
     topic_pages: tuple[TopicPageEntry, ...] = ()
     title_overrides: dict[str, str] = field(default_factory=dict)
+    # Per-directory purpose-doc generator (rrt docs map)
+    map: MapConfig | None = None
 
     def validate(self) -> None:
         """Validate badge_style and badge_variant values."""

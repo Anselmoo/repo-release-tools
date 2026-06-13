@@ -28,6 +28,7 @@ from .model import (
     DocsConfig,
     EolConfig,
     EolOverride,
+    MapConfig,
     SharedBlock,
     TopicPageEntry,
 )
@@ -159,6 +160,7 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
         command_groups=_load_command_groups(d),
         topic_pages=_load_topic_pages(d),
         title_overrides=_load_title_overrides(d),
+        map=_load_map_config(d.get("map")),
     )
 
 
@@ -454,5 +456,69 @@ def _load_title_overrides(d: dict[str, object]) -> dict[str, str]:
     for k, v in cast("dict[str, object]", raw).items():
         if not isinstance(k, str) or not isinstance(v, str):
             raise ValueError("tool.rrt.docs.title_overrides keys and values must be strings")
+        result[k] = v
+    return result
+
+
+def _load_map_config(raw: object) -> MapConfig | None:
+    """Parse an optional [tool.rrt.docs.map] table into a MapConfig."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("tool.rrt.docs.map must be a table")
+
+    d: dict[str, object] = cast("dict[str, object]", raw)
+
+    cfg = MapConfig(
+        root=_load_map_string(d, "root", default="src"),
+        file_name=_load_map_string(d, "file_name", default="README.md"),
+        on_conflict=_load_map_string(d, "on_conflict", default="merge"),
+        tree_max_depth=_load_map_int(d, "tree_max_depth", default=2),
+        prompts=_load_map_string_tuple(d, "prompts"),
+        purpose=_load_map_purpose(d),
+        include=_load_map_string_tuple(d, "include"),
+        exclude=_load_map_string_tuple(d, "exclude"),
+    )
+    cfg.validate()
+    return cfg
+
+
+def _load_map_string(d: dict[str, object], key: str, *, default: str) -> str:
+    raw = d.get(key)
+    if raw is None:
+        return default
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f"tool.rrt.docs.map.{key} must be a non-empty string")
+    return raw
+
+
+def _load_map_int(d: dict[str, object], key: str, *, default: int) -> int:
+    raw = d.get(key)
+    if raw is None:
+        return default
+    if not isinstance(raw, int) or isinstance(raw, bool):
+        raise ValueError(f"tool.rrt.docs.map.{key} must be an integer")
+    return raw
+
+
+def _load_map_string_tuple(d: dict[str, object], key: str) -> tuple[str, ...]:
+    raw = d.get(key)
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise ValueError(f"tool.rrt.docs.map.{key} must be a list of strings")
+    return tuple(cast("list[str]", raw))
+
+
+def _load_map_purpose(d: dict[str, object]) -> dict[str, str]:
+    raw = d.get("purpose")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("tool.rrt.docs.map.purpose must be a table")
+    result: dict[str, str] = {}
+    for k, v in cast("dict[str, object]", raw).items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise ValueError("tool.rrt.docs.map.purpose keys and values must be strings")
         result[k] = v
     return result
