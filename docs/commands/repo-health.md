@@ -85,6 +85,7 @@ permalink: "/commands/repo-health/"
   - [`rrt docs suggest`](#rrt-docs-suggest)
   - [`rrt docs badges`](#rrt-docs-badges)
   - [`rrt docs api`](#rrt-docs-api)
+  - [`rrt docs map`](#rrt-docs-map)
 - [`rrt drift`](#rrt-drift)
   - [Overview](#overview-8)
   - [Responsibilities](#responsibilities-1)
@@ -939,6 +940,7 @@ Arguments
   suggest      Suggest or scaffold rich module docstrings for Python files.
   badges       Generate platform SVG badge files into docs/assets/badges/.
   api          Emit a structured index of all rrt CLI commands and arguments.
+  map          Generate per-directory purpose docs from [tool.rrt.docs.map].
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -1092,6 +1094,24 @@ Options
   --output FILE  Write output to FILE instead of stdout.
   --root PATH    Project root directory (default: current directory).
   --dry-run      Print what would be written without writing files.
+```
+
+### `rrt docs map`
+
+```text
+Usage:  rrt docs map [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --check      Fail if any directory's purpose doc disagrees with the lockfile.
+  --root PATH  Project root directory (default: current directory).
+  --dry-run    Preview changes without writing files or the lockfile.
 ```
 
 ## `rrt drift`

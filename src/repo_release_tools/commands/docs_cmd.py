@@ -787,6 +787,85 @@ def _cmd_suggest(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Map (per-directory purpose docs)
+# ---------------------------------------------------------------------------
+
+
+def _cmd_map(args: argparse.Namespace) -> int:
+    """Generate or check per-directory purpose docs via `rrt docs map`."""
+    from repo_release_tools.commands.docs_map import generate  # noqa: PLC0415
+    from repo_release_tools.commands.docs_map_lock import (  # noqa: PLC0415
+        detect_drift,
+        refresh_lockfile,
+    )
+
+    verbose: int = getattr(args, "verbose", 0) or 0
+    cwd = Path(args.root)
+    docs_cfg = _config_for_cwd(cwd)
+    p = DryRunPrinter(dry_run=getattr(args, "dry_run", False), verbose=verbose)
+
+    if docs_cfg.map is None:
+        p.line(
+            "[tool.rrt.docs.map] is not configured.",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+
+    map_cfg = docs_cfg.map
+    check: bool = getattr(args, "check", False)
+
+    if check:
+        drift = detect_drift(map_cfg, cwd)
+        if not drift:
+            p.ok("docs map is up-to-date.")
+            return 0
+        p.line(
+            f"docs map is stale: {len(drift)} drift item(s).",
+            ok=False,
+            stream=sys.stderr,
+        )
+        for item in drift:
+            p.line(
+                f"{item.kind}: {item.directory}",
+                ok=None,
+                stream=sys.stderr,
+            )
+        p.action(
+            "Run `rrt docs map` (or `rrt-hooks docs-map-update`) to refresh.",
+            stream=sys.stderr,
+        )
+        return 1
+
+    p.header(
+        "Generating purpose docs",
+        Root=str(cwd / map_cfg.root),
+        File=map_cfg.file_name,
+        on_conflict=map_cfg.on_conflict,
+    )
+    p.section("Results")
+
+    results = generate(map_cfg, cwd, dry_run=p.dry_run)
+    counts: dict[str, int] = {}
+    for r in results:
+        counts[r.status] = counts.get(r.status, 0) + 1
+        rel = r.file_path.relative_to(cwd).as_posix()
+        if p.dry_run:
+            p.would_write(rel, detail=r.status)
+        else:
+            p.action(f"{r.status}: {rel}")
+
+    if not p.dry_run:
+        lockfile = refresh_lockfile(map_cfg, cwd)
+        p.blank_line()
+        p.ok(f"Lockfile refreshed: {lockfile.relative_to(cwd)}")
+
+    summary = ", ".join(f"{count} {status}" for status, count in sorted(counts.items()))
+    p.footer(f"Done. {summary or 'no target directories'}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 
@@ -810,6 +889,8 @@ def cmd_docs(args: argparse.Namespace) -> int:
             return _cmd_badges(args)
         case "api":
             return _cmd_api(args)
+        case "map":
+            return _cmd_map(args)
     p = VerbosePrinter(verbose=verbose)
     p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
@@ -1080,3 +1161,28 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Print what would be written without writing files.",
     )
     api_p.set_defaults(handler=cmd_docs)
+
+    # ── map ───────────────────────────────────────────────────────────────
+    map_p = sub.add_parser(
+        "map",
+        help="Generate per-directory purpose docs from [tool.rrt.docs.map].",
+    )
+    map_p.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Fail if any directory's purpose doc disagrees with the lockfile.",
+    )
+    map_p.add_argument(
+        "--root",
+        default=".",
+        metavar="PATH",
+        help="Project root directory (default: current directory).",
+    )
+    map_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Preview changes without writing files or the lockfile.",
+    )
+    map_p.set_defaults(handler=cmd_docs)
