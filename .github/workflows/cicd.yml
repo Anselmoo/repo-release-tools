@@ -241,7 +241,7 @@ jobs:
         with:
           package: repo-release-tools
           registry: pypi
-          mode: complete
+          mode: reference
           entry-script: rrt-mcp
           extras: mcp
           no-probe: "true"
