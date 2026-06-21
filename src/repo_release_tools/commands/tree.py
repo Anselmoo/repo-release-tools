@@ -762,7 +762,10 @@ def _report_tree_check_result(
     for msg in drifted:
         printer.warn(f"  {msg}")
     if strict:
-        printer.line("Tree structure drift detected (--strict mode).", ok=False)
+        printer.line("Tree structure drift detected (--strict mode).", ok=False, stream=sys.stderr)
+        printer.line(
+            "Run `rrt tree --snapshot` to update the snapshot.", ok=False, stream=sys.stderr
+        )
         return 1
     printer.warn("Tree structure drift detected (advisory). Use --strict to block.")
     return 0

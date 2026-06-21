@@ -777,8 +777,9 @@ def test_doctor_check_advisory_exits_0_on_regression(
 def test_doctor_check_strict_exits_1_on_regression(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """--check --strict exits 1 when a regression is detected."""
+    """--check --strict exits 1 when a regression is detected and shows snapshot recommendation."""
     from repo_release_tools.state import build_health_lock, write_lock
 
     monkeypatch.chdir(tmp_path)
@@ -805,6 +806,7 @@ def test_doctor_check_strict_exits_1_on_regression(
 
     # Strict mode: regression found → exit 1
     assert rc == 1
+    assert "rrt doctor --snapshot" in capsys.readouterr().err
 
 
 def test_doctor_check_missing_lock_exits_1_strict(

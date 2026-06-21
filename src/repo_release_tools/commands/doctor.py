@@ -360,7 +360,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         for msg in regressions:
             p.warn(f"  {msg}")
         if strict:
-            p.line("Health regressions detected (--strict mode).", ok=False)
+            p.line("Health regressions detected (--strict mode).", ok=False, stream=sys.stderr)
+            p.line(
+                "Run `rrt doctor --snapshot` to update the health snapshot.",
+                ok=False,
+                stream=sys.stderr,
+            )
             return 1
         p.warn("Health regressions detected (advisory). Use --strict to block.")
         return 0
