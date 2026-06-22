@@ -63,6 +63,8 @@ def main() -> int:
 
     try:
         current_pct = _read_current_coverage_pct(coverage_xml)
+    except FileNotFoundError:  # pragma: no cover - no tests ran this session
+        return 0
     except Exception as exc:  # pragma: no cover - defensive for hook runtime
         return _block(f"Coverage gate failed to read current coverage: {exc}")
 

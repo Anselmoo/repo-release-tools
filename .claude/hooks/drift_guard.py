@@ -29,6 +29,11 @@ def main() -> int:
     repo_root = Path.cwd()
     command = os.getenv("RRT_DRIFT_CHECK_COMMAND", "uv run rrt drift check")
 
+    env = os.environ.copy()
+    env["PATH"] = ":".join([
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/.cargo/bin"),
+    ]) + ":" + env.get("PATH", "")
     try:
         result = subprocess.run(  # noqa: S603
             shlex.split(command),
@@ -36,6 +41,7 @@ def main() -> int:
             check=False,
             capture_output=True,
             text=True,
+            env=env,
         )
     except Exception as exc:  # pragma: no cover - defensive for hook runtime
         return _block(f"Drift guard could not execute '{command}': {exc}")
