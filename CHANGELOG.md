@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.9.1] - 2026-06-22
 ### Added
 
 - `rrt release repair` — fix or recreate a release branch after a polluted PR. Verify mode (`rrt release repair`) walks every version target, pin target, and `[VERSION]`/`[Unreleased]` section and prints drift; `--yes` rewrites the drifted files and commits `chore(release): repair v{ver}`. Recreate mode (`--from BASE --yes`) rewinds the current branch to `BASE`, restores the `[VERSION]` body from HEAD (or `--changelog-from PATH`), and replays the bump as a single `chore: bump version to v{ver}` commit. Safety: writes a `repair/backup/<branch>-<ts>` ref before any destructive operation, refuses when the working tree is dirty or the branch is ahead of `origin/<branch>` (use `--force-allow-pushed`), and supports a `--hotfix` mode that implies `--yes` and tags the commit as `chore(release): repair v{ver}` for express recovery.
