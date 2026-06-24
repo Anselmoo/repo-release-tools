@@ -18,6 +18,7 @@ from repo_release_tools.version.targets import (
     read_toml_field,
     read_version_string,
     replace_all_versions_atomic,
+    replace_kind_pattern_version,
     replace_package_json_version,
     replace_pattern_version,
     replace_version_in_file,
@@ -434,6 +435,60 @@ def test_read_version_string_kind_pattern_no_match_raises(tmp_path: Path) -> Non
     target = VersionTarget(path=f, kind="pattern", pattern=r'"ruff==(\d+\.\d+\.\d+)"')
     with pytest.raises(RuntimeError, match="Could not match configured pattern"):
         read_version_string(target)
+
+
+def test_replace_kind_pattern_version_basic() -> None:
+    text = 'dependencies = [\n    "ruff==0.15.18",\n]\n'
+    result = replace_kind_pattern_version(text, r'"ruff==(\d+\.\d+\.\d+)"', "1.0.0")
+    assert result == 'dependencies = [\n    "ruff==1.0.0",\n]\n'
+
+
+def test_replace_kind_pattern_version_first_occurrence_only() -> None:
+    text = '"ruff==1.0.0"\n"ruff==1.0.0"\n'
+    result = replace_kind_pattern_version(text, r'"ruff==(\d+\.\d+\.\d+)"', "2.0.0")
+    # count=1: only the first occurrence is replaced
+    assert result == '"ruff==2.0.0"\n"ruff==1.0.0"\n'
+
+
+def test_replace_kind_pattern_version_preserves_surrounding_text() -> None:
+    text = 'name = "my-pkg"\ndeps = ["ruff==0.5.0", "black==24.0"]\n'
+    result = replace_kind_pattern_version(text, r"ruff==(\d+\.\d+\.\d+)", "0.6.0")
+    assert result == 'name = "my-pkg"\ndeps = ["ruff==0.6.0", "black==24.0"]\n'
+
+
+def test_replace_kind_pattern_version_no_match_raises() -> None:
+    with pytest.raises(RuntimeError, match="Configured pattern did not match"):
+        replace_kind_pattern_version("no version here", r'"ruff==(\d+\.\d+\.\d+)"', "1.0.0")
+
+
+def test_replace_version_in_file_kind_pattern(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    f = tmp_path / "pyproject.toml"
+    f.write_text('dependencies = ["ruff==0.15.18"]\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="pattern", pattern=r'"ruff==(\d+\.\d+\.\d+)"')
+    replace_version_in_file(target, "1.0.0", dry_run=False)
+    assert f.read_text(encoding="utf-8") == 'dependencies = ["ruff==1.0.0"]\n'
+
+
+def test_replace_version_in_file_kind_pattern_dry_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    f = tmp_path / "pyproject.toml"
+    original = 'dependencies = ["ruff==0.15.18"]\n'
+    f.write_text(original, encoding="utf-8")
+    target = VersionTarget(path=f, kind="pattern", pattern=r'"ruff==(\d+\.\d+\.\d+)"')
+    replace_version_in_file(target, "1.0.0", dry_run=True)
+    assert f.read_text(encoding="utf-8") == original  # file unchanged
+    assert "Would update" in capsys.readouterr().out
+
+
+def test_replace_all_versions_atomic_kind_pattern(tmp_path: Path) -> None:
+    f = tmp_path / "pyproject.toml"
+    f.write_text('dependencies = ["ruff==0.15.18"]\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="pattern", pattern=r'"ruff==(\d+\.\d+\.\d+)"')
+    replace_all_versions_atomic([target], "1.0.0", dry_run=False)
+    assert f.read_text(encoding="utf-8") == 'dependencies = ["ruff==1.0.0"]\n'
 
 
 def test_read_toml_field_missing_section_missing_field_and_non_string(tmp_path: Path) -> None:
