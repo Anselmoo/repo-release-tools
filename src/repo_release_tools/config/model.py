@@ -211,34 +211,51 @@ class VersionTarget:
         All checks run unconditionally so that ``ci_format`` is always
         validated regardless of which replacement mechanism is configured.
         """
-        if self.kind is not None and self.kind not in VALID_TARGET_KINDS:
-            allowed = ", ".join(sorted(VALID_TARGET_KINDS))
-            raise ValueError(f"kind must be one of {allowed}, got {self.kind!r}")
+        if self.kind == "pattern":
+            if self.pattern is None:
+                raise ValueError("kind='pattern' requires a 'pattern' field with a 1-group regex")
+            if self.section is not None or self.field is not None:
+                raise ValueError("kind='pattern' cannot be combined with section or field")
+            try:
+                compiled = re.compile(self.pattern)
+            except re.error as exc:
+                raise ValueError(f"kind='pattern' pattern is not a valid regex: {exc}") from exc
+            if compiled.groups != 1:
+                raise ValueError(
+                    f"kind='pattern' pattern must have exactly 1 capture group "
+                    f"(the version string); got {compiled.groups}"
+                )
+        else:
+            if self.kind is not None and self.kind not in VALID_TARGET_KINDS:
+                allowed = ", ".join(sorted(VALID_TARGET_KINDS))
+                raise ValueError(f"kind must be one of {allowed}, got {self.kind!r}")
 
-        has_kind = self.kind in VALID_TARGET_KINDS
-        has_pattern = self.pattern is not None
-        has_section = self.section is not None
-        has_field = self.field is not None
+            has_kind = self.kind in VALID_TARGET_KINDS
+            has_pattern = self.pattern is not None
+            has_section = self.section is not None
+            has_field = self.field is not None
 
-        if has_section != has_field:
-            raise ValueError("section and field must be configured together")
+            if has_section != has_field:
+                raise ValueError("section and field must be configured together")
 
-        has_section_field = has_section and has_field
-        configured_modes = sum((has_kind, has_pattern, has_section_field))
-        if configured_modes == 0:
-            kind_opts = " or ".join(f"kind={k!r}" for k in sorted(VALID_TARGET_KINDS))
-            raise ValueError(
-                f"Each version target must define either {kind_opts}, pattern, or section+field",
-            )
-        if configured_modes > 1:
-            raise ValueError(
-                "Version target replacement selectors are mutually exclusive: "
-                "use exactly one of kind, pattern, or section+field",
-            )
+            has_section_field = has_section and has_field
+            configured_modes = sum((has_kind, has_pattern, has_section_field))
+            if configured_modes == 0:
+                kind_opts = " or ".join(f"kind={k!r}" for k in sorted(VALID_TARGET_KINDS))
+                raise ValueError(
+                    f"Each version target must define either {kind_opts}, "
+                    "pattern, or section+field",
+                )
+            if configured_modes > 1:
+                raise ValueError(
+                    "Version target replacement selectors are mutually exclusive: "
+                    "use exactly one of kind, pattern, or section+field",
+                )
 
-        if has_pattern:
-            assert self.pattern is not None
-            re.compile(self.pattern)
+            if has_pattern:
+                assert self.pattern is not None
+                re.compile(self.pattern)
+
         if self.ci_format is not None:
             if not isinstance(self.ci_format, str):
                 raise ValueError(

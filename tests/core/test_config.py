@@ -2864,6 +2864,49 @@ def test_version_target_validate_rejects_invalid_kind() -> None:
         target.validate()
 
 
+def test_validate_kind_pattern_requires_pattern_field() -> None:
+    target = VersionTarget(path=Path("x.toml"), kind="pattern")
+    with pytest.raises(ValueError, match="kind='pattern' requires a 'pattern' field"):
+        target.validate()
+
+
+def test_validate_kind_pattern_rejects_section_field() -> None:
+    target = VersionTarget(
+        path=Path("x.toml"), kind="pattern", pattern=r"(\d+)", section="s", field="f"
+    )
+    with pytest.raises(ValueError, match="cannot be combined with section"):
+        target.validate()
+
+
+def test_validate_kind_pattern_rejects_zero_groups() -> None:
+    target = VersionTarget(path=Path("x.toml"), kind="pattern", pattern=r"\d+\.\d+\.\d+")
+    with pytest.raises(ValueError, match="exactly 1 capture group"):
+        target.validate()
+
+
+def test_validate_kind_pattern_rejects_two_groups() -> None:
+    target = VersionTarget(path=Path("x.toml"), kind="pattern", pattern=r"(\d+)\.(\d+)")
+    with pytest.raises(ValueError, match="exactly 1 capture group"):
+        target.validate()
+
+
+def test_validate_kind_pattern_rejects_three_groups() -> None:
+    target = VersionTarget(path=Path("x.toml"), kind="pattern", pattern=r"(prefix)(\d+)(suffix)")
+    with pytest.raises(ValueError, match="exactly 1 capture group"):
+        target.validate()
+
+
+def test_validate_kind_pattern_valid() -> None:
+    target = VersionTarget(path=Path("x.toml"), kind="pattern", pattern=r'"ruff==(\d+\.\d+\.\d+)"')
+    target.validate()  # must not raise
+
+
+def test_validate_kind_pattern_invalid_regex_raises() -> None:
+    target = VersionTarget(path=Path("x.toml"), kind="pattern", pattern=r"(unclosed")
+    with pytest.raises(ValueError, match="not a valid regex"):
+        target.validate()
+
+
 def test_version_target_validate_rejects_no_mode() -> None:
     """Target with no kind/pattern/section+field raises ValueError."""
     target = VersionTarget(path=Path("x"))
