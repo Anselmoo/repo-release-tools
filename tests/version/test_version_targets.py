@@ -411,6 +411,31 @@ def test_read_version_string_pattern_no_match_raises(tmp_path: Path) -> None:
         read_version_string(target)
 
 
+def test_read_version_string_kind_pattern(tmp_path: Path) -> None:
+    f = tmp_path / "pyproject.toml"
+    f.write_text('dependencies = [\n    "ruff==0.15.18",\n]\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="pattern", pattern=r'"ruff==(\d+\.\d+\.\d+)"')
+    assert read_version_string(target) == "0.15.18"
+
+
+def test_read_version_string_kind_pattern_multiline_file(tmp_path: Path) -> None:
+    f = tmp_path / "pyproject.toml"
+    f.write_text(
+        '[project]\nname = "my-pkg"\n\n[project.dependencies]\nruff = "ruff==1.2.3"\n',
+        encoding="utf-8",
+    )
+    target = VersionTarget(path=f, kind="pattern", pattern=r"ruff==(\d+\.\d+\.\d+)")
+    assert read_version_string(target) == "1.2.3"
+
+
+def test_read_version_string_kind_pattern_no_match_raises(tmp_path: Path) -> None:
+    f = tmp_path / "file.txt"
+    f.write_text("no version here\n", encoding="utf-8")
+    target = VersionTarget(path=f, kind="pattern", pattern=r'"ruff==(\d+\.\d+\.\d+)"')
+    with pytest.raises(RuntimeError, match="Could not match configured pattern"):
+        read_version_string(target)
+
+
 def test_read_toml_field_missing_section_missing_field_and_non_string(tmp_path: Path) -> None:
     f = tmp_path / "x.toml"
     f.write_text("[project]\nname='x'\n", encoding="utf-8")

@@ -215,6 +215,12 @@ def read_version_string(target: VersionTarget) -> str:
             if m is None:
                 raise RuntimeError(f"Could not find <Version> in {target.path}")
             return m.group(2)
+        case "pattern":
+            assert target.pattern is not None
+            m = search_pattern(text, target.pattern)
+            if m is None:
+                raise RuntimeError(f"Could not match configured pattern in {target.path}")
+            return m.group(1)
 
     if target.pattern:
         m = search_pattern(text, target.pattern)
