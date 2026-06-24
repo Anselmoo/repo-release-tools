@@ -306,11 +306,11 @@ def replace_pattern_version(text: str, pattern: str, new_version: str, *, count:
 
 def replace_kind_pattern_version(text: str, pattern: str, new_version: str) -> str:
     """Replace the version string captured in group 1 of a kind='pattern' regex."""
+
+    def _replacer(m: re.Match[str], _nv: str = new_version) -> str:
+        return m.string[m.start(0) : m.start(1)] + _nv + m.string[m.end(1) : m.end(0)]
+
     for compiled in compile_pattern_variants(pattern):
-
-        def _replacer(m: re.Match[str], _nv: str = new_version) -> str:
-            return m.string[m.start(0) : m.start(1)] + _nv + m.string[m.end(1) : m.end(0)]
-
         updated, n = compiled.subn(_replacer, text, count=1)
         if n:
             return updated
