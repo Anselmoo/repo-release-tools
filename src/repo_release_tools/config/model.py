@@ -7,17 +7,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent
 
+from repo_release_tools.sync.providers import PROVIDERS as VALID_UPSTREAM_PROVIDERS  # noqa: F401
+
 DEFAULT_RELEASE_BRANCH = "release/v{version}"
 DEFAULT_CHANGELOG = "CHANGELOG.md"
 DEFAULT_CHANGELOG_WORKFLOW = "incremental"
 DEFAULT_LOCK_COMMAND = ["uv", "lock", "-U"]
 DEFAULT_GENERIC_LOCK_COMMAND: list[str] = []
 VALID_CHANGELOG_WORKFLOWS = frozenset({"incremental", "squash"})
-
-# Mirror of sync.providers.PROVIDERS — kept here to avoid a circular import.
-VALID_UPSTREAM_PROVIDERS: frozenset[str] = frozenset(
-    {"pypi", "npm", "nuget", "crates", "packagist"}
-)
 
 # Well-known changelog filenames probed in order when autodetecting.
 CHANGELOG_CANDIDATES = (

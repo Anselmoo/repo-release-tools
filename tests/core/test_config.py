@@ -3639,5 +3639,5 @@ def test_upstream_config_rejects_invalid_provider(tmp_path: Path) -> None:
         '[tool.rrt.upstream]\npackage = "ruff"\nprovider = "bogus"\n',
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="bogus"):
+    with pytest.raises(ValueError, match=r"bogus.*must be one of|must be one of.*bogus"):
         load_or_autodetect_config(tmp_path)
