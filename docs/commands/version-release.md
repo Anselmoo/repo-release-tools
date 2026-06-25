@@ -843,6 +843,118 @@ Examples
   $ rrt tag check --strict
 ```
 
+## Version target configuration reference
+
+### `kind='pattern'` targets
+
+When a version string lives outside a well-known format (`pep621`,
+`cargo_toml`, `package_json`, etc.), use `kind='pattern'` with a
+single-capture-group regex. The captured group is **exactly the version
+string** — no prefix or suffix groups needed.
+
+```toml
+[[tool.rrt.version_targets]]
+path = "src/myapp/__init__.py"
+kind = "pattern"
+pattern = '^VERSION = "([^"]+)"$'
+```
+
+Rules:
+
+- `pattern` must compile as a valid Python regex.
+- The regex must contain **exactly 1 capture group** whose match is the
+  version string itself.
+- `kind='pattern'` is mutually exclusive with `section`, `field`, and
+  all other `kind` values.
+- The pattern is applied with `re.MULTILINE`; use `^` / `$` anchors for
+  line-level matching.
+
+`kind='pattern'` differs from the **legacy bare-pattern** approach (no
+`kind`), which requires 3 groups — `(prefix)(version)(suffix)`. The
+`kind='pattern'` form is preferred for new targets because the regex is
+shorter and group intent is unambiguous:
+
+```toml
+# Legacy 3-group pattern — still supported
+[[tool.rrt.version_targets]]
+path = "docs/conf.py"
+pattern = '^(release = ")([^"]+)(")$'
+
+# Preferred: kind='pattern' with 1 capture group
+[[tool.rrt.version_targets]]
+path = "docs/conf.py"
+kind = "pattern"
+pattern = '^release = "([^"]+)"$'
+```
+
+### `pin_target_missing`
+
+Controls what happens when a `[[tool.rrt.pin_targets]]` entry pattern
+finds no matches in the target file:
+
+| Value | Behavior |
+|---|---|
+| `"error"` *(default)* | `rrt bump` fails if any pin target has zero matches |
+| `"warn"` | `rrt bump` prints a warning and continues |
+
+Set in `[tool.rrt]`:
+
+```toml
+[tool.rrt]
+pin_target_missing = "warn"
+```
+
+Use `"warn"` during a migration where some pin files may not yet contain
+the expected pattern, or when a pin target is intentionally optional.
+
+### `version_groups` — per-component versioning
+
+`version_groups` lets a single repository maintain multiple independently
+released components, each with its own version, changelog, and release
+branch.
+
+```toml
+[[tool.rrt.version_groups]]
+name = "backend"
+release_branch = "release/backend/v{version}"
+changelog_file = "backend/CHANGELOG.md"
+
+  [[tool.rrt.version_groups.version_targets]]
+  path = "backend/pyproject.toml"
+  kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "sdk"
+release_branch = "release/sdk/v{version}"
+changelog_file = "sdk/CHANGELOG.md"
+
+  [[tool.rrt.version_groups.version_targets]]
+  path = "sdk/package.json"
+  kind = "package_json"
+```
+
+Each group supports: `release_branch`, `changelog_file`,
+`changelog_workflow`, `lock_command`, `generated_files`,
+`version_targets`, and `pin_targets`.
+
+Bump a specific group:
+
+```bash
+rrt bump minor --group backend
+rrt bump patch --group sdk
+```
+
+When a single group is configured, `--group` is optional. With multiple
+groups, set `default_group_name` to select the default:
+
+```toml
+[tool.rrt]
+default_group_name = "backend"
+```
+
+See also: `rrt workspace bump` to bump all groups to the same version in
+one pass.
+
 <!-- rrt:auto:start:doc-footer -->
 ---
 
