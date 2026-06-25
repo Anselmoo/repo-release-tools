@@ -102,8 +102,6 @@ def _fetch_packagist_versions(package: str, *, timeout: int = 10) -> list[str]:
 # Dispatch
 # ---------------------------------------------------------------------------
 
-_PROVIDERS = {"pypi", "npm", "nuget", "crates", "packagist"}
-
 
 def fetch_versions(package: str, provider: str = "pypi", *, timeout: int = 10) -> list[str]:
     """Return all released versions of *package* from *provider*; [] on error/unknown provider.
