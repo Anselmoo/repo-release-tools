@@ -182,3 +182,33 @@
   always_run: true
   stages: [manual]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-tree-check
+  name: repo-release-tools tree check
+  description: Validate project tree structure against the committed .rrt/tree.lock.toml
+  entry: rrt-hooks tree-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-drift-check
+  name: repo-release-tools drift check
+  description: Verify agent-facing surfaces match the committed .rrt/drift.lock.toml
+  entry: rrt-hooks drift-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-changelog-postcorrect
+  name: repo-release-tools changelog post-correct
+  description: Consolidate fragmented changelog entries after a squash merge
+  entry: rrt-hooks changelog post-correct
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
