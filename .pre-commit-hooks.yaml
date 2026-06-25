@@ -212,3 +212,13 @@
   always_run: true
   stages: [manual]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-sync
+  name: repo-release-tools upstream sync
+  description: List upstream releases newer than the current version
+  entry: rrt-hooks sync
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"

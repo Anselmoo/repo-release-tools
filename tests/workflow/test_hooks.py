@@ -1279,3 +1279,21 @@ def test_drift_check_subcommand_wired(tmp_path: Path, monkeypatch: pytest.Monkey
 
     rc = hooks_main(["drift-check"])
     assert rc in (0, 1)
+
+
+def test_sync_subcommand_wired(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """rrt-hooks sync exits 1 when no [tool.rrt.upstream] package is configured."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "mypkg"\nversion = "0.5.0"\n\n'
+        "[tool.rrt]\n\n"
+        "[[tool.rrt.version_targets]]\n"
+        'path = "pyproject.toml"\n'
+        'kind = "pep621"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.workflow.hooks import main as hooks_main
+
+    # No [tool.rrt.upstream] configured → cmd_sync returns 1.
+    assert hooks_main(["sync"]) == 1

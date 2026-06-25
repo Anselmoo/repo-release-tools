@@ -30,6 +30,7 @@ from repo_release_tools.commands.drift_cmd import cmd_check as cmd_drift_check
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.folder import cmd_folder_check
 from repo_release_tools.commands.release_cmd import cmd_release_check
+from repo_release_tools.commands.sync_cmd import cmd_sync
 from repo_release_tools.commands.tree import cmd_tree
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
@@ -1128,6 +1129,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Verify agent-surface drift lockfile is current (rrt drift check).",
     )
 
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="List upstream releases newer than the current version.",
+    )
+    sync_parser.add_argument(
+        "--group",
+        default=None,
+        metavar="GROUP",
+        help="Version group name (default: first/default group).",
+    )
+    sync_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a JSON array of newer version strings instead of one-per-line output.",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview without side effects (informational; sync is read-only).",
+    )
+
     folder_check_parser = subparsers.add_parser(
         "folder-check",
         help="Validate repository folder structure against configured rules or templates.",
@@ -1259,6 +1281,9 @@ def main(argv: list[str] | None = None) -> int:
                 verbose=verbose,
             )
             return cmd_drift_check(drift_args)
+        case "sync":
+            parsed.verbose = verbose
+            return cmd_sync(parsed)
         case "check-eol":
             parsed.verbose = verbose
             return cmd_eol_check(parsed)
