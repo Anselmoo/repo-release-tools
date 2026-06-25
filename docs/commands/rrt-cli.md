@@ -114,7 +114,7 @@ Each command group has its own reference page with the full argparse help.
 
 | Group | Commands | Reference |
 |---|---|---|
-| **Version & Release** | `bump`, `changelog`, `ci-version`, `release`, `workspace`, `tag` | [Version & Release](version-release.md) |
+| **Version & Release** | `bump`, `changelog`, `ci-version`, `release`, `sync`, `workspace`, `tag` | [Version & Release](version-release.md) |
 | **Repository Health** | `doctor`, `artifacts`, `config`, `env`, `eol`, `toc`, `tree`, `docs`, `drift`, `folder` | [Repository Health](repo-health.md) |
 | **Git Workflow** | `branch`, `git` | [Git Workflow](git-workflow.md) |
 | **CI & Automation** | `action` | [CI & Automation](ci-automation.md) |

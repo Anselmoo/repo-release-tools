@@ -85,7 +85,54 @@ from repo_release_tools.version.targets import read_version_string
 
 RELEASE_CHECK_EPILOG = "  $ rrt release check"
 
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("release_check", __doc__ or ""),)
+_RELEASE_CHECK_EXTENDED_DOC = (
+    (__doc__ or "")
+    + """
+## `rrt doctor` vs `rrt release check`
+
+| Check | `rrt doctor` | `rrt release check` |
+|---|---|---|
+| Hook manager integration | Yes | No |
+| CI workflow surfaces | Yes | No |
+| Version target reachability | No | Yes |
+| Pin target regex matches | No | Yes |
+| Changelog file existence | No | Yes |
+
+**Rule of thumb:** run `rrt doctor` to confirm automation wiring is in
+place; run `rrt release check` before cutting a release to confirm that
+the files `rrt bump` will touch are reachable.
+
+## Common failures
+
+```
+Error: version target 'src/myapp/__init__.py' not found
+```
+→ The file was moved or renamed. Update `path` in `pyproject.toml`.
+
+```
+Error: pin target pattern has no matches in 'docs/conf.py'
+```
+→ The pattern compiles but matches nothing. Check the regex, or set
+`pin_target_missing = "warn"` to downgrade to a warning during migration.
+
+```
+Error: changelog file 'CHANGELOG.md' not found
+```
+→ First-release setup: the changelog file doesn't exist yet. Create it
+with `[Unreleased]` as a placeholder section.
+
+## Hook usage
+
+```bash
+rrt release check
+
+# Or via pre-commit (manual stage):
+pre-commit run rrt-release-check --hook-stage manual
+```
+"""
+)
+
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("release", _RELEASE_CHECK_EXTENDED_DOC),)
 
 
 def _check_version_target(target: VersionTarget, root: Path) -> tuple[str, bool, str]:

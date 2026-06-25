@@ -1492,6 +1492,10 @@ Pair it with:
 | `rrt-folder-check` | pre-commit / pre-push | Validate repository folder structure against `[tool.rrt.folders]` config |
 | `rrt-artifacts-check` | pre-commit / pre-push | Verify artifact hashes match the committed lock (strict by default) |
 | `rrt-artifacts-snapshot` | manual | Hash all configured `artifact_targets` and write `.rrt/artifacts.lock.toml` |
+| `rrt-tree-check` | pre-push | Validate project tree structure against the committed `.rrt/tree.lock.toml` |
+| `rrt-drift-check` | pre-push | Verify agent-facing surfaces match the committed `.rrt/drift.lock.toml` |
+| `rrt-changelog-postcorrect` | manual | Consolidate fragmented changelog entries after a squash merge |
+| `rrt-sync` | manual | List upstream releases newer than the current version |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
 incremental workflow. You usually want one or the other, not both.
@@ -1543,6 +1547,57 @@ You can also run the same dirty-tree logic directly:
 ```bash
 rrt-hooks check-dirty-tree
 ```
+
+### Tree check
+
+`rrt-tree-check` validates the project directory structure against the
+committed `.rrt/tree.lock.toml`. Run it at `pre-push` to catch accidental
+layout changes before they reach the remote:
+
+```yaml
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.10.0
+    hooks:
+      - id: rrt-tree-check
+        stages: [pre-push]
+```
+
+Generate or refresh the lock with `rrt tree --lock`.
+
+### Drift check
+
+`rrt-drift-check` verifies that agent-facing surfaces (MCP tool definitions,
+skills, and related metadata) match the committed `.rrt/drift.lock.toml`.
+Pair it with `pre-push` to prevent publishing stale agent interfaces:
+
+```yaml
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.10.0
+    hooks:
+      - id: rrt-drift-check
+        stages: [pre-push]
+```
+
+Update the lock with `rrt drift snapshot`.
+
+### Upstream sync
+
+`rrt-sync` lists upstream releases that are strictly newer than the current
+project version. It is a read-only informational hook registered at the
+`manual` stage — useful in release pipelines to decide whether a bump is
+needed:
+
+```bash
+# List newer versions one per line
+pre-commit run rrt-sync --hook-stage manual
+# or directly:
+rrt sync
+rrt sync --json
+```
+
+See `[tool.rrt.upstream]` config and the `rrt sync` command for details.
 
 ## Post-correction mode (squash-merge workflows)
 

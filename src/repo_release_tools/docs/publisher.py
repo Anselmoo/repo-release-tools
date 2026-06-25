@@ -30,10 +30,13 @@ from typing import Protocol
 import repo_release_tools as rrt_package
 from repo_release_tools import eol as eol_module
 from repo_release_tools.commands import branch as branch_module
+from repo_release_tools.commands import bump as bump_module
 from repo_release_tools.commands import doctor as doctor_module
 from repo_release_tools.commands import eol_check as eol_check_module
 from repo_release_tools.commands import install_cmd as install_module
+from repo_release_tools.commands import release_cmd as release_cmd_module
 from repo_release_tools.commands import skill as skill_module
+from repo_release_tools.commands import sync_cmd as sync_cmd_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
@@ -66,7 +69,7 @@ COMMAND_GROUPS_CONFIG: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "version-release",
         "Version & Release",
-        ("bump", "changelog", "ci-version", "release", "workspace", "tag"),
+        ("bump", "changelog", "ci-version", "release", "sync", "workspace", "tag"),
     ),
     (
         "repo-health",
@@ -142,6 +145,7 @@ SOURCE_OWNED_TOPIC_DOCS: dict[str, str] = _collect_source_owned_topic_docs(
     (
         rrt_package,
         branch_module,
+        bump_module,
         git_helpers,
         hooks_module,
         action_module,
@@ -150,6 +154,8 @@ SOURCE_OWNED_TOPIC_DOCS: dict[str, str] = _collect_source_owned_topic_docs(
         install_module,
         eol_module,
         tree_module,
+        release_cmd_module,
+        sync_cmd_module,
     ),
 )
 
@@ -203,9 +209,12 @@ COMMAND_DOC_MODULES: dict[str, object] | None = None
 
 COMMAND_DOC_SOURCES: dict[str, CommandDocSource] = {
     "branch": CommandDocSource(render=lambda: _render_topic_doc("branch")),
+    "bump": CommandDocSource(render=lambda: _render_topic_doc("bump")),
     "git": CommandDocSource(render=lambda: _render_topic_doc("git")),
     "doctor": CommandDocSource(render=lambda: _render_topic_doc("doctor")),
     "eol": CommandDocSource(render=lambda: inspect.getdoc(eol_check_module) or ""),
+    "release": CommandDocSource(render=lambda: _render_topic_doc("release")),
+    "sync": CommandDocSource(render=lambda: _render_topic_doc("sync")),
     "tree": CommandDocSource(render=lambda: _render_topic_doc("tree")),
 }
 

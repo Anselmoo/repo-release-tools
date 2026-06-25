@@ -17,18 +17,13 @@ permalink: "/commands/version-release/"
 
 <!-- rrt:auto:start:toc -->
 - [`rrt bump`](#rrt-bump)
-  - [Overview](#overview)
-  - [What the command updates](#what-the-command-updates)
-  - [Release workflow](#release-workflow)
-  - [Changelog behavior](#changelog-behavior)
-  - [Safety notes](#safety-notes)
-  - [Examples](#examples)
+  - [Version target configuration reference](#version-target-configuration-reference)
 - [`rrt changelog`](#rrt-changelog)
-  - [Overview](#overview-1)
+  - [Overview](#overview)
   - [Responsibilities](#responsibilities)
   - [Subcommands](#subcommands)
   - [Behavior](#behavior)
-  - [Examples](#examples-1)
+  - [Examples](#examples)
   - [Related Docs](#related-docs)
   - [`rrt changelog compare`](#rrt-changelog-compare)
   - [`rrt changelog lint`](#rrt-changelog-lint)
@@ -38,28 +33,37 @@ permalink: "/commands/version-release/"
   - [`rrt ci-version apply`](#rrt-ci-version-apply)
   - [`rrt ci-version sync`](#rrt-ci-version-sync)
 - [`rrt release`](#rrt-release)
-  - [Overview](#overview-2)
+  - [Overview](#overview-1)
   - [What it checks](#what-it-checks)
   - [Output and severity](#output-and-severity)
   - [Config discovery behavior](#config-discovery-behavior)
-  - [Examples](#examples-2)
+  - [Examples](#examples-1)
   - [Related docs](#related-docs-1)
+  - [`rrt doctor` vs `rrt release check`](#rrt-doctor-vs-rrt-release-check)
+  - [Common failures](#common-failures)
+  - [Hook usage](#hook-usage)
   - [`rrt release check`](#rrt-release-check)
   - [`rrt release notes`](#rrt-release-notes)
   - [`rrt release repair`](#rrt-release-repair)
+- [`rrt sync`](#rrt-sync)
+  - [Configuration](#configuration)
+  - [Supported providers](#supported-providers)
+  - [Basic usage](#basic-usage)
+  - [CI mirror loop](#ci-mirror-loop)
+  - [Hook](#hook)
 - [`rrt workspace`](#rrt-workspace)
-  - [Overview](#overview-3)
+  - [Overview](#overview-2)
   - [When to use this](#when-to-use-this)
   - [What it does](#what-it-does)
-  - [Safety notes](#safety-notes-1)
-  - [Examples](#examples-3)
+  - [Safety notes](#safety-notes)
+  - [Examples](#examples-2)
   - [`rrt workspace bump`](#rrt-workspace-bump)
 - [`rrt tag`](#rrt-tag)
-  - [Overview](#overview-4)
+  - [Overview](#overview-3)
   - [Responsibilities](#responsibilities-1)
   - [Tag Format](#tag-format)
   - [Behavior](#behavior-1)
-  - [Examples](#examples-4)
+  - [Examples](#examples-3)
   - [Caveats](#caveats)
   - [`rrt tag create`](#rrt-tag-create)
   - [`rrt tag check`](#rrt-tag-check)
@@ -67,67 +71,117 @@ permalink: "/commands/version-release/"
 
 ## `rrt bump`
 
-Bump a release version and prepare the associated release branch.
+### Version target configuration reference
 
-### Overview
+#### `kind='pattern'` targets
 
-This command reads the active ``[tool.rrt]`` configuration, computes a new
-version, updates configured files, and creates the release branch named by the
-selected version group.
+When a version string lives outside a well-known format (`pep621`,
+`cargo_toml`, `package_json`, etc.), use `kind='pattern'` with a
+single-capture-group regex. The captured group is **exactly the version
+string** — no prefix or suffix groups needed.
 
-The bump value may be one of:
+```toml
+[[tool.rrt.version_targets]]
+path = "src/myapp/__init__.py"
+kind = "pattern"
+pattern = '^VERSION = "([^"]+)"$'
+```
 
-* ``major``, ``minor``, or ``patch`` to increment the current version
-* an explicit version string such as ``2.1.0``
+Rules:
 
-### What the command updates
+- `pattern` must compile as a valid Python regex.
+- The regex must contain **exactly 1 capture group** whose match is the
+  version string itself.
+- `kind='pattern'` is mutually exclusive with `section`, `field`, and
+  all other `kind` values.
+- The pattern is applied with `re.MULTILINE`; use `^` / `$` anchors for
+  line-level matching.
 
-Depending on the selected version group, the command can update:
+`kind='pattern'` differs from the **legacy bare-pattern** approach (no
+`kind`), which requires 3 groups — `(prefix)(version)(suffix)`. The
+`kind='pattern'` form is preferred for new targets because the regex is
+shorter and group intent is unambiguous:
 
-* version targets defined in ``[[tool.rrt.version_targets]]``
-* dependency or documentation pins configured for the group
-* the changelog file
-* lockfiles, when the group defines a lock command
+```toml
+# Legacy 3-group pattern — still supported
+[[tool.rrt.version_targets]]
+path = "docs/conf.py"
+pattern = '^(release = ")([^"]+)(")$'
 
-### Release workflow
+# Preferred: kind='pattern' with 1 capture group
+[[tool.rrt.version_targets]]
+path = "docs/conf.py"
+kind = "pattern"
+pattern = '^release = "([^"]+)"$'
+```
 
-1. Load the repository config from ``[tool.rrt]``.
-2. Resolve the selected version group.
-3. Compute the new version from the current group version or the explicit
-   ``<bump>`` value.
-4. Update version targets and optional pin targets.
-5. Update the changelog unless ``--no-changelog`` is set.
-6. Run the configured lock and generated-asset commands unless
-   ``--no-update`` is set.
-7. Create the release branch and stage or commit the resulting changes.
+#### `pin_target_missing`
 
-### Changelog behavior
+Controls what happens when a `[[tool.rrt.pin_targets]]` entry pattern
+finds no matches in the target file:
 
-The changelog update logic supports three modes:
+| Value | Behavior |
+|---|---|
+| `"error"` *(default)* | `rrt bump` fails if any pin target has zero matches |
+| `"warn"` | `rrt bump` prints a warning and continues |
 
-* ``auto`` - promote ``[Unreleased]`` when it has entries, otherwise generate a
-  new section from git history
-* ``promote`` - require a non-empty ``[Unreleased]`` section and rename it to
-  the new version heading
-* ``generate`` - always generate a fresh section from the commit log
+Set in `[tool.rrt]`:
 
-When an empty ``[Unreleased]`` placeholder exists, generated content is kept
-below it so the placeholder stays at the top of the file.
+```toml
+[tool.rrt]
+pin_target_missing = "warn"
+```
 
-### Safety notes
+Use `"warn"` during a migration where some pin files may not yet contain
+the expected pattern, or when a pin target is intentionally optional.
 
-* The working tree must be clean unless ``--dry-run`` is used.
-* Existing release branches are refused unless ``--force`` is set.
-* ``--no-commit`` leaves the branch created with staged changes only.
-* ``--dry-run`` previews the planned file edits and git actions without writing
-  to disk.
+`pin_target_missing` applies to `rrt bump` only; `rrt release check` always
+reports missing pin target matches as warnings regardless of this setting.
 
-### Examples
+#### `version_groups` — per-component versioning
 
-* ``rrt bump patch``
-* ``rrt bump minor --dry-run``
-* ``rrt bump 2.1.0 --no-changelog --no-commit``
-* ``rrt bump major --base-branch develop``
+`version_groups` lets a single repository maintain multiple independently
+released components, each with its own version, changelog, and release
+branch.
+
+```toml
+[[tool.rrt.version_groups]]
+name = "backend"
+release_branch = "release/backend/v{version}"
+changelog_file = "backend/CHANGELOG.md"
+
+  [[tool.rrt.version_groups.version_targets]]
+  path = "backend/pyproject.toml"
+  kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "sdk"
+release_branch = "release/sdk/v{version}"
+changelog_file = "sdk/CHANGELOG.md"
+
+  [[tool.rrt.version_groups.version_targets]]
+  path = "sdk/package.json"
+  kind = "package_json"
+```
+
+Each group supports: `release_branch`, `changelog_file`,
+`changelog_workflow`, `lock_command`, `generated_files`,
+`version_targets`, and `pin_targets`.
+
+Bump a specific group:
+
+```bash
+rrt bump minor --group backend
+rrt bump patch --group sdk
+```
+
+When a single group is configured, `--group` is optional. With multiple
+groups, set `default_group_name` to select the default:
+
+```toml
+[tool.rrt]
+default_group_name = "backend"
+```
 
 ```text
 Usage:  rrt bump [OPTIONS] <bump>
@@ -514,6 +568,48 @@ you need to keep multiple language surfaces aligned.
 - [pre-commit / lefthook](hooks.md)
 - [GitHub Action](action.md)
 
+### `rrt doctor` vs `rrt release check`
+
+| Check | `rrt doctor` | `rrt release check` |
+|---|---|---|
+| Hook manager integration | Yes | No |
+| CI workflow surfaces | Yes | No |
+| Version target reachability | No | Yes |
+| Pin target regex matches | No | Yes |
+| Changelog file existence | No | Yes |
+
+**Rule of thumb:** run `rrt doctor` to confirm automation wiring is in
+place; run `rrt release check` before cutting a release to confirm that
+the files `rrt bump` will touch are reachable.
+
+### Common failures
+
+```
+Error: version target 'src/myapp/__init__.py' not found
+```
+→ The file was moved or renamed. Update `path` in `pyproject.toml`.
+
+```
+Error: pin target pattern has no matches in 'docs/conf.py'
+```
+→ The pattern compiles but matches nothing. Check the regex, or set
+`pin_target_missing = "warn"` to downgrade to a warning during migration.
+
+```
+Error: changelog file 'CHANGELOG.md' not found
+```
+→ First-release setup: the changelog file doesn't exist yet. Create it
+with `[Unreleased]` as a placeholder section.
+
+### Hook usage
+
+```bash
+rrt release check
+
+# Or via pre-commit (manual stage):
+pre-commit run rrt-release-check --hook-stage manual
+```
+
 ```text
 Usage:  rrt release [OPTIONS] <release_command>
 
@@ -617,6 +713,101 @@ Examples
   $ rrt release repair --yes
   $ rrt release repair --from main --yes
   $ rrt release repair --from main --hotfix
+```
+
+## `rrt sync`
+
+### Configuration
+
+`rrt sync` reads upstream version information using the `[tool.rrt.upstream]`
+block in your project config:
+
+```toml
+[tool.rrt.upstream]
+package = "my-package"
+provider = "pypi"
+```
+
+`package` is the registry name of the upstream package. `provider` selects the
+registry to query.
+
+### Supported providers
+
+| Provider | `provider` value | Notes |
+|---|---|---|
+| PyPI | `pypi` | Python package index; queries `/pypi/<package>/json` |
+| npm | `npm` | Node package registry; queries `/package/<package>` |
+| NuGet | `nuget` | .NET package registry; queries the NuGet API |
+| crates.io | `crates` | Rust crate registry; requires a `User-Agent` header — handled internally |
+| Packagist | `packagist` | PHP package registry; `package` must be in `vendor/name` form |
+
+### Basic usage
+
+```bash
+# List newer versions one per line (default)
+rrt sync
+
+# Emit a JSON array of newer version strings
+rrt sync --json
+
+# Target a specific version group
+rrt sync --group backend
+```
+
+### CI mirror loop
+
+Use `rrt sync` output to drive a CI bump loop that tracks upstream releases:
+
+```bash
+for v in $(rrt sync); do
+    rrt bump "$v" --no-changelog --force
+done
+```
+
+This pattern is useful for mirror repositories that must stay in lock-step
+with an upstream package without manual intervention.
+
+### Hook
+
+`rrt-sync` is published as a manual-stage pre-commit hook. Add it to your
+`.pre-commit-config.yaml` to run it on demand before a release:
+
+```yaml
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.10.0
+    hooks:
+      - id: rrt-sync
+```
+
+```bash
+pre-commit run rrt-sync --hook-stage manual
+```
+
+```text
+Usage:  rrt sync [OPTIONS]
+
+Fetch all released versions of the configured upstream package and print those that are strictly newer than the current project version.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --group GROUP  Version group name (default: first/default group).
+  --json         Emit a JSON array of newer version strings instead of one-per-line output.
+  --dry-run      Preview without side effects (informational; sync is read-only).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt sync
+  $ rrt sync --json
+  $ rrt sync --group backend
+  $ rrt sync --dry-run
 ```
 
 ## `rrt workspace`

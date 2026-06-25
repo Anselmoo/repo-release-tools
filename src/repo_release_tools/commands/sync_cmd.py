@@ -96,3 +96,79 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Preview without side effects (informational; sync is read-only).",
     )
     parser.set_defaults(handler=cmd_sync)
+
+
+# ---------------------------------------------------------------------------
+# Source-owned topic docs
+# ---------------------------------------------------------------------------
+
+_SYNC_DOC = """
+## Configuration
+
+`rrt sync` reads upstream version information using the `[tool.rrt.upstream]`
+block in your project config:
+
+```toml
+[tool.rrt.upstream]
+package = "my-package"
+provider = "pypi"
+```
+
+`package` is the registry name of the upstream package. `provider` selects the
+registry to query.
+
+## Supported providers
+
+| Provider | `provider` value | Notes |
+|---|---|---|
+| PyPI | `pypi` | Python package index; queries `/pypi/<package>/json` |
+| npm | `npm` | Node package registry; queries `/package/<package>` |
+| NuGet | `nuget` | .NET package registry; queries the NuGet API |
+| crates.io | `crates` | Rust crate registry; requires a `User-Agent` header — handled internally |
+| Packagist | `packagist` | PHP package registry; `package` must be in `vendor/name` form |
+
+## Basic usage
+
+```bash
+# List newer versions one per line (default)
+rrt sync
+
+# Emit a JSON array of newer version strings
+rrt sync --json
+
+# Target a specific version group
+rrt sync --group backend
+```
+
+## CI mirror loop
+
+Use `rrt sync` output to drive a CI bump loop that tracks upstream releases:
+
+```bash
+for v in $(rrt sync); do
+    rrt bump "$v" --no-changelog --force
+done
+```
+
+This pattern is useful for mirror repositories that must stay in lock-step
+with an upstream package without manual intervention.
+
+## Hook
+
+`rrt-sync` is published as a manual-stage pre-commit hook. Add it to your
+`.pre-commit-config.yaml` to run it on demand before a release:
+
+```yaml
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.10.0
+    hooks:
+      - id: rrt-sync
+```
+
+```bash
+pre-commit run rrt-sync --hook-stage manual
+```
+"""
+
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("sync", _SYNC_DOC),)
