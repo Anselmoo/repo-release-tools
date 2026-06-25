@@ -26,6 +26,7 @@ from repo_release_tools.commands.branch import (
 from repo_release_tools.commands.docs_cmd import cmd_docs
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.commands.doctor import cmd_doctor
+from repo_release_tools.commands.drift_cmd import cmd_check as cmd_drift_check
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.folder import cmd_folder_check
 from repo_release_tools.commands.release_cmd import cmd_release_check
@@ -1122,6 +1123,10 @@ def main(argv: list[str] | None = None) -> int:
         "tree-check",
         help="Validate project tree structure against .rrt/tree.lock.toml (strict).",
     )
+    subparsers.add_parser(
+        "drift-check",
+        help="Verify agent-surface drift lockfile is current (rrt drift check).",
+    )
 
     folder_check_parser = subparsers.add_parser(
         "folder-check",
@@ -1247,6 +1252,13 @@ def main(argv: list[str] | None = None) -> int:
                 format="classic",
             )
             return cmd_tree(tree_args)
+        case "drift-check":
+            drift_args = argparse.Namespace(
+                root=".",
+                lock_file="drift.lock.toml",
+                verbose=verbose,
+            )
+            return cmd_drift_check(drift_args)
         case "check-eol":
             parsed.verbose = verbose
             return cmd_eol_check(parsed)

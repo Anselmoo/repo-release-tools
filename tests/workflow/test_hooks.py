@@ -1270,3 +1270,12 @@ def test_tree_check_subcommand_clean_tree(tmp_path: Path, monkeypatch: pytest.Mo
     # subcommand is wired and returns an int exit code (0 or 1), not a crash.
     rc = hooks_main(["tree-check"])
     assert rc in (0, 1)
+
+
+def test_drift_check_subcommand_wired(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """rrt-hooks drift-check dispatches to drift cmd_check and returns an int."""
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.workflow.hooks import main as hooks_main
+
+    rc = hooks_main(["drift-check"])
+    assert rc in (0, 1)
