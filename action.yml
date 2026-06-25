@@ -68,6 +68,11 @@ inputs:
       [tool.rrt.folders] configuration. Fails on missing required files
       or directories.
     default: "false"
+  check-artifacts:
+    description: >-
+      Whether to verify that generated artifact hashes match the committed
+      .rrt/artifacts.lock.toml fingerprints.
+    default: "false"
   verbose:
     description: "Verbosity level for rrt-hooks output (0=quiet, 1=-v summary, 2=-vv details, 3=-vvv debug). Default: 0."
     required: false
@@ -250,3 +255,12 @@ runs:
         set -euo pipefail
         rrt-hooks ${_rrt_verbose_flag:-} folder-check || \
           (echo "::error::Folder structure violation — see output above for details." && exit 1)
+
+    - name: Verify artifact hashes
+      if: inputs.check-artifacts == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        rrt-hooks ${_rrt_verbose_flag:-} artifacts-check || \
+          (echo "::error::Artifact hash mismatch. Run 'rrt artifacts --snapshot' and commit the lockfile." && exit 1)
