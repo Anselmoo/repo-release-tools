@@ -54,6 +54,7 @@ Version & Release
   changelog   Commands for working with the project changelog.
   ci-version  Compute and apply CI pre-release versions (PEP 440 / SemVer).
   release     Release-specific workflows and checks.
+  sync        Fetch all released versions of the configured upstream package and print those that are strictly newer than the current project version.
   workspace   Apply a unified version bump to every listed package.
   tag         Create annotated git tags from the current configured version, or check that existing tags follow the naming convention.
 

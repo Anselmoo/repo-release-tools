@@ -38,6 +38,7 @@ Affected entrypoints:
 -   changelog   Changelog management: compare releases and lint entries
 -   ci-version  Compute and apply CI pre-release versions (PEP 440 / SemVer)
 -   release     Run release-specific checks such as version-target and changelog validation
+-   sync        List upstream releases newer than the current version
 -   workspace   Coordinate version bumps across multiple packages in a monorepo
 -   tag         Create and validate release tags
 

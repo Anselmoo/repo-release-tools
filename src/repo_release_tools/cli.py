@@ -34,6 +34,7 @@ from repo_release_tools.commands import (
     project_cmd,
     release_cmd,
     skill,
+    sync_cmd,
     tag,
     toc,
     tree,
@@ -110,7 +111,7 @@ def _compute_col_width(actions: list[argparse.Action], width: int | None = None)
 
 
 COMMAND_GROUPS: dict[str, list[str]] = {
-    "Version & Release": ["bump", "changelog", "ci-version", "release", "workspace", "tag"],
+    "Version & Release": ["bump", "changelog", "ci-version", "release", "sync", "workspace", "tag"],
     "Repository Health": [
         "doctor",
         "artifacts",
@@ -186,6 +187,7 @@ COMMAND_REGISTRARS = (
     project_cmd.register,
     release_cmd.register,
     skill.register,
+    sync_cmd.register,
     tag.register,
     toc.register,
     tree.register,
