@@ -3641,3 +3641,36 @@ def test_upstream_config_rejects_invalid_provider(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match=r"bogus.*must be one of|must be one of.*bogus"):
         load_or_autodetect_config(tmp_path)
+
+
+def test_upstream_must_be_table(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        'upstream = "not-a-table"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="upstream must be a table"):
+        load_or_autodetect_config(tmp_path)
+
+
+def test_upstream_package_must_be_string(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        "[tool.rrt.upstream]\npackage = 123\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="upstream.package must be a string"):
+        load_or_autodetect_config(tmp_path)
+
+
+def test_upstream_provider_must_be_string(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        "[tool.rrt.upstream]\nprovider = 123\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="upstream.provider must be a string"):
+        load_or_autodetect_config(tmp_path)
