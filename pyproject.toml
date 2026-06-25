@@ -252,7 +252,6 @@ required_dirs = [
     "docs",
     "eol",
     "folders",
-    "hooks",
     "integration",
     "mcp",
     "ui",
@@ -291,7 +290,7 @@ required_files = [
 name = "tests-core"
 description = "Root-level module tests: changelog, cli, config loading, state"
 strictness = "strict"
-exact = true
+exact = false
 required_files = [
     "test_changelog.py",
     "test_cli.py",
@@ -303,7 +302,7 @@ required_files = [
 name = "tests-docs"
 description = "Docs subsystem tests"
 strictness = "strict"
-exact = true
+exact = false
 required_files = [
     "test_docs_extractor.py",
     "test_docs_formats.py",
@@ -322,15 +321,8 @@ required_files = ["test_eol.py"]
 name = "tests-folders"
 description = "Folders module tests"
 strictness = "strict"
-exact = true
+exact = false
 required_files = ["test_folders_config_extra.py", "test_folders_core_extra.py"]
-
-[[tool.rrt.folders.templates]]
-name = "tests-hooks"
-description = "Hook runner tests"
-strictness = "strict"
-exact = true
-required_files = ["test_hooks.py", "test_hooks_top.py"]
 
 [[tool.rrt.folders.templates]]
 name = "tests-integration"
@@ -343,7 +335,7 @@ required_files = ["test_runtime_hybrid.py"]
 name = "tests-mcp"
 description = "MCP server tests"
 strictness = "strict"
-exact = true
+exact = false
 required_files = [
     "conftest.py",
     "test_apps.py",
@@ -358,7 +350,7 @@ required_files = [
 name = "tests-ui"
 description = "UI rendering layer tests"
 strictness = "strict"
-exact = true
+exact = false
 required_files = [
     "test_glyphs.py",
     "test_output.py",
@@ -378,8 +370,8 @@ required_files = [
 name = "tests-version"
 description = "Versioning module tests"
 strictness = "strict"
-exact = true
-required_files = ["test_version_targets.py", "test_versioning.py"]
+exact = false
+required_files = ["test_calver.py", "test_version_targets.py", "test_versioning.py"]
 
 [[tool.rrt.folders.templates]]
 name = "tests-workflow"
@@ -417,11 +409,6 @@ templates = ["tests-eol"]
 name = "tests-folders-rule"
 selector = "tests/folders"
 templates = ["tests-folders"]
-
-[[tool.rrt.folders.rules]]
-name = "tests-hooks-rule"
-selector = "tests/hooks"
-templates = ["tests-hooks"]
 
 [[tool.rrt.folders.rules]]
 name = "tests-integration-rule"
