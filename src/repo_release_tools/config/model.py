@@ -14,6 +14,11 @@ DEFAULT_LOCK_COMMAND = ["uv", "lock", "-U"]
 DEFAULT_GENERIC_LOCK_COMMAND: list[str] = []
 VALID_CHANGELOG_WORKFLOWS = frozenset({"incremental", "squash"})
 
+# Mirror of sync.providers.PROVIDERS — kept here to avoid a circular import.
+VALID_UPSTREAM_PROVIDERS: frozenset[str] = frozenset(
+    {"pypi", "npm", "nuget", "crates", "packagist"}
+)
+
 # Well-known changelog filenames probed in order when autodetecting.
 CHANGELOG_CANDIDATES = (
     "CHANGELOG.md",
@@ -345,6 +350,8 @@ class VersionGroup:
     version_source: Path | None = None
     pin_targets: list[PinTarget] = field(default_factory=list)
     changelog_workflow: str = DEFAULT_CHANGELOG_WORKFLOW
+    upstream_package: str | None = None
+    upstream_provider: str = "pypi"
 
     def primary_target(self) -> VersionTarget:
         """Return the target used as the canonical version source."""

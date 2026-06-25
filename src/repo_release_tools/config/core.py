@@ -33,6 +33,7 @@ from .model import (
     VALID_CI_FORMATS,
     VALID_PIN_TARGET_MISSING,
     VALID_TARGET_KINDS,
+    VALID_UPSTREAM_PROVIDERS,
     ArtifactTarget,
     CommandGroupEntry,
     DocsConfig,
@@ -1214,6 +1215,21 @@ def _load_version_group(
             f"version_source {raw_version_source!r} for group {group_name!r} does not match any target path",
         )
 
+    upstream_tbl = raw_group.get("upstream", {})
+    if not isinstance(upstream_tbl, dict):
+        raise ValueError("upstream must be a table when provided")
+    upstream_package = upstream_tbl.get("package")
+    if upstream_package is not None and not isinstance(upstream_package, str):
+        raise ValueError("upstream.package must be a string when provided")
+    upstream_provider = upstream_tbl.get("provider", "pypi")
+    if not isinstance(upstream_provider, str):
+        raise ValueError("upstream.provider must be a string")
+    if upstream_provider not in VALID_UPSTREAM_PROVIDERS:
+        allowed = ", ".join(sorted(VALID_UPSTREAM_PROVIDERS))
+        raise ValueError(
+            f"upstream.provider {upstream_provider!r} is not valid; must be one of {allowed}"
+        )
+
     return VersionGroup(
         name=group_name,
         release_branch=release_branch,
@@ -1225,6 +1241,8 @@ def _load_version_group(
         version_source=version_source,
         pin_targets=_load_pin_targets(root, raw_group.get("pin_targets", [])),
         changelog_workflow=changelog_workflow,
+        upstream_package=upstream_package,
+        upstream_provider=upstream_provider,
     )
 
 
@@ -1245,6 +1263,7 @@ __all__ = [
     "VALID_CHANGELOG_WORKFLOWS",
     "VALID_CI_FORMATS",
     "VALID_TARGET_KINDS",
+    "VALID_UPSTREAM_PROVIDERS",
     "_VALID_LANGUAGES",
     "DocsConfig",
     "EolConfig",

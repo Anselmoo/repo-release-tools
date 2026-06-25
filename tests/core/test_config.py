@@ -3587,3 +3587,57 @@ def test_load_title_overrides_non_string_value_raises() -> None:
 
     with pytest.raises(ValueError, match="keys and values must be strings"):
         _load_title_overrides({"title_overrides": {"key": 123}})
+
+
+# ---------------------------------------------------------------------------
+# [tool.rrt.upstream] config
+# ---------------------------------------------------------------------------
+
+
+def test_upstream_config_parsed(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        '[tool.rrt.upstream]\npackage = "ruff"\nprovider = "pypi"\n',
+        encoding="utf-8",
+    )
+    cfg = load_or_autodetect_config(tmp_path)
+    grp = cfg.version_groups[0]
+    assert grp.upstream_package == "ruff"
+    assert grp.upstream_provider == "pypi"
+
+
+def test_upstream_config_defaults_when_omitted(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n',
+        encoding="utf-8",
+    )
+    cfg = load_or_autodetect_config(tmp_path)
+    grp = cfg.version_groups[0]
+    assert grp.upstream_package is None
+    assert grp.upstream_provider == "pypi"
+
+
+def test_upstream_config_npm_provider_accepted(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        '[tool.rrt.upstream]\npackage = "lodash"\nprovider = "npm"\n',
+        encoding="utf-8",
+    )
+    cfg = load_or_autodetect_config(tmp_path)
+    grp = cfg.version_groups[0]
+    assert grp.upstream_package == "lodash"
+    assert grp.upstream_provider == "npm"
+
+
+def test_upstream_config_rejects_invalid_provider(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        '[tool.rrt.upstream]\npackage = "ruff"\nprovider = "bogus"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="bogus"):
+        load_or_autodetect_config(tmp_path)
