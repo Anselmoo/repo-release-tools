@@ -907,6 +907,9 @@ pin_target_missing = "warn"
 Use `"warn"` during a migration where some pin files may not yet contain
 the expected pattern, or when a pin target is intentionally optional.
 
+`pin_target_missing` applies to `rrt bump` only; `rrt release check` always
+reports missing pin target matches as warnings regardless of this setting.
+
 ### `version_groups` — per-component versioning
 
 `version_groups` lets a single repository maintain multiple independently
@@ -951,9 +954,6 @@ groups, set `default_group_name` to select the default:
 [tool.rrt]
 default_group_name = "backend"
 ```
-
-See also: `rrt workspace bump` to bump all groups to the same version in
-one pass.
 
 <!-- rrt:auto:start:doc-footer -->
 ---
