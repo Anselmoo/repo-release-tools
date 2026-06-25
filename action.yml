@@ -62,6 +62,12 @@ inputs:
       Detects source files added, modified, or deleted without regenerating
       .rrt/docs.lock.toml.
     default: "false"
+  check-folder:
+    description: >-
+      Whether to validate the repository folder structure against
+      [tool.rrt.folders] configuration. Fails on missing required files
+      or directories.
+    default: "false"
   verbose:
     description: "Verbosity level for rrt-hooks output (0=quiet, 1=-v summary, 2=-vv details, 3=-vvv debug). Default: 0."
     required: false
@@ -235,3 +241,12 @@ runs:
         set -euo pipefail
         rrt-hooks ${_rrt_verbose_flag:-} check-docs || \
           (echo "::error::Docs lockfile is out of sync. Run 'rrt docs build' to regenerate." && exit 1)
+
+    - name: Validate folder structure
+      if: inputs.check-folder == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        rrt-hooks ${_rrt_verbose_flag:-} folder-check || \
+          (echo "::error::Folder structure violation — see output above for details." && exit 1)
