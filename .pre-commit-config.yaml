@@ -94,6 +94,14 @@ repos:
         pass_filenames: false
         stages: [pre-commit, pre-push]
 
+      - id: rrt-artifacts-check
+        name: rrt artifacts check
+        entry: uv run rrt-hooks artifacts-check
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
