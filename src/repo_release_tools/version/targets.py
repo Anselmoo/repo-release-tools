@@ -53,6 +53,9 @@ def _compute_updated_content(target: VersionTarget, text: str, new_version: str)
             return GEMSPEC_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
         case "csproj":
             return CSPROJ_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
+        case "pattern":
+            assert target.pattern is not None
+            return replace_kind_pattern_version(text, target.pattern, new_version)
     if target.pattern:
         return replace_pattern_version(text, target.pattern, new_version)
     return replace_toml_field(
@@ -215,6 +218,12 @@ def read_version_string(target: VersionTarget) -> str:
             if m is None:
                 raise RuntimeError(f"Could not find <Version> in {target.path}")
             return m.group(2)
+        case "pattern":
+            assert target.pattern is not None
+            m = search_pattern(text, target.pattern)
+            if m is None:
+                raise RuntimeError(f"Could not match configured pattern in {target.path}")
+            return m.group(1)
 
     if target.pattern:
         m = search_pattern(text, target.pattern)
@@ -290,6 +299,19 @@ def replace_pattern_version(text: str, pattern: str, new_version: str, *, count:
     """
     for compiled in compile_pattern_variants(pattern):
         updated, n = compiled.subn(rf"\g<1>{new_version}\g<3>", text, count=count)
+        if n:
+            return updated
+    raise RuntimeError("Configured pattern did not match the target file")
+
+
+def replace_kind_pattern_version(text: str, pattern: str, new_version: str) -> str:
+    """Replace the version string captured in group 1 of a kind='pattern' regex."""
+
+    def _replacer(m: re.Match[str], _nv: str = new_version) -> str:
+        return m.string[m.start(0) : m.start(1)] + _nv + m.string[m.end(1) : m.end(0)]
+
+    for compiled in compile_pattern_variants(pattern):
+        updated, n = compiled.subn(_replacer, text, count=1)
         if n:
             return updated
     raise RuntimeError("Configured pattern did not match the target file")

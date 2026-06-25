@@ -9,46 +9,70 @@
     "release_branch": {
       "type": "string",
       "description": "Release branch name template. Use {version} as a placeholder.",
-      "examples": ["release/v{version}", "releases/{version}"]
+      "examples": [
+        "release/v{version}",
+        "releases/{version}"
+      ]
     },
     "changelog_file": {
       "type": "string",
       "description": "Path to the changelog file relative to the project root.",
-      "examples": ["CHANGELOG.md", "CHANGELOG.rst", "docs/CHANGELOG.md"]
+      "examples": [
+        "CHANGELOG.md",
+        "CHANGELOG.rst",
+        "docs/CHANGELOG.md"
+      ]
     },
     "changelog_workflow": {
       "type": "string",
-      "enum": ["incremental", "squash"],
+      "enum": [
+        "incremental",
+        "squash"
+      ],
       "description": "How changelog entries are written. 'incremental' = append per commit; 'squash' = accumulate then promote on release."
     },
     "lock_command": {
       "type": "array",
-      "items": {"type": "string"},
+      "items": {
+        "type": "string"
+      },
       "description": "Command to regenerate lockfiles after a version bump (e.g. ['uv', 'lock', '-U'])."
     },
     "generated_files": {
       "type": "array",
-      "items": {"type": "string"},
+      "items": {
+        "type": "string"
+      },
       "description": "Paths to generated files that should be staged after a bump."
     },
     "extra_branch_types": {
       "type": "array",
-      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
       "description": "Additional branch type prefixes beyond the built-in set."
     },
     "extra_commit_types": {
       "type": "array",
-      "items": {"type": "string"},
+      "items": {
+        "type": "string"
+      },
       "description": "Additional conventional commit types recognized by rrt (e.g. ['security', 'ux'])."
     },
     "extra_section_map": {
       "type": "object",
-      "additionalProperties": {"type": "string"},
+      "additionalProperties": {
+        "type": "string"
+      },
       "description": "Map extra commit types to changelog sections (e.g. {security = 'Fixed', ux = 'Changed'})."
     },
     "pin_target_missing": {
       "type": "string",
-      "enum": ["warn", "error"],
+      "enum": [
+        "warn",
+        "error"
+      ],
       "description": "Behavior when a pin target pattern has no match. Default: 'error'."
     },
     "version_targets": {
@@ -57,7 +81,9 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["path"],
+        "required": [
+          "path"
+        ],
         "properties": {
           "path": {
             "type": "string",
@@ -65,12 +91,22 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["pep621", "package_json", "python_version", "go_version"],
-            "description": "Well-known target type. Mutually exclusive with 'pattern' and 'section'+'field'."
+            "enum": [
+              "pep621",
+              "package_json",
+              "python_version",
+              "go_version",
+              "cargo_toml",
+              "maven_pom",
+              "gemspec",
+              "csproj",
+              "pattern"
+            ],
+            "description": "Well-known target type. Use 'pattern' with a 1-capture-group regex to read the version from a dependency pin or arbitrary string. All other kinds are mutually exclusive with 'pattern' and 'section'+'field'."
           },
           "pattern": {
             "type": "string",
-            "description": "Regex with 3 capture groups: (prefix)(version)(suffix). Mutually exclusive with 'kind'."
+            "description": "Regex pattern. When used with kind='pattern': exactly 1 capture group whose match is the version string. When used alone (no kind): exactly 3 capture groups (prefix)(version)(suffix). Mutually exclusive with standalone 'kind' and 'section'+'field'."
           },
           "section": {
             "type": "string",
@@ -82,7 +118,10 @@
           },
           "ci_format": {
             "type": "string",
-            "enum": ["pep440", "semver_pre"],
+            "enum": [
+              "pep440",
+              "semver_pre"
+            ],
             "description": "How the CI version string is formatted. Use 'pep440' for Python packages."
           }
         }
@@ -94,7 +133,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["path", "pattern"],
+        "required": [
+          "path",
+          "pattern"
+        ],
         "properties": {
           "path": {
             "type": "string",
@@ -112,16 +154,45 @@
       "description": "Named release units for monorepo or multi-component projects.",
       "items": {
         "type": "object",
-        "required": ["name", "version_targets"],
+        "required": [
+          "name",
+          "version_targets"
+        ],
         "properties": {
-          "name": {"type": "string"},
-          "release_branch": {"type": "string"},
-          "changelog_file": {"type": "string"},
-          "changelog_workflow": {"type": "string", "enum": ["incremental", "squash"]},
-          "lock_command": {"type": "array", "items": {"type": "string"}},
-          "generated_files": {"type": "array", "items": {"type": "string"}},
-          "version_targets": {"$ref": "#/properties/version_targets"},
-          "pin_targets": {"$ref": "#/properties/pin_targets"}
+          "name": {
+            "type": "string"
+          },
+          "release_branch": {
+            "type": "string"
+          },
+          "changelog_file": {
+            "type": "string"
+          },
+          "changelog_workflow": {
+            "type": "string",
+            "enum": [
+              "incremental",
+              "squash"
+            ]
+          },
+          "lock_command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "generated_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version_targets": {
+            "$ref": "#/properties/version_targets"
+          },
+          "pin_targets": {
+            "$ref": "#/properties/pin_targets"
+          }
         }
       }
     },
@@ -129,20 +200,46 @@
       "type": "object",
       "description": "End-of-life lifecycle tracking configuration.",
       "properties": {
-        "languages": {"type": "array", "items": {"type": "string"}},
-        "warn_days": {"type": "integer", "minimum": 0},
-        "error_days": {"type": "integer", "minimum": 0},
-        "fetch_live": {"type": "boolean"},
-        "allow_eol": {"type": "boolean"},
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warn_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fetch_live": {
+          "type": "boolean"
+        },
+        "allow_eol": {
+          "type": "boolean"
+        },
         "overrides": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["language", "cycle", "eol"],
+            "required": [
+              "language",
+              "cycle",
+              "eol"
+            ],
             "properties": {
-              "language": {"type": "string"},
-              "cycle": {"type": "string"},
-              "eol": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+              "language": {
+                "type": "string"
+              },
+              "cycle": {
+                "type": "string"
+              },
+              "eol": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              }
             }
           }
         }
@@ -152,28 +249,86 @@
       "type": "object",
       "description": "Documentation tree injection configuration.",
       "properties": {
-        "mirror_src_tree": {"type": "boolean"},
-        "docs_dir": {"type": "string"},
-        "src_dir": {"type": "string"},
-        "extraction_mode": {"type": "string", "enum": ["explicit", "implicit", "both"]},
-        "languages": {"type": "array", "items": {"type": "string"}},
-        "formats": {"type": "array", "items": {"type": "string"}},
-        "source_repo_url": {"type": "string"},
-        "source_ref": {"type": "string"},
-        "source_url_template": {"type": "string"},
-        "badge_style": {"type": "string", "enum": ["svg", "shields", "text"]},
-        "badge_variant": {"type": "string", "enum": ["color", "dark", "light"]},
-        "badge_assets_dir": {"type": "string"},
-        "source_link_badge": {"type": "boolean"}
+        "mirror_src_tree": {
+          "type": "boolean"
+        },
+        "docs_dir": {
+          "type": "string"
+        },
+        "src_dir": {
+          "type": "string"
+        },
+        "extraction_mode": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "implicit",
+            "both"
+          ]
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source_repo_url": {
+          "type": "string"
+        },
+        "source_ref": {
+          "type": "string"
+        },
+        "source_url_template": {
+          "type": "string"
+        },
+        "badge_style": {
+          "type": "string",
+          "enum": [
+            "svg",
+            "shields",
+            "text"
+          ]
+        },
+        "badge_variant": {
+          "type": "string",
+          "enum": [
+            "color",
+            "dark",
+            "light"
+          ]
+        },
+        "badge_assets_dir": {
+          "type": "string"
+        },
+        "source_link_badge": {
+          "type": "boolean"
+        }
       }
     },
     "folders": {
       "type": "object",
       "description": "Folder supervision policy configuration.",
       "properties": {
-        "mode": {"type": "string", "enum": ["strict", "warn", "off"]},
-        "templates": {"type": "array"},
-        "rules": {"type": "array"}
+        "mode": {
+          "type": "string",
+          "enum": [
+            "strict",
+            "warn",
+            "off"
+          ]
+        },
+        "templates": {
+          "type": "array"
+        },
+        "rules": {
+          "type": "array"
+        }
       }
     }
   }
