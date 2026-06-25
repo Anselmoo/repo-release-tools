@@ -200,3 +200,21 @@ def test_cmd_sync_skips_non_semver(
     assert "0.7.0" in out
     # non-semver entries silently dropped
     assert "not-a-version" not in out
+
+
+# ---------------------------------------------------------------------------
+# Test 7: unknown --group name → returns 1, does not raise
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_sync_bad_group_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        _PYPROJECT_WITH_UPSTREAM,
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    rc = sync_cmd.cmd_sync(_ns(group="nonexistent"))
+    assert rc == 1

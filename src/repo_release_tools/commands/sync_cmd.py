@@ -15,7 +15,7 @@ from pathlib import Path
 
 from repo_release_tools.config import load_or_autodetect_config
 from repo_release_tools.sync.providers import fetch_versions
-from repo_release_tools.ui import DryRunPrinter
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.semver import Version, newer_versions
 from repo_release_tools.version.targets import read_group_current_version
 
@@ -28,7 +28,12 @@ def cmd_sync(args: argparse.Namespace) -> int:
     """Print upstream versions newer than the current project version."""
     p = DryRunPrinter(getattr(args, "dry_run", False), verbose=getattr(args, "verbose", 0))
     cfg = load_or_autodetect_config(Path.cwd())
-    group = cfg.resolve_group(getattr(args, "group", None))
+    try:
+        group = cfg.resolve_group(getattr(args, "group", None))
+    except ValueError as exc:
+        p = VerbosePrinter(verbose=getattr(args, "verbose", 0))
+        p.line(str(exc), ok=False, stream=sys.stderr)
+        return 1
 
     if not group.upstream_package:
         p.line("No [tool.rrt.upstream] package configured.", ok=False)
