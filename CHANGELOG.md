@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [1.10.0] - 2026-06-25
+
+### Added
+- pattern version target (#107)
+
 ## [1.9.1] - 2026-06-22
 ### Added
 
