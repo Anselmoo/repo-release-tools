@@ -1355,6 +1355,64 @@ Options
   --loose          Emit a permissive loose template instead of an exact one.
 ```
 
+## `rrt release check`
+
+Validates that the version targets, pin targets, and changelog file
+configured in `[tool.rrt]` are reachable and correctly formed — the
+pre-flight check before running `rrt bump`.
+
+### What it checks
+
+| Check | Validates |
+|---|---|
+| Version target files | Each `path` in `[[tool.rrt.version_targets]]` exists and is readable |
+| Version target values | The version string can be extracted from each file |
+| Pin target files | Each `path` in `[[tool.rrt.pin_targets]]` exists |
+| Pin target patterns | Each `pattern` compiles as a valid regex and matches ≥ 1 location |
+| Changelog file | `changelog_file` exists and is readable |
+
+### `rrt doctor` vs `rrt release check`
+
+| Check | `rrt doctor` | `rrt release check` |
+|---|---|---|
+| Hook manager integration | Yes | No |
+| CI workflow surfaces | Yes | No |
+| Version target reachability | No | Yes |
+| Pin target regex matches | No | Yes |
+| Changelog file existence | No | Yes |
+
+**Rule of thumb:** run `rrt doctor` to confirm automation wiring is in
+place; run `rrt release check` before cutting a release to confirm that
+the files `rrt bump` will touch are reachable.
+
+### Common failures
+
+```
+Error: version target 'src/myapp/__init__.py' not found
+```
+→ The file was moved or renamed. Update `path` in `pyproject.toml`.
+
+```
+Error: pin target pattern has no matches in 'docs/conf.py'
+```
+→ The pattern compiles but matches nothing. Check the regex, or set
+`pin_target_missing = "warn"` to downgrade to a warning during migration.
+
+```
+Error: changelog file 'CHANGELOG.md' not found
+```
+→ First-release setup: the changelog file doesn't exist yet. Create it
+with `[Unreleased]` as a placeholder section.
+
+### Usage
+
+```bash
+rrt release check
+
+# Or via pre-commit (manual stage):
+pre-commit run rrt-release-check --hook-stage manual
+```
+
 <!-- rrt:auto:start:doc-footer -->
 ---
 
