@@ -29,6 +29,7 @@ from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.folder import cmd_folder_check
 from repo_release_tools.commands.release_cmd import cmd_release_check
+from repo_release_tools.commands.tree import cmd_tree
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
@@ -1117,6 +1118,10 @@ def main(argv: list[str] | None = None) -> int:
         "docstring-suggest",
         help="Apply scaffolded docstrings to missing or thin module docstrings.",
     )
+    subparsers.add_parser(
+        "tree-check",
+        help="Validate project tree structure against .rrt/tree.lock.toml (strict).",
+    )
 
     folder_check_parser = subparsers.add_parser(
         "folder-check",
@@ -1223,6 +1228,25 @@ def main(argv: list[str] | None = None) -> int:
         case "release-check":
             parsed.verbose = verbose
             return cmd_release_check(parsed)
+        case "tree-check":
+            tree_args = argparse.Namespace(
+                path=None,
+                root=".",
+                max_depth=None,
+                dirs_only=False,
+                show_hidden=False,
+                inject=None,
+                anchor=None,
+                fix_empty_dirs=False,
+                dry_run=False,
+                strict_empty_dirs=False,
+                snapshot=False,
+                check=True,
+                strict=True,
+                verbose=verbose,
+                format="classic",
+            )
+            return cmd_tree(tree_args)
         case "check-eol":
             parsed.verbose = verbose
             return cmd_eol_check(parsed)
