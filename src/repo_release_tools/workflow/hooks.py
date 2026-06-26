@@ -1548,6 +1548,11 @@ Pair it with:
 | `rrt-drift-check` | pre-push | Verify agent-facing surfaces match the committed `.rrt/drift.lock.toml` |
 | `rrt-changelog-postcorrect` | manual | Consolidate fragmented changelog entries after a squash merge |
 | `rrt-sync` | manual | List upstream releases newer than the current version |
+| `rrt-config-validate` | pre-commit / pre-push | Validate `[tool.rrt]` config — version targets, pin targets, and structure |
+| `rrt-config-reference-update` | pre-commit | Regenerate `docs/rrt-config-reference.toml` from the schema and stage it |
+| `rrt-config-reference-check` | manual | Fail when `docs/rrt-config-reference.toml` is stale vs the schema |
+| `rrt-changelog-lint` | pre-commit | Enforce changelog entry style (sentence case, length, no duplicates) |
+| `rrt-tag-check` | pre-push | Validate existing git tags follow the configured naming convention |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
 incremental workflow. You usually want one or the other, not both.
@@ -1650,6 +1655,26 @@ rrt sync --json
 ```
 
 See `[tool.rrt.upstream]` config and the `rrt sync` command for details.
+
+### Config reference & validation
+
+`rrt-config-validate` gates commits and pushes by validating the `[tool.rrt]`
+config — checking that version targets resolve, pin targets reference known
+files, and the overall structure is well-formed. `docs/rrt-config-reference.toml`
+is schema-generated: the `rrt-config-reference-update` hook regenerates it and
+stages the result on each commit, while `rrt-config-reference-check` (manual
+stage) fails the hook run when the file is stale relative to the current schema.
+
+### Changelog lint
+
+`rrt-changelog-lint` enforces changelog entry style on every `pre-commit` run —
+requiring sentence case, capping entry length, and rejecting duplicate bullets
+before they accumulate.
+
+### Tag check
+
+`rrt-tag-check` runs at `pre-push` and validates that existing git tags in the
+repository follow the naming convention configured under `[tool.rrt]`.
 
 ## Post-correction mode (squash-merge workflows)
 
