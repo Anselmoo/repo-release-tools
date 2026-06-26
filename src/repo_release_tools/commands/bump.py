@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -78,6 +79,7 @@ from repo_release_tools.changelog import (
 )
 from repo_release_tools.config import (
     RrtConfig,
+    VersionGroup,
     find_repo_root,
     format_autodetected_config_notice,
     format_missing_tool_rrt_guidance,
@@ -104,6 +106,47 @@ from repo_release_tools.version.targets import (
 from repo_release_tools.workflow import git
 
 PREVIEW_LINES = 8
+
+
+def apply_version(
+    group: VersionGroup,
+    version: str,
+    config: RrtConfig,
+    *,
+    dry_run: bool = False,
+) -> list[Path]:
+    """Apply *version* to a group's version targets and pin targets.
+
+    This is the shared write-only core used by ``cmd_bump`` and the upcoming
+    ``rrt sync --bump``.  It intentionally has no git, branch, or changelog
+    side-effects — those remain the responsibility of the caller.
+
+    Steps performed:
+
+    1. Atomically rewrite every ``group.version_targets`` entry.
+    2. Apply ``group.pin_targets + config.global_pin_targets``, deduplicating
+       by ``(path, pattern)`` and honouring ``config.pin_target_missing``.
+
+    Returns a deduplicated list of :class:`~pathlib.Path` objects for every
+    file that was (or, in dry-run, would be) modified.  Callers use this list
+    to stage the changes with ``git add``.
+    """
+    replace_all_versions_atomic(group.version_targets, version, dry_run=dry_run)
+    changed: list[Path] = [target.path for target in group.version_targets]
+
+    all_pins = group.pin_targets + config.global_pin_targets
+    seen_pin_keys: set[tuple[object, str]] = set()
+    for pin in all_pins:
+        key = (pin.path, pin.pattern)
+        if key in seen_pin_keys:
+            continue
+        seen_pin_keys.add(key)
+        replace_pin_in_file(
+            pin, version, dry_run=dry_run, pin_target_missing=config.pin_target_missing
+        )
+        changed.append(pin.path)
+
+    return changed
 
 
 def resolve_changelog_mode(config: RrtConfig, requested_mode: str | None) -> str:
@@ -343,30 +386,32 @@ def cmd_bump(args: argparse.Namespace) -> int:
             version_progress.update_bar(i / total_targets)
     if total_targets > 1:
         version_progress.clear()
-    replace_all_versions_atomic(group.version_targets, str(new), dry_run=args.dry_run)
 
     all_pins = group.pin_targets + config.global_pin_targets
-    if all_pins and not getattr(args, "no_pin_sync", False):
+    no_pin_sync = getattr(args, "no_pin_sync", False)
+    if all_pins and not no_pin_sync:
         pin_progress = ProgressLine(file=sys.stdout)
         p.section("Updating doc pins")
-        seen_pin_keys: set[tuple[object, str]] = set()
-        unique_pins: list = []
+        seen_pin_count: set[tuple[object, str]] = set()
+        unique_pin_count = 0
         for pin in all_pins:
             key = (pin.path, pin.pattern)
-            if key not in seen_pin_keys:
-                seen_pin_keys.add(key)
-                unique_pins.append(pin)
-        total_pins = len(unique_pins)
-        for i, pin in enumerate(unique_pins, 1):
+            if key not in seen_pin_count:
+                seen_pin_count.add(key)
+                unique_pin_count += 1
+        total_pins = unique_pin_count
+        for i in range(1, total_pins + 1):
             if total_pins > 1 and i > 1:
                 pin_progress.clear()
-            replace_pin_in_file(
-                pin, str(new), dry_run=args.dry_run, pin_target_missing=config.pin_target_missing
-            )
             if total_pins > 1:
                 pin_progress.update_bar(i / total_pins)
         if total_pins > 1:
             pin_progress.clear()
+
+    # Build a pin-free view when no_pin_sync is set so apply_version skips pins.
+    apply_group = dataclasses.replace(group, pin_targets=[]) if no_pin_sync else group
+    apply_config = dataclasses.replace(config, global_pin_targets=[]) if no_pin_sync else config
+    changed_paths = apply_version(apply_group, str(new), apply_config, dry_run=args.dry_run)
 
     if not args.no_changelog:
         p.section("Updating changelog")
@@ -455,7 +500,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
         label=f"git checkout {create_flag}",
     )
 
-    files_to_stage = [str(target.path.relative_to(root)) for target in group.version_targets]
+    # changed_paths contains version-target paths followed by pin paths (already deduplicated).
+    files_to_stage = [str(p.relative_to(root)) for p in changed_paths]
     for path in group.generated_files:
         if path.exists():
             files_to_stage.append(str(path.relative_to(root)))
@@ -464,14 +510,6 @@ def cmd_bump(args: argparse.Namespace) -> int:
             files_to_stage.append(str(asset.path.relative_to(root)))
     if group.changelog_file.exists() and not args.no_changelog:
         files_to_stage.append(str(group.changelog_file.relative_to(root)))
-    if not getattr(args, "no_pin_sync", False):
-        seen_pin_stage: set[tuple[object, str]] = set()
-        for pin in all_pins:
-            key = (pin.path, pin.pattern)
-            if key in seen_pin_stage:
-                continue
-            seen_pin_stage.add(key)
-            files_to_stage.append(str(pin.path.relative_to(root)))
     git.run(
         ["git", "add", *dict.fromkeys(files_to_stage)],
         root,
