@@ -257,7 +257,7 @@ def _cmd_reference(*, check: bool, dry_run: bool) -> int:
 
     if dry_run:
         p = DryRunPrinter(dry_run=True)
-        p.header("[DRY RUN] Generate config reference")
+        p.header("Generate config reference")
         p.would_write(str(ref_path), "annotated .rrt.toml reference from schema")
         p.blank_line()
         p.footer("Done.")
