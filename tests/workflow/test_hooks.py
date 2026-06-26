@@ -1297,3 +1297,33 @@ def test_sync_subcommand_wired(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     # No [tool.rrt.upstream] configured → cmd_sync returns 1.
     assert hooks_main(["sync"]) == 1
+
+
+def test_config_validate_subcommand_wired(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """rrt-hooks config-validate returns 0 on a valid minimal [tool.rrt] config."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "mypkg"\nversion = "0.5.0"\n\n'
+        "[tool.rrt]\n\n"
+        "[[tool.rrt.version_targets]]\n"
+        'path = "pyproject.toml"\n'
+        'kind = "pep621"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.workflow.hooks import main as hooks_main
+
+    rc = hooks_main(["config-validate"])
+    assert rc == 0
+
+
+def test_config_reference_check_subcommand_wired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """rrt-hooks config-reference-check returns 1 when docs/rrt-config-reference.toml is absent."""
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.workflow.hooks import main as hooks_main
+
+    # No docs/rrt-config-reference.toml → drift detected → exit 1.
+    rc = hooks_main(["config-reference-check"])
+    assert rc == 1

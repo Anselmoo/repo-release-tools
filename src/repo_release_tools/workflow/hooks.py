@@ -23,6 +23,7 @@ from repo_release_tools.commands.branch import (
     SLUG_MAX,
     normalize_commit_type,
 )
+from repo_release_tools.commands.config_cmd import cmd_config
 from repo_release_tools.commands.docs_cmd import cmd_docs
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.commands.doctor import cmd_doctor
@@ -1150,6 +1151,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Preview without side effects (informational; sync is read-only).",
     )
 
+    subparsers.add_parser(
+        "config-validate",
+        help="Validate [tool.rrt] config (version/pin targets + structure).",
+    )
+    subparsers.add_parser(
+        "config-reference-check",
+        help="Verify docs/rrt-config-reference.toml is current.",
+    )
+
     folder_check_parser = subparsers.add_parser(
         "folder-check",
         help="Validate repository folder structure against configured rules or templates.",
@@ -1284,6 +1294,30 @@ def main(argv: list[str] | None = None) -> int:
         case "sync":
             parsed.verbose = verbose
             return cmd_sync(parsed)
+        case "config-validate":
+            return cmd_config(
+                argparse.Namespace(
+                    validate=True,
+                    schema=False,
+                    raw=False,
+                    reference=False,
+                    check=False,
+                    dry_run=False,
+                    verbose=verbose,
+                )
+            )
+        case "config-reference-check":
+            return cmd_config(
+                argparse.Namespace(
+                    reference=True,
+                    check=True,
+                    schema=False,
+                    raw=False,
+                    validate=False,
+                    dry_run=False,
+                    verbose=verbose,
+                )
+            )
         case "check-eol":
             parsed.verbose = verbose
             return cmd_eol_check(parsed)
