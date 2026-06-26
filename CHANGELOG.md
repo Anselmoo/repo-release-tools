@@ -1,5 +1,47 @@
 ## [Unreleased]
 
+## [1.10.1] - 2026-06-26
+
+### Added
+- publish rrt-tag-check hook (pre-push)
+- publish rrt-changelog-lint hook (pre-commit, hard-fail)
+- publish rrt-config-validate and config-reference hooks
+- add rrt-hooks config-validate and config-reference-check
+- add 'rrt config reference' command and generate docs/rrt-config-reference.toml
+- add schema-to-TOML config reference generator
+- add rrt sync --bump mirror orchestration (commit/tag/dry-run)
+- add [tool.rrt.upstream] commit_message config field
+- add rrt-hooks sync wrapper, rrt-sync manifest entry, and upstream schema
+- add rrt sync command for multi-provider version discovery
+- parse and validate [tool.rrt.upstream] config
+- add multi-provider version fetcher (npm, nuget, crates, packagist)
+- add PyPI version fetcher (stdlib HTTP)
+- add Version.sort_key and newer_versions helper
+- publish rrt-tree-check, rrt-drift-check, and rrt-changelog-postcorrect hooks
+- add rrt-hooks drift-check subcommand
+- add rrt-hooks tree-check subcommand
+- add check-artifacts input to GitHub Action
+- add check-folder input to GitHub Action
+
+### Fixed
+- validate upstream commit_message template in rrt sync --bump
+- remove double [DRY RUN] prefix in config reference dry-run header
+- emit scalars before tables in config reference (correct TOML nesting)
+- handle invalid --group in rrt sync with clean exit
+
+### Changed
+- move config-reference auto-update to a repo-local hook
+- extract apply_version helper for bump and sync reuse
+- import PROVIDERS as single source of truth for upstream validation
+- remove unused _PROVIDERS set in sync providers
+
+### Documentation
+- document config-validate, config-reference, changelog-lint, and tag-check hooks
+- migrate prose into source — hooks, bump, release, sync, action
+- clarify pin_target_missing scope and remove misleading workspace bump note
+- add dedicated rrt release check section to repo-health
+- document kind='pattern' targets, pin_target_missing, and version_groups
+
 ## [1.10.0] - 2026-06-25
 
 ### Added
