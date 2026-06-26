@@ -82,23 +82,30 @@ rrt config --schema > rrt-config.schema.json
 from __future__ import annotations
 
 import argparse
+import difflib
 import importlib.resources
 import json
 import sys
 from pathlib import Path
 
 from repo_release_tools import config as cfg
+from repo_release_tools.config.reference import render_reference_toml
 from repo_release_tools.ui import (
     GLYPHS,
+    DryRunPrinter,
     VerbosePrinter,
     highlight_terminal,
 )
 
 CONFIG_EPILOG = (
     "  $ rrt config\n  $ rrt config --raw\n  $ rrt config --validate\n  $ rrt config --schema"
+    "\n  $ rrt config --reference\n  $ rrt config --reference --check"
+    "\n  $ rrt config --reference --dry-run"
 )
 
 RRT_CONFIG_SCHEMA = "rrt-config.schema.json"
+
+CONFIG_REFERENCE_PATH = Path("docs/rrt-config-reference.toml")
 
 
 def _render_group_details(group: cfg.VersionGroup, root: Path) -> list[str]:
@@ -211,6 +218,59 @@ def _cmd_validate(root: Path) -> int:
     return 0
 
 
+def _cmd_reference(*, check: bool, dry_run: bool) -> int:
+    """Implement ``rrt config --reference [--check] [--dry-run]``."""
+    schema = _load_schema()
+    text = render_reference_toml(schema)
+    ref_path = CONFIG_REFERENCE_PATH
+
+    if check:
+        p = VerbosePrinter()
+        if not ref_path.exists():
+            p.line(
+                f"{ref_path} does not exist. Run 'rrt config --reference' to generate it.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        existing = ref_path.read_text(encoding="utf-8")
+        if existing == text:
+            p.ok(f"{ref_path} is up to date.")
+            return 0
+        # Emit a unified diff to stderr
+        diff_lines = list(
+            difflib.unified_diff(
+                existing.splitlines(keepends=True),
+                text.splitlines(keepends=True),
+                fromfile=str(ref_path),
+                tofile="<generated>",
+            )
+        )
+        p.line(
+            f"{ref_path} is out of date. Run 'rrt config --reference' to regenerate.",
+            ok=False,
+            stream=sys.stderr,
+        )
+        for line in diff_lines:
+            sys.stderr.write(line)
+        return 1
+
+    if dry_run:
+        p = DryRunPrinter(dry_run=True)
+        p.header("[DRY RUN] Generate config reference")
+        p.would_write(str(ref_path), "annotated .rrt.toml reference from schema")
+        p.blank_line()
+        p.footer("Done.")
+        return 0
+
+    # Write the reference file
+    ref_path.parent.mkdir(parents=True, exist_ok=True)
+    ref_path.write_text(text, encoding="utf-8")
+    p = VerbosePrinter()
+    p.ok(f"Written: {ref_path}")
+    return 0
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     """Print the resolved rrt config as a tree."""
     verbose: int = getattr(args, "verbose", 0) or 0
@@ -228,6 +288,12 @@ def cmd_config(args: argparse.Namespace) -> int:
             return 1
         sys.stdout.write(json.dumps(schema, indent=2) + "\n")
         return 0
+
+    if getattr(args, "reference", False):
+        return _cmd_reference(
+            check=getattr(args, "check", False),
+            dry_run=getattr(args, "dry_run", False),
+        )
 
     if getattr(args, "validate", False):
         return _cmd_validate(root)
@@ -307,5 +373,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         default=False,
         help="Print the JSON Schema for [tool.rrt] to stdout.",
+    )
+    parser.add_argument(
+        "--reference",
+        action="store_true",
+        default=False,
+        help="Generate the annotated .rrt.toml config reference.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="With --reference: verify docs/rrt-config-reference.toml is current; exit 1 on drift.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="With --reference: print without writing.",
     )
     parser.set_defaults(handler=cmd_config)
