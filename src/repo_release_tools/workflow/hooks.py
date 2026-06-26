@@ -23,6 +23,7 @@ from repo_release_tools.commands.branch import (
     SLUG_MAX,
     normalize_commit_type,
 )
+from repo_release_tools.commands.changelog_lint import cmd_changelog_lint
 from repo_release_tools.commands.config_cmd import cmd_config
 from repo_release_tools.commands.docs_cmd import cmd_docs
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
@@ -1159,6 +1160,10 @@ def main(argv: list[str] | None = None) -> int:
         "config-reference-check",
         help="Verify docs/rrt-config-reference.toml is current.",
     )
+    subparsers.add_parser(
+        "changelog-lint",
+        help="Lint [Unreleased] changelog entries for style violations (hard-fail).",
+    )
 
     folder_check_parser = subparsers.add_parser(
         "folder-check",
@@ -1317,6 +1322,10 @@ def main(argv: list[str] | None = None) -> int:
                     dry_run=False,
                     verbose=verbose,
                 )
+            )
+        case "changelog-lint":
+            return cmd_changelog_lint(
+                argparse.Namespace(no_fail=False, release=None, group=None, verbose=verbose)
             )
         case "check-eol":
             parsed.verbose = verbose

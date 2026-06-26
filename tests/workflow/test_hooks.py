@@ -1327,3 +1327,49 @@ def test_config_reference_check_subcommand_wired(
     # No docs/rrt-config-reference.toml → drift detected → exit 1.
     rc = hooks_main(["config-reference-check"])
     assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# changelog-lint subcommand tests (W-2 whitespot)
+# ---------------------------------------------------------------------------
+
+
+def _make_changelog_lint_repo(tmp_path: Path, unreleased_body: str) -> None:
+    """Set up a minimal tmp repo with pyproject.toml + CHANGELOG.md for changelog-lint tests."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "mypkg"\nversion = "0.1.0"\n\n'
+        "[tool.rrt]\n\n"
+        "[[tool.rrt.version_targets]]\n"
+        'path = "pyproject.toml"\n'
+        'kind = "pep621"\n',
+        encoding="utf-8",
+    )
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text(
+        f"# Changelog\n\n## [Unreleased]\n\n{unreleased_body}\n",
+        encoding="utf-8",
+    )
+
+
+def test_changelog_lint_subcommand_clean(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """rrt-hooks changelog-lint returns 0 for a properly formatted [Unreleased] section."""
+    _make_changelog_lint_repo(tmp_path, "- Add new parser for TOML config")
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.workflow.hooks import main as hooks_main
+
+    rc = hooks_main(["changelog-lint"])
+    assert rc == 0
+
+
+def test_changelog_lint_subcommand_blocks_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """rrt-hooks changelog-lint returns 1 (hard-fail) for a bullet ending with a period."""
+    # A trailing period violates the no-trailing-period rule.
+    _make_changelog_lint_repo(tmp_path, "- Add new parser for TOML config.")
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.workflow.hooks import main as hooks_main
+
+    rc = hooks_main(["changelog-lint"])
+    assert rc == 1
