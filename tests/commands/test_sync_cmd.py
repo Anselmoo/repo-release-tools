@@ -655,3 +655,77 @@ def test_bump_tag_failure_propagates_error_code(
     rc = sync_cmd.cmd_sync(_ns(bump=True, tag=True))
     capsys.readouterr()
     assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# Test 20: bad commit-message template with unknown placeholder → ValueError
+# ---------------------------------------------------------------------------
+
+
+def test_bump_commit_bad_template_raises_value_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--commit-message with an unknown placeholder raises ValueError naming the template."""
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_WITH_UPSTREAM, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        sync_cmd,
+        "fetch_versions",
+        lambda pkg, provider: ["0.5.0", "0.6.0"],
+    )
+
+    with pytest.raises(ValueError, match=r"Mirror: \{foo\}"):
+        sync_cmd.cmd_sync(_ns(bump=True, commit=True, commit_message="Mirror: {foo}"))
+
+
+# ---------------------------------------------------------------------------
+# Test 21: bad template in dry-run also raises ValueError immediately
+# ---------------------------------------------------------------------------
+
+
+def test_bump_commit_bad_template_raises_in_dry_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A bad --commit-message template raises ValueError even in --dry-run mode."""
+    (tmp_path / "pyproject.toml").write_text(_PYPROJECT_WITH_UPSTREAM, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        sync_cmd,
+        "fetch_versions",
+        lambda pkg, provider: ["0.5.0", "0.6.0"],
+    )
+
+    with pytest.raises(ValueError, match=r"only the \{version\} placeholder"):
+        sync_cmd.cmd_sync(_ns(bump=True, commit=True, dry_run=True, commit_message="rel {0}"))
+
+
+# ---------------------------------------------------------------------------
+# Test 22: valid custom template still works (confirm _render_commit_message happy path)
+# ---------------------------------------------------------------------------
+
+
+def test_bump_commit_valid_custom_template_works(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A well-formed custom template 'rel {version}' renders correctly."""
+    _init_git(tmp_path)
+    _write_and_commit_initial(tmp_path, _PYPROJECT_WITH_UPSTREAM)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        sync_cmd,
+        "fetch_versions",
+        lambda pkg, provider: ["0.5.0", "0.6.0"],
+    )
+
+    rc = sync_cmd.cmd_sync(_ns(bump=True, commit=True, commit_message="rel {version}"))
+    capsys.readouterr()
+    assert rc == 0
+
+    subjects = _git_log_subjects(tmp_path)
+    assert "rel 0.6.0" in subjects

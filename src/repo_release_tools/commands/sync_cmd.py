@@ -39,6 +39,22 @@ from repo_release_tools.workflow import git
 # ---------------------------------------------------------------------------
 
 
+def _render_commit_message(template: str, version: str) -> str:
+    """Render the mirror commit message template; raise ValueError on a bad template.
+
+    Only ``{version}`` is a supported placeholder.  Unknown keys, positional
+    placeholders, or unbalanced braces all raise ``ValueError`` with an
+    actionable message so the CLI's top-level handler can display it cleanly.
+    """
+    try:
+        return template.format(version=version)
+    except (KeyError, IndexError, ValueError) as exc:
+        raise ValueError(
+            f"Invalid upstream commit_message template {template!r}: "
+            f"only the {{version}} placeholder is supported ({exc})."
+        ) from exc
+
+
 def _stage_and_commit(
     root: Path,
     changed: list[Path],
@@ -144,7 +160,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
                     subtle(f"⊙ [dry-run] Would bump → {v} (files: {file_names})") + "\n"
                 )
                 if do_commit:
-                    msg = tmpl.format(version=v)
+                    msg = _render_commit_message(tmpl, str(v))
                     sys.stdout.write(subtle(f'⊙ [dry-run] Would commit: "{msg}"') + "\n")
                 if do_tag:
                     sys.stdout.write(subtle(f"⊙ [dry-run] Would tag: v{v}") + "\n")
@@ -163,7 +179,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
         # 2. Optional commit.
         if do_commit:
-            msg = tmpl.format(version=v)
+            msg = _render_commit_message(tmpl, str(v))
             _stage_and_commit(root, changed, msg, dry_run=False)
 
         # 3. Optional tag (after commit so it lands on the right SHA).
