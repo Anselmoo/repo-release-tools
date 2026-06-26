@@ -49,6 +49,7 @@ permalink: "/commands/version-release/"
   - [Configuration](#configuration)
   - [Supported providers](#supported-providers)
   - [Basic usage](#basic-usage)
+  - [Mirror-orchestration mode](#mirror-orchestration-mode)
   - [CI mirror loop](#ci-mirror-loop)
   - [Hook](#hook)
 - [`rrt workspace`](#rrt-workspace)
@@ -726,10 +727,13 @@ block in your project config:
 [tool.rrt.upstream]
 package = "my-package"
 provider = "pypi"
+commit_message = "Mirror: {version}"
 ```
 
 `package` is the registry name of the upstream package. `provider` selects the
-registry to query.
+registry to query.  `commit_message` is a Python format string; `{version}` is
+replaced with the new version string and used as the git commit message when
+``--commit`` is given.
 
 ### Supported providers
 
@@ -754,6 +758,25 @@ rrt sync --json
 rrt sync --group backend
 ```
 
+### Mirror-orchestration mode
+
+```bash
+# Apply every newer version to version targets (no git side-effects)
+rrt sync --bump
+
+# Apply + commit each version with the default message "Mirror: <version>"
+rrt sync --bump --commit
+
+# Apply + commit + annotated tag per version
+rrt sync --bump --commit --tag
+
+# Preview the plan without touching anything
+rrt sync --bump --commit --tag --dry-run
+
+# Custom commit message template
+rrt sync --bump --commit --commit-message "chore: mirror {version}"
+```
+
 ### CI mirror loop
 
 Use `rrt sync` output to drive a CI bump loop that tracks upstream releases:
@@ -764,8 +787,7 @@ for v in $(rrt sync); do
 done
 ```
 
-This pattern is useful for mirror repositories that must stay in lock-step
-with an upstream package without manual intervention.
+Or let `rrt sync --bump --commit --tag` handle the full loop in a single call.
 
 ### Hook
 
@@ -787,7 +809,7 @@ pre-commit run rrt-sync --hook-stage manual
 ```text
 Usage:  rrt sync [OPTIONS]
 
-Fetch all released versions of the configured upstream package and print those that are strictly newer than the current project version.
+Fetch all released versions of the configured upstream package and print those that are strictly newer than the current project version.  With --bump, apply each newer version in ascending order, optionally committing and tagging each one.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -796,10 +818,18 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help     Show this message and exit.
-  --group GROUP  Version group name (default: first/default group).
-  --json         Emit a JSON array of newer version strings instead of one-per-line output.
-  --dry-run      Preview without side effects (informational; sync is read-only).
+  -h, --help             Show this message and exit.
+  --group GROUP          Version group name (default: first/default group).
+  --json                 Emit a JSON array of newer version strings instead of one-per-line output.
+  --dry-run              Preview without side effects.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Mirror orchestration
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  --bump                 Apply each newer version to version_targets + pin_targets in ascending order.  Without this flag the command lists newer versions only.
+  --commit               After each version's apply, stage changed files and create a git commit.
+  --tag                  After each version's apply (and optional commit), create an annotated git tag.
+  --commit-message TMPL  Override the commit message template.  Use {version} as a placeholder (e.g. 'chore: mirror {version}').  Defaults to group.upstream_commit_message ('Mirror: {version}').
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -807,7 +837,9 @@ Examples
   $ rrt sync
   $ rrt sync --json
   $ rrt sync --group backend
-  $ rrt sync --dry-run
+  $ rrt sync --bump
+  $ rrt sync --bump --commit --tag
+  $ rrt sync --bump --commit --commit-message 'chore: mirror {version}' --dry-run
 ```
 
 ## `rrt workspace`

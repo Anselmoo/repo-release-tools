@@ -4,6 +4,10 @@ Reads the current project version from the configured version group, fetches
 all released versions from the configured upstream registry (PyPI, npm, NuGet,
 crates.io, or Packagist), and emits those that are strictly newer than the
 current version — one per line by default, or as a JSON array with ``--json``.
+
+When ``--bump`` is given the command shifts from list-only to mirror-orchestration
+mode: for every newer version (ascending) it applies version targets, optionally
+commits the result, and optionally creates an annotated tag.
 """
 
 from __future__ import annotations
@@ -13,11 +17,54 @@ import json
 import sys
 from pathlib import Path
 
+from repo_release_tools.commands.bump import apply_version
+from repo_release_tools.commands.tag import cmd_tag_create
 from repo_release_tools.config import load_or_autodetect_config
 from repo_release_tools.sync.providers import fetch_versions
-from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
+from repo_release_tools.ui import (
+    DryRunPrinter,
+    VerbosePrinter,
+    info,
+    rule,
+    subtle,
+    success,
+    terminal_width,
+)
 from repo_release_tools.version.semver import Version, newer_versions
 from repo_release_tools.version.targets import read_group_current_version
+from repo_release_tools.workflow import git
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _stage_and_commit(
+    root: Path,
+    changed: list[Path],
+    message: str,
+    *,
+    dry_run: bool,
+) -> None:
+    """Stage *changed* files relative to *root* and create a git commit.
+
+    Reuses the same ``workflow.git.run`` path as ``cmd_bump`` (the
+    ``if not args.no_commit:`` block in bump.py around line 520-526).
+    """
+    rel_files = [str(p.relative_to(root)) for p in dict.fromkeys(changed)]
+    git.run(
+        ["git", "add", *rel_files],
+        root,
+        dry_run=dry_run,
+        label="git add",
+    )
+    git.run(
+        ["git", "commit", "-m", message],
+        root,
+        dry_run=dry_run,
+        label="git commit",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Command handler
@@ -25,8 +72,13 @@ from repo_release_tools.version.targets import read_group_current_version
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
-    """Print upstream versions newer than the current project version."""
-    p = DryRunPrinter(getattr(args, "dry_run", False), verbose=getattr(args, "verbose", 0))
+    """Print upstream versions newer than the current project version.
+
+    With ``--bump``: apply each newer version to the configured targets in
+    ascending order, then optionally commit and tag.
+    """
+    dry_run: bool = getattr(args, "dry_run", False)
+    p = DryRunPrinter(dry_run, verbose=getattr(args, "verbose", 0))
     cfg = load_or_autodetect_config(Path.cwd())
     try:
         group = cfg.resolve_group(getattr(args, "group", None))
@@ -51,11 +103,84 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
     fresh = newer_versions(current, parsed)
 
-    if getattr(args, "json", False):
-        sys.stdout.write(json.dumps([str(v) for v in fresh]) + "\n")
-    else:
-        for v in fresh:
-            sys.stdout.write(str(v) + "\n")
+    do_bump: bool = getattr(args, "bump", False)
+    do_commit: bool = getattr(args, "commit", False)
+    do_tag: bool = getattr(args, "tag", False)
+    commit_message_tmpl: str | None = getattr(args, "commit_message", None)
+
+    # ── List-only mode (no --bump) ──────────────────────────────────────────
+    if not do_bump:
+        if getattr(args, "json", False):
+            sys.stdout.write(json.dumps([str(v) for v in fresh]) + "\n")
+        else:
+            for v in fresh:
+                sys.stdout.write(str(v) + "\n")
+        return 0
+
+    # ── Mirror-orchestration mode (--bump) ──────────────────────────────────
+    root = cfg.root
+    tmpl = commit_message_tmpl or group.upstream_commit_message
+
+    if dry_run:
+        # ── Dry-run: print plan, write/commit/tag nothing ──────────────────
+        sys.stdout.write(
+            success(
+                f"✓ [DRY RUN] Mirror upstream {group.upstream_package} ({group.upstream_provider})"
+            )
+            + "\n"
+        )
+        sys.stdout.write(info(f"→ Current: {current}") + "\n")
+        sys.stdout.write("\n")
+        sys.stdout.write(rule("Plan", width=terminal_width()) + "\n")
+
+        if not fresh:
+            sys.stdout.write(subtle("⊙ [dry-run] No newer versions — nothing to do.") + "\n")
+        else:
+            for v in fresh:
+                # Compute changed paths without writing (dry_run=True)
+                changed = apply_version(group, str(v), cfg, dry_run=True)
+                file_names = ", ".join(p.name for p in dict.fromkeys(changed))
+                sys.stdout.write(
+                    subtle(f"⊙ [dry-run] Would bump → {v} (files: {file_names})") + "\n"
+                )
+                if do_commit:
+                    msg = tmpl.format(version=v)
+                    sys.stdout.write(subtle(f'⊙ [dry-run] Would commit: "{msg}"') + "\n")
+                if do_tag:
+                    sys.stdout.write(subtle(f"⊙ [dry-run] Would tag: v{v}") + "\n")
+
+        sys.stdout.write("\n")
+        sys.stdout.write(subtle("⊙ [dry-run] complete – no changes made") + "\n")
+        return 0
+
+    # ── Live mode: apply each version in ascending order ───────────────────
+    if not fresh:
+        return 0  # no-op — exit 0 as specified
+
+    for v in fresh:
+        # 1. Apply version targets + pin targets.
+        changed = apply_version(group, str(v), cfg, dry_run=False)
+
+        # 2. Optional commit.
+        if do_commit:
+            msg = tmpl.format(version=v)
+            _stage_and_commit(root, changed, msg, dry_run=False)
+
+        # 3. Optional tag (after commit so it lands on the right SHA).
+        if do_tag:
+            tag_ns = argparse.Namespace(
+                dry_run=False,
+                push=False,
+                prefix="v",
+                message=None,
+                force=False,
+                group=getattr(args, "group", None),
+                verbose=getattr(args, "verbose", 0),
+            )
+            rc = cmd_tag_create(tag_ns)
+            if rc != 0:
+                return rc
+
     return 0
 
 
@@ -64,7 +189,12 @@ def cmd_sync(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 _SYNC_EXAMPLES = (
-    "  $ rrt sync\n  $ rrt sync --json\n  $ rrt sync --group backend\n  $ rrt sync --dry-run"
+    "  $ rrt sync\n"
+    "  $ rrt sync --json\n"
+    "  $ rrt sync --group backend\n"
+    "  $ rrt sync --bump\n"
+    "  $ rrt sync --bump --commit --tag\n"
+    "  $ rrt sync --bump --commit --commit-message 'chore: mirror {version}' --dry-run"
 )
 
 
@@ -75,7 +205,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="List upstream releases newer than the current version.",
         description=(
             "Fetch all released versions of the configured upstream package and print "
-            "those that are strictly newer than the current project version."
+            "those that are strictly newer than the current project version.  "
+            "With --bump, apply each newer version in ascending order, "
+            "optionally committing and tagging each one."
         ),
         epilog=_SYNC_EXAMPLES,
     )
@@ -93,7 +225,38 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Preview without side effects (informational; sync is read-only).",
+        help="Preview without side effects.",
+    )
+
+    # ── Mirror-orchestration flags ──────────────────────────────────────────
+    mirror_grp = parser.add_argument_group("Mirror orchestration")
+    mirror_grp.add_argument(
+        "--bump",
+        action="store_true",
+        help=(
+            "Apply each newer version to version_targets + pin_targets in ascending order.  "
+            "Without this flag the command lists newer versions only."
+        ),
+    )
+    mirror_grp.add_argument(
+        "--commit",
+        action="store_true",
+        help="After each version's apply, stage changed files and create a git commit.",
+    )
+    mirror_grp.add_argument(
+        "--tag",
+        action="store_true",
+        help="After each version's apply (and optional commit), create an annotated git tag.",
+    )
+    mirror_grp.add_argument(
+        "--commit-message",
+        default=None,
+        metavar="TMPL",
+        help=(
+            "Override the commit message template.  "
+            "Use {version} as a placeholder (e.g. 'chore: mirror {version}').  "
+            "Defaults to group.upstream_commit_message ('Mirror: {version}')."
+        ),
     )
     parser.set_defaults(handler=cmd_sync)
 
@@ -112,10 +275,13 @@ block in your project config:
 [tool.rrt.upstream]
 package = "my-package"
 provider = "pypi"
+commit_message = "Mirror: {version}"
 ```
 
 `package` is the registry name of the upstream package. `provider` selects the
-registry to query.
+registry to query.  `commit_message` is a Python format string; `{version}` is
+replaced with the new version string and used as the git commit message when
+``--commit`` is given.
 
 ## Supported providers
 
@@ -140,6 +306,25 @@ rrt sync --json
 rrt sync --group backend
 ```
 
+## Mirror-orchestration mode
+
+```bash
+# Apply every newer version to version targets (no git side-effects)
+rrt sync --bump
+
+# Apply + commit each version with the default message "Mirror: <version>"
+rrt sync --bump --commit
+
+# Apply + commit + annotated tag per version
+rrt sync --bump --commit --tag
+
+# Preview the plan without touching anything
+rrt sync --bump --commit --tag --dry-run
+
+# Custom commit message template
+rrt sync --bump --commit --commit-message "chore: mirror {version}"
+```
+
 ## CI mirror loop
 
 Use `rrt sync` output to drive a CI bump loop that tracks upstream releases:
@@ -150,8 +335,7 @@ for v in $(rrt sync); do
 done
 ```
 
-This pattern is useful for mirror repositories that must stay in lock-step
-with an upstream package without manual intervention.
+Or let `rrt sync --bump --commit --tag` handle the full loop in a single call.
 
 ## Hook
 
