@@ -33,6 +33,7 @@ from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.folder import cmd_folder_check
 from repo_release_tools.commands.release_cmd import cmd_release_check
 from repo_release_tools.commands.sync_cmd import cmd_sync
+from repo_release_tools.commands.tag import cmd_tag_check
 from repo_release_tools.commands.tree import cmd_tree
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
@@ -1164,6 +1165,10 @@ def main(argv: list[str] | None = None) -> int:
         "changelog-lint",
         help="Lint [Unreleased] changelog entries for style violations (hard-fail).",
     )
+    subparsers.add_parser(
+        "tag-check",
+        help="Validate existing git tags follow the configured naming convention (advisory).",
+    )
 
     folder_check_parser = subparsers.add_parser(
         "folder-check",
@@ -1326,6 +1331,10 @@ def main(argv: list[str] | None = None) -> int:
         case "changelog-lint":
             return cmd_changelog_lint(
                 argparse.Namespace(no_fail=False, release=None, group=None, verbose=verbose)
+            )
+        case "tag-check":
+            return cmd_tag_check(
+                argparse.Namespace(strict=False, prefix="v", group=None, verbose=verbose)
             )
         case "check-eol":
             parsed.verbose = verbose

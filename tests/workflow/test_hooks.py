@@ -1373,3 +1373,73 @@ def test_changelog_lint_subcommand_blocks_violation(
 
     rc = hooks_main(["changelog-lint"])
     assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# tag-check subcommand tests (W-3 whitespot)
+# ---------------------------------------------------------------------------
+
+
+def _make_tag_check_repo(tmp_path: Path) -> None:
+    """Set up a minimal git repo + pyproject.toml with version_target for tag-check tests."""
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "mypkg"\nversion = "0.1.0"\n\n'
+        "[tool.rrt]\n\n"
+        "[[tool.rrt.version_targets]]\n"
+        'path = "pyproject.toml"\n'
+        'kind = "pep621"\n',
+        encoding="utf-8",
+    )
+    # Create an initial commit so we have a valid git repo
+    subprocess.run(["git", "add", "pyproject.toml"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "chore: initial commit"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_tag_check_subcommand_no_tags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """rrt-hooks tag-check returns 0 in a repo with no tags (non-strict advisory pass)."""
+    _make_tag_check_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.workflow.hooks import main as hooks_main
+
+    rc = hooks_main(["tag-check"])
+    # Non-strict: expected tag not found is advisory, not a hard failure.
+    # No malformed tags exist either, so exit code must be 0.
+    assert rc == 0
+
+
+def test_tag_check_subcommand_conventional_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """rrt-hooks tag-check returns 0 when a conventionally-named tag exists."""
+    _make_tag_check_repo(tmp_path)
+    # Create a conventionally-named tag (v prefix + version from pyproject.toml)
+    subprocess.run(
+        ["git", "tag", "-a", "v0.1.0", "-m", "Release v0.1.0"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.workflow.hooks import main as hooks_main
+
+    rc = hooks_main(["tag-check"])
+    assert rc == 0

@@ -262,3 +262,13 @@
   always_run: true
   stages: [pre-commit]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-tag-check
+  name: repo-release-tools tag check
+  description: Validate existing git tags follow the configured naming convention
+  entry: rrt-hooks tag-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
+  minimum_pre_commit_version: "3.2.0"
