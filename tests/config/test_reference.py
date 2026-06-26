@@ -214,6 +214,53 @@ def test_round_trip_real_bundled_schema() -> None:
     assert "rrt" in parsed["tool"]
 
 
+def test_real_schema_keys_land_at_correct_depth() -> None:
+    """Every non-$ref top-level schema property must appear directly in [tool.rrt].
+
+    Without two-pass (scalars-before-tables) ordering, scalar keys that sort
+    AFTER a table key silently nest into the wrong table — e.g. release_branch
+    (sorts after pin_targets) would land inside tool.rrt.pin_targets[0].
+    This test catches that regression.
+    """
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    rendered = render_reference_toml(schema)
+    parsed = tomllib.loads(rendered)["tool"]["rrt"]
+    for name, prop in schema["properties"].items():
+        if list(prop.keys()) == ["$ref"]:
+            continue  # $ref-only props are intentionally skipped
+        assert name in parsed, (
+            f"{name!r} missing from top-level [tool.rrt] — likely nested in wrong table"
+        )
+
+
+def test_scalar_after_table_not_mis_nested() -> None:
+    """A scalar key that sorts AFTER a table key must land at the correct depth.
+
+    This is the minimal regression guard for the two-pass (scalars-before-
+    tables) fix.  Without the fix, 'zzz_scalar' would be swallowed into
+    'alpha_table' because the [alpha_table] header is emitted first and all
+    subsequent bare key=value lines belong to it in TOML.
+    """
+    schema: dict = {
+        "properties": {
+            "alpha_table": {
+                "type": "object",
+                "description": "A sub-table.",
+                "properties": {
+                    "inner": {"type": "string", "description": "Inner field."},
+                },
+            },
+            "zzz_scalar": {"type": "string", "description": "A top-level scalar."},
+        }
+    }
+    rendered = render_reference_toml(schema)
+    parsed = tomllib.loads(rendered)["tool"]["rrt"]
+    assert "zzz_scalar" in parsed, (
+        "'zzz_scalar' was swallowed into 'alpha_table' — two-pass ordering broken"
+    )
+    assert "alpha_table" in parsed
+
+
 # ---------------------------------------------------------------------------
 # Test 6: determinism
 # ---------------------------------------------------------------------------

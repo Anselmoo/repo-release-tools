@@ -42,6 +42,12 @@ def render_reference_toml(schema: dict[str, Any]) -> str:
     The returned string is guaranteed to be parseable by :func:`tomllib.loads`
     without error.  Keys are emitted in sorted order for determinism.
 
+    In TOML, once a ``[table]`` or ``[[array-of-tables]]`` header is written,
+    all subsequent bare ``key = value`` lines belong to that table.  To avoid
+    silent mis-nesting, all scalar / scalar-array properties are emitted
+    *before* all table-producing properties at every recursion level
+    (two-pass ordering).
+
     Args:
         schema: A JSON Schema ``object`` whose ``"properties"`` key maps
             property names to their sub-schemas.  Schemas without a
@@ -56,7 +62,11 @@ def render_reference_toml(schema: dict[str, Any]) -> str:
     lines: list[str] = [_HEADER, "", "[tool.rrt]"]
 
     props: dict[str, Any] = schema.get("properties", {})
-    for name in sorted(props):
+    names = sorted(props)
+    ordered = [n for n in names if not _is_table(props[n])] + [
+        n for n in names if _is_table(props[n])
+    ]
+    for name in ordered:
         prop = props[name]
         lines.extend(_render_property(name, prop, parent="tool.rrt"))
 
@@ -66,6 +76,35 @@ def render_reference_toml(schema: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _is_table(prop: dict[str, Any]) -> bool:
+    """Return True if *prop* renders as a TOML table or array-of-tables header.
+
+    In TOML, once such a header is written every subsequent bare ``key =
+    value`` line belongs to that table.  Knowing which properties are
+    "table-producing" lets callers emit all scalars first (two-pass ordering)
+    to prevent silent mis-nesting.
+
+    ``$ref``-only properties are treated as non-tables: they emit only a
+    comment line (no header, no ``key = value``), so their position in the
+    output does not affect nesting.
+
+    Args:
+        prop: A JSON Schema sub-schema dict.
+
+    Returns:
+        ``True`` for ``type == "object"`` or ``type == "array"`` with
+        ``items.type == "object"``; ``False`` for everything else (scalars,
+        scalar arrays, ``$ref``-only entries).
+    """
+    t = prop.get("type")
+    if t == "object":
+        return True
+    if t == "array":
+        items = prop.get("items", {})
+        return isinstance(items, dict) and items.get("type") == "object"
+    return False
 
 
 def _render_property(
@@ -115,7 +154,11 @@ def _render_property(
             qualified = f"{parent}.{name}"
             lines.append(f"[[{qualified}]]")
             sub_props: dict[str, Any] = items.get("properties", {})
-            for sub_name in sorted(sub_props):
+            sub_names = sorted(sub_props)
+            sub_ordered = [n for n in sub_names if not _is_table(sub_props[n])] + [
+                n for n in sub_names if _is_table(sub_props[n])
+            ]
+            for sub_name in sub_ordered:
                 sub_prop = sub_props[sub_name]
                 lines.extend(_render_property(sub_name, sub_prop, parent=qualified))
         else:
@@ -127,7 +170,11 @@ def _render_property(
         qualified = f"{parent}.{name}"
         lines.append(f"[{qualified}]")
         sub_props = prop.get("properties", {})
-        for sub_name in sorted(sub_props):
+        sub_names = sorted(sub_props)
+        sub_ordered = [n for n in sub_names if not _is_table(sub_props[n])] + [
+            n for n in sub_names if _is_table(sub_props[n])
+        ]
+        for sub_name in sub_ordered:
             sub_prop = sub_props[sub_name]
             lines.extend(_render_property(sub_name, sub_prop, parent=qualified))
 
