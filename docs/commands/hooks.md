@@ -101,7 +101,6 @@ Pair it with:
 | `rrt-changelog-postcorrect` | manual | Consolidate fragmented changelog entries after a squash merge |
 | `rrt-sync` | manual | List upstream releases newer than the current version |
 | `rrt-config-validate` | pre-commit / pre-push | Validate `[tool.rrt]` config — version targets, pin targets, and structure |
-| `rrt-config-reference-update` | pre-commit | Regenerate `docs/rrt-config-reference.toml` from the schema and stage it |
 | `rrt-config-reference-check` | manual | Fail when `docs/rrt-config-reference.toml` is stale vs the schema |
 | `rrt-changelog-lint` | pre-commit | Enforce changelog entry style (sentence case, length, no duplicates) |
 | `rrt-tag-check` | pre-push | Validate existing git tags follow the configured naming convention |
@@ -213,9 +212,11 @@ See `[tool.rrt.upstream]` config and the `rrt sync` command for details.
 `rrt-config-validate` gates commits and pushes by validating the `[tool.rrt]`
 config — checking that version targets resolve, pin targets reference known
 files, and the overall structure is well-formed. `docs/rrt-config-reference.toml`
-is schema-generated: the `rrt-config-reference-update` hook regenerates it and
-stages the result on each commit, while `rrt-config-reference-check` (manual
-stage) fails the hook run when the file is stale relative to the current schema.
+is schema-generated; `rrt-config-reference-check` (manual stage) fails the hook
+run when the file is stale relative to the current schema. (Regenerating and
+staging that file on each commit is repo self-tooling — wire a local
+`bash -c 'rrt config --reference --check || (rrt config --reference && git add …)'`
+hook in your own `.pre-commit-config.yaml` if you vendor the reference.)
 
 ### Changelog lint
 

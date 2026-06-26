@@ -233,16 +233,6 @@
   stages: [pre-commit, pre-push]
   minimum_pre_commit_version: "3.2.0"
 
-- id: rrt-config-reference-update
-  name: repo-release-tools config reference update
-  description: Regenerate docs/rrt-config-reference.toml from the schema and stage it
-  entry: bash -c 'uv run rrt config --reference && git add docs/rrt-config-reference.toml'
-  language: system
-  pass_filenames: false
-  always_run: true
-  stages: [pre-commit]
-  minimum_pre_commit_version: "3.2.0"
-
 - id: rrt-config-reference-check
   name: repo-release-tools config reference check
   description: Fail when docs/rrt-config-reference.toml is stale versus the current schema
