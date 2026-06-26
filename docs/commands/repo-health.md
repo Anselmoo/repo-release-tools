@@ -369,10 +369,13 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help  Show this message and exit.
-  --raw       Show the raw config file with syntax highlighting instead of the tree view.
-  --validate  Validate the config and report pass/fail for each check.
-  --schema    Print the JSON Schema for [tool.rrt] to stdout.
+  -h, --help   Show this message and exit.
+  --raw        Show the raw config file with syntax highlighting instead of the tree view.
+  --validate   Validate the config and report pass/fail for each check.
+  --schema     Print the JSON Schema for [tool.rrt] to stdout.
+  --reference  Generate the annotated .rrt.toml config reference.
+  --check      With --reference: verify docs/rrt-config-reference.toml is current; exit 1 on drift.
+  --dry-run    With --reference: print without writing.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -381,6 +384,9 @@ Examples
   $ rrt config --raw
   $ rrt config --validate
   $ rrt config --schema
+  $ rrt config --reference
+  $ rrt config --reference --check
+  $ rrt config --reference --dry-run
 ```
 
 ## `rrt env`

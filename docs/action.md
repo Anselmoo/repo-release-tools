@@ -42,6 +42,8 @@ best and misleading at worst — tiny chaos gremlin, large confusion.
 - optional clean-worktree enforcement
 - optional `rrt doctor` core automation checks
 - optional `rrt release check` release-target validation
+- optional folder structure validation (`check-folder`)
+- optional artifact hash integrity (`check-artifacts`)
 
 ## Important behavior
 
@@ -115,6 +117,8 @@ hooks with CI `changelog-strategy: "unreleased"`.
 | `check-dirty-tree` | `"false"` | Fail when generated files leave the work tree dirty |
 | `check-doctor` | `"false"` | Run `rrt doctor` core automation checks |
 | `check-release-health` | `"false"` | Run `rrt release check` for version targets, pin targets, and changelog files |
+| `check-folder` | `"false"` | Fail if the repository folder structure violates `[tool.rrt.folders]` config |
+| `check-artifacts` | `"false"` | Fail if generated artifact hashes disagree with `.rrt/artifacts.lock.toml` |
 | `branch-name` | — | Override the branch name to validate |
 | `branch-ref-type` | — | Override branch ref type detection |
 | `commit-subject` | — | Override the commit subject to validate |
@@ -130,6 +134,14 @@ hook and CI integration surfaces.
 targets, pin targets, and changelog files in repo config are reachable and
 well-formed. It is the better release gate when your repository relies on
 config-driven version updates.
+
+`check-folder` runs `rrt-hooks folder-check`, which validates the repository
+directory layout against the `[tool.rrt.folders]` configuration. Use it to
+enforce a consistent project structure across contributors and CI environments.
+
+`check-artifacts` runs `rrt-hooks artifacts-check`, which compares generated
+artifact hashes against the committed `.rrt/artifacts.lock.toml`. It detects
+artifacts that were regenerated but not re-snapshotted, or vice versa.
 
 <!-- rrt:auto:start:doc-footer -->
 ---

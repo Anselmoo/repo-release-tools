@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent
 
+from repo_release_tools.sync.providers import PROVIDERS as VALID_UPSTREAM_PROVIDERS  # noqa: F401
+
 DEFAULT_RELEASE_BRANCH = "release/v{version}"
 DEFAULT_CHANGELOG = "CHANGELOG.md"
 DEFAULT_CHANGELOG_WORKFLOW = "incremental"
@@ -345,6 +347,9 @@ class VersionGroup:
     version_source: Path | None = None
     pin_targets: list[PinTarget] = field(default_factory=list)
     changelog_workflow: str = DEFAULT_CHANGELOG_WORKFLOW
+    upstream_package: str | None = None
+    upstream_provider: str = "pypi"
+    upstream_commit_message: str = "Mirror: {version}"
 
     def primary_target(self) -> VersionTarget:
         """Return the target used as the canonical version source."""

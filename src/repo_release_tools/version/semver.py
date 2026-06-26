@@ -101,6 +101,14 @@ class Version:
         """Return True when this version carries a pre-release label."""
         return self.pre is not None
 
+    def sort_key(self) -> tuple[int, int, int, int, str]:
+        """Ordering key. Stable releases sort after pre-releases of the same core.
+
+        The 4th element is 1 for stable, 0 for pre-release, so that
+        ``1.2.0-rc.1`` < ``1.2.0``. The 5th orders pre-release labels lexically.
+        """
+        return (self.major, self.minor, self.patch, 0 if self.pre else 1, self.pre or "")
+
     def __str__(self) -> str:
         """Return the canonical semver string."""
         base = f"{self.major}.{self.minor}.{self.patch}"
@@ -109,3 +117,10 @@ class Version:
         if self.build:
             base = f"{base}+{self.build}"
         return base
+
+
+def newer_versions(current: Version, candidates: list[Version]) -> list[Version]:
+    """Return candidates strictly newer than *current*, ascending by version."""
+    ck = current.sort_key()
+    fresh = [v for v in candidates if v.sort_key() > ck]
+    return sorted(fresh, key=Version.sort_key)

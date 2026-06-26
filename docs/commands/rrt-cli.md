@@ -54,6 +54,7 @@ Version & Release
   changelog   Commands for working with the project changelog.
   ci-version  Compute and apply CI pre-release versions (PEP 440 / SemVer).
   release     Release-specific workflows and checks.
+  sync        Fetch all released versions of the configured upstream package and print those that are strictly newer than the current project version.  With --bump, apply each newer version in ascending order, optionally committing and tagging each one.
   workspace   Apply a unified version bump to every listed package.
   tag         Create annotated git tags from the current configured version, or check that existing tags follow the naming convention.
 
@@ -113,7 +114,7 @@ Each command group has its own reference page with the full argparse help.
 
 | Group | Commands | Reference |
 |---|---|---|
-| **Version & Release** | `bump`, `changelog`, `ci-version`, `release`, `workspace`, `tag` | [Version & Release](version-release.md) |
+| **Version & Release** | `bump`, `changelog`, `ci-version`, `release`, `sync`, `workspace`, `tag` | [Version & Release](version-release.md) |
 | **Repository Health** | `doctor`, `artifacts`, `config`, `env`, `eol`, `toc`, `tree`, `docs`, `drift`, `folder` | [Repository Health](repo-health.md) |
 | **Git Workflow** | `branch`, `git` | [Git Workflow](git-workflow.md) |
 | **CI & Automation** | `action` | [CI & Automation](ci-automation.md) |

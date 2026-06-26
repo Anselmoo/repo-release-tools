@@ -23,12 +23,18 @@ from repo_release_tools.commands.branch import (
     SLUG_MAX,
     normalize_commit_type,
 )
+from repo_release_tools.commands.changelog_lint import cmd_changelog_lint
+from repo_release_tools.commands.config_cmd import cmd_config
 from repo_release_tools.commands.docs_cmd import cmd_docs
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.commands.doctor import cmd_doctor
+from repo_release_tools.commands.drift_cmd import cmd_check as cmd_drift_check
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.folder import cmd_folder_check
 from repo_release_tools.commands.release_cmd import cmd_release_check
+from repo_release_tools.commands.sync_cmd import cmd_sync
+from repo_release_tools.commands.tag import cmd_tag_check
+from repo_release_tools.commands.tree import cmd_tree
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
@@ -1117,6 +1123,52 @@ def main(argv: list[str] | None = None) -> int:
         "docstring-suggest",
         help="Apply scaffolded docstrings to missing or thin module docstrings.",
     )
+    subparsers.add_parser(
+        "tree-check",
+        help="Validate project tree structure against .rrt/tree.lock.toml (strict).",
+    )
+    subparsers.add_parser(
+        "drift-check",
+        help="Verify agent-surface drift lockfile is current (rrt drift check).",
+    )
+
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="List upstream releases newer than the current version.",
+    )
+    sync_parser.add_argument(
+        "--group",
+        default=None,
+        metavar="GROUP",
+        help="Version group name (default: first/default group).",
+    )
+    sync_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a JSON array of newer version strings instead of one-per-line output.",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview without side effects (informational; sync is read-only).",
+    )
+
+    subparsers.add_parser(
+        "config-validate",
+        help="Validate [tool.rrt] config (version/pin targets + structure).",
+    )
+    subparsers.add_parser(
+        "config-reference-check",
+        help="Verify docs/rrt-config-reference.toml is current.",
+    )
+    subparsers.add_parser(
+        "changelog-lint",
+        help="Lint [Unreleased] changelog entries for style violations (hard-fail).",
+    )
+    subparsers.add_parser(
+        "tag-check",
+        help="Validate existing git tags follow the configured naming convention (advisory).",
+    )
 
     folder_check_parser = subparsers.add_parser(
         "folder-check",
@@ -1223,6 +1275,67 @@ def main(argv: list[str] | None = None) -> int:
         case "release-check":
             parsed.verbose = verbose
             return cmd_release_check(parsed)
+        case "tree-check":
+            tree_args = argparse.Namespace(
+                path=None,
+                root=".",
+                max_depth=None,
+                dirs_only=False,
+                show_hidden=False,
+                inject=None,
+                anchor=None,
+                fix_empty_dirs=False,
+                dry_run=False,
+                strict_empty_dirs=False,
+                snapshot=False,
+                check=True,
+                strict=True,
+                verbose=verbose,
+                format="classic",
+            )
+            return cmd_tree(tree_args)
+        case "drift-check":
+            drift_args = argparse.Namespace(
+                root=".",
+                lock_file="drift.lock.toml",
+                verbose=verbose,
+            )
+            return cmd_drift_check(drift_args)
+        case "sync":
+            parsed.verbose = verbose
+            return cmd_sync(parsed)
+        case "config-validate":
+            return cmd_config(
+                argparse.Namespace(
+                    validate=True,
+                    schema=False,
+                    raw=False,
+                    reference=False,
+                    check=False,
+                    dry_run=False,
+                    verbose=verbose,
+                )
+            )
+        case "config-reference-check":
+            return cmd_config(
+                argparse.Namespace(
+                    reference=True,
+                    check=True,
+                    schema=False,
+                    raw=False,
+                    validate=False,
+                    dry_run=False,
+                    verbose=verbose,
+                )
+            )
+        case "changelog-lint":
+            return cmd_changelog_lint(
+                argparse.Namespace(no_fail=False, release=None, group=None, verbose=verbose)
+            )
+        case "tag-check":
+            return cmd_tag_check(
+                argparse.Namespace(strict=False, prefix="v", group=None, verbose=verbose)
+            )
         case "check-eol":
             parsed.verbose = verbose
             return cmd_eol_check(parsed)
@@ -1431,6 +1544,14 @@ Pair it with:
 | `rrt-folder-check` | pre-commit / pre-push | Validate repository folder structure against `[tool.rrt.folders]` config |
 | `rrt-artifacts-check` | pre-commit / pre-push | Verify artifact hashes match the committed lock (strict by default) |
 | `rrt-artifacts-snapshot` | manual | Hash all configured `artifact_targets` and write `.rrt/artifacts.lock.toml` |
+| `rrt-tree-check` | pre-push | Validate project tree structure against the committed `.rrt/tree.lock.toml` |
+| `rrt-drift-check` | pre-push | Verify agent-facing surfaces match the committed `.rrt/drift.lock.toml` |
+| `rrt-changelog-postcorrect` | manual | Consolidate fragmented changelog entries after a squash merge |
+| `rrt-sync` | manual | List upstream releases newer than the current version |
+| `rrt-config-validate` | pre-commit / pre-push | Validate `[tool.rrt]` config — version targets, pin targets, and structure |
+| `rrt-config-reference-check` | manual | Fail when `docs/rrt-config-reference.toml` is stale vs the schema |
+| `rrt-changelog-lint` | pre-commit | Enforce changelog entry style (sentence case, length, no duplicates) |
+| `rrt-tag-check` | pre-push | Validate existing git tags follow the configured naming convention |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
 incremental workflow. You usually want one or the other, not both.
@@ -1482,6 +1603,79 @@ You can also run the same dirty-tree logic directly:
 ```bash
 rrt-hooks check-dirty-tree
 ```
+
+### Tree check
+
+`rrt-tree-check` validates the project directory structure against the
+committed `.rrt/tree.lock.toml`. Run it at `pre-push` to catch accidental
+layout changes before they reach the remote:
+
+```yaml
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.10.0
+    hooks:
+      - id: rrt-tree-check
+        stages: [pre-push]
+```
+
+Generate or refresh the lock with `rrt tree --lock`.
+
+### Drift check
+
+`rrt-drift-check` verifies that agent-facing surfaces (MCP tool definitions,
+skills, and related metadata) match the committed `.rrt/drift.lock.toml`.
+Pair it with `pre-push` to prevent publishing stale agent interfaces:
+
+```yaml
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.10.0
+    hooks:
+      - id: rrt-drift-check
+        stages: [pre-push]
+```
+
+Update the lock with `rrt drift snapshot`.
+
+### Upstream sync
+
+`rrt-sync` lists upstream releases that are strictly newer than the current
+project version. It is a read-only informational hook registered at the
+`manual` stage — useful in release pipelines to decide whether a bump is
+needed:
+
+```bash
+# List newer versions one per line
+pre-commit run rrt-sync --hook-stage manual
+# or directly:
+rrt sync
+rrt sync --json
+```
+
+See `[tool.rrt.upstream]` config and the `rrt sync` command for details.
+
+### Config reference & validation
+
+`rrt-config-validate` gates commits and pushes by validating the `[tool.rrt]`
+config — checking that version targets resolve, pin targets reference known
+files, and the overall structure is well-formed. `docs/rrt-config-reference.toml`
+is schema-generated; `rrt-config-reference-check` (manual stage) fails the hook
+run when the file is stale relative to the current schema. (Regenerating and
+staging that file on each commit is repo self-tooling — wire a local
+`bash -c 'rrt config --reference --check || (rrt config --reference && git add …)'`
+hook in your own `.pre-commit-config.yaml` if you vendor the reference.)
+
+### Changelog lint
+
+`rrt-changelog-lint` enforces changelog entry style on every `pre-commit` run —
+requiring sentence case, capping entry length, and rejecting duplicate bullets
+before they accumulate.
+
+### Tag check
+
+`rrt-tag-check` runs at `pre-push` and validates that existing git tags in the
+repository follow the naming convention configured under `[tool.rrt]`.
 
 ## Post-correction mode (squash-merge workflows)
 

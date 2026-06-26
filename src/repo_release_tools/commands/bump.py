@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -78,6 +79,7 @@ from repo_release_tools.changelog import (
 )
 from repo_release_tools.config import (
     RrtConfig,
+    VersionGroup,
     find_repo_root,
     format_autodetected_config_notice,
     format_missing_tool_rrt_guidance,
@@ -104,6 +106,47 @@ from repo_release_tools.version.targets import (
 from repo_release_tools.workflow import git
 
 PREVIEW_LINES = 8
+
+
+def apply_version(
+    group: VersionGroup,
+    version: str,
+    config: RrtConfig,
+    *,
+    dry_run: bool = False,
+) -> list[Path]:
+    """Apply *version* to a group's version targets and pin targets.
+
+    This is the shared write-only core used by ``cmd_bump`` and the upcoming
+    ``rrt sync --bump``.  It intentionally has no git, branch, or changelog
+    side-effects — those remain the responsibility of the caller.
+
+    Steps performed:
+
+    1. Atomically rewrite every ``group.version_targets`` entry.
+    2. Apply ``group.pin_targets + config.global_pin_targets``, deduplicating
+       by ``(path, pattern)`` and honouring ``config.pin_target_missing``.
+
+    Returns a deduplicated list of :class:`~pathlib.Path` objects for every
+    file that was (or, in dry-run, would be) modified.  Callers use this list
+    to stage the changes with ``git add``.
+    """
+    replace_all_versions_atomic(group.version_targets, version, dry_run=dry_run)
+    changed: list[Path] = [target.path for target in group.version_targets]
+
+    all_pins = group.pin_targets + config.global_pin_targets
+    seen_pin_keys: set[tuple[object, str]] = set()
+    for pin in all_pins:
+        key = (pin.path, pin.pattern)
+        if key in seen_pin_keys:
+            continue
+        seen_pin_keys.add(key)
+        replace_pin_in_file(
+            pin, version, dry_run=dry_run, pin_target_missing=config.pin_target_missing
+        )
+        changed.append(pin.path)
+
+    return changed
 
 
 def resolve_changelog_mode(config: RrtConfig, requested_mode: str | None) -> str:
@@ -343,30 +386,32 @@ def cmd_bump(args: argparse.Namespace) -> int:
             version_progress.update_bar(i / total_targets)
     if total_targets > 1:
         version_progress.clear()
-    replace_all_versions_atomic(group.version_targets, str(new), dry_run=args.dry_run)
 
     all_pins = group.pin_targets + config.global_pin_targets
-    if all_pins and not getattr(args, "no_pin_sync", False):
+    no_pin_sync = getattr(args, "no_pin_sync", False)
+    if all_pins and not no_pin_sync:
         pin_progress = ProgressLine(file=sys.stdout)
         p.section("Updating doc pins")
-        seen_pin_keys: set[tuple[object, str]] = set()
-        unique_pins: list = []
+        seen_pin_count: set[tuple[object, str]] = set()
+        unique_pin_count = 0
         for pin in all_pins:
             key = (pin.path, pin.pattern)
-            if key not in seen_pin_keys:
-                seen_pin_keys.add(key)
-                unique_pins.append(pin)
-        total_pins = len(unique_pins)
-        for i, pin in enumerate(unique_pins, 1):
+            if key not in seen_pin_count:
+                seen_pin_count.add(key)
+                unique_pin_count += 1
+        total_pins = unique_pin_count
+        for i in range(1, total_pins + 1):
             if total_pins > 1 and i > 1:
                 pin_progress.clear()
-            replace_pin_in_file(
-                pin, str(new), dry_run=args.dry_run, pin_target_missing=config.pin_target_missing
-            )
             if total_pins > 1:
                 pin_progress.update_bar(i / total_pins)
         if total_pins > 1:
             pin_progress.clear()
+
+    # Build a pin-free view when no_pin_sync is set so apply_version skips pins.
+    apply_group = dataclasses.replace(group, pin_targets=[]) if no_pin_sync else group
+    apply_config = dataclasses.replace(config, global_pin_targets=[]) if no_pin_sync else config
+    changed_paths = apply_version(apply_group, str(new), apply_config, dry_run=args.dry_run)
 
     if not args.no_changelog:
         p.section("Updating changelog")
@@ -455,7 +500,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
         label=f"git checkout {create_flag}",
     )
 
-    files_to_stage = [str(target.path.relative_to(root)) for target in group.version_targets]
+    # changed_paths contains version-target paths followed by pin paths (already deduplicated).
+    files_to_stage = [str(p.relative_to(root)) for p in changed_paths]
     for path in group.generated_files:
         if path.exists():
             files_to_stage.append(str(path.relative_to(root)))
@@ -464,14 +510,6 @@ def cmd_bump(args: argparse.Namespace) -> int:
             files_to_stage.append(str(asset.path.relative_to(root)))
     if group.changelog_file.exists() and not args.no_changelog:
         files_to_stage.append(str(group.changelog_file.relative_to(root)))
-    if not getattr(args, "no_pin_sync", False):
-        seen_pin_stage: set[tuple[object, str]] = set()
-        for pin in all_pins:
-            key = (pin.path, pin.pattern)
-            if key in seen_pin_stage:
-                continue
-            seen_pin_stage.add(key)
-            files_to_stage.append(str(pin.path.relative_to(root)))
     git.run(
         ["git", "add", *dict.fromkeys(files_to_stage)],
         root,
@@ -591,3 +629,124 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Version group to bump when multiple groups are configured.",
     )
     parser.set_defaults(handler=cmd_bump)
+
+
+# ---------------------------------------------------------------------------
+# Source-owned topic docs
+# ---------------------------------------------------------------------------
+
+_VERSION_TARGET_CONFIG_DOC = """
+## Version target configuration reference
+
+### `kind='pattern'` targets
+
+When a version string lives outside a well-known format (`pep621`,
+`cargo_toml`, `package_json`, etc.), use `kind='pattern'` with a
+single-capture-group regex. The captured group is **exactly the version
+string** — no prefix or suffix groups needed.
+
+```toml
+[[tool.rrt.version_targets]]
+path = "src/myapp/__init__.py"
+kind = "pattern"
+pattern = '^VERSION = "([^"]+)"$'
+```
+
+Rules:
+
+- `pattern` must compile as a valid Python regex.
+- The regex must contain **exactly 1 capture group** whose match is the
+  version string itself.
+- `kind='pattern'` is mutually exclusive with `section`, `field`, and
+  all other `kind` values.
+- The pattern is applied with `re.MULTILINE`; use `^` / `$` anchors for
+  line-level matching.
+
+`kind='pattern'` differs from the **legacy bare-pattern** approach (no
+`kind`), which requires 3 groups — `(prefix)(version)(suffix)`. The
+`kind='pattern'` form is preferred for new targets because the regex is
+shorter and group intent is unambiguous:
+
+```toml
+# Legacy 3-group pattern — still supported
+[[tool.rrt.version_targets]]
+path = "docs/conf.py"
+pattern = '^(release = ")([^"]+)(")$'
+
+# Preferred: kind='pattern' with 1 capture group
+[[tool.rrt.version_targets]]
+path = "docs/conf.py"
+kind = "pattern"
+pattern = '^release = "([^"]+)"$'
+```
+
+### `pin_target_missing`
+
+Controls what happens when a `[[tool.rrt.pin_targets]]` entry pattern
+finds no matches in the target file:
+
+| Value | Behavior |
+|---|---|
+| `"error"` *(default)* | `rrt bump` fails if any pin target has zero matches |
+| `"warn"` | `rrt bump` prints a warning and continues |
+
+Set in `[tool.rrt]`:
+
+```toml
+[tool.rrt]
+pin_target_missing = "warn"
+```
+
+Use `"warn"` during a migration where some pin files may not yet contain
+the expected pattern, or when a pin target is intentionally optional.
+
+`pin_target_missing` applies to `rrt bump` only; `rrt release check` always
+reports missing pin target matches as warnings regardless of this setting.
+
+### `version_groups` — per-component versioning
+
+`version_groups` lets a single repository maintain multiple independently
+released components, each with its own version, changelog, and release
+branch.
+
+```toml
+[[tool.rrt.version_groups]]
+name = "backend"
+release_branch = "release/backend/v{version}"
+changelog_file = "backend/CHANGELOG.md"
+
+  [[tool.rrt.version_groups.version_targets]]
+  path = "backend/pyproject.toml"
+  kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "sdk"
+release_branch = "release/sdk/v{version}"
+changelog_file = "sdk/CHANGELOG.md"
+
+  [[tool.rrt.version_groups.version_targets]]
+  path = "sdk/package.json"
+  kind = "package_json"
+```
+
+Each group supports: `release_branch`, `changelog_file`,
+`changelog_workflow`, `lock_command`, `generated_files`,
+`version_targets`, and `pin_targets`.
+
+Bump a specific group:
+
+```bash
+rrt bump minor --group backend
+rrt bump patch --group sdk
+```
+
+When a single group is configured, `--group` is optional. With multiple
+groups, set `default_group_name` to select the default:
+
+```toml
+[tool.rrt]
+default_group_name = "backend"
+```
+"""
+
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("bump", _VERSION_TARGET_CONFIG_DOC),)

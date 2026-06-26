@@ -86,6 +86,46 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
+      - id: rrt-folder-check
+        name: rrt folder check
+        entry: uv run rrt-hooks folder-check
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
+
+      - id: rrt-artifacts-check
+        name: rrt artifacts check
+        entry: uv run rrt-hooks artifacts-check
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit, pre-push]
+
+      - id: rrt-config-reference-auto-update
+        name: rrt config reference auto-update
+        entry: bash -c 'uv run rrt config --reference --check || (uv run rrt config --reference && git add docs/rrt-config-reference.toml)'
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: rrt-config-validate
+        name: rrt config validate
+        entry: uv run rrt-hooks config-validate
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: rrt-release-check
+        name: rrt release check
+        entry: uv run rrt-hooks release-check
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [manual]
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:

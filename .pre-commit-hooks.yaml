@@ -182,3 +182,83 @@
   always_run: true
   stages: [manual]
   minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-tree-check
+  name: repo-release-tools tree check
+  description: Validate project tree structure against the committed .rrt/tree.lock.toml
+  entry: rrt-hooks tree-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-drift-check
+  name: repo-release-tools drift check
+  description: Verify agent-facing surfaces match the committed .rrt/drift.lock.toml
+  entry: rrt-hooks drift-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-changelog-postcorrect
+  name: repo-release-tools changelog post-correct
+  description: Consolidate fragmented changelog entries after a squash merge
+  entry: rrt-hooks changelog post-correct
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-sync
+  name: repo-release-tools upstream sync
+  description: List upstream releases newer than the current version
+  entry: rrt-hooks sync
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-config-validate
+  name: repo-release-tools config validate
+  description: Validate [tool.rrt] config — version targets, pin targets, and structure
+  entry: rrt-hooks config-validate
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit, pre-push]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-config-reference-check
+  name: repo-release-tools config reference check
+  description: Fail when docs/rrt-config-reference.toml is stale versus the current schema
+  entry: rrt-hooks config-reference-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-changelog-lint
+  name: repo-release-tools changelog lint
+  description: Enforce changelog entry style (sentence case, length, no duplicates)
+  entry: rrt-hooks changelog-lint
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+  minimum_pre_commit_version: "3.2.0"
+
+- id: rrt-tag-check
+  name: repo-release-tools tag check
+  description: Validate existing git tags follow the configured naming convention
+  entry: rrt-hooks tag-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
+  minimum_pre_commit_version: "3.2.0"
