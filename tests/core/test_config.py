@@ -3674,3 +3674,37 @@ def test_upstream_provider_must_be_string(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="upstream.provider must be a string"):
         load_or_autodetect_config(tmp_path)
+
+
+def test_upstream_commit_message_parsed(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        '[tool.rrt.upstream]\npackage = "ruff"\ncommit_message = "rel {version}"\n',
+        encoding="utf-8",
+    )
+    cfg = load_or_autodetect_config(tmp_path)
+    grp = cfg.version_groups[0]
+    assert grp.upstream_commit_message == "rel {version}"
+
+
+def test_upstream_commit_message_default_when_omitted(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n',
+        encoding="utf-8",
+    )
+    cfg = load_or_autodetect_config(tmp_path)
+    grp = cfg.version_groups[0]
+    assert grp.upstream_commit_message == "Mirror: {version}"
+
+
+def test_upstream_commit_message_must_be_string(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n'
+        "[tool.rrt.upstream]\ncommit_message = 123\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="commit_message must be a string"):
+        load_or_autodetect_config(tmp_path)

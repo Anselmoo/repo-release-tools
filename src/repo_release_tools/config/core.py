@@ -1229,6 +1229,9 @@ def _load_version_group(
         raise ValueError(
             f"upstream.provider {upstream_provider!r} is not valid; must be one of {allowed}"
         )
+    upstream_commit_message = upstream_tbl.get("commit_message", "Mirror: {version}")
+    if not isinstance(upstream_commit_message, str):
+        raise ValueError("upstream.commit_message must be a string")
 
     return VersionGroup(
         name=group_name,
@@ -1243,6 +1246,7 @@ def _load_version_group(
         changelog_workflow=changelog_workflow,
         upstream_package=upstream_package,
         upstream_provider=upstream_provider,
+        upstream_commit_message=upstream_commit_message,
     )
 
 

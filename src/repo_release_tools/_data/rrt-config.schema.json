@@ -154,7 +154,8 @@
       "description": "Upstream release source for `rrt sync` discovery.",
       "properties": {
         "package": { "type": "string", "description": "Upstream package name (vendor/name for packagist)." },
-        "provider": { "type": "string", "enum": ["pypi", "npm", "nuget", "crates", "packagist"], "default": "pypi" }
+        "provider": { "type": "string", "enum": ["pypi", "npm", "nuget", "crates", "packagist"], "default": "pypi" },
+        "commit_message": { "type": "string", "default": "Mirror: {version}", "description": "Commit message template for 'rrt sync --bump --commit'; {version} is substituted." }
       },
       "additionalProperties": false
     },
