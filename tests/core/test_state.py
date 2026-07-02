@@ -715,6 +715,7 @@ class TestArtifactsLockIsCurrentWithInputs:
 
         (tmp_path / "gen.py").write_text("x = 1")
         current_hash = _compute_inputs_hash(["*.py"], tmp_path)
+        assert current_hash is not None
         lock_path = self._make_lock_with_inputs(tmp_path, current_hash)
         targets = [{"path": "*.svg", "description": "", "command": [], "inputs": ["*.py"]}]
         is_ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
