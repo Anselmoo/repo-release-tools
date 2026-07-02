@@ -167,9 +167,7 @@ def cmd_artifacts(args: argparse.Namespace) -> int:
                     suppress_announce=False,
                 )
             except RuntimeError as exc:
-                from repo_release_tools.ui import error
-
-                error(str(exc))
+                p.line(str(exc), ok=False, stream=sys.stderr)
                 return 1
             regenerated += 1
         if not dry_run:

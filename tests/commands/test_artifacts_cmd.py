@@ -467,8 +467,11 @@ class TestCmdArtifactsRegenerate:
     def test_regenerate_skips_targets_without_command(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        from repo_release_tools.config.model import ArtifactTarget
         _write_svg(tmp_path / "badge.svg")
-        config = _make_config(tmp_path)  # no command on target
+        config = _make_config(tmp_path, artifact_targets=[
+            ArtifactTarget(path="*.svg", description="badge", command=[], inputs=[])
+        ])
         monkeypatch.chdir(tmp_path)
         with unittest.mock.patch(
             "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
