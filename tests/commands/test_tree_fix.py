@@ -216,6 +216,7 @@ def _init_git_repo(root: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=root, check=True)
     subprocess.run(["git", "config", "user.name", "Tester"], cwd=root, check=True)
+    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=root, check=True)
 
 
 def test_fix_empty_dirs_git_rm_real(tmp_path: Path) -> None:

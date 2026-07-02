@@ -739,7 +739,10 @@ class TestArtifactsLockIsCurrentWithInputs:
     def test_warns_when_inputs_configured_but_not_in_lock(self, tmp_path: Path) -> None:
         (tmp_path / "gen.py").write_text("x = 1")
         # Lock with no [targets] section
-        lock = {"meta": {"generated_at": "2026-01-01T00:00:00+00:00", "rrt_version": "1.0.0"}, "files": {}}
+        lock = {
+            "meta": {"generated_at": "2026-01-01T00:00:00+00:00", "rrt_version": "1.0.0"},
+            "files": {},
+        }
         lock_path = tmp_path / ".rrt" / "artifacts.lock.toml"
         write_lock(lock_path, lock)
         targets = [{"path": "*.svg", "description": "", "command": [], "inputs": ["*.py"]}]

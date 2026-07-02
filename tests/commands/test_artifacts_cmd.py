@@ -468,10 +468,14 @@ class TestCmdArtifactsRegenerate:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from repo_release_tools.config.model import ArtifactTarget
+
         _write_svg(tmp_path / "badge.svg")
-        config = _make_config(tmp_path, artifact_targets=[
-            ArtifactTarget(path="*.svg", description="badge", command=[], inputs=[])
-        ])
+        config = _make_config(
+            tmp_path,
+            artifact_targets=[
+                ArtifactTarget(path="*.svg", description="badge", command=[], inputs=[])
+            ],
+        )
         monkeypatch.chdir(tmp_path)
         with unittest.mock.patch(
             "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",

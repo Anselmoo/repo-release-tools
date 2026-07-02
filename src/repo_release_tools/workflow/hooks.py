@@ -1209,6 +1209,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     subparsers.add_parser(
+        "artifacts-generate",
+        help="Run each target's command to regenerate outputs, then re-snapshot.",
+    )
+
+    subparsers.add_parser(
         "artifacts-snapshot",
         help="Hash all configured artifact_targets and write .rrt/artifacts.lock.toml.",
     )
@@ -1398,12 +1403,22 @@ def main(argv: list[str] | None = None) -> int:
             parsed.check = True
             parsed.list = False
             return cmd_artifacts(parsed)
+        case "artifacts-generate":
+            parsed.verbose = verbose
+            parsed.regenerate = True
+            parsed.snapshot = False
+            parsed.check = False
+            parsed.strict = False
+            parsed.list = False
+            parsed.dry_run = False
+            return cmd_artifacts(parsed)
         case "artifacts-snapshot":
             parsed.verbose = verbose
             parsed.snapshot = True
             parsed.check = False
             parsed.strict = False
             parsed.list = False
+            parsed.regenerate = False
             return cmd_artifacts(parsed)
         case "update-unreleased":
             if parsed.message_file is not None:
@@ -1542,8 +1557,9 @@ Pair it with:
 | `rrt-docs-inject` | manual | Synchronize shared anchor blocks across documentation |
 | `rrt-docstring-suggest` | manual | Apply scaffolded docstrings to missing or thin module docstrings |
 | `rrt-folder-check` | pre-commit / pre-push | Validate repository folder structure against `[tool.rrt.folders]` config |
-| `rrt-artifacts-check` | pre-commit / pre-push | Verify artifact hashes match the committed lock (strict by default) |
-| `rrt-artifacts-snapshot` | manual | Hash all configured `artifact_targets` and write `.rrt/artifacts.lock.toml` |
+| `rrt-artifacts-generate` | pre-commit | Run generation commands and snapshot hashes to `.rrt/artifacts.lock.toml` |
+| `rrt-artifacts-check` | manual | Verify artifact hashes match the committed lock (strict by default) |
+| `rrt-artifacts-snapshot` | manual | Snapshot artifact hashes without running generation commands |
 | `rrt-tree-check` | pre-push | Validate project tree structure against the committed `.rrt/tree.lock.toml` |
 | `rrt-drift-check` | pre-push | Verify agent-facing surfaces match the committed `.rrt/drift.lock.toml` |
 | `rrt-changelog-postcorrect` | manual | Consolidate fragmented changelog entries after a squash merge |

@@ -525,9 +525,7 @@ def _dict_to_toml(d: dict[str, Any], _prefix: str = "") -> str:
             for nt_key, nt_val in nested_tables:
                 escaped_key = nt_key.replace("\\", "\\\\").replace('"', '\\"')
                 quoted_key = (
-                    f'"{escaped_key}"'
-                    if not re.fullmatch(r"[A-Za-z0-9_-]+", nt_key)
-                    else nt_key
+                    f'"{escaped_key}"' if not re.fullmatch(r"[A-Za-z0-9_-]+", nt_key) else nt_key
                 )
                 header = f"[{full_key}.{quoted_key}]"
                 if out:

@@ -94,13 +94,21 @@ repos:
         pass_filenames: false
         stages: [pre-commit, pre-push]
 
+      - id: rrt-artifacts-generate
+        name: rrt artifacts generate
+        entry: uv run rrt-hooks artifacts-generate
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [manual]
+
       - id: rrt-artifacts-check
         name: rrt artifacts check
         entry: uv run rrt-hooks artifacts-check
         language: system
         always_run: true
         pass_filenames: false
-        stages: [pre-commit, pre-push]
+        stages: [manual]
 
       - id: rrt-config-reference-auto-update
         name: rrt config reference auto-update
