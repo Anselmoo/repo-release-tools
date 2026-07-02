@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import unittest.mock
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,25 +28,45 @@ _DEFAULT_GROUP = VersionGroup(
 
 
 def _make_config(
-    tmp_path: Path | None = None, targets: list[dict[str, str]] | None = None
+    tmp_path: Path | None = None,
+    targets: list[dict[str, str]] | None = None,
+    artifact_targets: list[ArtifactTarget] | None = None,
 ) -> RrtConfig:
     root = tmp_path or Path(".")
-    artifact_targets = [
-        ArtifactTarget(path=t["path"], description=t.get("description", ""))
-        for t in (targets or [])
-    ]
+    if artifact_targets is not None:
+        resolved_targets = artifact_targets
+    else:
+        resolved_targets = [
+            ArtifactTarget(path=t["path"], description=t.get("description", ""))
+            for t in (targets or [])
+        ]
     return RrtConfig(
         root=root,
         config_file=root / "pyproject.toml",
         version_groups=[_DEFAULT_GROUP],
-        artifact_targets=artifact_targets,
+        artifact_targets=resolved_targets,
     )
 
 
-def _make_args(**kwargs: object) -> argparse.Namespace:
-    defaults: dict[str, object] = dict(snapshot=False, check=False, list=False, strict=False)
-    defaults.update(kwargs)
-    return argparse.Namespace(**defaults)
+def _make_args(
+    *,
+    snapshot: bool = False,
+    check: bool = False,
+    list_: bool = False,
+    regenerate: bool = False,
+    dry_run: bool = False,
+    strict: bool = False,
+    verbose: int = 0,
+) -> argparse.Namespace:
+    return argparse.Namespace(
+        snapshot=snapshot,
+        check=check,
+        list=list_,
+        regenerate=regenerate,
+        dry_run=dry_run,
+        strict=strict,
+        verbose=verbose,
+    )
 
 
 def _write_svg(path: Path, content: str = "<svg/>") -> Path:
@@ -71,7 +92,7 @@ def test_source_owned_topic_docs_has_artifacts_entry() -> None:
 def test_target_dicts_converts_correctly() -> None:
     config = _make_config(targets=[{"path": "foo/*.svg", "description": "Foo SVGs"}])
     result = _target_dicts(config)
-    assert result == [{"path": "foo/*.svg", "description": "Foo SVGs"}]
+    assert result == [{"path": "foo/*.svg", "description": "Foo SVGs", "command": [], "inputs": []}]
 
 
 def test_target_dicts_empty() -> None:
@@ -290,7 +311,7 @@ def test_list_exits_0_with_no_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     with patch(
         "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config", return_value=config
     ):
-        rc = cmd_artifacts(_make_args(list=True))
+        rc = cmd_artifacts(_make_args(list_=True))
     assert rc == 0
 
 
@@ -302,7 +323,7 @@ def test_list_exits_0_after_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyP
         "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config", return_value=config
     ):
         cmd_artifacts(_make_args(snapshot=True))
-        rc = cmd_artifacts(_make_args(list=True))
+        rc = cmd_artifacts(_make_args(list_=True))
     assert rc == 0
 
 
@@ -383,3 +404,134 @@ def test_print_artifact_list_skips_directories(
     captured = capsys.readouterr()
     assert "NOT IN LOCK" not in captured.out
     assert "MISMATCH" not in captured.out
+
+
+# ---------------------------------------------------------------------------
+# cmd_artifacts --regenerate
+# ---------------------------------------------------------------------------
+
+
+class TestCmdArtifactsRegenerate:
+    """Tests for rrt artifacts --regenerate."""
+
+    def _make_config_with_command(
+        self,
+        tmp_path: Path,
+        command: list[str],
+        inputs: list[str] | None = None,
+    ) -> RrtConfig:
+        """Return config with one artifact target that has a command."""
+        target = ArtifactTarget(
+            path="*.svg",
+            description="badge",
+            command=command,
+            inputs=inputs or [],
+        )
+        return _make_config(tmp_path, artifact_targets=[target])
+
+    def test_regenerate_runs_command_and_snapshots(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _write_svg(tmp_path / "badge.svg")
+        config = self._make_config_with_command(tmp_path, ["echo", "regenerated"])
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            args = _make_args(regenerate=True)
+            ret = cmd_artifacts(args)
+        assert ret == 0
+        lock_path = tmp_path / ".rrt" / "artifacts.lock.toml"
+        assert lock_path.exists()
+        out = capsys.readouterr().out
+        assert "regenerat" in out.lower() or "snapshot" in out.lower()
+
+    def test_regenerate_dry_run_does_not_write_lock(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _write_svg(tmp_path / "badge.svg")
+        config = self._make_config_with_command(tmp_path, ["echo", "would-run"])
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            args = _make_args(regenerate=True, dry_run=True)
+            ret = cmd_artifacts(args)
+        assert ret == 0
+        assert not (tmp_path / ".rrt" / "artifacts.lock.toml").exists()
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower() or "would" in out.lower()
+
+    def test_regenerate_skips_targets_without_command(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _write_svg(tmp_path / "badge.svg")
+        config = _make_config(tmp_path)  # no command on target
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            args = _make_args(regenerate=True)
+            ret = cmd_artifacts(args)
+        assert ret == 0  # no targets with command → still exits 0
+
+    def test_regenerate_returns_1_when_command_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _write_svg(tmp_path / "badge.svg")
+        config = self._make_config_with_command(tmp_path, ["false"])
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            args = _make_args(regenerate=True)
+            ret = cmd_artifacts(args)
+        assert ret == 1
+
+
+# ---------------------------------------------------------------------------
+# cmd_artifacts --check with inputs staleness
+# ---------------------------------------------------------------------------
+
+
+class TestCmdArtifactsCheckStaleness:
+    """Tests for input-staleness detection via --check."""
+
+    def test_check_strict_fails_on_stale_inputs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from repo_release_tools.state import hash_file
+
+        svg = _write_svg(tmp_path / "badge.svg")
+        (tmp_path / "gen.py").write_text("# generator")
+        target = ArtifactTarget(path="*.svg", description="", command=[], inputs=["*.py"])
+        config = _make_config(tmp_path, artifact_targets=[target])
+
+        # Write lock with stale inputs_hash
+        lock_path = tmp_path / ".rrt" / "artifacts.lock.toml"
+        lock = {
+            "meta": {"generated_at": "2026-01-01T00:00:00+00:00", "rrt_version": "1.0.0"},
+            "targets": {"*.svg": {"inputs_hash": "sha256:stale"}},
+            "files": {
+                "badge.svg": {
+                    "hash": hash_file(svg),
+                    "size": svg.stat().st_size,
+                    "description": "",
+                    "updated_at": "2026-01-01T00:00:00+00:00",
+                }
+            },
+        }
+        write_lock(lock_path, lock)
+
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            args = _make_args(check=True, strict=True)
+            ret = cmd_artifacts(args)
+        assert ret == 1
