@@ -621,3 +621,131 @@ class TestArtifactsLockIsCurrent:
         (tmp_path / "dir.svg").mkdir()
         ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
         assert ok
+
+
+class TestComputeInputsHash:
+    """Tests for _compute_inputs_hash helper."""
+
+    def test_returns_none_for_empty_globs(self, tmp_path: Path) -> None:
+        from repo_release_tools.state import _compute_inputs_hash
+
+        assert _compute_inputs_hash([], tmp_path) is None
+
+    def test_returns_none_when_no_files_match(self, tmp_path: Path) -> None:
+        from repo_release_tools.state import _compute_inputs_hash
+
+        assert _compute_inputs_hash(["*.nonexistent"], tmp_path) is None
+
+    def test_returns_sha256_prefixed_string(self, tmp_path: Path) -> None:
+        from repo_release_tools.state import _compute_inputs_hash
+
+        (tmp_path / "gen.py").write_text("print('hello')")
+        result = _compute_inputs_hash(["*.py"], tmp_path)
+        assert result is not None
+        assert result.startswith("sha256:")
+
+    def test_deterministic_across_calls(self, tmp_path: Path) -> None:
+        from repo_release_tools.state import _compute_inputs_hash
+
+        (tmp_path / "gen.py").write_text("x = 1")
+        r1 = _compute_inputs_hash(["*.py"], tmp_path)
+        r2 = _compute_inputs_hash(["*.py"], tmp_path)
+        assert r1 == r2
+
+    def test_changes_when_input_content_changes(self, tmp_path: Path) -> None:
+        from repo_release_tools.state import _compute_inputs_hash
+
+        f = tmp_path / "gen.py"
+        f.write_text("x = 1")
+        h1 = _compute_inputs_hash(["*.py"], tmp_path)
+        f.write_text("x = 2")
+        h2 = _compute_inputs_hash(["*.py"], tmp_path)
+        assert h1 != h2
+
+
+class TestBuildArtifactsLockWithInputs:
+    """Tests for build_artifacts_lock with inputs field."""
+
+    def test_targets_section_absent_when_no_inputs(self, tmp_path: Path) -> None:
+        (tmp_path / "out.svg").write_bytes(b"<svg/>")
+        targets = [{"path": "*.svg", "description": "", "command": [], "inputs": []}]
+        result = build_artifacts_lock(targets, tmp_path)
+        assert "targets" not in result
+
+    def test_targets_section_present_when_inputs_configured(self, tmp_path: Path) -> None:
+        (tmp_path / "out.svg").write_bytes(b"<svg/>")
+        (tmp_path / "gen.py").write_text("# generator")
+        targets = [{"path": "*.svg", "description": "", "command": [], "inputs": ["*.py"]}]
+        result = build_artifacts_lock(targets, tmp_path)
+        assert "targets" in result
+        assert "*.svg" in result["targets"]
+        assert result["targets"]["*.svg"]["inputs_hash"].startswith("sha256:")
+
+    def test_targets_section_omitted_when_no_input_files_match(self, tmp_path: Path) -> None:
+        (tmp_path / "out.svg").write_bytes(b"<svg/>")
+        targets = [{"path": "*.svg", "description": "", "command": [], "inputs": ["*.nonexistent"]}]
+        result = build_artifacts_lock(targets, tmp_path)
+        # No matching input files → no inputs_hash stored
+        assert "targets" not in result or "*.svg" not in result.get("targets", {})
+
+    def test_bare_glob_key_round_trips_through_toml(self, tmp_path: Path) -> None:
+        """Bare-glob paths like '*' must produce valid TOML (quoted keys)."""
+        import tomllib
+
+        (tmp_path / "out").write_bytes(b"data")
+        (tmp_path / "gen.py").write_text("# generator")
+        # '*' has no '.', '/', '"', or '\\', so was previously unquoted → invalid TOML
+        targets = [{"path": "*", "description": "", "command": [], "inputs": ["*.py"]}]
+        lock_path = tmp_path / ".rrt" / "artifacts.lock.toml"
+        data = build_artifacts_lock(targets, tmp_path)
+        write_lock(lock_path, data)
+        parsed = tomllib.loads(lock_path.read_text())
+        assert "*" in parsed.get("targets", {})
+
+
+class TestArtifactsLockIsCurrentWithInputs:
+    """Tests for input-staleness detection in artifacts_lock_is_current."""
+
+    def _make_lock_with_inputs(self, tmp_path: Path, inputs_hash: str) -> Path:
+        lock = {
+            "meta": {"generated_at": "2026-01-01T00:00:00+00:00", "rrt_version": "1.0.0"},
+            "targets": {"*.svg": {"inputs_hash": inputs_hash}},
+            "files": {},
+        }
+        lock_path = tmp_path / ".rrt" / "artifacts.lock.toml"
+        write_lock(lock_path, lock)
+        return lock_path
+
+    def test_detects_changed_inputs(self, tmp_path: Path) -> None:
+        (tmp_path / "gen.py").write_text("x = 1")
+        lock_path = self._make_lock_with_inputs(tmp_path, "sha256:stale_hash")
+        targets = [{"path": "*.svg", "description": "", "command": [], "inputs": ["*.py"]}]
+        is_ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert not is_ok
+        assert any("stale" in m.lower() or "input" in m.lower() for m in msgs)
+
+    def test_passes_when_inputs_unchanged(self, tmp_path: Path) -> None:
+        from repo_release_tools.state import _compute_inputs_hash
+
+        (tmp_path / "gen.py").write_text("x = 1")
+        current_hash = _compute_inputs_hash(["*.py"], tmp_path)
+        assert current_hash is not None
+        lock_path = self._make_lock_with_inputs(tmp_path, current_hash)
+        targets = [{"path": "*.svg", "description": "", "command": [], "inputs": ["*.py"]}]
+        is_ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert is_ok
+        assert msgs == []
+
+    def test_warns_when_inputs_configured_but_not_in_lock(self, tmp_path: Path) -> None:
+        (tmp_path / "gen.py").write_text("x = 1")
+        # Lock with no [targets] section
+        lock = {
+            "meta": {"generated_at": "2026-01-01T00:00:00+00:00", "rrt_version": "1.0.0"},
+            "files": {},
+        }
+        lock_path = tmp_path / ".rrt" / "artifacts.lock.toml"
+        write_lock(lock_path, lock)
+        targets = [{"path": "*.svg", "description": "", "command": [], "inputs": ["*.py"]}]
+        is_ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert not is_ok
+        assert any("snapshot" in m.lower() or "input" in m.lower() for m in msgs)

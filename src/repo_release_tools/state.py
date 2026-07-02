@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -346,6 +347,27 @@ def hash_file(path: Path) -> str:
     return f"sha256:{h.hexdigest()}"
 
 
+def _compute_inputs_hash(inputs_globs: list[str], repo_root: Path) -> str | None:
+    """Return a combined SHA-256 hash of all files matching *inputs_globs*.
+
+    Files are sorted by path for determinism. Returns ``None`` when no globs
+    are provided or no files match — callers should omit the key rather than
+    storing ``None``.
+    """
+    if not inputs_globs:
+        return None
+    matched: list[Path] = []
+    for pattern in inputs_globs:
+        matched.extend(repo_root.glob(pattern))
+    files = sorted(set(f for f in matched if f.is_file()))
+    if not files:
+        return None
+    combined = hashlib.sha256()
+    for f in files:
+        combined.update(f.read_bytes())
+    return f"sha256:{combined.hexdigest()}"
+
+
 def build_artifacts_lock(
     artifact_targets: list[dict[str, Any]],
     repo_root: Path,
@@ -355,6 +377,11 @@ def build_artifacts_lock(
     Each entry in *artifact_targets* must have a ``path`` key (glob pattern
     relative to *repo_root*) and an optional ``description`` string.  Every
     file matched by the glob is hashed with SHA-256 and recorded.
+
+    When a target includes an ``inputs`` list of glob patterns, the combined
+    hash of all matching input files is stored in a ``[targets]`` section
+    keyed by the target's ``path``.  This enables ``--check`` to detect
+    source-vs-output staleness.
     """
     ts = now_utc()
     result: dict[str, Any] = {
@@ -364,9 +391,14 @@ def build_artifacts_lock(
         },
         "files": {},
     }
+    targets_section: dict[str, Any] = {}
     for target in artifact_targets:
         pattern = str(target.get("path", ""))
         description = str(target.get("description", ""))
+        inputs_globs: list[str] = target.get("inputs", [])  # type: ignore[assignment]
+        inputs_hash = _compute_inputs_hash(inputs_globs, repo_root)
+        if inputs_hash is not None:
+            targets_section[pattern] = {"inputs_hash": inputs_hash}
         for matched in sorted(repo_root.glob(pattern)):
             if not matched.is_file():
                 continue
@@ -377,6 +409,8 @@ def build_artifacts_lock(
                 "description": description,
                 "updated_at": ts,
             }
+    if targets_section:
+        result["targets"] = targets_section
     return result
 
 
@@ -387,19 +421,39 @@ def artifacts_lock_is_current(
 ) -> tuple[bool, list[str]]:
     """Compare current artifact hashes against the artifacts lockfile.
 
-    Drifts on: hash mismatch, file tracked in lock but now missing, or
-    file matched by a target but not yet in the lock.
+    Drifts on: hash mismatch, file tracked in lock but now missing, file
+    matched by a target but not yet in the lock, or input files changed
+    since the lock was written.
 
     Returns ``(is_current, list_of_drift_messages)``.
     """
     current = read_lock(lock_path)
     locked_files: dict[str, Any] = current.get("files", {})
+    locked_targets: dict[str, Any] = current.get("targets", {})
 
     drifted: list[str] = []
     seen_paths: set[str] = set()
 
     for target in artifact_targets:
         pattern = str(target.get("path", ""))
+        inputs_globs: list[str] = target.get("inputs", [])  # type: ignore[assignment]
+
+        # Input-staleness check
+        if inputs_globs:
+            current_inputs_hash = _compute_inputs_hash(inputs_globs, repo_root)
+            stored = locked_targets.get(pattern, {})
+            stored_inputs_hash = stored.get("inputs_hash") if stored else None
+            if current_inputs_hash is not None and stored_inputs_hash is None:
+                drifted.append(
+                    f"Input tracking configured but no input hashes in lock"
+                    f" (target: {pattern}) — run rrt artifacts --snapshot to initialize"
+                )
+            elif current_inputs_hash != stored_inputs_hash:
+                drifted.append(
+                    f"Input files changed since last snapshot"
+                    f" (target: {pattern}) — run rrt artifacts --regenerate or --snapshot"
+                )
+
         for matched in sorted(repo_root.glob(pattern)):
             if not matched.is_file():
                 continue
@@ -471,9 +525,7 @@ def _dict_to_toml(d: dict[str, Any], _prefix: str = "") -> str:
             for nt_key, nt_val in nested_tables:
                 escaped_key = nt_key.replace("\\", "\\\\").replace('"', '\\"')
                 quoted_key = (
-                    f'"{escaped_key}"'
-                    if ("/" in nt_key or "." in nt_key or '"' in nt_key or "\\" in nt_key)
-                    else nt_key
+                    f'"{escaped_key}"' if not re.fullmatch(r"[A-Za-z0-9_-]+", nt_key) else nt_key
                 )
                 header = f"[{full_key}.{quoted_key}]"
                 if out:

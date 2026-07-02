@@ -1111,7 +1111,22 @@ def _load_artifact_targets(raw_targets: object) -> list[ArtifactTarget]:
         if not isinstance(raw_path, str) or not raw_path:
             raise ValueError("Each artifact_targets entry must have a non-empty 'path' string")
         description = str(typed_item.get("description", ""))
-        target = ArtifactTarget(path=raw_path, description=description)
+        raw_command = typed_item.get("command", [])
+        if not isinstance(raw_command, list) or not all(
+            isinstance(p, str) and p for p in raw_command
+        ):
+            raise ValueError("artifact_targets.command must be a list of non-empty strings")
+        raw_inputs = typed_item.get("inputs", [])
+        if not isinstance(raw_inputs, list) or not all(
+            isinstance(s, str) and s for s in raw_inputs
+        ):
+            raise ValueError("artifact_targets.inputs must be a list of non-empty strings")
+        target = ArtifactTarget(
+            path=raw_path,
+            description=description,
+            command=cast("list[str]", raw_command),
+            inputs=cast("list[str]", raw_inputs),
+        )
         target.validate()
         targets.append(target)
     return targets

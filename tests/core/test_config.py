@@ -3455,6 +3455,67 @@ def test_load_artifact_targets_missing_path() -> None:
         _load_artifact_targets([{"description": "no path"}])
 
 
+def test_artifact_target_validate_bad_command() -> None:
+    from repo_release_tools.config.model import ArtifactTarget
+
+    with pytest.raises(ValueError, match="command"):
+        ArtifactTarget(path="docs/*.md", command=["", "bad"]).validate()
+
+
+def test_artifact_target_validate_absolute_input() -> None:
+    from repo_release_tools.config.model import ArtifactTarget
+
+    with pytest.raises(ValueError, match="relative"):
+        ArtifactTarget(path="docs/*.md", inputs=["/abs/input.py"]).validate()
+
+
+def test_artifact_target_validate_empty_input_string() -> None:
+    from repo_release_tools.config.model import ArtifactTarget
+
+    with pytest.raises(ValueError, match="non-empty"):
+        ArtifactTarget(path="docs/*.md", inputs=[""]).validate()
+
+
+def test_artifact_target_defaults_are_empty() -> None:
+    from repo_release_tools.config.model import ArtifactTarget
+
+    t = ArtifactTarget(path="docs/*.md")
+    assert t.command == []
+    assert t.inputs == []
+
+
+def test_load_artifact_targets_parses_command_and_inputs() -> None:
+    from repo_release_tools.config.core import _load_artifact_targets
+
+    result = _load_artifact_targets(
+        [{"path": "docs/*.md", "command": ["uv", "run", "gen.py"], "inputs": ["src/**/*.py"]}]
+    )
+    assert len(result) == 1
+    assert result[0].command == ["uv", "run", "gen.py"]
+    assert result[0].inputs == ["src/**/*.py"]
+
+
+def test_load_artifact_targets_bad_command_not_list() -> None:
+    from repo_release_tools.config.core import _load_artifact_targets
+
+    with pytest.raises(ValueError, match="command"):
+        _load_artifact_targets([{"path": "docs/*.md", "command": "not-a-list"}])
+
+
+def test_load_artifact_targets_bad_inputs_not_list() -> None:
+    from repo_release_tools.config.core import _load_artifact_targets
+
+    with pytest.raises(ValueError, match="inputs"):
+        _load_artifact_targets([{"path": "docs/*.md", "inputs": "not-a-list"}])
+
+
+def test_load_artifact_targets_bad_inputs_empty_string() -> None:
+    from repo_release_tools.config.core import _load_artifact_targets
+
+    with pytest.raises(ValueError, match="inputs"):
+        _load_artifact_targets([{"path": "docs/*.md", "inputs": [""]}])
+
+
 # ---------------------------------------------------------------------------
 # _load_command_groups / _load_topic_pages / _load_title_overrides
 # ---------------------------------------------------------------------------

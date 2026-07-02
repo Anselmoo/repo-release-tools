@@ -1395,6 +1395,12 @@ def _make_tag_check_repo(tmp_path: Path) -> None:
         check=True,
         capture_output=True,
     )
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text(
         '[project]\nname = "mypkg"\nversion = "0.1.0"\n\n'
@@ -1443,3 +1449,35 @@ def test_tag_check_subcommand_conventional_tag(
 
     rc = hooks_main(["tag-check"])
     assert rc == 0
+
+
+def test_tag_check_subcommand_dispatches_cmd_tag_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """rrt-hooks tag-check dispatches to cmd_tag_check with the right namespace."""
+    import repo_release_tools.workflow.hooks as hooks
+
+    calls: list[object] = []
+    monkeypatch.setattr(hooks, "cmd_tag_check", lambda args: calls.append(args) or 0)
+    rc = hooks.main(["tag-check"])
+    assert rc == 0
+    assert len(calls) == 1
+
+
+def test_main_artifacts_generate_hook_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    """rrt-hooks artifacts-generate dispatches to cmd_artifacts with regenerate=True."""
+
+    import repo_release_tools.workflow.hooks as hooks
+
+    artifact_calls: list[SimpleNamespace] = []
+    monkeypatch.setattr(
+        hooks,
+        "cmd_artifacts",
+        lambda parsed: artifact_calls.append(parsed) or 0,
+    )
+
+    assert hooks.main(["artifacts-generate"]) == 0
+
+    (gen_args,) = artifact_calls
+    assert gen_args.regenerate is True
+    assert gen_args.snapshot is False
+    assert gen_args.check is False
+    assert gen_args.list is False

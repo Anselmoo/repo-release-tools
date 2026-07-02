@@ -259,11 +259,13 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help  Show this message and exit.
-  --snapshot  Hash all configured artifact_targets and write .rrt/artifacts.lock.toml.
-  --check     Verify artifact hashes match the committed lock. Advisory by default.
-  --list      Display all tracked artifacts and their current hash status.
-  --strict    With --check: exit 1 on any hash mismatch (for CI gates).
+  -h, --help    Show this message and exit.
+  --snapshot    Hash all configured artifact_targets and write .rrt/artifacts.lock.toml.
+  --check       Verify artifact hashes match the committed lock. Advisory by default.
+  --list        Display all tracked artifacts and their current hash status.
+  --regenerate  Run each target's command to regenerate outputs, then re-snapshot.
+  --dry-run     Show what --regenerate would do without running commands or writing the lock.
+  --strict      With --check: exit 1 on any hash mismatch (for CI gates).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from repo_release_tools.assets import banner
@@ -23,6 +25,43 @@ def test_normalize_banner_preserves_frame_borders_and_aligns() -> None:
 def test_normalize_banner_empty_returns_input() -> None:
     # empty banner should be returned unchanged
     assert banner._normalize_banner("") == ""
+
+
+def test_collect_metrics_reads_branch_from_git_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lines 126-127: branch is read from .git/HEAD when the file exists."""
+    import repo_release_tools.assets.banner as bmod
+
+    # Build a fake directory structure so that src_root.parent/.git/HEAD resolves inside tmp_path.
+    # src_root = Path(__file__).parent.parent.parent → fake: tmp_path/src
+    # head_path = src_root.parent / ".git" / "HEAD" → tmp_path/.git/HEAD
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    (git_dir / "HEAD").write_text("ref: refs/heads/my-feature\n", encoding="utf-8")
+
+    fake_file = str(tmp_path / "src" / "repo_release_tools" / "assets" / "banner.py")
+    monkeypatch.setattr(bmod, "__file__", fake_file)
+
+    metrics = bmod._collect_metrics()
+    assert metrics["branch"] == "MY-FEATURE"
+
+
+def test_collect_metrics_reads_detached_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line 127 (else branch): short hash used when HEAD has no '/'."""
+    import repo_release_tools.assets.banner as bmod
+
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    (git_dir / "HEAD").write_text("abc1234deadbeef\n", encoding="utf-8")
+
+    fake_file = str(tmp_path / "src" / "repo_release_tools" / "assets" / "banner.py")
+    monkeypatch.setattr(bmod, "__file__", fake_file)
+
+    metrics = bmod._collect_metrics()
+    assert metrics["branch"] == "ABC1234"
 
 
 def test_collect_metrics_handles_unreadable_files(monkeypatch: pytest.MonkeyPatch) -> None:
