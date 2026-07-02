@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -525,7 +526,7 @@ def _dict_to_toml(d: dict[str, Any], _prefix: str = "") -> str:
                 escaped_key = nt_key.replace("\\", "\\\\").replace('"', '\\"')
                 quoted_key = (
                     f'"{escaped_key}"'
-                    if ("/" in nt_key or "." in nt_key or '"' in nt_key or "\\" in nt_key)
+                    if not re.fullmatch(r"[A-Za-z0-9_-]+", nt_key)
                     else nt_key
                 )
                 header = f"[{full_key}.{quoted_key}]"

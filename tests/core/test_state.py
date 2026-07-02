@@ -688,6 +688,20 @@ class TestBuildArtifactsLockWithInputs:
         # No matching input files → no inputs_hash stored
         assert "targets" not in result or "*.svg" not in result.get("targets", {})
 
+    def test_bare_glob_key_round_trips_through_toml(self, tmp_path: Path) -> None:
+        """Bare-glob paths like '*' must produce valid TOML (quoted keys)."""
+        import tomllib
+
+        (tmp_path / "out").write_bytes(b"data")
+        (tmp_path / "gen.py").write_text("# generator")
+        # '*' has no '.', '/', '"', or '\\', so was previously unquoted → invalid TOML
+        targets = [{"path": "*", "description": "", "command": [], "inputs": ["*.py"]}]
+        lock_path = tmp_path / ".rrt" / "artifacts.lock.toml"
+        data = build_artifacts_lock(targets, tmp_path)
+        write_lock(lock_path, data)
+        parsed = tomllib.loads(lock_path.read_text())
+        assert "*" in parsed.get("targets", {})
+
 
 class TestArtifactsLockIsCurrentWithInputs:
     """Tests for input-staleness detection in artifacts_lock_is_current."""
