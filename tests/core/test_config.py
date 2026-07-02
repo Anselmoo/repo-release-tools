@@ -3509,6 +3509,13 @@ def test_load_artifact_targets_bad_inputs_not_list() -> None:
         _load_artifact_targets([{"path": "docs/*.md", "inputs": "not-a-list"}])
 
 
+def test_load_artifact_targets_bad_inputs_empty_string() -> None:
+    from repo_release_tools.config.core import _load_artifact_targets
+
+    with pytest.raises(ValueError, match="inputs"):
+        _load_artifact_targets([{"path": "docs/*.md", "inputs": [""]}])
+
+
 # ---------------------------------------------------------------------------
 # _load_command_groups / _load_topic_pages / _load_title_overrides
 # ---------------------------------------------------------------------------
