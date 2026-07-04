@@ -179,6 +179,13 @@ def cmd_artifacts(args: argparse.Namespace) -> int:
                 p.line(str(exc), ok=False, stream=sys.stderr)
                 return 1
             regenerated += 1
+
+        if regenerated == 0:
+            rp.line(
+                "No artifact targets have a command configured — nothing to regenerate.", ok=True
+            )
+            return 0
+
         if not dry_run:
             data = build_artifacts_lock(targets, root)
             write_lock(lock_path, data)

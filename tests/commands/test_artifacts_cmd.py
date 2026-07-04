@@ -485,6 +485,38 @@ class TestCmdArtifactsRegenerate:
             ret = cmd_artifacts(args)
         assert ret == 0  # no targets with command → still exits 0
 
+    def test_regenerate_no_command_targets_does_not_write_lock(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--regenerate with targets that have no command must not overwrite the lock."""
+        from repo_release_tools.config.model import ArtifactTarget
+
+        # Write an existing lock to verify it is NOT touched
+        lock_path = tmp_path / ".rrt" / "artifacts.lock.toml"
+        lock_path.parent.mkdir(parents=True)
+        lock_path.write_text(
+            "[meta]\ngenerated_at = '2026-01-01'\nrrt_version = '1.0.0'\n\n[files]\n"
+        )
+        original_mtime = lock_path.stat().st_mtime
+
+        config = _make_config(
+            tmp_path,
+            artifact_targets=[
+                ArtifactTarget(path="*.svg", description="badges", command=[], inputs=[])
+            ],
+        )
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            args = _make_args(regenerate=True)
+            ret = cmd_artifacts(args)
+
+        assert ret == 0
+        # Lock must NOT have been rewritten
+        assert lock_path.stat().st_mtime == original_mtime
+
     def test_regenerate_returns_1_when_command_fails(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -569,3 +601,4 @@ def test_dry_run_without_snapshot_returns_error(
     assert ret == 1
     err = capsys.readouterr().err
     assert "--dry-run" in err
+    assert "--regenerate" in err
