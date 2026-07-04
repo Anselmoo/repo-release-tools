@@ -337,11 +337,19 @@ class ArtifactTarget:
             raise ValueError(
                 "artifact_targets.command must be a non-empty list of non-empty strings"
             )
+        if ".." in Path(self.path).parts:
+            raise ValueError(
+                "artifact_targets.path must not escape the repo root (no '..' components)"
+            )
         for inp in self.inputs:
             if not isinstance(inp, str) or not inp:
                 raise ValueError("artifact_targets.inputs entries must be non-empty strings")
             if Path(inp).is_absolute():
                 raise ValueError("artifact_targets.inputs entries must be relative glob patterns")
+            if ".." in Path(inp).parts:
+                raise ValueError(
+                    "artifact_targets.inputs entries must not escape the repo root (no '..' components)"
+                )
 
 
 @dataclass(frozen=True)

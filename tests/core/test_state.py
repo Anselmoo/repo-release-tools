@@ -662,6 +662,25 @@ class TestComputeInputsHash:
         h2 = _compute_inputs_hash(["*.py"], tmp_path)
         assert h1 != h2
 
+    def test_different_file_splits_with_same_concat_produce_different_hashes(
+        self, tmp_path: Path
+    ) -> None:
+        from repo_release_tools.state import _compute_inputs_hash
+
+        # File boundary regression: ["ab","c"] vs ["a","bc"] concatenate to the
+        # same byte string "abc" — the hash must differ because paths are included.
+        (tmp_path / "ab").write_text("ab")
+        (tmp_path / "c").write_text("c")
+        h1 = _compute_inputs_hash(["ab", "c"], tmp_path)
+
+        (tmp_path / "ab").unlink()
+        (tmp_path / "c").unlink()
+        (tmp_path / "a").write_text("a")
+        (tmp_path / "bc").write_text("bc")
+        h2 = _compute_inputs_hash(["a", "bc"], tmp_path)
+
+        assert h1 != h2
+
 
 class TestBuildArtifactsLockWithInputs:
     """Tests for build_artifacts_lock with inputs field."""

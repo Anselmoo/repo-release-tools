@@ -364,7 +364,13 @@ def _compute_inputs_hash(inputs_globs: list[str], repo_root: Path) -> str | None
         return None
     combined = hashlib.sha256()
     for f in files:
+        # Include relative path as a boundary marker so that different file
+        # splits with identical concatenated content produce different hashes
+        # (e.g. files ["ab","c"] vs ["a","bc"] would otherwise collide).
+        combined.update(str(f.relative_to(repo_root)).encode())
+        combined.update(b"\x00")
         combined.update(f.read_bytes())
+        combined.update(b"\x00")
     return f"sha256:{combined.hexdigest()}"
 
 

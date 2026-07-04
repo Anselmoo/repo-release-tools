@@ -3476,6 +3476,20 @@ def test_artifact_target_validate_empty_input_string() -> None:
         ArtifactTarget(path="docs/*.md", inputs=[""]).validate()
 
 
+def test_artifact_target_validate_dotdot_in_inputs() -> None:
+    from repo_release_tools.config.model import ArtifactTarget
+
+    with pytest.raises(ValueError, match="repo root"):
+        ArtifactTarget(path="docs/*.md", inputs=["../secrets/token.txt"]).validate()
+
+
+def test_artifact_target_validate_dotdot_in_path() -> None:
+    from repo_release_tools.config.model import ArtifactTarget
+
+    with pytest.raises(ValueError, match="repo root"):
+        ArtifactTarget(path="../outside/*.md").validate()
+
+
 def test_artifact_target_defaults_are_empty() -> None:
     from repo_release_tools.config.model import ArtifactTarget
 
