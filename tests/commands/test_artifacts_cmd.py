@@ -542,3 +542,30 @@ class TestCmdArtifactsCheckStaleness:
             args = _make_args(check=True, strict=True)
             ret = cmd_artifacts(args)
         assert ret == 1
+
+
+# ---------------------------------------------------------------------------
+# cmd_artifacts --dry-run validation
+# ---------------------------------------------------------------------------
+
+
+def test_dry_run_without_regenerate_returns_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    # No mocks needed — guard fires before find_repo_root is called.
+    ret = cmd_artifacts(_make_args(check=True, dry_run=True))
+    assert ret == 1
+    err = capsys.readouterr().err
+    assert "--dry-run" in err
+    assert "--regenerate" in err
+
+
+def test_dry_run_without_snapshot_returns_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    ret = cmd_artifacts(_make_args(snapshot=True, dry_run=True))
+    assert ret == 1
+    err = capsys.readouterr().err
+    assert "--dry-run" in err

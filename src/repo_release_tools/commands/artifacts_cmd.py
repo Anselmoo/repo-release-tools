@@ -92,7 +92,6 @@ def _target_dicts(config: RrtConfig) -> list[dict[str, Any]]:
 def cmd_artifacts(args: argparse.Namespace) -> int:
     """Run artifact integrity check, snapshot, or list."""
     verbose: int = getattr(args, "verbose", 0) or 0
-    root = find_repo_root(Path.cwd())
     do_snapshot: bool = getattr(args, "snapshot", False)
     do_check: bool = getattr(args, "check", False)
     do_list: bool = getattr(args, "list", False)
@@ -101,6 +100,16 @@ def cmd_artifacts(args: argparse.Namespace) -> int:
     strict: bool = getattr(args, "strict", False)
 
     p = VerbosePrinter(verbose=verbose)
+
+    if dry_run and not do_regenerate:
+        p.line(
+            "--dry-run requires --regenerate; it has no effect with --check, --snapshot, or --list",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+
+    root = find_repo_root(Path.cwd())
 
     try:
         config = load_or_autodetect_config(root)
