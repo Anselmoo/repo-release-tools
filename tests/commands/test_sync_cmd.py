@@ -66,6 +66,9 @@ def _init_git(path: Path) -> None:
     subprocess.run(
         ["git", "config", "user.name", "Test"], cwd=path, check=True, capture_output=True
     )
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"], cwd=path, check=True, capture_output=True
+    )
 
 
 def _git_log_subjects(path: Path) -> list[str]:

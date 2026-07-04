@@ -163,6 +163,16 @@
   stages: [pre-commit, pre-push]
   minimum_pre_commit_version: "3.2.0"
 
+- id: rrt-artifacts-generate
+  name: repo-release-tools artifacts generate
+  description: Run per-target generation commands and snapshot hashes to .rrt/artifacts.lock.toml
+  entry: rrt-hooks artifacts-generate
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+  minimum_pre_commit_version: "3.2.0"
+
 - id: rrt-artifacts-check
   name: repo-release-tools artifacts check
   description: Verify generated artifact hashes match the committed .rrt/artifacts.lock.toml
@@ -175,7 +185,7 @@
 
 - id: rrt-artifacts-snapshot
   name: repo-release-tools artifacts snapshot
-  description: Hash all configured artifact_targets and write .rrt/artifacts.lock.toml
+  description: Snapshot artifact hashes without running generation commands
   entry: rrt-hooks artifacts-snapshot
   language: python
   pass_filenames: false

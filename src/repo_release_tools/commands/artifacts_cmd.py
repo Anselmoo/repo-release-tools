@@ -48,6 +48,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from repo_release_tools.config import (
     RrtConfig,
@@ -62,10 +63,12 @@ from repo_release_tools.state import (
     write_lock,
 )
 from repo_release_tools.ui import (
+    DryRunPrinter,
     VerbosePrinter,
     rule,
     terminal_width,
 )
+from repo_release_tools.workflow import git
 
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("artifacts", __doc__ or ""),)
 ARTIFACTS_EPILOG = (
@@ -73,21 +76,40 @@ ARTIFACTS_EPILOG = (
 )
 
 
-def _target_dicts(config: RrtConfig) -> list[dict[str, str]]:
+def _target_dicts(config: RrtConfig) -> list[dict[str, Any]]:
     """Convert ArtifactTarget objects to the dict format expected by state functions."""
-    return [{"path": t.path, "description": t.description} for t in config.artifact_targets]
+    return [
+        {
+            "path": t.path,
+            "description": t.description,
+            "command": t.command,
+            "inputs": t.inputs,
+        }
+        for t in config.artifact_targets
+    ]
 
 
 def cmd_artifacts(args: argparse.Namespace) -> int:
     """Run artifact integrity check, snapshot, or list."""
     verbose: int = getattr(args, "verbose", 0) or 0
-    root = find_repo_root(Path.cwd())
     do_snapshot: bool = getattr(args, "snapshot", False)
     do_check: bool = getattr(args, "check", False)
     do_list: bool = getattr(args, "list", False)
+    do_regenerate: bool = getattr(args, "regenerate", False)
+    dry_run: bool = getattr(args, "dry_run", False)
     strict: bool = getattr(args, "strict", False)
 
     p = VerbosePrinter(verbose=verbose)
+
+    if dry_run and not do_regenerate:
+        p.line(
+            "--dry-run requires --regenerate; it has no effect with --check, --snapshot, or --list",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+
+    root = find_repo_root(Path.cwd())
 
     try:
         config = load_or_autodetect_config(root)
@@ -135,6 +157,45 @@ def cmd_artifacts(args: argparse.Namespace) -> int:
 
     if do_list:
         _print_artifact_list(targets, root, lock_path)
+        return 0
+
+    if do_regenerate:
+        rp = DryRunPrinter(dry_run=dry_run)
+        rp.header("Regenerate artifact targets")
+        regenerated = 0
+        for target in config.artifact_targets:
+            if not target.command:
+                continue
+            label = f"regenerate {target.path}"
+            try:
+                git.run(
+                    target.command,
+                    root,
+                    dry_run=dry_run,
+                    label=label,
+                    suppress_announce=False,
+                )
+            except RuntimeError as exc:
+                p.line(str(exc), ok=False, stream=sys.stderr)
+                return 1
+            regenerated += 1
+
+        if regenerated == 0:
+            rp.line(
+                "No artifact targets have a command configured — nothing to regenerate.", ok=True
+            )
+            return 0
+
+        if not dry_run:
+            data = build_artifacts_lock(targets, root)
+            write_lock(lock_path, data)
+            file_count = len(data.get("files", {}))
+            rp.footer(
+                f"Regenerated {regenerated} target(s); snapshot updated"
+                f" ({file_count} file(s) → {lock_path.relative_to(root)})"
+            )
+        else:
+            rp.footer(f"Would regenerate {regenerated} target(s) and update snapshot.")
         return 0
 
     # Default: show a brief status summary
@@ -218,6 +279,18 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
         action="store_true",
         default=False,
         help="Display all tracked artifacts and their current hash status.",
+    )
+    mode.add_argument(
+        "--regenerate",
+        action="store_true",
+        default=False,
+        help="Run each target's command to regenerate outputs, then re-snapshot.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Show what --regenerate would do without running commands or writing the lock.",
     )
     parser.add_argument(
         "--strict",

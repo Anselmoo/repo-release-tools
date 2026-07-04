@@ -324,6 +324,8 @@ class ArtifactTarget:
 
     path: str
     description: str = ""
+    command: list[str] = field(default_factory=list)
+    inputs: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         """Validate artifact target configuration."""
@@ -331,6 +333,23 @@ class ArtifactTarget:
             raise ValueError("artifact_targets.path must be a non-empty string")
         if Path(self.path).is_absolute():
             raise ValueError("artifact_targets.path must be a relative glob pattern")
+        if self.command and not all(isinstance(p, str) and p for p in self.command):
+            raise ValueError(
+                "artifact_targets.command must be a non-empty list of non-empty strings"
+            )
+        if ".." in Path(self.path).parts:
+            raise ValueError(
+                "artifact_targets.path must not escape the repo root (no '..' components)"
+            )
+        for inp in self.inputs:
+            if not isinstance(inp, str) or not inp:
+                raise ValueError("artifact_targets.inputs entries must be non-empty strings")
+            if Path(inp).is_absolute():
+                raise ValueError("artifact_targets.inputs entries must be relative glob patterns")
+            if ".." in Path(inp).parts:
+                raise ValueError(
+                    "artifact_targets.inputs entries must not escape the repo root (no '..' components)"
+                )
 
 
 @dataclass(frozen=True)
