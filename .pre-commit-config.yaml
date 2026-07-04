@@ -100,7 +100,7 @@ repos:
         language: system
         always_run: true
         pass_filenames: false
-        stages: [manual]
+        stages: [pre-commit]
 
       - id: rrt-artifacts-check
         name: rrt artifacts check
