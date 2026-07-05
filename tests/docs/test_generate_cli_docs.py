@@ -361,25 +361,11 @@ def test_generate_group_reference_markdown_includes_docstring_prose() -> None:
     assert between, "no prose injected for rrt branch"
 
 
-def test_extract_first_h1_and_compute_permalink_helpers() -> None:
+def test_extract_first_h1_helper() -> None:
     docs = _load_generator_module()
 
     assert docs._extract_first_h1("# Title\n\nBody\n") == "Title"
     assert docs._extract_first_h1("No heading here\n") is None
-
-    assert docs._compute_permalink_for_output(Path("docs/index.md")) == "/"
-
-
-def test_compute_permalink_only_swallows_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    docs = _load_generator_module()
-
-    def boom(self: Path, other: object) -> Path:
-        raise RuntimeError("unexpected path error")
-
-    monkeypatch.setattr(Path, "relative_to", boom)
-
-    with pytest.raises(RuntimeError, match="unexpected path error"):
-        docs._compute_permalink_for_output(Path("docs/example.md"))
 
 
 def test_cmd_publish_renders_each_target_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -416,10 +402,6 @@ def test_cmd_publish_renders_each_target_once(monkeypatch: pytest.MonkeyPatch) -
     assert exit_code == 0
     assert [target.render_calls for target in targets] == [1, 1]
     assert len(calls) == 2
-    assert (
-        docs._compute_permalink_for_output(Path("docs/commands/rrt-cli.md")) == "/commands/rrt-cli/"
-    )
-    assert docs._compute_permalink_for_output(Path("README.md")) == ""
 
 
 def test_wrap_with_frontmatter_falls_back_to_h1_or_stem_for_unknown_slug() -> None:

@@ -684,7 +684,7 @@ class TestEmbedSharedBlocksInContent:
         )
         monkeypatch.setattr(
             "repo_release_tools.commands.docs_cmd._expand_platform_vars",
-            lambda content, docs, *, root, target_path: content,
+            lambda content, docs: content,
         )
 
         base = '---\ntitle: "branch"\n---\n\n# branch\n'
@@ -1032,64 +1032,37 @@ class TestPlatformHelpers:
         result = _expand_platform_vars("{platform} - {platform_label}", docs)
         assert "gitlab - GitLab" == result
 
-    def test_expand_platform_vars_svg_badge_uses_target_relative_assets_path(
-        self, tmp_path: Path
+    @pytest.mark.parametrize(
+        "target_rel",
+        ["docs/commands/skill.md", "docs/index.md", "README.md"],
+    )
+    def test_expand_platform_vars_svg_badge_uses_root_absolute_base_url_path(
+        self, tmp_path: Path, target_rel: str
     ) -> None:
+        # Badge asset links are now root-absolute and base_url-prefixed, independent
+        # of where the embedding file lives in the site tree (Astro serves
+        # docs/public/... at the site root — no per-target-location depth math).
         docs = DocsConfig(
             source_repo_url="https://github.com/o/r",
             badge_style="svg",
-            badge_assets_dir="docs/assets/badges",
+            badge_assets_dir="docs/public/assets/badges",
+            base_url="/repo-release-tools",
         )
-        target = tmp_path / "docs" / "commands" / "skill.md"
-        target.parent.mkdir(parents=True)
-        result = _expand_platform_vars(
-            "{platform_badge}",
-            docs,
-            root=tmp_path,
-            target_path=target,
-        )
-        # Jekyll `permalink: pretty` serves skill.md at /commands/skill/ (one level deeper
-        # than the file's parent), so the correct relative path is two levels up.
-        assert "](../../assets/badges/github.svg)" in result
+        target = tmp_path / target_rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        result = _expand_platform_vars("{platform_badge}", docs)
+        assert "](/repo-release-tools/assets/badges/github.svg)" in result
 
-    def test_expand_platform_vars_svg_badge_index_md_uses_direct_parent_path(
+    def test_expand_platform_vars_svg_badge_without_base_url_is_site_root_relative(
         self, tmp_path: Path
     ) -> None:
         docs = DocsConfig(
             source_repo_url="https://github.com/o/r",
             badge_style="svg",
-            badge_assets_dir="docs/assets/badges",
+            badge_assets_dir="docs/public/assets/badges",
         )
-        # index.md is exempt from the Jekyll pretty-permalink depth adjustment
-        target = tmp_path / "docs" / "index.md"
-        target.parent.mkdir(parents=True)
-        result = _expand_platform_vars(
-            "{platform_badge}",
-            docs,
-            root=tmp_path,
-            target_path=target,
-        )
-        # index.md is not subject to Jekyll pretty-permalink depth; badges are a sibling dir
-        assert "](assets/badges/github.svg)" in result
-
-    def test_expand_platform_vars_svg_badge_readme_md_uses_direct_parent_path(
-        self, tmp_path: Path
-    ) -> None:
-        docs = DocsConfig(
-            source_repo_url="https://github.com/o/r",
-            badge_style="svg",
-            badge_assets_dir="docs/assets/badges",
-        )
-        # README.md lives at repo root, outside docs/ — must not receive the Jekyll
-        # virtual-depth adjustment that would incorrectly produce ../docs/assets/...
-        target = tmp_path / "README.md"
-        result = _expand_platform_vars(
-            "{platform_badge}",
-            docs,
-            root=tmp_path,
-            target_path=target,
-        )
-        assert "](docs/assets/badges/github.svg)" in result
+        result = _expand_platform_vars("{platform_badge}", docs)
+        assert "](/assets/badges/github.svg)" in result
 
 
 class TestCmdBadges:

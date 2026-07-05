@@ -529,10 +529,14 @@ class DocsConfig:
     source_ref: str | None = None
     source_url_template: str | None = None
     shared_blocks: tuple[SharedBlock, ...] = ()
+    # Root-absolute site prefix (e.g. an Astro/Starlight `base:` path such as
+    # "/repo-release-tools"). Used to compute root-absolute asset links that
+    # are independent of a given page's location in the site tree.
+    base_url: str = ""
     # Platform badge / source-anchor settings
     platform: str | None = None  # auto-detected from source_repo_url when None
     badge_style: str = "svg"  # "svg" | "shields" | "text"
-    badge_assets_dir: str = "docs/assets/badges"
+    badge_assets_dir: str = "docs/public/assets/badges"
     badge_variant: str = "color"  # "color" | "dark" | "light"
     source_link_badge: bool = False  # prefix per-file source links with a badge
     # suggest settings

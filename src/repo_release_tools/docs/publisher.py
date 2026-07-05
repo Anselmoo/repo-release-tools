@@ -575,7 +575,7 @@ TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
 
 
 # ---------------------------------------------------------------------------
-# Title / permalink helpers for generated pages
+# Title / description helpers for generated pages
 # ---------------------------------------------------------------------------
 
 TITLE_OVERRIDES: dict[str, str] = {
@@ -593,28 +593,46 @@ TITLE_OVERRIDES: dict[str, str] = {
     **{slug: f"rrt {display}" for slug, display, _ in COMMAND_GROUPS_CONFIG},
 }
 
+DESCRIPTION_OVERRIDES: dict[str, str] = {
+    "rrt-cli": (
+        "Generated reference for the full rrt CLI, covering every command group and "
+        "argparse option."
+    ),
+    "branch": (
+        "Conventional branch naming model, allowed branch types, and validation rules "
+        "for rrt branch."
+    ),
+    "git": "Git workflow helpers and shortcuts bundled with rrt git.",
+    "tree": (
+        "Guide to rrt tree output modes, ignore behavior, and traversal controls for "
+        "project structure snapshots."
+    ),
+    "hooks": (
+        "Pre-commit and lefthook setup for incremental or squash-based changelog "
+        "workflows via rrt-hooks."
+    ),
+    "action": (
+        "CI policy gate wrapping rrt-hooks for branch, commit, and changelog checks in "
+        "GitHub Actions."
+    ),
+    "skill": "Bundled uvx and installed-CLI agent skills managed by rrt skill install.",
+    "install": "Installing the rrt CLI and its optional extras with rrt install.",
+    "agent-instructions": (
+        "Reference for hook and Action enforcement points used by agent-driven workflows."
+    ),
+    "doctor": "Configuration health checks and diagnostics performed by rrt doctor.",
+    "eol": "Runtime end-of-life tracking and warnings surfaced by rrt eol.",
+    **{
+        slug: f"Generated command reference for the {display} command group."
+        for slug, display, _ in COMMAND_GROUPS_CONFIG
+    },
+}
+
 
 def _extract_first_h1(text: str) -> str | None:
     """Return the first top-level heading text from *text*, or ``None``."""
     m = re.search(r"(?m)^\s*#\s+(.+)$", text)
     return m[1].strip() if m else None
-
-
-def _compute_permalink_for_output(output_path: Path) -> str:
-    """Compute a reasonable permalink for *output_path* when under `docs/`.
-
-    Examples:
-    - `docs/index.md` -> `/`
-    - `docs/commands/rrt-cli.md` -> `/commands/rrt-cli/`
-    """
-    try:
-        rel = output_path.relative_to("docs")
-    except ValueError:
-        return ""
-    if rel.name == "index.md":
-        return "/"
-    # drop the suffix and produce a posix path with trailing slash
-    return "/" + str(rel.with_suffix("")).replace(os.sep, "/") + "/"
 
 
 def _wrap_with_frontmatter(
@@ -626,8 +644,10 @@ def _wrap_with_frontmatter(
 ) -> Callable[[], str]:
     """Return a render callable that prefixes generated content with YAML frontmatter.
 
-    The frontmatter contains at least a `title:` and, when applicable, a
-    `permalink:` so Jekyll/minima uses a stable label and URL for the page.
+    The frontmatter contains at least a `title:` and, when a description
+    override is registered for *slug*, a `description:` field for Starlight's
+    SEO metadata. Starlight derives the page's route from its file path, so no
+    explicit permalink/URL field is needed.
     """
 
     def _wrapped() -> str:
@@ -646,11 +666,11 @@ def _wrap_with_frontmatter(
         if output_path.suffix.lower() == ".mdx" and output_path.parent.name == "commands":
             content = _ensure_primary_h1(content, title)
 
-        permalink = _compute_permalink_for_output(output_path)
-
         fm_lines = [f'title: "{title}"']
-        if permalink:
-            fm_lines.append(f'permalink: "{permalink}"')
+        description = DESCRIPTION_OVERRIDES.get(slug) if slug else None
+        if description:
+            description = description.replace('"', '\\"')
+            fm_lines.append(f'description: "{description}"')
 
         frontmatter = "---\n" + "\n".join(fm_lines) + "\n---\n\n"
         return frontmatter + content

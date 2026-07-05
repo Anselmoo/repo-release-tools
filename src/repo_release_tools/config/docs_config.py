@@ -149,6 +149,7 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
         source_ref=_load_optional_docs_string(d, "source_ref"),
         source_url_template=_load_optional_docs_string(d, "source_url_template"),
         shared_blocks=_load_shared_blocks(d, root=root),
+        base_url=_load_base_url(d),
         platform=_load_optional_docs_string(d, "platform"),
         badge_style=_load_badge_style(d),
         badge_assets_dir=_load_badge_assets_dir(d),
@@ -255,10 +256,19 @@ def _load_badge_style(d: dict[str, object]) -> str:
 def _load_badge_assets_dir(d: dict[str, object]) -> str:
     raw = d.get("badge_assets_dir")
     if raw is None:
-        return "docs/assets/badges"
+        return "docs/public/assets/badges"
     if not isinstance(raw, str) or not raw.strip():
         raise ValueError("tool.rrt.docs.badge_assets_dir must be a non-empty string")
     return raw.strip()
+
+
+def _load_base_url(d: dict[str, object]) -> str:
+    raw = d.get("base_url")
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError("tool.rrt.docs.base_url must be a string when provided")
+    return raw
 
 
 def _load_source_link_badge(d: dict[str, object]) -> bool:

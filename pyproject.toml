@@ -448,6 +448,8 @@ suggest_roots = ["src/repo_release_tools/commands"]
 suggest_exempt = ["__init__.py", "__main__.py"]
 suggest_min_chars = 2500
 badge_variant = "adaptive"
+# Must exactly match docs/astro.config.mjs's `base:` value.
+base_url = "/repo-release-tools"
 
 # Source-link settings used by docs exporters to build file/line URLs.
 source_repo_url = "https://github.com/Anselmoo/repo-release-tools"

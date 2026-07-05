@@ -83,7 +83,6 @@ rrt docs api --format json                 # machine-readable API index
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -338,57 +337,46 @@ def _effective_source_url_template(docs: DocsConfig, platform: str) -> str:
     return PLATFORM_URL_TEMPLATES.get(platform, PLATFORM_URL_TEMPLATES["generic"])
 
 
-def _badge_assets_dir_for_target(
-    docs: DocsConfig, *, root: Path | None, target_path: Path | None
-) -> str:
-    """Return badge assets path for *target_path*.
+def _badge_assets_dir_for_target(docs: DocsConfig) -> str:
+    """Return the root-absolute badge assets URL path for *docs*.
 
-    For SVG badges we compute a target-relative path so injected markdown links
-    stay valid regardless of target directory depth.
+    Astro serves everything under a project's ``public/`` directory at the
+    site root, so the physical ``docs/public/...`` prefix is stripped and the
+    configured ``base_url`` (e.g. an Astro/Starlight ``base:`` path such as
+    ``/repo-release-tools``) is prepended. The result is a single root-absolute
+    URL path that is valid regardless of which page embeds the badge — unlike
+    the old Jekyll-era approach, no per-target-location depth math is needed.
 
     Args:
-        docs: Docs configuration holding badge style and configured assets dir.
-        root: Repository root used to resolve relative configured assets paths.
-        target_path: Target document path that will receive injected content.
+        docs: Docs configuration holding badge style, configured assets dir,
+            and the site's ``base_url``.
 
     Returns:
-        A POSIX-style path string suitable for markdown image links from
-        ``target_path.parent`` to the badge assets directory.
+        A POSIX-style, root-absolute path string suitable for markdown image
+        links from any page in the site.
     """
-    if docs.badge_style != "svg" or root is None or target_path is None:
+    if docs.badge_style != "svg":
         return docs.badge_assets_dir
 
     assets_path = Path(docs.badge_assets_dir)
-    if not assets_path.is_absolute():
-        assets_path = (root / assets_path).resolve()
-    resolved_target = target_path if target_path.is_absolute() else (root / target_path)
-    # Jekyll `permalink: pretty` serves foo.md at /foo/ (trailing slash = one virtual level
-    # deeper than the file's parent directory). Compute relative paths from that virtual
-    # location so <picture srcset="..."> links resolve correctly in the browser.
-    # Only apply for files inside the docs/ site tree; repo-root files (e.g. README.md)
-    # are not served by Jekyll and must not receive the extra virtual depth.
-    is_in_docs = root is not None and resolved_target.is_relative_to((root / "docs").resolve())
-    if resolved_target.suffix == ".md" and resolved_target.stem != "index" and is_in_docs:
-        effective_parent = (resolved_target.parent / resolved_target.stem).resolve()
-    else:
-        effective_parent = resolved_target.parent.resolve()
-    return Path(os.path.relpath(assets_path, start=effective_parent)).as_posix()
+    public_prefix = Path("docs/public")
+    try:
+        served_path = assets_path.relative_to(public_prefix)
+    except ValueError:
+        served_path = assets_path
+
+    base_url = docs.base_url.rstrip("/")
+    return f"{base_url}/{served_path.as_posix()}"
 
 
-def _expand_platform_vars(
-    content: str,
-    docs: DocsConfig,
-    *,
-    root: Path | None = None,
-    target_path: Path | None = None,
-) -> str:
+def _expand_platform_vars(content: str, docs: DocsConfig) -> str:
     """Expand {platform}, {platform_label}, {platform_badge}, {platform_badge_inline}."""
     from repo_release_tools.tools.platform import get_display_label  # noqa: PLC0415
 
     platform = _effective_platform(docs)
     label = get_display_label(platform)
     repo_url = docs.source_repo_url or ""
-    badge_assets_dir = _badge_assets_dir_for_target(docs, root=root, target_path=target_path)
+    badge_assets_dir = _badge_assets_dir_for_target(docs)
 
     if "{platform_badge}" in content or "{platform_badge_inline}" in content:
         badge_linked = render_badge(
@@ -490,12 +478,7 @@ def _cmd_inject(args: argparse.Namespace) -> int:
             for target_path in matched:
                 rendered_content = content
                 if cfg.docs:
-                    rendered_content = _expand_platform_vars(
-                        rendered_content,
-                        cfg.docs,
-                        root=root,
-                        target_path=target_path,
-                    )
+                    rendered_content = _expand_platform_vars(rendered_content, cfg.docs)
                 if add_anchors:
                     _prepend_anchor_if_missing(
                         target_path,
@@ -554,9 +537,7 @@ def _embed_shared_blocks_in_content(
         block_content = block.content.rstrip("\n")
         block_content = block_content.replace("{version}", rrt_version)
         block_content = block_content.replace("{repo_url}", repo_url)
-        block_content = _expand_platform_vars(
-            block_content, cfg.docs, root=root, target_path=abs_target
-        )
+        block_content = _expand_platform_vars(block_content, cfg.docs)
 
         content = insert_anchor_stub_str(
             content,
@@ -644,7 +625,7 @@ def _prepend_anchor_if_missing(
 
 
 def _cmd_badges(args: argparse.Namespace) -> int:
-    """Generate platform SVG badge files into docs/assets/badges/."""
+    """Generate platform SVG badge files into docs/public/assets/badges/."""
     verbose: int = getattr(args, "verbose", 0) or 0
     from repo_release_tools.tools.platform import KNOWN_LABEL_KEYS, get_badge_svg  # noqa: PLC0415
 
@@ -1085,7 +1066,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     # ── badges ────────────────────────────────────────────────────────────
     bdg_p = sub.add_parser(
         "badges",
-        help="Generate platform SVG badge files into docs/assets/badges/.",
+        help="Generate platform SVG badge files into docs/public/assets/badges/.",
     )
     bdg_p.add_argument(
         "--platform",
