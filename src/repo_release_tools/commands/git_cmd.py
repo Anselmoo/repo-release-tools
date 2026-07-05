@@ -87,6 +87,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._git_shared import (
+    STATUS_MAX,
+    add_dry_run_flag,
+    conflict_status_lines,
+    load_status_lines,
+    summarize_status,
+)
 from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_description
 from repo_release_tools.config import load_extra_branch_types
 from repo_release_tools.ui import (
@@ -112,7 +119,6 @@ DEFAULT_REBOOTSTRAP_MESSAGE = "chore: initial commit"
 MOVE_STASH_MESSAGE = "rrt git move auto-stash"
 SYNC_STASH_MESSAGE = "rrt git sync auto-stash"
 _HUNK_HEADER_RE = re.compile(r"^@@ -(?P<old>\d+)(?:,\d+)? \+(?P<new>\d+)(?:,\d+)? @@")
-STATUS_MAX = 15
 
 
 @dataclass(frozen=True)
@@ -186,44 +192,6 @@ def backup_path_for_git_dir(root: Path) -> Path:
 def require_explicit_confirmation(args: argparse.Namespace) -> bool:
     """Return whether the destructive rebootstrap command is confirmed."""
     return bool(args.yes_i_know_this_destroys_history)
-
-
-def conflict_status_lines(status_lines: list[str]) -> list[str]:
-    """Return unresolved-conflict entries from porcelain status lines."""
-    return [line for line in status_lines if git.classify_status_line(line)[0] == "conflict"]
-
-
-def summarize_status(branch_name: str, status_lines: list[str], *, upstream: str | None) -> str:
-    """Render a compact one-line branch status summary."""
-    modified = 0
-    untracked = 0
-    for line in status_lines:
-        kind, _ = git.classify_status_line(line)
-        if kind == "untracked":
-            untracked += 1
-        else:
-            modified += 1
-
-    ahead = 0
-    behind = 0
-    if upstream is not None:
-        ahead, behind = git.ahead_behind(Path.cwd(), upstream)
-
-    return GLYPHS.git.status_line(
-        branch_name,
-        ahead=ahead,
-        behind=behind,
-        modified=modified,
-        untracked=untracked,
-    )
-
-
-def load_status_lines(root: Path) -> list[str]:
-    """Load status lines or raise a user-facing runtime error."""
-    try:
-        return git.status_porcelain(root)
-    except RuntimeError as exc:
-        raise RuntimeError(str(exc)) from exc
 
 
 def describe_sync_relation(*, ahead: int, behind: int, base_ref: str | None) -> str:
@@ -1136,11 +1104,6 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
     p.blank_line()
     return 0
-
-
-def add_dry_run_flag(parser: argparse.ArgumentParser) -> None:
-    """Register a shared dry-run flag."""
-    parser.add_argument("--dry-run", action="store_true", help="Preview without changing git.")
 
 
 def add_commit_arguments(parser: argparse.ArgumentParser) -> None:
