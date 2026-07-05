@@ -83,7 +83,6 @@ import argparse
 import datetime as dt
 import shutil
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._git_shared import (
@@ -93,7 +92,7 @@ from repo_release_tools.commands._git_shared import (
     load_status_lines,
     summarize_status,
 )
-from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_description
+from repo_release_tools.commands.git_commit import register_commit
 from repo_release_tools.commands.git_inspect import register_inspect
 from repo_release_tools.ui import (
     DryRunPrinter,
@@ -101,79 +100,11 @@ from repo_release_tools.ui import (
     spinner_lines,
 )
 from repo_release_tools.workflow import git
-from repo_release_tools.workflow.hooks import (
-    ALLOWED_BRANCH_NAMES,
-    BOT_BRANCH_TYPES,
-    MAGIC_BRANCH_TYPES,
-)
 
-COMMIT_TYPES = (*CONVENTIONAL_TYPES, "deps")
 DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE = "chore: bootstrap repository"
 DEFAULT_REBOOTSTRAP_MESSAGE = "chore: initial commit"
 MOVE_STASH_MESSAGE = "rrt git move auto-stash"
 SYNC_STASH_MESSAGE = "rrt git sync auto-stash"
-
-
-@dataclass(frozen=True)
-class CommitSubject:
-    """A conventional commit subject assembled from CLI input."""
-
-    type: str
-    description: str
-    scope: str | None = None
-    breaking: bool = False
-
-    def render(self) -> str:
-        """Return the conventional commit subject."""
-        scope_part = f"({self.scope})" if self.scope else ""
-        breaking_part = "!" if self.breaking else ""
-        return f"{self.type}{scope_part}{breaking_part}: {self.description}"
-
-
-def normalize_commit_subject_type(value: str) -> str:
-    """Validate a commit type accepted by commit helpers."""
-    normalized = value.lower()
-    if normalized not in COMMIT_TYPES:
-        allowed = ", ".join(COMMIT_TYPES)
-        raise argparse.ArgumentTypeError(
-            f"invalid commit type: {value!r} (choose one of: {allowed})",
-        )
-    return normalized
-
-
-def infer_commit_type(branch_name: str) -> str | None:
-    """Infer a conventional commit type from the current branch name."""
-    if (
-        not branch_name
-        or branch_name in ALLOWED_BRANCH_NAMES
-        or branch_name.startswith("release/v")
-        or "/" not in branch_name
-    ):
-        return None
-
-    type_part, _ = branch_name.split("/", 1)
-    if type_part in MAGIC_BRANCH_TYPES or type_part in BOT_BRANCH_TYPES:
-        return None
-    return type_part if type_part in CONVENTIONAL_TYPES else None
-
-
-def resolve_commit_subject(args: argparse.Namespace, root: Path) -> tuple[str, str]:
-    """Resolve the current branch and conventional commit subject."""
-    branch_name = git.current_branch(root)
-    commit_type = args.type or infer_commit_type(branch_name)
-    if commit_type is None:
-        raise ValueError(
-            "Could not infer a conventional commit type from the current branch. "
-            "Use --type explicitly.",
-        )
-
-    subject = CommitSubject(
-        type=commit_type,
-        description=join_description(args.description),
-        scope=args.scope,
-        breaking=args.breaking,
-    ).render()
-    return branch_name or "<detached>", subject
 
 
 def backup_path_for_git_dir(root: Path) -> Path:
@@ -185,44 +116,6 @@ def backup_path_for_git_dir(root: Path) -> Path:
 def require_explicit_confirmation(args: argparse.Namespace) -> bool:
     """Return whether the destructive rebootstrap command is confirmed."""
     return bool(args.yes_i_know_this_destroys_history)
-
-
-def run_commit(args: argparse.Namespace, *, stage_all: bool) -> int:
-    """Create a conventional commit, optionally staging all files first."""
-    root = Path.cwd()
-    try:
-        branch_name, subject = resolve_commit_subject(args, root)
-    except ValueError as exc:
-        p = VerbosePrinter()
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-
-    p = DryRunPrinter(args.dry_run)
-    p.blank_line()
-    p.header(
-        "Commit",
-        Branch=branch_name,
-        Mode="stage all" if stage_all else "commit only",
-        Subject=subject,
-    )
-    p.section("Git")
-    if stage_all:
-        git.run(["git", "add", "."], root, dry_run=args.dry_run, label="git add")
-    git.run(["git", "commit", "-m", subject], root, dry_run=args.dry_run, label="git commit")
-
-    p.blank_line()
-    p.footer(f"Done. Created commit: {subject!r}")
-    return 0
-
-
-def cmd_commit(args: argparse.Namespace) -> int:
-    """Create a conventional commit from the current branch context."""
-    return run_commit(args, stage_all=False)
-
-
-def cmd_commit_all(args: argparse.Namespace) -> int:
-    """Stage all tracked and untracked files, then create a conventional commit."""
-    return run_commit(args, stage_all=True)
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
@@ -364,83 +257,6 @@ def cmd_move(args: argparse.Namespace) -> int:
 
     p.blank_line()
     p.footer(f"Done. Switched to {args.target!r}.")
-    return 0
-
-
-def cmd_squash_local(args: argparse.Namespace) -> int:
-    """Squash local commits since a base ref into one conventional commit."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    root = Path.cwd()
-    if not args.dry_run and not git.working_tree_clean(root):
-        p = VerbosePrinter(verbose=verbose)
-        p.line(
-            "Working tree has uncommitted changes. Commit or stash them first.",
-            ok=False,
-            stream=sys.stderr,
-        )
-        return 1
-
-    base_ref = args.base_ref or git.upstream_branch(root)
-    if base_ref is None:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(
-            "No upstream branch is configured and no --base-ref was provided.",
-            ok=False,
-            stream=sys.stderr,
-        )
-        return 1
-
-    try:
-        branch_name, subject = resolve_commit_subject(args, root)
-    except ValueError as exc:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-
-    commits = git.commits_ahead(root, base_ref)
-    if not commits:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(
-            f"No commits found ahead of {base_ref!r}. Nothing to squash.",
-            ok=False,
-            stream=sys.stderr,
-        )
-        return 1
-
-    squash_base = git.merge_base(root, base_ref)
-    if squash_base is None:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(
-            f"Could not determine merge-base for {base_ref!r} and HEAD.",
-            ok=False,
-            stream=sys.stderr,
-        )
-        return 1
-
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
-    p.blank_line()
-    p.header(
-        "Squash local",
-        Branch=branch_name,
-        Base=base_ref,
-        Commits=str(len(commits)),
-        Subject=subject,
-    )
-    p.section("Commits to squash")
-    for line in commits:
-        p.list_item(line)
-
-    p.section("Squashing")
-    git.run(
-        ["git", "reset", "--soft", squash_base],
-        root,
-        dry_run=args.dry_run,
-        label="git reset --soft",
-    )
-    git.run(["git", "commit", "-m", subject], root, dry_run=args.dry_run, label="git commit")
-
-    p.blank_line()
-    p.footer(f"Done. Squashed {len(commits)} commit(s) into {subject!r}.")
     return 0
 
 
@@ -625,22 +441,6 @@ def cmd_purge_cache(args: argparse.Namespace) -> int:
     return 0
 
 
-def add_commit_arguments(parser: argparse.ArgumentParser) -> None:
-    """Register shared commit drafting arguments."""
-    parser.add_argument("description", nargs="+", help="Commit description words.")
-    parser.add_argument(
-        "--type",
-        dest="type",
-        default=None,
-        type=normalize_commit_subject_type,
-        metavar="TYPE",
-        help="Explicit conventional commit type. Defaults to the current branch type.",
-    )
-    parser.add_argument("--scope", default=None, metavar="SCOPE", help="Optional commit scope.")
-    parser.add_argument("--breaking", action="store_true", help="Mark the commit as breaking.")
-    add_dry_run_flag(parser)
-
-
 GIT_EPILOG = (
     "  $ rrt git status\n"
     "  $ rrt git diff --against HEAD~1\n"
@@ -649,25 +449,9 @@ GIT_EPILOG = (
     "  $ rrt git undo-safe"
 )
 
-GIT_COMMIT_EXAMPLES = (
-    '  $ rrt git commit "refresh help examples"\n'
-    '  $ rrt git commit --type fix --scope cli "handle empty config"\n'
-    '  $ rrt git commit --breaking "ship parser v2"'
-)
-
-GIT_COMMIT_ALL_EXAMPLES = (
-    '  $ rrt git commit-all "refresh release metadata"\n'
-    '  $ rrt git commit-all --type chore --scope deps "update lockfiles"'
-)
-
 GIT_SYNC_EXAMPLES = "  $ rrt git sync\n  $ rrt git sync --merge\n  $ rrt git sync --dry-run"
 
 GIT_MOVE_EXAMPLES = "  $ rrt git move release/v1.2.0\n  $ rrt git move -b feat/help-copy --dry-run"
-
-GIT_SQUASH_LOCAL_EXAMPLES = (
-    '  $ rrt git squash-local "ship parser"\n'
-    '  $ rrt git squash-local --base-ref origin/main --type fix "repair sync handling"'
-)
 
 GIT_UNDO_SAFE_EXAMPLES = (
     "  $ rrt git undo-safe\n"
@@ -700,24 +484,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
 
     register_inspect(git_sub)
-
-    commit_parser = git_sub.add_parser(
-        "commit",
-        help="Create a conventional commit, inferring type from the current branch.",
-        description="Create one conventional commit from the provided description, inferring the type from the current branch when possible.",
-        epilog=GIT_COMMIT_EXAMPLES,
-    )
-    add_commit_arguments(commit_parser)
-    commit_parser.set_defaults(handler=cmd_commit)
-
-    commit_all_parser = git_sub.add_parser(
-        "commit-all",
-        help="Stage all files and create a conventional commit from the branch context.",
-        description="Stage all tracked and untracked changes, then create one conventional commit from the current branch context.",
-        epilog=GIT_COMMIT_ALL_EXAMPLES,
-    )
-    add_commit_arguments(commit_all_parser)
-    commit_all_parser.set_defaults(handler=cmd_commit_all)
+    register_commit(git_sub)
 
     sync_parser = git_sub.add_parser(
         "sync",
@@ -748,21 +515,6 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     add_dry_run_flag(move_parser)
     move_parser.set_defaults(handler=cmd_move)
-
-    squash_parser = git_sub.add_parser(
-        "squash-local",
-        help="Squash local commits since upstream or a base ref into one commit.",
-        description="Squash commits ahead of the upstream branch or --base-ref into one conventional commit.",
-        epilog=GIT_SQUASH_LOCAL_EXAMPLES,
-    )
-    add_commit_arguments(squash_parser)
-    squash_parser.add_argument(
-        "--base-ref",
-        default=None,
-        metavar="REF",
-        help="Base ref to squash against. Defaults to the current upstream branch.",
-    )
-    squash_parser.set_defaults(handler=cmd_squash_local)
 
     undo_parser = git_sub.add_parser(
         "undo-safe",

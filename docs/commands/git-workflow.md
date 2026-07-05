@@ -31,9 +31,9 @@ permalink: "/commands/git-workflow/"
   - [`rrt git check-dirty-tree`](#rrt-git-check-dirty-tree)
   - [`rrt git commit`](#rrt-git-commit)
   - [`rrt git commit-all`](#rrt-git-commit-all)
+  - [`rrt git squash-local`](#rrt-git-squash-local)
   - [`rrt git sync`](#rrt-git-sync)
   - [`rrt git move`](#rrt-git-move)
-  - [`rrt git squash-local`](#rrt-git-squash-local)
   - [`rrt git undo-safe`](#rrt-git-undo-safe)
   - [`rrt git rebootstrap`](#rrt-git-rebootstrap)
   - [`rrt git purge-cache`](#rrt-git-purge-cache)
@@ -301,9 +301,9 @@ Arguments
   check-dirty-tree  Exit non-zero when the working tree is dirty. Useful in hooks and CI.
   commit            Create a conventional commit, inferring type from the current branch.
   commit-all        Stage all files and create a conventional commit from the branch context.
+  squash-local      Squash local commits since upstream or a base ref into one commit.
   sync              Fetch, stash if needed, and pull the current branch safely.
   move              Switch branches safely by stashing and restoring local changes.
-  squash-local      Squash local commits since upstream or a base ref into one commit.
   undo-safe         Undo a commit while keeping work staged or in the working tree.
   rebootstrap       Destroy current git history and create a fresh repository history.
   purge-cache       Expire reflogs and run git garbage collection.
@@ -522,6 +522,35 @@ Examples
   $ rrt git commit-all --type chore --scope deps "update lockfiles"
 ```
 
+### `rrt git squash-local`
+
+```text
+Usage:  rrt git squash-local [OPTIONS] <description>
+
+Squash commits ahead of the upstream branch or --base-ref into one conventional commit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <description>   Commit description words.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help      Show this message and exit.
+  --type TYPE     Explicit conventional commit type. Defaults to the current branch type.
+  --scope SCOPE   Optional commit scope.
+  --breaking      Mark the commit as breaking.
+  --dry-run       Preview without changing git.
+  --base-ref REF  Base ref to squash against. Defaults to the current upstream branch.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git squash-local "ship parser"
+  $ rrt git squash-local --base-ref origin/main --type fix "repair sync handling"
+```
+
 ### `rrt git sync`
 
 ```text
@@ -572,35 +601,6 @@ Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt git move release/v1.2.0
   $ rrt git move -b feat/help-copy --dry-run
-```
-
-### `rrt git squash-local`
-
-```text
-Usage:  rrt git squash-local [OPTIONS] <description>
-
-Squash commits ahead of the upstream branch or --base-ref into one conventional commit.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  <description>   Commit description words.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help      Show this message and exit.
-  --type TYPE     Explicit conventional commit type. Defaults to the current branch type.
-  --scope SCOPE   Optional commit scope.
-  --breaking      Mark the commit as breaking.
-  --dry-run       Preview without changing git.
-  --base-ref REF  Base ref to squash against. Defaults to the current upstream branch.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt git squash-local "ship parser"
-  $ rrt git squash-local --base-ref origin/main --type fix "repair sync handling"
 ```
 
 ### `rrt git undo-safe`
