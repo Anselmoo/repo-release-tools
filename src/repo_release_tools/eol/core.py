@@ -2,7 +2,7 @@
 
 Supports Python, Go, Node.js, and Rust. Bundled data provides offline
 operation; pass ``fetch_live=True`` to pull fresh data from
-https://endoflife.date/api/v1/products/<slug>/.
+``https://endoflife.date/api/v1/products/<slug>/``.
 
 Rust uses a rolling-release model — only the latest stable is supported.
 The meaningful check for Rust is how many releases behind the host/project

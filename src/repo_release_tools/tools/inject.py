@@ -1,4 +1,4 @@
-"""Anchor-based block replacement and doc-write helpers for Markdown and RST files.
+"""Anchor-based block replacement and doc-write helpers for Markdown, MDX, and RST files.
 
 Anchor markers surround a block of generated content inside a larger document.
 
@@ -7,6 +7,13 @@ For Markdown (``.md`` files), markers are invisible HTML comments::
     <!-- rrt:auto:start:my-anchor -->
     ...generated content replaced on every run...
     <!-- rrt:auto:end:my-anchor -->
+
+For MDX (``.mdx`` files), markers use JSX comment syntax instead, since MDX's
+JSX-aware parser cannot parse raw HTML comments::
+
+    {/* rrt:auto:start:my-anchor */}
+    ...generated content replaced on every run...
+    {/* rrt:auto:end:my-anchor */}
 
 For reStructuredText (``.rst`` / ``.txt`` files), markers use RST comment syntax::
 
@@ -29,7 +36,7 @@ combination of ASCII letters, digits, dots, underscores, or hyphens.
 ## Format detection
 
 The format is inferred automatically from the file extension:
-``rst`` and ``txt`` → RST; everything else → Markdown.
+``rst`` and ``txt`` → RST; ``mdx`` → MDX; everything else → Markdown.
 """
 
 from __future__ import annotations
@@ -42,14 +49,21 @@ ANCHOR_START_TOKEN: str = "rrt:auto:start:"
 ANCHOR_END_TOKEN: str = "rrt:auto:end:"
 RST_ANCHOR_START_TOKEN: str = ".. rrt:auto:start:"
 RST_ANCHOR_END_TOKEN: str = ".. rrt:auto:end:"
+MDX_ANCHOR_START_TOKEN: str = "rrt:auto:start:"
+MDX_ANCHOR_END_TOKEN: str = "rrt:auto:end:"
 _ANCHOR_ID_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _RST_EXTENSIONS: frozenset[str] = frozenset({".rst", ".txt"})
+_MDX_EXTENSIONS: frozenset[str] = frozenset({".mdx"})
 
 
 def _detect_inject_format(path: Path | str) -> str:
-    """Return ``'rst'`` for ``.rst``/``.txt`` files, ``'md'`` otherwise."""
+    """Return ``'rst'`` for ``.rst``/``.txt``, ``'mdx'`` for ``.mdx``, ``'md'`` otherwise."""
     suffix = Path(path).suffix.lower()
-    return "rst" if suffix in _RST_EXTENSIONS else "md"
+    if suffix in _RST_EXTENSIONS:
+        return "rst"
+    if suffix in _MDX_EXTENSIONS:
+        return "mdx"
+    return "md"
 
 
 def _anchor_comment_pattern(token: str, anchor_id: str) -> re.Pattern[str]:
@@ -62,6 +76,12 @@ def _anchor_rst_pattern(token: str, anchor_id: str) -> re.Pattern[str]:
     """Return a strict RST comment marker matcher for ``.. <token><anchor_id>``."""
     marker = re.escape(f"{token}{anchor_id}")
     return re.compile(rf"^\s*{marker}\s*$")
+
+
+def _anchor_mdx_pattern(token: str, anchor_id: str) -> re.Pattern[str]:
+    """Return a strict marker matcher for ``{/* <token><anchor_id> */}``."""
+    marker = re.escape(f"{token}{anchor_id}")
+    return re.compile(rf"^\s*\{{/\*\s*{marker}\s*\*/\}}\s*$")
 
 
 class SupportsWrite(Protocol):
@@ -84,6 +104,12 @@ def insert_anchor_stub_str(
     Mirrors the placement logic of :func:`ensure_anchor_stub` but operates on a
     string rather than a file path, making it suitable for in-memory content
     generation.
+
+    Note: this helper (and :func:`ensure_anchor_stub`) hardcodes the Markdown
+    HTML-comment anchor form and is not format-aware (it doesn't handle RST or
+    MDX today). Its current call sites never target ``.mdx`` files, so this is
+    a pre-existing, deferred gap rather than a regression — add an ``mdx``
+    branch here too whenever a call site starts targeting the ``.mdx`` tree.
     """
     if position not in {"prepend", "append"}:
         raise ValueError(f"Unsupported anchor position: {position!r}")
@@ -163,7 +189,7 @@ def replace_anchored_block(
         content: New content to place between the markers. Trailing newline is
             normalised automatically.
         fmt: ``'md'`` for Markdown HTML-comment anchors (default), ``'rst'`` for
-            reStructuredText comment anchors.
+            reStructuredText comment anchors, ``'mdx'`` for MDX JSX-comment anchors.
 
     Returns:
         Updated file text with the block replaced, or ``None`` when the start
@@ -182,6 +208,10 @@ def replace_anchored_block(
         start_re = _anchor_rst_pattern(RST_ANCHOR_START_TOKEN, anchor_id)
         end_re = _anchor_rst_pattern(RST_ANCHOR_END_TOKEN, anchor_id)
         end_token_display = f"{RST_ANCHOR_END_TOKEN}{anchor_id}"
+    elif fmt == "mdx":
+        start_re = _anchor_mdx_pattern(MDX_ANCHOR_START_TOKEN, anchor_id)
+        end_re = _anchor_mdx_pattern(MDX_ANCHOR_END_TOKEN, anchor_id)
+        end_token_display = f"{{/* {MDX_ANCHOR_END_TOKEN}{anchor_id} */}}"
     else:
         start_re = _anchor_comment_pattern(ANCHOR_START_TOKEN, anchor_id)
         end_re = _anchor_comment_pattern(ANCHOR_END_TOKEN, anchor_id)
@@ -251,6 +281,9 @@ def apply_generated_docs(
         if inject_fmt == "rst":
             start_token_display = f"{RST_ANCHOR_START_TOKEN}{anchor_id}"
             end_token_display = f"{RST_ANCHOR_END_TOKEN}{anchor_id}"
+        elif inject_fmt == "mdx":
+            start_token_display = f"{{/* {MDX_ANCHOR_START_TOKEN}{anchor_id} */}}"
+            end_token_display = f"{{/* {MDX_ANCHOR_END_TOKEN}{anchor_id} */}}"
         else:
             start_token_display = f"{ANCHOR_START_TOKEN}{anchor_id}"
             end_token_display = f"{ANCHOR_END_TOKEN}{anchor_id}"
