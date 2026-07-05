@@ -1146,11 +1146,13 @@ def _load_publish_targets(raw_targets: object) -> dict[str, PublishTarget]:
         remote = typed_entry.get("remote", "")
         if not isinstance(remote, str) or not remote:
             raise ValueError(f"publish_targets.{name} must have a non-empty 'remote'")
-        target = PublishTarget(
-            remote=remote,
-            branch=cast("str", typed_entry.get("branch", "main")),
-            message=cast("str", typed_entry.get("message", "Initial commit")),
-        )
+        branch = typed_entry.get("branch", "main")
+        if not isinstance(branch, str) or not branch:
+            raise ValueError(f"publish_targets.{name} must have a non-empty 'branch'")
+        message = typed_entry.get("message", "Initial commit")
+        if not isinstance(message, str) or not message:
+            raise ValueError(f"publish_targets.{name} must have a non-empty 'message'")
+        target = PublishTarget(remote=remote, branch=branch, message=message)
         target.validate()
         targets[name] = target
     return targets

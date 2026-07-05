@@ -779,6 +779,87 @@ def test_publish_snapshot_cleans_up_on_push_failure(
     ]
 
 
+def test_publish_snapshot_cleanup_failure_does_not_mask_original_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A failed cleanup step must warn, not replace the original exception."""
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+
+    def _fake_run(cmd: list[str], cwd: pathlib.Path, *, dry_run: bool, label: str) -> str:
+        if cmd[:2] == ["git", "checkout"] and "--orphan" not in cmd:
+            raise RuntimeError("checkout failed (exit 128): could not restore branch")
+        if cmd[:2] == ["git", "branch"]:
+            raise RuntimeError("branch failed (exit 1): branch not found")
+        if cmd[:2] == ["git", "push"]:
+            raise RuntimeError("push failed (exit 1): remote rejected")
+        return ""
+
+    monkeypatch.setattr(git_sync.git, "run", _fake_run)
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=True,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="push failed"):
+        git_sync.cmd_publish_snapshot(args)
+    out = capsys.readouterr().out
+    assert "Cleanup: failed to restore branch" in out
+    assert "Cleanup: failed to delete temp branch" in out
+
+
+def test_publish_snapshot_cleanup_failure_after_success_returns_ok(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A published snapshot is still reported as success even if cleanup fails."""
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+
+    def _fake_run(cmd: list[str], cwd: pathlib.Path, *, dry_run: bool, label: str) -> str:
+        if cmd[:2] == ["git", "checkout"] and "--orphan" not in cmd:
+            raise RuntimeError("checkout failed (exit 128): could not restore branch")
+        if cmd[:2] == ["git", "branch"]:
+            raise RuntimeError("branch failed (exit 1): branch not found")
+        return ""
+
+    monkeypatch.setattr(git_sync.git, "run", _fake_run)
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=True,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 0
+    out = capsys.readouterr().out
+    assert "Cleanup: failed to restore branch" in out
+    assert "Cleanup: failed to delete temp branch" in out
+
+
 def test_publish_snapshot_resolves_named_config_target(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

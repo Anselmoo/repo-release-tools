@@ -3595,6 +3595,20 @@ def test_load_publish_targets_empty_branch() -> None:
         _load_publish_targets({"demo": {"remote": "public", "branch": ""}})
 
 
+def test_load_publish_targets_non_string_branch() -> None:
+    from repo_release_tools.config.core import _load_publish_targets
+
+    with pytest.raises(ValueError, match="publish_targets.demo must have a non-empty 'branch'"):
+        _load_publish_targets({"demo": {"remote": "public", "branch": 123}})
+
+
+def test_load_publish_targets_non_string_message() -> None:
+    from repo_release_tools.config.core import _load_publish_targets
+
+    with pytest.raises(ValueError, match="publish_targets.demo must have a non-empty 'message'"):
+        _load_publish_targets({"demo": {"remote": "public", "message": 123}})
+
+
 def test_publish_target_config_roundtrip(tmp_path: Path) -> None:
     cfg_file = tmp_path / "pyproject.toml"
     cfg_file.write_text(

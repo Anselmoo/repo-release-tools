@@ -694,7 +694,7 @@ Examples
 ```text
 Usage:  rrt git publish-snapshot [OPTIONS] <target>
 
-Create an orphan branch from tracked content, commit it once, and force-push it to a secondary remote. Refuses to run if --remote resolves to the same URL as origin, and requires --yes-i-know-this-overwrites-remote-history to do anything beyond a preview.
+Create an orphan branch from tracked content, commit it once, and force-push it to a secondary remote. Refuses to run if --remote resolves to the same URL as origin, and requires --yes-i-know-this-overwrites-remote-history to do anything beyond a preview. Safety notes: force-pushing does not immediately purge old objects on the remote host — they can remain fetchable by direct SHA until the host runs garbage collection. If secrets were ever committed, run git filter-repo or the BFG Repo-Cleaner first; this command only controls what is visible going forward. Clones or forks made before the force-push retain the old history locally, which is outside this tool's control.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments

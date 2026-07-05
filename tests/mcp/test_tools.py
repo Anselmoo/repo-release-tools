@@ -861,3 +861,86 @@ def test_rrt_publish_snapshot_apply_push_fails(
     assert "rejected" in result.error
     assert any(cmd[:2] == ["git", "checkout"] for cmd in cleanup_calls)
     assert any(cmd[:3] == ["git", "branch", "-D"] for cmd in cleanup_calls)
+
+
+def test_rrt_publish_snapshot_cleanup_failure_does_not_mask_push_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed cleanup step must warn, not replace the original push error."""
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(publish_tools.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        publish_tools.git, "unique_snapshot_branch_name", lambda root: "snapshot-tmp"
+    )
+
+    def _fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        if cmd[:2] == ["git", "push"]:
+            raise RuntimeError("git push --force failed (exit 1): rejected")
+        if cmd[:2] == ["git", "checkout"] and "--orphan" not in cmd:
+            raise RuntimeError("checkout failed (exit 128): could not restore branch")
+        if cmd[:2] == ["git", "branch"]:
+            raise RuntimeError("branch failed (exit 1): branch not found")
+        return ""
+
+    monkeypatch.setattr(publish_tools.git, "run", _fake_run)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=False
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is False
+    assert result.error is not None
+    assert "rejected" in result.error
+    warned = [call.args[0] for call in ctx.warning.call_args_list]
+    assert any("failed to restore branch" in message for message in warned)
+    assert any("failed to delete temp branch" in message for message in warned)
+
+
+def test_rrt_publish_snapshot_cleanup_failure_after_success_still_published(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A published snapshot is still reported as success even if cleanup fails."""
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(publish_tools.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        publish_tools.git, "unique_snapshot_branch_name", lambda root: "snapshot-tmp"
+    )
+
+    def _fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        if cmd[:2] == ["git", "checkout"] and "--orphan" not in cmd:
+            raise RuntimeError("checkout failed (exit 128): could not restore branch")
+        if cmd[:2] == ["git", "branch"]:
+            raise RuntimeError("branch failed (exit 1): branch not found")
+        return ""
+
+    monkeypatch.setattr(publish_tools.git, "run", _fake_run)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=False
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is True
+    assert result.error is None
+    warned = [call.args[0] for call in ctx.warning.call_args_list]
+    assert any("failed to restore branch" in message for message in warned)
+    assert any("failed to delete temp branch" in message for message in warned)

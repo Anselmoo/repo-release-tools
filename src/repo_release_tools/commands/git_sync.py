@@ -11,7 +11,12 @@
 - `publish-snapshot` force-pushes a single-commit snapshot of tracked content to a
   secondary remote. It refuses to run when `--remote` resolves to the same URL as
   `origin`, and requires `--yes-i-know-this-overwrites-remote-history` to do
-  anything beyond a preview.
+  anything beyond a preview. Force-pushing does not immediately purge the old
+  objects on the remote host — they can remain fetchable by direct SHA until the
+  host runs garbage collection. If secrets were ever committed, run
+  `git filter-repo` or the BFG Repo-Cleaner first; this command only controls
+  what is visible going forward. Clones or forks made before the force-push
+  retain the old history locally, which is outside this tool's control.
 """
 
 from __future__ import annotations
@@ -463,11 +468,24 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
             label="git push --force",
         )
     finally:
-        git.run(["git", "checkout", original_branch], root, dry_run=dry_run, label="git checkout")
-        git.run(["git", "branch", "-D", tmp_branch], root, dry_run=dry_run, label="git branch -D")
+        try:
+            git.run(
+                ["git", "checkout", original_branch], root, dry_run=dry_run, label="git checkout"
+            )
+        except RuntimeError as exc:
+            p.warn(f"Cleanup: failed to restore branch {original_branch!r}: {exc}")
+        try:
+            git.run(
+                ["git", "branch", "-D", tmp_branch], root, dry_run=dry_run, label="git branch -D"
+            )
+        except RuntimeError as exc:
+            p.warn(f"Cleanup: failed to delete temp branch {tmp_branch!r}: {exc}")
 
     p.blank_line()
-    p.footer(f"Done. Pushed a single-commit snapshot to {remote}:{branch}.")
+    if dry_run:
+        p.footer(f"Done. Preview complete — nothing was pushed to {remote}:{branch}.")
+    else:
+        p.footer(f"Done. Pushed a single-commit snapshot to {remote}:{branch}.")
     return 0
 
 
@@ -610,7 +628,12 @@ def register_sync(git_sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
             "Create an orphan branch from tracked content, commit it once, and force-push "
             "it to a secondary remote. Refuses to run if --remote resolves to the same URL "
             "as origin, and requires --yes-i-know-this-overwrites-remote-history to do "
-            "anything beyond a preview."
+            "anything beyond a preview. Safety notes: force-pushing does not immediately "
+            "purge old objects on the remote host — they can remain fetchable by direct SHA "
+            "until the host runs garbage collection. If secrets were ever committed, run "
+            "git filter-repo or the BFG Repo-Cleaner first; this command only controls what "
+            "is visible going forward. Clones or forks made before the force-push retain the "
+            "old history locally, which is outside this tool's control."
         ),
         epilog=GIT_PUBLISH_SNAPSHOT_EXAMPLES,
     )

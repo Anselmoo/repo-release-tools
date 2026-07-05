@@ -96,7 +96,17 @@ def register(mcp: FastMCP) -> None:
                 remote=remote, branch=branch, published=False, dry_run=False, error=str(exc)
             )
         finally:
-            git.run(["git", "checkout", original_branch], root, dry_run=False, label="git checkout")
-            git.run(["git", "branch", "-D", tmp_branch], root, dry_run=False, label="git branch -D")
+            try:
+                git.run(
+                    ["git", "checkout", original_branch], root, dry_run=False, label="git checkout"
+                )
+            except RuntimeError as exc:
+                await ctx.warning(f"Cleanup: failed to restore branch {original_branch!r}: {exc}")
+            try:
+                git.run(
+                    ["git", "branch", "-D", tmp_branch], root, dry_run=False, label="git branch -D"
+                )
+            except RuntimeError as exc:
+                await ctx.warning(f"Cleanup: failed to delete temp branch {tmp_branch!r}: {exc}")
 
         return PublishSnapshotResult(remote=remote, branch=branch, published=True, dry_run=False)
