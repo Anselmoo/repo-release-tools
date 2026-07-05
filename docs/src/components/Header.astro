@@ -1,0 +1,99 @@
+---
+/**
+ * Docs site header. Reproduces docs/_layouts/default.html's site-header:
+ * hexagon logo glyph + wordmark on the left, terminal-button nav links on
+ * the right. Pass content into the `right` slot for a search box / theme
+ * toggle (commonly Starlight's native search + theme toggle, re-skinned,
+ * per the design-system.mdx visual-reference notes).
+ *
+ * Ported from components/navigation/Header.jsx (Reto design system mirror).
+ */
+interface NavLink {
+  label: string;
+  href?: string;
+  active?: boolean;
+}
+
+interface Props {
+  title?: string;
+  links?: NavLink[];
+  logo?: string;
+}
+
+const { title = "repo-release-tools", links = [], logo = "⬡" } = Astro.props as Props;
+---
+
+<header class="reto-header">
+  <a href="#" class="reto-header__brand">
+    <span class="reto-header__logo" aria-hidden="true">{logo}</span>
+    {title}
+  </a>
+
+  <nav class="reto-header__nav">
+    {links.map((link) => (
+      <a
+        href={link.href || "#"}
+        class={link.active ? "reto-header__link reto-header__link--active" : "reto-header__link"}
+      >
+        {link.label}
+      </a>
+    ))}
+    <slot name="right" />
+  </nav>
+</header>
+
+<style>
+  .reto-header {
+    padding: 1.25rem 2rem;
+    border-bottom: 2px solid var(--reto-border);
+    background: var(--reto-bg-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .reto-header__brand {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    color: var(--reto-accent);
+    text-decoration: none;
+    font-family: var(--reto-font-display);
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-display);
+    text-shadow: var(--reto-phosphor-glow);
+  }
+
+  .reto-header__logo {
+    color: var(--reto-accent-strong);
+    font-size: 1.4em;
+  }
+
+  .reto-header__nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .reto-header__link {
+    display: inline-block;
+    padding: 0.5rem 1.2rem;
+    font-family: var(--reto-font-display);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    color: var(--reto-accent);
+    background: transparent;
+    border: 1px solid var(--reto-accent);
+    text-decoration: none;
+  }
+
+  .reto-header__link--active {
+    color: var(--reto-bg);
+    background: var(--reto-accent);
+  }
+</style>

@@ -1,0 +1,263 @@
+---
+title: Reto design system
+description: The "Reto" retro-terminal design system behind repo-release-tools' documentation — palette, type, spacing, components, and content voice.
+---
+
+A design system for building **documentation and service-catalog sites** in
+the "Reto" style — the retro-terminal aesthetic used by
+[`repo-release-tools`](https://github.com/Anselmoo/repo-release-tools), a
+config-driven release-automation toolkit (semantic versioning, conventional
+commits, changelog policy) shipped as a Python CLI, a GitHub Action, and an
+MCP server.
+
+This system is built for documentation modeled after established docs
+frameworks (VitePress / Docusaurus / Starlight) but skinned in the source
+project's warm, 80s-CRT "reto" identity — and biased toward **simplicity
+over complexity**: the CLI exposes 39+ commands across 5 groups, so the
+primary UI job is presenting that surface as a small, scannable **service
+catalog** rather than a wall of commands.
+
+## Quick facts
+
+- Two modes, both warm: light = cream paper + dark umber; dark = near-black
+  carbon + amber phosphor. No blue/purple/cool colors.
+- Type: Orbitron (uppercase display only), Inter (body), JetBrains Mono
+  (code + terminal UI). All three loaded live from Google Fonts.
+- Square corners everywhere except the outer page card (8px) and code (4px).
+  Buttons are `border-radius: 0`.
+- Signature effect: a soft amber `text-shadow` "phosphor glow" on headings,
+  active nav, and hover states — used sparingly, not on every element.
+- No icon font/SVG sprite: iconography is unicode glyphs (`⬡ █ » ☾ ☀ ◐ ✓ ✗`)
+  plus shields.io-style badges (Simple Icons) for platform/language tags.
+  Never draw new SVG icons for this brand.
+- Content voice: terse, technical, sentence-case, exact code spans, at most
+  one dry aside per page. No emoji.
+- The product problem this system solves: a large CLI surface (39+ commands)
+  should read as a small "service catalog" (~5 grouped tiles), not a flat list.
+
+## Sources
+
+Everything in this system was read directly from the live repository —
+nothing was invented from a screenshot.
+
+- Repo: [github.com/Anselmoo/repo-release-tools](https://github.com/Anselmoo/repo-release-tools)
+- Theme stylesheet: [`docs/assets/css/reto.css`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/css/reto.css) — the ground truth for every color, font, border, and glow value in this system
+- Theme toggle script: [`docs/assets/js/theme-toggle.js`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/js/theme-toggle.js)
+- Docs index / command-group table: [`docs/index.md`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md)
+- CLI reference: [`docs/commands/rrt-cli.md`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md)
+- Terminal banners + badges: [`docs/assets/banner-dark.png`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-dark.png), [`docs/assets/readme-badges/`](https://github.com/Anselmoo/repo-release-tools/tree/main/docs/assets/readme-badges)
+
+If you have access to this repo, read `reto.css` directly before making
+major changes here — this page distills it, but the source is the ground
+truth.
+
+## Content fundamentals
+
+The source project's copy is **terse, technical, and slightly dry-witted** —
+written for engineers configuring CI, not for a general audience.
+
+- **Voice**: second person imperative for instructions ("Use it from...",
+  "Choose the action if..."), third person for the product itself
+  (`` `repo-release-tools` keeps release policy boring in the best possible
+  way. ``). Rarely first person; never "we" as a company voice.
+- **Tone**: matter-of-fact with occasional dry humor dropped into otherwise
+  dense technical prose — e.g. calling a shallow checkout "*tiny chaos
+  gremlin, large confusion*", or describing squash-merge changelog noise as
+  "*ten tiny commit-level changelog bullets... one giant release footnote
+  monster*." Humor is a seasoning, not the register — most sentences are
+  plain and precise.
+- **Casing**: sentence case in prose; `code font` for every command, flag,
+  file path, and config key, always exact and copy-pasteable. Headings are
+  the one place the CSS forces full uppercase (visual, not a copy rule).
+  Section labels in the terminal-banner style ("SYSTEM", "STATUS",
+  "COVERAGE") are shouted caps — that's the one register where all-caps is
+  intentional.
+- **Structure**: docs consistently open with "choose your entry point"
+  framing (which surface — CLI, Action, MCP — fits your need) before any
+  detail. Tables are used heavily to route readers to the right doc rather
+  than a linear read.
+- **Emoji**: none in the docs prose or UI copy.
+- **Self-aware disclaimers**: the project is upfront about its own
+  automation and its dependencies, e.g. footer copy explicitly disclosing
+  that chat is "*powered by Context7, a third-party service with its own
+  terms and privacy policy*." Carry that candor into any new copy that adds
+  a third-party integration.
+
+Write plainly and specifically, prefer a table over a paragraph when
+routing between options, keep code spans exact, and allow at most one dry
+aside per page — don't force jokes into every section.
+
+## Visual foundations
+
+- **Colors**: two-mode palette, not a single hue reused everywhere.
+  **Light** = warm cream paper (`#f5f0e6`) with dark umber/brown text and
+  accents (`#7a4d1c`, `#b65e13`) — "paper terminal." **Dark** = near-black
+  carbon (`#0c0805`) with amber phosphor text (`#ffb36c`) — "CRT terminal."
+  Mode switches automatically via `prefers-color-scheme`, or pins via
+  `html[data-theme]`. There is no blue, purple, or cool color anywhere in
+  the source palette. Semantic success/danger colors are new additions
+  (the source is monochrome), derived in `oklch` to stay within the same
+  warm hue family rather than introducing a cold green/red.
+- **Type**: three families, each with one clear job. **Orbitron** (display)
+  — always uppercase, letter-spaced, used only for headings, buttons, and
+  labels, never body copy. **Inter** (body) — all prose. **JetBrains Mono**
+  (code) — code blocks, inline code, and the terminal-banner UI. All three
+  are stock Google Fonts loaded live from the Google Fonts CDN, exactly as
+  the source site does.
+- **Spacing**: rem-based, not snapped to a 4/8px grid — the source uses
+  `0.5rem / 0.75rem / 1rem / 1.5rem / 2rem / 3rem` directly.
+- **Backgrounds**: always flat, full-bleed color — no gradients, no photos.
+  The closest thing to imagery is the terminal-banner PNG (ASCII-art status
+  screen) and a fixed full-viewport CRT scanline + noise-grain overlay.
+- **Animation**: minimal and functional, not decorative. The only motion in
+  the source is a `1s step-end infinite` blink on the `█` cursor glyph
+  before `<h2>` text, and simple `all 0.1s ease` transitions on buttons/
+  links. No entrance animations, no bounces, no parallax.
+- **Hover states**: buttons and nav links invert — transparent-with-border
+  becomes filled with the accent color, text flips to the background color,
+  and a `scale(1.05)` + phosphor text-shadow glow is added. Links darken to
+  `--reto-accent-strong` and gain the same glow. One consistent hover
+  language across the whole site — no opacity fades.
+- **Press states**: not explicitly defined in the source; buttons stay
+  static on press rather than inventing a new motion — treat `:active` as
+  identical to resting state unless you have a reason to diverge.
+- **Borders & shadows**: almost everything is 1px solid `--reto-border`.
+  The one exception is the outer page container, which uses a **3px double
+  border** — an explicit "terminal double-line" motif — plus a soft drop
+  shadow (`--reto-shadow`) and, in dark mode, a colored phosphor glow
+  (`--reto-glow`) instead of a shadow. Text on headings/active nav gets a
+  small `text-shadow` phosphor bleed (`--reto-phosphor-glow`) — the
+  system's signature "CRT glow" effect, used sparingly.
+- **Corner radii**: mostly **square**. Buttons are `border-radius: 0`
+  (terminal aesthetic). The page card and code blocks get a small `4–8px`
+  radius. Badges get a barely-rounded `3px`. Nothing is pill-shaped or
+  heavily rounded.
+- **Transparency & blur**: no backdrop-blur/glassmorphism anywhere. The
+  only translucency is the CRT scanline overlay (a fixed full-viewport
+  gradient at low opacity) and a faint SVG noise-grain texture over the
+  whole page — both simulate an old monitor, not a glass UI.
+- **Imagery**: no photography. The only raster images are the terminal-
+  banner PNGs (dark/light) and a Windows/social-card variant — pixel-style
+  bitmap type inside a drawn CRT-monitor bezel.
+- **Layout**: single-column, max-width `1000px` content wrapper, centered.
+  Fixed elements: the theme-toggle button (bottom-right) and the CRT
+  scanline overlay (full viewport).
+
+### Typography note (font substitution)
+
+No fonts were "missing" — Orbitron, Inter, and JetBrains Mono are the exact
+families the source site already loads from Google Fonts. This system loads
+them the same way (`tokens/fonts.css` `@import`s the Google Fonts CDN)
+rather than vendoring binaries, so nothing needs to be flagged or
+substituted.
+
+## Iconography
+
+The source project has **no icon font and no SVG icon sprite for UI
+chrome**. Its icon vocabulary is:
+
+1. **Unicode glyphs** for UI chrome and terminal decoration: `⬡` (site
+   logo), `█` (blinking h2 cursor), `»` (h3 marker), `☾ / ☀ / ◐` (theme
+   toggle states), `✓ / ✗` and `● / ○` (status/health marks in the terminal
+   banner). Components reuse these exact glyphs rather than inventing new
+   iconography — see `Header`, the theme toggle, `StatusPanel`.
+2. **[Simple Icons](https://simpleicons.org)** (CC0-1.0) and
+   [Google Material Icons](https://fonts.google.com/icons) (Apache-2.0),
+   rendered as flat-color shields.io-style badges for platform/registry/
+   language identification (GitHub, PyPI, Python, npm, Docker, etc.).
+3. **No emoji** anywhere in the product UI or docs prose.
+
+For a new component that needs a generic glyph (e.g. `ServiceCard`'s
+leading icon), use a unicode symbol in the same terminal/geometric family
+(`⬡ ✦ ▣ ◆`) rather than drawing an SVG.
+
+## Intentional additions
+
+The source repo defines a documentation *site* (Jekyll layout + one
+stylesheet), not a component library — so this system's component inventory
+was authored from scratch, scoped tightly to what a docs/service-catalog
+product needs. Additions beyond the literal source:
+
+- **`ServiceCard` / `CommandRow`** — the "service catalog" pattern, grouping
+  the CLI's 39+ commands into ~5 scannable tiles (mirrors the exact group
+  table in `docs/index.md`).
+- **`Header`, `Sidebar`, `Breadcrumbs`** — standard docs-framework chrome
+  (VitePress/Docusaurus/Starlight-shaped), restyled with reto tokens. The
+  source site has a simple top nav only. (Table-of-contents and search use
+  Starlight's native equivalents, re-skinned — see below.)
+- **`StatusPanel`** — a live-markup recreation of the terminal-banner
+  motif (system info / coverage bar / test+health glyphs) for use inside
+  real pages, instead of embedding the banner PNG.
+- **`Callout`** — admonition variant of the source's existing blockquote.
+- **Semantic success/danger colors** — see Visual Foundations above.
+
+## Component inventory
+
+Ten components below ship as native, zero-JS Astro components at
+`src/components/*.astro`, using the token files in `src/styles/tokens/`.
+
+| Component | Location | Notes |
+|---|---|---|
+| `Badge` | `core/` | Status chip / shields.io-style tag. Tones: neutral, accent, success, warning, danger. Variants: soft, outline, shield. |
+| `Button` | `core/` | Square-cornered, uppercase terminal button. Variants: outline, solid, ghost. Hover state is a plain CSS `:hover` rule (no client JS). |
+| `CommandRow` | `catalog/` | One `command` + description row, used inside `ServiceCard`. |
+| `ServiceCard` | `catalog/` | The service-catalog tile: icon, title, description, and a list of `CommandRow`s. |
+| `Table` | `content/` | Docs table with uppercase display-font header row and zebra striping. First column renders in monospace. |
+| `Callout` | `feedback/` | Admonition box — note / tip / warning / danger. |
+| `StatusPanel` | `feedback/` | Live-markup recreation of the terminal-banner status box: system rows, coverage bar, test/health glyph rows. |
+| `Breadcrumbs` | `navigation/` | Slash-separated breadcrumb trail; last item renders as the current-page label. |
+| `Header` | `navigation/` | Site header: hexagon-glyph wordmark + terminal-button nav links. Accepts a `right` slot for search/theme-toggle content. |
+| `Sidebar` | `navigation/` | Grouped left-hand docs navigation with an active-item accent bar. |
+
+Four further components from the design-prototype inventory are **not**
+ported as custom components — Starlight already ships a superior first-party
+equivalent, wired up and re-skinned in a later task:
+
+| Prototype component | Starlight replacement |
+|---|---|
+| `CodeBlock` | Expressive Code (Starlight's built-in code block renderer) |
+| `SearchInput` | Pagefind search |
+| `TableOfContents` | Starlight's native on-page TOC |
+| `ThemeToggle` | Starlight's native theme toggle, re-skinned |
+
+### Visual reference for the four Starlight-native replacements
+
+- **`CodeBlock`**: bordered (`1px solid var(--reto-border)`), `var(--radius-sm)`
+  corners, optional filename/language header bar on `var(--reto-bg-elevated)`
+  with a bottom border and a bordered "copy" button, body on
+  `var(--reto-code-bg)` in `var(--reto-font-code)` at `var(--text-code-sm)`,
+  `line-height: 1.6`.
+- **`SearchInput`**: leading `›` glyph, monospace font, `var(--reto-code-bg)`
+  fill, `1px solid var(--reto-border)`, `border-radius: var(--radius-sm)`,
+  min-width 220px.
+- **`TableOfContents`**: 200px width, sticky positioning, active-item left
+  accent bar (`2px solid var(--reto-accent-strong)`), inactive border
+  `2px solid var(--reto-border)`, uppercase display-font section title.
+- **`ThemeToggle`**: glyphs `◐` (auto) / `☾` (dark) / `☀` (light); fixed
+  circular button, 48×48px, `border-radius: 4px`, `2px solid var(--reto-border)`,
+  `box-shadow: var(--reto-glow)`, background `var(--reto-bg-elevated)`, icon
+  color `var(--reto-accent)`, fixed bottom-right (`right: 2rem; bottom: 2rem`)
+  when used as a floating toggle.
+
+## Index
+
+```
+src/styles/
+  reto.css                    Global stylesheet entry point (@import list only)
+  tokens/
+    fonts.css                 Google Fonts CDN import (Orbitron, Inter, JetBrains Mono)
+    colors.css                 Base palette + light/dark semantic aliases + oklch feedback colors
+    typography.css              Font stacks + type scale
+    spacing.css                 Spacing scale, radii, border widths
+    effects.css                 Shadows, phosphor glow, scanline/noise overlays, blink keyframe
+    base.css                    Global element styles for raw prose/markdown content
+src/components/
+  Badge.astro, Button.astro                       core
+  Breadcrumbs.astro, Header.astro, Sidebar.astro   navigation
+  Callout.astro, StatusPanel.astro                 feedback
+  CommandRow.astro, ServiceCard.astro              catalog
+  Table.astro                                      content
+```
+
+No logo mark exists in the source beyond the `⬡` unicode glyph + Orbitron
+wordmark — that combination *is* the brand mark.

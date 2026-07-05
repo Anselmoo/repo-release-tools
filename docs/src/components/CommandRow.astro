@@ -1,0 +1,45 @@
+---
+/**
+ * A single command entry inside a ServiceCard — command name as a code
+ * chip + one-line description. Keeps the huge command surface scannable.
+ *
+ * Ported from components/catalog/CommandRow.jsx (Reto design system mirror).
+ */
+interface Props {
+  command: string;
+  description: string;
+}
+
+const { command, description } = Astro.props as Props;
+---
+
+<div class="reto-command-row">
+  <code class="reto-command-row__command">{command}</code>
+  <span class="reto-command-row__description">{description}</span>
+</div>
+
+<style>
+  .reto-command-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: baseline;
+    padding: 0.35rem 0;
+  }
+
+  .reto-command-row__command {
+    font-family: var(--reto-font-code);
+    font-size: 0.82rem;
+    color: var(--reto-accent-strong);
+    background: var(--reto-code-bg);
+    border: 1px solid var(--reto-border);
+    border-radius: var(--radius-sm);
+    padding: 0.1rem 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .reto-command-row__description {
+    color: var(--reto-text-soft);
+    font-size: 0.85rem;
+    font-family: var(--reto-font-body);
+  }
+</style>

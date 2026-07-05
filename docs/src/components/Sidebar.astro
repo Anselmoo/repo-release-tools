@@ -1,0 +1,94 @@
+---
+/**
+ * Grouped docs sidebar — mirrors the command-group table on docs/index.md
+ * (Version & Release, Repository Health, Git Workflow, ...). Active item
+ * gets a left accent bar, matching the phosphor-glow language used
+ * throughout the source site. Fixed 220px width — pair with a flex
+ * content region.
+ *
+ * Ported from components/navigation/Sidebar.jsx (Reto design system mirror).
+ */
+interface SidebarItem {
+  label: string;
+  href?: string;
+  active?: boolean;
+}
+
+interface SidebarGroup {
+  label: string;
+  items: SidebarItem[];
+}
+
+interface Props {
+  groups?: SidebarGroup[];
+}
+
+const { groups = [] } = Astro.props as Props;
+---
+
+<nav class="reto-sidebar">
+  {groups.map((group) => (
+    <div class="reto-sidebar__group">
+      <div class="reto-sidebar__group-label">{group.label}</div>
+      <ul class="reto-sidebar__list">
+        {group.items.map((item) => (
+          <li>
+            <a
+              href={item.href || "#"}
+              class={item.active ? "reto-sidebar__link reto-sidebar__link--active" : "reto-sidebar__link"}
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ))}
+</nav>
+
+<style>
+  .reto-sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    font-family: var(--reto-font-body);
+  }
+
+  .reto-sidebar__group {
+    margin-bottom: 1.75rem;
+  }
+
+  .reto-sidebar__group-label {
+    font-family: var(--reto-font-display);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    color: var(--reto-text-soft);
+    margin-bottom: 0.6rem;
+  }
+
+  .reto-sidebar__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .reto-sidebar__link {
+    display: block;
+    padding: 0.35rem 0.7rem;
+    border-left: 3px solid transparent;
+    color: var(--reto-text);
+    background: transparent;
+    text-decoration: none;
+    font-size: 0.92rem;
+  }
+
+  .reto-sidebar__link--active {
+    border-left-color: var(--reto-accent-strong);
+    color: var(--reto-accent-strong);
+    background: var(--reto-code-bg);
+    text-shadow: var(--reto-phosphor-glow);
+  }
+</style>

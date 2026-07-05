@@ -1,0 +1,171 @@
+---
+/**
+ * Recreates the "rrt" terminal banner status panel (see docs/assets/
+ * banner-dark.png) as live markup: a system-info line, a coverage bar,
+ * and a row of pass/fail glyphs — for release-health / doctor-style views.
+ *
+ * Ported from components/feedback/StatusPanel.jsx (Reto design system mirror).
+ */
+interface SystemRow {
+  label: string;
+  values: string[];
+}
+
+interface Props {
+  systemRows?: SystemRow[];
+  statusLine?: string;
+  coverage?: number;
+  tests?: { passed: number; total: number };
+  health?: boolean[];
+  title?: string;
+}
+
+const {
+  systemRows = [],
+  statusLine,
+  coverage,
+  tests = { passed: 0, total: 0 },
+  health = [],
+  title = "STATUS",
+} = Astro.props as Props;
+---
+
+<div class="reto-status-panel">
+  <div class="reto-status-panel__title">{title}</div>
+  <div class="reto-status-panel__body">
+    {systemRows.map((row) => (
+      <div class="reto-status-panel__row">
+        <span class="reto-status-panel__row-label">{row.label}</span>
+        <span>
+          {row.values.map((v, i) => (
+            <Fragment>
+              {i > 0 ? <span class="reto-status-panel__separator">|</span> : null}
+              {v}
+            </Fragment>
+          ))}
+        </span>
+      </div>
+    ))}
+
+    {statusLine ? <div class="reto-status-panel__status-line">{statusLine}</div> : null}
+
+    {typeof coverage === "number" ? (
+      <div class="reto-status-panel__coverage">
+        <span class="reto-status-panel__row-label">COVERAGE</span>
+        <div class="reto-status-panel__coverage-track">
+          <div class="reto-status-panel__coverage-fill" style={{ width: `${coverage}%` }} />
+        </div>
+        <span>{coverage}%</span>
+      </div>
+    ) : null}
+
+    {tests.total > 0 ? (
+      <div class="reto-status-panel__glyph-row">
+        <span class="reto-status-panel__row-label">TESTS</span>
+        {Array.from({ length: tests.total }).map((_, i) => (
+          <span class={i < tests.passed ? "reto-status-panel__glyph--pass" : "reto-status-panel__glyph--fail"}>
+            {i < tests.passed ? "✓" : "✕"}
+          </span>
+        ))}
+      </div>
+    ) : null}
+
+    {health.length > 0 ? (
+      <div class="reto-status-panel__glyph-row">
+        <span class="reto-status-panel__row-label">HEALTH</span>
+        {health.map((ok) => (
+          <span class={ok ? "reto-status-panel__glyph--health-on" : "reto-status-panel__glyph--health-off"}>
+            {ok ? "●" : "○"}
+          </span>
+        ))}
+      </div>
+    ) : null}
+  </div>
+</div>
+
+<style>
+  .reto-status-panel {
+    border: 1px solid var(--reto-border);
+    background: var(--reto-code-bg);
+    font-family: var(--reto-font-code);
+    color: var(--reto-text);
+    font-size: 0.85rem;
+  }
+
+  .reto-status-panel__title {
+    border-bottom: 1px solid var(--reto-border);
+    padding: 0.6rem 1rem;
+    color: var(--reto-accent-strong);
+    letter-spacing: 0.1em;
+    font-size: 0.75rem;
+  }
+
+  .reto-status-panel__body {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .reto-status-panel__row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .reto-status-panel__row-label {
+    color: var(--reto-text-soft);
+    width: 70px;
+    flex-shrink: 0;
+  }
+
+  .reto-status-panel__separator {
+    opacity: 0.5;
+    margin: 0 0.4rem;
+  }
+
+  .reto-status-panel__status-line {
+    color: var(--reto-text-soft);
+    padding-top: 0.2rem;
+  }
+
+  .reto-status-panel__coverage {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .reto-status-panel__coverage-track {
+    flex: 1;
+    height: 10px;
+    background: var(--reto-bg);
+    border: 1px solid var(--reto-border);
+  }
+
+  .reto-status-panel__coverage-fill {
+    height: 100%;
+    background: var(--reto-accent-strong);
+  }
+
+  .reto-status-panel__glyph-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .reto-status-panel__glyph--pass {
+    color: var(--reto-success-strong);
+  }
+
+  .reto-status-panel__glyph--fail {
+    color: var(--reto-danger-strong);
+  }
+
+  .reto-status-panel__glyph--health-on {
+    color: var(--reto-accent-strong);
+  }
+
+  .reto-status-panel__glyph--health-off {
+    color: var(--reto-border);
+  }
+</style>

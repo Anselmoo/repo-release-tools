@@ -1,0 +1,39 @@
+/* ==========================================================================
+   Typography — Reto Design System
+   Font stacks match docs/assets/css/reto.css exactly. Type scale is new
+   (the source only styles h1/h2/h3/h4/body/code), sized for a docs/service
+   catalog product: display headings, body copy, UI labels, code.
+   ========================================================================== */
+
+:root {
+  --reto-font-body: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --reto-font-display: "Orbitron", "Eurostile", "Avenir Next Condensed", "Segoe UI", sans-serif;
+  --reto-font-code: "JetBrains Mono", "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+
+  /* Body / UI scale */
+  --text-xs: 0.8rem;
+  --text-sm: 0.9rem;
+  --text-base: 17px;
+  --text-lg: 1.15rem;
+  --text-xl: 1.4rem;
+
+  /* Display (Orbitron, uppercase, tracked) scale */
+  --text-display-sm: 1.3rem;
+  --text-display-md: 1.7rem;
+  --text-display-lg: 2.2rem;
+  --text-display-xl: 3.2rem;
+  --text-display-hero: 4.5rem;
+
+  /* Code scale */
+  --text-code-sm: 0.85rem;
+  --text-code-md: 0.95rem;
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-body: 1.65;
+
+  --tracking-display: 0.08em;
+  --tracking-label: 0.15em;
+  --tracking-eyebrow: 0.2em;
+  --tracking-normal: 0.01em;
+}

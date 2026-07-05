@@ -1,0 +1,95 @@
+/* ==========================================================================
+   Base element styles — Reto Design System
+   Global resets/typography for raw HTML content (docs prose, cards).
+   Components (Astro) style themselves via scoped <style> blocks; this file
+   is for prose regions rendered from Markdown/MDX.
+   ========================================================================== */
+
+html, body {
+  background: var(--reto-bg);
+  color: var(--reto-text);
+  font-family: var(--reto-font-body);
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body {
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-normal);
+}
+
+h1, h2, h3, h4 {
+  color: var(--reto-accent);
+  font-family: var(--reto-font-display);
+  letter-spacing: var(--tracking-display);
+  text-transform: uppercase;
+  text-shadow: var(--reto-phosphor-glow);
+  margin-top: var(--space-6);
+  font-weight: 700;
+}
+
+h1 { font-size: var(--text-display-lg); border-bottom: var(--border-thin) solid var(--reto-border); padding-bottom: var(--space-2); margin-bottom: var(--space-5); }
+h2 { font-size: var(--text-display-md); }
+h3 { font-size: var(--text-display-sm); }
+h4 { font-size: var(--text-lg); }
+
+h2::before, h3::before {
+  color: var(--reto-accent-strong);
+  font-family: var(--reto-font-code);
+  margin-right: var(--space-2);
+}
+h2::before { content: "\2588"; animation: reto-blink 1s step-end infinite; }
+h3::before { content: ">>"; }
+
+p, li, td, th { color: var(--reto-text); }
+
+a {
+  color: var(--reto-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+a:hover { color: var(--reto-accent-strong); text-shadow: var(--reto-phosphor-glow); }
+
+blockquote {
+  border: var(--border-thin) solid var(--reto-border);
+  background: var(--reto-code-bg);
+  color: var(--reto-text-soft);
+  border-left: 8px solid var(--reto-accent-strong);
+  padding: var(--space-4) var(--space-5);
+  margin: var(--space-5) 0;
+}
+
+pre, code { font-family: var(--reto-font-code); }
+
+pre {
+  background: var(--reto-code-bg);
+  border: var(--border-thin) solid var(--reto-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  overflow-x: auto;
+}
+
+code.inline-code {
+  background: var(--reto-code-bg);
+  border: var(--border-thin) solid var(--reto-border);
+  border-radius: var(--radius-sm);
+  color: var(--reto-accent-strong);
+  padding: 0.1em 0.3em;
+}
+
+table { width: 100%; border-collapse: collapse; border: var(--border-thin) solid var(--reto-border); margin: var(--space-5) 0; }
+th, td { border: var(--border-thin) solid var(--reto-border); padding: var(--space-3); text-align: left; }
+th { background: var(--reto-bg-elevated); font-family: var(--reto-font-display); font-size: var(--text-sm); text-transform: uppercase; }
+tr:nth-child(2n) { background: rgba(255, 179, 108, 0.03); }
+
+hr { border: 0; border-top: var(--border-thin) solid var(--reto-border); margin: var(--space-6) 0; }
+
+::selection { background: var(--reto-accent-strong); color: var(--reto-bg); }
+
+:focus-visible {
+  outline: 2px solid var(--reto-accent-strong);
+  outline-offset: 2px;
+}

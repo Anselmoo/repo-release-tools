@@ -1,0 +1,61 @@
+---
+/**
+ * Admonition callout — same visual language as the source's blockquote
+ * (accent-bordered box on code-bg), with a tone-colored left bar + label.
+ * `title` overrides the default all-caps label.
+ *
+ * Ported from components/feedback/Callout.jsx (Reto design system mirror).
+ */
+interface Props {
+  tone?: "note" | "tip" | "warning" | "danger";
+  title?: string;
+}
+
+const { tone = "note", title } = Astro.props as Props;
+
+const TONE: Record<string, { border: string; label: string; glyph: string }> = {
+  note: { border: "var(--reto-accent-strong)", label: "NOTE", glyph: "»" },
+  tip: { border: "var(--reto-success-strong)", label: "TIP", glyph: "★" },
+  warning: { border: "var(--reto-accent-strong)", label: "WARNING", glyph: "▲" },
+  danger: { border: "var(--reto-danger-strong)", label: "DANGER", glyph: "✕" },
+};
+
+const t = TONE[tone] || TONE.note;
+---
+
+<div class="reto-callout" style={{ borderLeftColor: t.border }}>
+  <div class="reto-callout__label" style={{ color: t.border }}>
+    <span aria-hidden="true">{t.glyph}</span>
+    {title || t.label}
+  </div>
+  <div class="reto-callout__body">
+    <slot />
+  </div>
+</div>
+
+<style>
+  .reto-callout {
+    border: 1px solid var(--reto-border);
+    background: var(--reto-code-bg);
+    border-left: 8px solid var(--reto-accent-strong);
+    padding: 1rem 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .reto-callout__label {
+    font-family: var(--reto-font-display);
+    font-size: 0.78rem;
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .reto-callout__body {
+    color: var(--reto-text-soft);
+    font-family: var(--reto-font-body);
+    line-height: var(--leading-body);
+  }
+</style>
