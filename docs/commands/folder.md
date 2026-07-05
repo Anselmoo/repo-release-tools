@@ -4,9 +4,9 @@ permalink: "/commands/folder/"
 ---
 <!-- rrt:auto:start:page-header -->
 <p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../../assets/badges/github-reto-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="../../assets/badges/github-reto-light.svg">
-  <img alt="GitHub" src="../../assets/badges/github-reto-dark.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="/repo-release-tools/assets/badges/github-reto-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="/repo-release-tools/assets/badges/github-reto-light.svg">
+  <img alt="GitHub" src="/repo-release-tools/assets/badges/github-reto-dark.svg">
 </picture></a></p>
 <!-- rrt:auto:end:page-header -->
 

@@ -1,15 +1,7 @@
 ---
 title: "GitHub Action"
-permalink: "/action/"
+description: "CI policy gate wrapping rrt-hooks for branch, commit, and changelog checks in GitHub Actions."
 ---
-<!-- rrt:auto:start:page-header -->
-<p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="/repo-release-tools/assets/badges/github-reto-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="/repo-release-tools/assets/badges/github-reto-light.svg">
-  <img alt="GitHub" src="/repo-release-tools/assets/badges/github-reto-dark.svg">
-</picture></a></p>
-<!-- rrt:auto:end:page-header -->
-
 
 # GitHub Action
 
@@ -142,9 +134,3 @@ enforce a consistent project structure across contributors and CI environments.
 `check-artifacts` runs `rrt-hooks artifacts-check`, which compares generated
 artifact hashes against the committed `.rrt/artifacts.lock.toml`. It detects
 artifacts that were regenerated but not re-snapshotted, or vice versa.
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->

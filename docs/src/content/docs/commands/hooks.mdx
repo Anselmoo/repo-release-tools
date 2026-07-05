@@ -1,15 +1,7 @@
 ---
 title: "rrt hooks"
-permalink: "/commands/hooks/"
+description: "Pre-commit and lefthook setup for incremental or squash-based changelog workflows via rrt-hooks."
 ---
-<!-- rrt:auto:start:page-header -->
-<p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="/repo-release-tools/assets/badges/github-reto-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="/repo-release-tools/assets/badges/github-reto-light.svg">
-  <img alt="GitHub" src="/repo-release-tools/assets/badges/github-reto-dark.svg">
-</picture></a></p>
-<!-- rrt:auto:end:page-header -->
-
 
 # rrt hooks
 
@@ -392,9 +384,3 @@ rrt-hooks commit-msg "$1"
 | Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` | `rrt-hooks commit-msg "$1"` |
 | Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-hooks pre-commit` | `rrt-hooks pre-commit` |
 | Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased` | `rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased` |
-
-<!-- rrt:auto:start:doc-footer -->
----
-
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
-<!-- rrt:auto:end:doc-footer -->
