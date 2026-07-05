@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.11.0] - 2026-07-05
 ### Added
 - Add `rrt git publish-snapshot` to force-push a single-commit snapshot of tracked content to a secondary remote
 - Refuse `publish-snapshot` when `--remote` resolves to the same URL as `origin`, normalized across URL forms
