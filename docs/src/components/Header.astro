@@ -16,15 +16,16 @@ interface NavLink {
 
 interface Props {
   title?: string;
+  href?: string;
   links?: NavLink[];
   logo?: string;
 }
 
-const { title = "repo-release-tools", links = [], logo = "⬡" } = Astro.props as Props;
+const { title = "repo-release-tools", href = "#", links = [], logo = "⬡" } = Astro.props as Props;
 ---
 
 <header class="reto-header">
-  <a href="#" class="reto-header__brand">
+  <a href={href} class="reto-header__brand">
     <span class="reto-header__logo" aria-hidden="true">{logo}</span>
     {title}
   </a>

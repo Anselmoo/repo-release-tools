@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "docs-preview",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd docs && npm run preview -- --port 4321"],
+      "port": 4321
+    }
+  ]
+}
