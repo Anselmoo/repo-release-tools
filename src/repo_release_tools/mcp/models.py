@@ -206,6 +206,16 @@ class BranchResult(BaseModel):
     error: str | None = None
 
 
+class PublishSnapshotResult(BaseModel):
+    """Result of a publish-snapshot preview or force-push."""
+
+    remote: str
+    branch: str
+    published: bool
+    dry_run: bool
+    error: str | None = None
+
+
 class RawLockData(BaseModel):
     """Passthrough wrapper for arbitrary lock file data."""
 

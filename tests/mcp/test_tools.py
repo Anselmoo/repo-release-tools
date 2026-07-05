@@ -20,13 +20,15 @@ from repo_release_tools.mcp.models import (
     ConfigError,
     DoctorResponse,
     LockError,
+    PublishSnapshotResult,
 )
-from repo_release_tools.mcp.tools import register_tools
+from repo_release_tools.mcp.tools import publish_tools, register_tools
 from repo_release_tools.mcp.tools.changelog_tools import register as register_changelog
 from repo_release_tools.mcp.tools.config_tools import _path_to_str
 from repo_release_tools.mcp.tools.config_tools import register as register_config
 from repo_release_tools.mcp.tools.git_tools import register as register_git
 from repo_release_tools.mcp.tools.lock_tools import register as register_locks
+from repo_release_tools.mcp.tools.publish_tools import register as register_publish
 from repo_release_tools.mcp.tools.validation_tools import register as register_validation
 from repo_release_tools.mcp.tools.version_tools import register as register_version
 
@@ -665,3 +667,197 @@ def test_rrt_branch_new_apply_timeout(tmp_path: Path) -> None:
     result = asyncio.run(_run())
     assert result.created is False
     assert result.error == "git checkout -b timed out after 8 seconds."
+
+
+# ── publish snapshot tools ────────────────────────────────────────────────────
+
+
+def _publish_tools(tmp_path: Path) -> dict[str, Any]:
+    mcp = _CaptureMCP()
+    register_publish(mcp)  # ty: ignore[invalid-argument-type]
+    return mcp._tools
+
+
+def test_rrt_publish_snapshot_not_a_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: False)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=True
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is False
+    assert result.error is not None
+    assert "not inside a Git work tree" in result.error
+
+
+def test_rrt_publish_snapshot_dry_run_previews(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=True
+        )
+
+    result = asyncio.run(_run())
+    assert result.dry_run is True
+    assert result.published is False
+    assert result.error is None
+
+
+def test_rrt_publish_snapshot_allows_when_origin_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": None, "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=True
+        )
+
+    result = asyncio.run(_run())
+    assert result.dry_run is True
+    assert result.published is False
+    assert result.error is None
+
+
+def test_rrt_publish_snapshot_rejects_origin_remote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(publish_tools.git, "remote_url", lambda root, name: "https://x/a.git")
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="origin", branch="main", dry_run=True
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is False
+    assert result.error is not None
+    assert "origin" in result.error.lower()
+
+
+def test_rrt_publish_snapshot_in_progress_operation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: "rebase")
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=True
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is False
+    assert result.error is not None
+    assert "rebase" in result.error
+
+
+def test_rrt_publish_snapshot_apply_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(publish_tools.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        publish_tools.git, "unique_snapshot_branch_name", lambda root: "snapshot-tmp"
+    )
+    run_calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        run_calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr(publish_tools.git, "run", _fake_run)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", message="snap", dry_run=False
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is True
+    assert result.dry_run is False
+    assert result.error is None
+    assert any(cmd[:2] == ["git", "push"] for cmd in run_calls)
+    assert any(cmd[:2] == ["git", "checkout"] and cmd[-1] == "main" for cmd in run_calls)
+    assert any(cmd[:3] == ["git", "branch", "-D"] for cmd in run_calls)
+
+
+def test_rrt_publish_snapshot_apply_push_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(publish_tools.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        publish_tools.git, "unique_snapshot_branch_name", lambda root: "snapshot-tmp"
+    )
+    cleanup_calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        if cmd[:2] == ["git", "push"]:
+            raise RuntimeError("git push --force failed (exit 1): rejected")
+        cleanup_calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr(publish_tools.git, "run", _fake_run)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=False
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is False
+    assert result.dry_run is False
+    assert result.error is not None
+    assert "rejected" in result.error
+    assert any(cmd[:2] == ["git", "checkout"] for cmd in cleanup_calls)
+    assert any(cmd[:3] == ["git", "branch", "-D"] for cmd in cleanup_calls)
