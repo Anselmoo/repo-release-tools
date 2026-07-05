@@ -384,6 +384,9 @@ def test_remote_url_missing_remote_returns_none(tmp_path: Path) -> None:
         ("git@github.com:org/repo.git", "https://github.com/org/repo"),
         ("https://github.com/org/repo.git", "https://GitHub.com/org/repo/"),
         ("ssh://git@github.com/org/repo.git", "git@github.com:org/repo"),
+        ("file:///tmp/foo/repo.git", "/tmp/foo/repo.git"),
+        ("/tmp/foo/../foo/repo.git", "/tmp/foo/repo.git"),
+        ("file:///tmp/foo/bar/../repo.git", "/tmp/foo/repo.git"),
     ],
 )
 def test_normalize_remote_url_treats_equivalent_forms_as_equal(left: str, right: str) -> None:
@@ -393,6 +396,13 @@ def test_normalize_remote_url_treats_equivalent_forms_as_equal(left: str, right:
 def test_normalize_remote_url_treats_different_repos_as_different() -> None:
     assert git.normalize_remote_url("git@github.com:org/repo.git") != git.normalize_remote_url(
         "git@github.com:org/other-repo.git",
+    )
+
+
+def test_normalize_remote_url_treats_different_local_paths_as_different() -> None:
+    """Path-traversal normalization must not accidentally merge distinct repos."""
+    assert git.normalize_remote_url("/tmp/foo/repo.git") != git.normalize_remote_url(
+        "/tmp/foo/other-repo.git",
     )
 
 

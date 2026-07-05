@@ -696,10 +696,47 @@ def test_publish_snapshot_happy_path_pushes_and_cleans_up(
         ["git", "checkout", "--orphan", "rrt-snapshot-tmp-20260705120000"],
         ["git", "add", "-u"],
         ["git", "commit", "-m", "Initial commit"],
-        ["git", "push", "--force", "mirror", "rrt-snapshot-tmp-20260705120000:main"],
+        ["git", "push", "--force", "--", "mirror", "rrt-snapshot-tmp-20260705120000:main"],
         ["git", "checkout", "main"],
         ["git", "branch", "-D", "rrt-snapshot-tmp-20260705120000"],
     ]
+
+
+def test_publish_snapshot_push_command_has_option_terminator(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The '--' before the remote argument prevents a dash-prefixed --remote value
+    (e.g. --receive-pack=<shell command>) from being parsed by ``git push`` as an
+    option instead of the repository argument, which would otherwise let an
+    attacker-controlled --remote string execute an arbitrary local command."""
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_sync.git, "run", lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or ""
+    )
+    args = argparse.Namespace(
+        target=None,
+        remote="--receive-pack=touch /tmp/should-not-run",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=True,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 0
+    push_command = next(cmd for cmd in commands if cmd[:2] == ["git", "push"])
+    assert push_command[:4] == ["git", "push", "--force", "--"]
+    assert push_command[4] == "--receive-pack=touch /tmp/should-not-run"
 
 
 def test_publish_snapshot_cleans_up_on_push_failure(
@@ -785,6 +822,7 @@ def test_publish_snapshot_resolves_named_config_target(
         "git",
         "push",
         "--force",
+        "--",
         "mirror",
         "rrt-snapshot-tmp-20260705120000:main",
     ]

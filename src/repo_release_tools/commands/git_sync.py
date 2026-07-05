@@ -457,7 +457,7 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
         git.run(["git", "add", "-u"], root, dry_run=dry_run, label="git add -u")
         git.run(["git", "commit", "-m", message], root, dry_run=dry_run, label="git commit")
         git.run(
-            ["git", "push", "--force", remote, f"{tmp_branch}:{branch}"],
+            ["git", "push", "--force", "--", remote, f"{tmp_branch}:{branch}"],
             root,
             dry_run=dry_run,
             label="git push --force",

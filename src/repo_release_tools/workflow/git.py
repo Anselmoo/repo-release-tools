@@ -54,6 +54,7 @@ summary first, followed by the details needed to act on the result.
 from __future__ import annotations
 
 import datetime as dt
+import posixpath
 import re
 import subprocess
 from collections.abc import Callable
@@ -306,10 +307,12 @@ def normalize_remote_url(url: str) -> str:
     """Normalize a git remote URL to a scheme-and-case-insensitive host/path form.
 
     Used only for the publish-snapshot origin-equality guard, never for the
-    actual push (which always uses the raw configured/flag value).
+    actual push (which always uses the raw configured/flag value). Collapses
+    ``..``/``.`` path segments so a same-repo URL padded with redundant path
+    traversal still compares equal to its canonical form.
     """
     value = url.strip()
-    for scheme in ("ssh://", "https://", "http://", "git://"):
+    for scheme in ("ssh://", "https://", "http://", "git://", "file://"):
         if value.startswith(scheme):
             value = value[len(scheme) :]
             break
@@ -322,7 +325,9 @@ def normalize_remote_url(url: str) -> str:
         value = value.split("@", 1)[1]
 
     value = value.removesuffix(".git").rstrip("/")
-    host, _, path = value.partition("/")
+    host, sep, path = value.partition("/")
+    if sep:
+        path = posixpath.normpath(f"/{path}").lstrip("/")
     return f"{host.lower()}/{path}"
 
 
