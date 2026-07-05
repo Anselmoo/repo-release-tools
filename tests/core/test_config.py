@@ -3531,6 +3531,94 @@ def test_load_artifact_targets_bad_inputs_empty_string() -> None:
 
 
 # ---------------------------------------------------------------------------
+# PublishTarget — config parsing
+# ---------------------------------------------------------------------------
+
+
+def test_publish_target_validate_empty_remote() -> None:
+    from repo_release_tools.config.model import PublishTarget
+
+    with pytest.raises(ValueError, match="non-empty 'remote'"):
+        PublishTarget(remote="").validate()
+
+
+def test_publish_target_validate_empty_branch() -> None:
+    from repo_release_tools.config.model import PublishTarget
+
+    with pytest.raises(ValueError, match="non-empty 'branch'"):
+        PublishTarget(remote="public", branch="").validate()
+
+
+def test_load_publish_targets_dict_shape() -> None:
+    from repo_release_tools.config.core import _load_publish_targets
+
+    raw = {"demo": {"remote": "public", "branch": "main", "message": "Initial commit"}}
+    targets = _load_publish_targets(raw)
+    assert targets["demo"].remote == "public"
+    assert targets["demo"].branch == "main"
+    assert targets["demo"].message == "Initial commit"
+
+
+def test_load_publish_targets_defaults_branch_and_message() -> None:
+    from repo_release_tools.config.core import _load_publish_targets
+
+    targets = _load_publish_targets({"demo": {"remote": "public"}})
+    assert targets["demo"].branch == "main"
+    assert targets["demo"].message == "Initial commit"
+
+
+def test_load_publish_targets_not_a_dict() -> None:
+    from repo_release_tools.config.core import _load_publish_targets
+
+    with pytest.raises(ValueError, match="publish_targets must be a table"):
+        _load_publish_targets(["not-a-dict"])
+
+
+def test_load_publish_targets_entry_not_dict() -> None:
+    from repo_release_tools.config.core import _load_publish_targets
+
+    with pytest.raises(ValueError, match="publish_targets.demo must be a table"):
+        _load_publish_targets({"demo": "not-a-table"})
+
+
+def test_load_publish_targets_missing_remote() -> None:
+    from repo_release_tools.config.core import _load_publish_targets
+
+    with pytest.raises(ValueError, match="publish_targets.demo must have a non-empty 'remote'"):
+        _load_publish_targets({"demo": {}})
+
+
+def test_load_publish_targets_empty_branch() -> None:
+    from repo_release_tools.config.core import _load_publish_targets
+
+    with pytest.raises(ValueError, match="non-empty 'branch'"):
+        _load_publish_targets({"demo": {"remote": "public", "branch": ""}})
+
+
+def test_publish_target_config_roundtrip(tmp_path: Path) -> None:
+    cfg_file = tmp_path / "pyproject.toml"
+    cfg_file.write_text(
+        """[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[tool.rrt.publish_targets.demo]
+remote = "public"
+branch = "main"
+
+[project]
+name = "example"
+version = "0.1.0"
+""",
+        encoding="utf-8",
+    )
+    config = load_config_from_path(tmp_path, cfg_file)
+    assert config.publish_targets["demo"].remote == "public"
+
+
+# ---------------------------------------------------------------------------
 # _load_command_groups / _load_topic_pages / _load_title_overrides
 # ---------------------------------------------------------------------------
 

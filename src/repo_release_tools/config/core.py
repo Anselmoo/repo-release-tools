@@ -47,6 +47,7 @@ from .model import (
     MapConfig,
     MissingRrtConfigError,
     PinTarget,
+    PublishTarget,
     RrtConfig,
     SharedBlock,
     TopicPageEntry,
@@ -714,6 +715,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         default_group_name=default_group_name,
         extra_branch_types=extra_branch_types,
         global_pin_targets=_load_pin_targets(root, raw.get("pin_targets", [])),
+        publish_targets=_load_publish_targets(raw.get("publish_targets", {})),
         eol=_load_eol_config(raw.get("eol")),
         docs=_load_docs_config(raw.get("docs"), root=root),
         folders=_load_folders_config(raw.get("folders")),
@@ -1129,6 +1131,28 @@ def _load_artifact_targets(raw_targets: object) -> list[ArtifactTarget]:
         )
         target.validate()
         targets.append(target)
+    return targets
+
+
+def _load_publish_targets(raw_targets: object) -> dict[str, PublishTarget]:
+    """Parse a table of named publish target entries into ``PublishTarget`` objects."""
+    if not isinstance(raw_targets, dict):
+        raise ValueError("publish_targets must be a table of named entries")
+    targets: dict[str, PublishTarget] = {}
+    for name, raw_entry in cast("dict[str, object]", raw_targets).items():
+        if not isinstance(raw_entry, dict):
+            raise ValueError(f"publish_targets.{name} must be a table")
+        typed_entry = cast("dict[str, object]", raw_entry)
+        remote = typed_entry.get("remote", "")
+        if not isinstance(remote, str) or not remote:
+            raise ValueError(f"publish_targets.{name} must have a non-empty 'remote'")
+        target = PublishTarget(
+            remote=remote,
+            branch=cast("str", typed_entry.get("branch", "main")),
+            message=cast("str", typed_entry.get("message", "Initial commit")),
+        )
+        target.validate()
+        targets[name] = target
     return targets
 
 
