@@ -13,11 +13,8 @@
  * them (Pagefind, `social` config, `data-theme` persistence).
  *
  * Nav links reproduce docs/_layouts/default.html:38-45's top nav order
- * (Action / CLI / Version / Health / Git / Setup / Agents) — the same
- * order the sidebar groups use. The old nav's "MCP" link is omitted here:
- * docs/mcp-server.md has not been ported to docs/src/content/docs/ as an
- * .mdx page yet (see astro.config.mjs's sidebar comment for the same
- * flagged gap) — linking it would 404.
+ * (Action / CLI / Version / Health / Git / Setup / MCP / Agents) — the same
+ * order the sidebar groups use.
  */
 import config from "virtual:starlight/user-config";
 import Search from "virtual:starlight/components/Search";
@@ -44,6 +41,7 @@ const navLinks = [
   { label: "Health", href: withBase("/commands/repo-health/") },
   { label: "Git", href: withBase("/commands/git-workflow/") },
   { label: "Setup", href: withBase("/commands/setup-tooling/") },
+  { label: "MCP", href: withBase("/mcp-server/") },
   { label: "Agents", href: withBase("/agent-instructions/") },
 ].map((link) => ({ ...link, active: isActive(link.href) }));
 ---

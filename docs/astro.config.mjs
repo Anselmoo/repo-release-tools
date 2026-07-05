@@ -27,13 +27,6 @@ export default defineConfig({
       // into a collapsed subgroup so they don't dominate the sidebar. Two
       // extra groups (CI & Automation, Design System) cover real pages that
       // exist under src/content/docs/ but had no top-nav slot in Jekyll.
-      //
-      // MCP is intentionally OMITTED here: docs/mcp-server.md (the old
-      // Jekyll page) has never been ported to docs/src/content/docs/ as an
-      // .mdx file — Task 4 only covered the generated command-group pages,
-      // not this hand-authored topic page. Per this task's constraint to
-      // link only real, currently-existing pages, no MCP sidebar entry is
-      // added; see the task report for this flagged content gap.
       sidebar: [
         {
           label: "Action",
@@ -78,6 +71,10 @@ export default defineConfig({
         {
           label: "CI & Automation",
           link: "commands/ci-automation",
+        },
+        {
+          label: "MCP",
+          link: "mcp-server",
         },
         {
           label: "Agent Instructions",
