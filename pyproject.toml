@@ -116,16 +116,12 @@ help = "Verify generated docs and shared anchors are current."
 sequence = ["docs-generate", "docs-check", "docs-inject-check"]
 
 [tool.poe.groups.docs.tasks.serve]
-help = "Serve the docs site locally with Jekyll at http://localhost:4000/ (requires Ruby)."
-shell = "cd docs && bundle install && bundle exec jekyll serve --baseurl '' --livereload"
+help = "Serve the docs site locally with Astro's dev server at http://localhost:4321/."
+shell = "cd docs && npm ci && npm run dev"
 
-[tool.poe.groups.docs.tasks.serve-pages]
-help = "Serve with the production baseurl (/repo-release-tools) to simulate GitHub Pages exactly (requires Ruby)."
-shell = "cd docs && bundle install && bundle exec jekyll serve --baseurl '/repo-release-tools'"
-
-[tool.poe.groups.docs.tasks.serve-python]
-help = "Serve raw docs directory via Python HTTP server at http://localhost:4000/ (no Jekyll rendering — templates stay as Liquid/Markdown)."
-cmd = "python -m http.server 4000 --directory docs"
+[tool.poe.groups.docs.tasks.preview]
+help = "Build and serve the production build (base-aware, via astro preview) to simulate GitHub Pages exactly."
+shell = "cd docs && npm run build && npm run preview"
 
 [tool.poe.groups.docs.tasks.sync-assets]
 help = "Validate source-owned skill and agent assets are present (no copy needed)."
@@ -140,8 +136,8 @@ help = "Export all platform/variant badge SVGs to src/repo_release_tools/assets/
 cmd = "python -m repo_release_tools.assets.badges src/repo_release_tools/assets/badges"
 
 [tool.poe.groups.docs.tasks.badge-sync]
-help = "Sync already-generated src/badges SVGs to docs/assets/badges/ (run after badge-export)."
-cmd = "python -m repo_release_tools.assets.badges docs/assets/badges"
+help = "Sync already-generated src/badges SVGs to docs/public/assets/badges/ (run after badge-export)."
+cmd = "python -m repo_release_tools.assets.badges docs/public/assets/badges"
 
 [tool.rrt]
 pin_target_missing = "warn"
