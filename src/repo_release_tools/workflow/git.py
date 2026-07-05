@@ -53,7 +53,10 @@ summary first, followed by the details needed to act on the result.
 
 from __future__ import annotations
 
+import datetime as dt
+import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
@@ -279,6 +282,65 @@ def remote_names(cwd: Path) -> list[str]:
     """Return configured remote names."""
     out = capture(["git", "remote"], cwd)
     return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def remote_url(cwd: Path, name: str) -> str | None:
+    """Return the configured URL for a remote, or None if it doesn't exist."""
+    result = subprocess.run(
+        ["git", "remote", "get-url", name],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    return value or None
+
+
+_SCP_STYLE_RE = re.compile(r"^(?:[\w.-]+@)?([\w.-]+):(.+)$")
+
+
+def normalize_remote_url(url: str) -> str:
+    """Normalize a git remote URL to a scheme-and-case-insensitive host/path form.
+
+    Used only for the publish-snapshot origin-equality guard, never for the
+    actual push (which always uses the raw configured/flag value).
+    """
+    value = url.strip()
+    for scheme in ("ssh://", "https://", "http://", "git://"):
+        if value.startswith(scheme):
+            value = value[len(scheme) :]
+            break
+    else:
+        scp_match = _SCP_STYLE_RE.match(value)
+        if scp_match:
+            value = f"{scp_match.group(1)}/{scp_match.group(2)}"
+
+    if "@" in value.split("/", 1)[0]:
+        value = value.split("@", 1)[1]
+
+    value = value.removesuffix(".git").rstrip("/")
+    host, _, path = value.partition("/")
+    return f"{host.lower()}/{path}"
+
+
+def unique_snapshot_branch_name(
+    cwd: Path,
+    *,
+    prefix: str = "rrt-snapshot-tmp",
+    now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.UTC),
+) -> str:
+    """Return a local branch name for a publish-snapshot temp branch, avoiding collisions."""
+    stamp = now().strftime("%Y%m%d%H%M%S")
+    base = f"{prefix}-{stamp}"
+    if not branch_exists(cwd, base):
+        return base
+    suffix = 1
+    while branch_exists(cwd, f"{base}-{suffix}"):
+        suffix += 1
+    return f"{base}-{suffix}"
 
 
 def is_git_repository(cwd: Path) -> bool:
