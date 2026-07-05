@@ -58,13 +58,21 @@ registrations in dependency order.
   Always defaults to `dry_run=True`. Returns a `BranchResult` with the full branch name
   and a suggested commit title.
 
+### `publish_tools` → `rrt_publish_snapshot`
+
+- **`rrt_publish_snapshot`** — Force-pushes a single-commit snapshot of tracked content
+  to a secondary remote. Refuses to run when `remote` resolves to the same URL as
+  `origin`, or when a git operation (rebase, merge, etc.) is already in progress.
+  Always defaults to `dry_run=True`. Returns a `PublishSnapshotResult`.
+
 ## Response conventions
 
 All tools return Pydantic models (see `mcp.models`) serialised to JSON by FastMCP.
 Tools that can fail return an `error` field rather than raising an exception, so the
 AI assistant can report the failure gracefully without a tool error traceback.
 
-All mutating tools (`rrt_bump`, `rrt_branch_new`) default to `dry_run=True`.
+All mutating tools (`rrt_bump`, `rrt_branch_new`, `rrt_publish_snapshot`) default to
+`dry_run=True`.
 
 ## Adding a new tool module
 
@@ -81,6 +89,7 @@ from .changelog_tools import register as register_changelog
 from .config_tools import register as register_config
 from .git_tools import register as register_git
 from .lock_tools import register as register_locks
+from .publish_tools import register as register_publish
 from .validation_tools import register as register_validation
 from .version_tools import register as register_version
 
@@ -93,3 +102,4 @@ def register_tools(mcp: FastMCP) -> None:
     register_validation(mcp)
     register_changelog(mcp)
     register_git(mcp)
+    register_publish(mcp)

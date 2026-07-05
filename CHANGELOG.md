@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Added
+- Add `rrt git publish-snapshot` to force-push a single-commit snapshot of tracked content to a secondary remote
+- Refuse `publish-snapshot` when `--remote` resolves to the same URL as `origin`, normalized across URL forms
+- Require `--yes-i-know-this-overwrites-remote-history` before `publish-snapshot` runs beyond a `--dry-run` preview
+- Support `[tool.rrt.publish_targets.<name>]` config entries for `publish-snapshot` remote/branch/message defaults
+- Add `rrt_publish_snapshot` MCP tool mirroring the CLI command's origin-equality safety guard
+
 ## [1.10.1] - 2026-06-26
 
 ### Added

@@ -31,12 +31,13 @@ permalink: "/commands/git-workflow/"
   - [`rrt git check-dirty-tree`](#rrt-git-check-dirty-tree)
   - [`rrt git commit`](#rrt-git-commit)
   - [`rrt git commit-all`](#rrt-git-commit-all)
+  - [`rrt git squash-local`](#rrt-git-squash-local)
   - [`rrt git sync`](#rrt-git-sync)
   - [`rrt git move`](#rrt-git-move)
-  - [`rrt git squash-local`](#rrt-git-squash-local)
   - [`rrt git undo-safe`](#rrt-git-undo-safe)
   - [`rrt git rebootstrap`](#rrt-git-rebootstrap)
   - [`rrt git purge-cache`](#rrt-git-purge-cache)
+  - [`rrt git publish-snapshot`](#rrt-git-publish-snapshot)
 <!-- rrt:auto:end:toc -->
 
 ## `rrt branch`
@@ -301,12 +302,13 @@ Arguments
   check-dirty-tree  Exit non-zero when the working tree is dirty. Useful in hooks and CI.
   commit            Create a conventional commit, inferring type from the current branch.
   commit-all        Stage all files and create a conventional commit from the branch context.
+  squash-local      Squash local commits since upstream or a base ref into one commit.
   sync              Fetch, stash if needed, and pull the current branch safely.
   move              Switch branches safely by stashing and restoring local changes.
-  squash-local      Squash local commits since upstream or a base ref into one commit.
   undo-safe         Undo a commit while keeping work staged or in the working tree.
   rebootstrap       Destroy current git history and create a fresh repository history.
   purge-cache       Expire reflogs and run git garbage collection.
+  publish-snapshot  Force-push a single-commit snapshot of tracked content to a secondary remote.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -321,6 +323,7 @@ Examples
   $ rrt git commit --type fix "make output clearer"
   $ rrt git sync
   $ rrt git undo-safe
+  $ rrt git publish-snapshot --remote mirror --dry-run
 ```
 
 ### `rrt git status`
@@ -522,6 +525,35 @@ Examples
   $ rrt git commit-all --type chore --scope deps "update lockfiles"
 ```
 
+### `rrt git squash-local`
+
+```text
+Usage:  rrt git squash-local [OPTIONS] <description>
+
+Squash commits ahead of the upstream branch or --base-ref into one conventional commit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <description>   Commit description words.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help      Show this message and exit.
+  --type TYPE     Explicit conventional commit type. Defaults to the current branch type.
+  --scope SCOPE   Optional commit scope.
+  --breaking      Mark the commit as breaking.
+  --dry-run       Preview without changing git.
+  --base-ref REF  Base ref to squash against. Defaults to the current upstream branch.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git squash-local "ship parser"
+  $ rrt git squash-local --base-ref origin/main --type fix "repair sync handling"
+```
+
 ### `rrt git sync`
 
 ```text
@@ -572,35 +604,6 @@ Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt git move release/v1.2.0
   $ rrt git move -b feat/help-copy --dry-run
-```
-
-### `rrt git squash-local`
-
-```text
-Usage:  rrt git squash-local [OPTIONS] <description>
-
-Squash commits ahead of the upstream branch or --base-ref into one conventional commit.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  <description>   Commit description words.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help      Show this message and exit.
-  --type TYPE     Explicit conventional commit type. Defaults to the current branch type.
-  --scope SCOPE   Optional commit scope.
-  --breaking      Mark the commit as breaking.
-  --dry-run       Preview without changing git.
-  --base-ref REF  Base ref to squash against. Defaults to the current upstream branch.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt git squash-local "ship parser"
-  $ rrt git squash-local --base-ref origin/main --type fix "repair sync handling"
 ```
 
 ### `rrt git undo-safe`
@@ -684,6 +687,36 @@ Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt git purge-cache
   $ rrt git purge-cache --dry-run
+```
+
+### `rrt git publish-snapshot`
+
+```text
+Usage:  rrt git publish-snapshot [OPTIONS] <target>
+
+Create an orphan branch from tracked content, commit it once, and force-push it to a secondary remote. Refuses to run if --remote resolves to the same URL as origin, and requires --yes-i-know-this-overwrites-remote-history to do anything beyond a preview. Safety notes: force-pushing does not immediately purge old objects on the remote host — they can remain fetchable by direct SHA until the host runs garbage collection. If secrets were ever committed, run git filter-repo or the BFG Repo-Cleaner first; this command only controls what is visible going forward. Clones or forks made before the force-push retain the old history locally, which is outside this tool's control.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <target>                                     Named [tool.rrt.publish_targets.<name>] entry to resolve remote/branch/message from.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help                                   Show this message and exit.
+  --remote                                     Remote name or URL to force-push to.
+  --branch                                     Remote branch to force-push to. Defaults to main.
+  --message                                    Commit message for the snapshot commit.
+  --yes-i-know-this-overwrites-remote-history  Required confirmation to actually force-push. Without it, behaves as --dry-run.
+  --dry-run                                    Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git publish-snapshot --remote mirror --dry-run
+  $ rrt git publish-snapshot demo --yes-i-know-this-overwrites-remote-history
+  $ rrt git publish-snapshot --remote mirror --branch main --message "Initial commit" --yes-i-know-this-overwrites-remote-history
 ```
 
 <!-- rrt:auto:start:doc-footer -->

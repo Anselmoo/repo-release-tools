@@ -104,6 +104,7 @@ uv run rrt-mcp --transport http --port 8000
 | `rrt_bump` | versioning | Semver bump — preview or apply |
 | `rrt_branch_new` | git | Create conventionally-named branch |
 | `rrt_init_run` | init, config | Run `rrt init` with selected target |
+| `rrt_publish_snapshot` | git, publishing | Force-push a single-commit snapshot to a secondary remote |
 
 ---
 

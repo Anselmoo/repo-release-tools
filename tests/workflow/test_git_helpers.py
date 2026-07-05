@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from repo_release_tools.workflow import git
+
+
+def _init_repo(root: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "Tester"], cwd=root, check=True)
+    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=root, check=True)
 
 
 def test_run_dry_run_skips_subprocess(
@@ -353,3 +361,90 @@ def test_in_progress_operation_returns_none_without_git_dir_or_markers(
     git_dir.mkdir()
     monkeypatch.setattr(git, "git_dir", lambda cwd: git_dir)
     assert git.in_progress_operation(tmp_path) is None
+
+
+def test_remote_url_returns_configured_url(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://example.com/x.git"],
+        cwd=tmp_path,
+        check=True,
+    )
+    assert git.remote_url(tmp_path, "origin") == "https://example.com/x.git"
+
+
+def test_remote_url_missing_remote_returns_none(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    assert git.remote_url(tmp_path, "does-not-exist") is None
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        ("git@github.com:org/repo.git", "https://github.com/org/repo"),
+        ("https://github.com/org/repo.git", "https://GitHub.com/org/repo/"),
+        ("ssh://git@github.com/org/repo.git", "git@github.com:org/repo"),
+        ("file:///tmp/foo/repo.git", "/tmp/foo/repo.git"),
+        ("/tmp/foo/../foo/repo.git", "/tmp/foo/repo.git"),
+        ("file:///tmp/foo/bar/../repo.git", "/tmp/foo/repo.git"),
+    ],
+)
+def test_normalize_remote_url_treats_equivalent_forms_as_equal(left: str, right: str) -> None:
+    assert git.normalize_remote_url(left) == git.normalize_remote_url(right)
+
+
+def test_normalize_remote_url_treats_different_repos_as_different() -> None:
+    assert git.normalize_remote_url("git@github.com:org/repo.git") != git.normalize_remote_url(
+        "git@github.com:org/other-repo.git",
+    )
+
+
+def test_normalize_remote_url_treats_different_local_paths_as_different() -> None:
+    """Path-traversal normalization must not accidentally merge distinct repos."""
+    assert git.normalize_remote_url("/tmp/foo/repo.git") != git.normalize_remote_url(
+        "/tmp/foo/other-repo.git",
+    )
+
+
+def test_unique_snapshot_branch_name_avoids_collision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _init_repo(tmp_path)
+    monkeypatch.setattr(
+        git,
+        "branch_exists",
+        lambda cwd, branch: branch == "rrt-snapshot-tmp-20260705120000",
+    )
+    name = git.unique_snapshot_branch_name(
+        tmp_path,
+        now=lambda: dt.datetime(2026, 7, 5, 12, 0, 0, tzinfo=dt.UTC),
+    )
+    assert name == "rrt-snapshot-tmp-20260705120000-1"
+
+
+def test_unique_snapshot_branch_name_avoids_multiple_collisions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _init_repo(tmp_path)
+    taken = {
+        "rrt-snapshot-tmp-20260705120000",
+        "rrt-snapshot-tmp-20260705120000-1",
+        "rrt-snapshot-tmp-20260705120000-2",
+    }
+    monkeypatch.setattr(git, "branch_exists", lambda cwd, branch: branch in taken)
+    name = git.unique_snapshot_branch_name(
+        tmp_path,
+        now=lambda: dt.datetime(2026, 7, 5, 12, 0, 0, tzinfo=dt.UTC),
+    )
+    assert name == "rrt-snapshot-tmp-20260705120000-3"
+
+
+def test_unique_snapshot_branch_name_default_prefix(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    name = git.unique_snapshot_branch_name(
+        tmp_path,
+        now=lambda: dt.datetime(2026, 7, 5, 12, 0, 0, tzinfo=dt.UTC),
+    )
+    assert name == "rrt-snapshot-tmp-20260705120000"

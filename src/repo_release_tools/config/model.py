@@ -353,6 +353,22 @@ class ArtifactTarget:
 
 
 @dataclass(frozen=True)
+class PublishTarget:
+    """A named publish-snapshot destination: remote, branch, and commit message."""
+
+    remote: str
+    branch: str = "main"
+    message: str = "Initial commit"
+
+    def validate(self) -> None:
+        """Validate publish target configuration."""
+        if not self.remote:
+            raise ValueError("publish_targets entries must have a non-empty 'remote'")
+        if not self.branch:
+            raise ValueError("publish_targets entries must have a non-empty 'branch'")
+
+
+@dataclass(frozen=True)
 class VersionGroup:
     """A coordinated release unit inside a repository."""
 
@@ -700,6 +716,7 @@ class RrtConfig:
     autodetected: bool = False
     extra_branch_types: tuple[str, ...] = ()
     global_pin_targets: list[PinTarget] = field(default_factory=list)
+    publish_targets: dict[str, PublishTarget] = field(default_factory=dict)
     eol: EolConfig | None = None
     docs: DocsConfig | None = None
     folders: FolderPolicyConfig | None = None
