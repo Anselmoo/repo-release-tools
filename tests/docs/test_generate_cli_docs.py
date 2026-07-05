@@ -269,7 +269,7 @@ def test_iter_generated_doc_targets_exposes_all_targets() -> None:
     targets = list(docs.iter_generated_doc_targets())
 
     assert targets
-    assert targets[0].output_path.name == "rrt-cli.md"
+    assert targets[0].output_path.name == "rrt-cli.mdx"
     assert any(target.anchor_id == "index-topic-links" for target in targets)
     assert any(target.anchor_id == "readme-links" for target in targets)
 
@@ -281,7 +281,7 @@ def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
     assert docs.generate_git_markdown() == docs.git_helpers.GIT_DOC
     assert docs.generate_semantic_branches_markdown().startswith("# rrt branch")
     assert docs.generate_git_markdown().startswith("# rrt git")
-    assert docs.GENERATED_DOC_TARGETS[0].output_path.name == "rrt-cli.md"
+    assert docs.GENERATED_DOC_TARGETS[0].output_path.name == "rrt-cli.mdx"
     assert len(docs.GENERATED_DOC_TARGETS) >= 3
     assert "branch" in docs.TOPIC_PAGE_OUTPUTS
     assert "git" in docs.TOPIC_PAGE_OUTPUTS
@@ -293,7 +293,7 @@ def test_generated_doc_targets_include_anchored_index_block() -> None:
     index_targets = [
         target
         for target in docs.GENERATED_DOC_TARGETS
-        if str(target.output_path).endswith("docs/index.md")
+        if str(target.output_path).endswith("docs/src/content/docs/index.mdx")
     ]
 
     assert len(index_targets) == 1
@@ -317,9 +317,9 @@ def test_generated_command_topics_have_frontmatter_and_command_h1() -> None:
 
     by_name = {target.output_path.name: target for target in docs.GENERATED_DOC_TARGETS}
 
-    doctor = by_name["doctor.md"].render()
-    eol = by_name["eol_check.md"].render()
-    git_doc = by_name["git_cmd.md"].render()
+    doctor = by_name["doctor.mdx"].render()
+    eol = by_name["eol_check.mdx"].render()
+    git_doc = by_name["git_cmd.mdx"].render()
 
     _assert_frontmatter_and_h1(doctor, title="rrt doctor")
     _assert_frontmatter_and_h1(eol, title="rrt eol")
@@ -426,7 +426,7 @@ def test_wrap_with_frontmatter_falls_back_to_h1_or_stem_for_unknown_slug() -> No
     docs = _load_generator_module()
 
     wrapped_h1 = docs._wrap_with_frontmatter(
-        Path("docs/commands/custom-topic.md"),
+        Path("docs/src/content/docs/commands/custom-topic.mdx"),
         lambda: "# Custom Topic\n\nBody\n",
         title_override=None,
         slug="custom-topic",
@@ -436,7 +436,7 @@ def test_wrap_with_frontmatter_falls_back_to_h1_or_stem_for_unknown_slug() -> No
     assert "\n# Custom Topic\n" in rendered_h1
 
     wrapped_stem = docs._wrap_with_frontmatter(
-        Path("docs/commands/no-heading.md"),
+        Path("docs/src/content/docs/commands/no-heading.mdx"),
         lambda: "Body without heading\n",
         title_override=None,
         slug="not-registered",
@@ -450,7 +450,7 @@ def test_wrap_with_frontmatter_uses_title_override_registry_when_slug_known() ->
     docs = _load_generator_module()
 
     wrapped = docs._wrap_with_frontmatter(
-        Path("docs/commands/doctor.md"),
+        Path("docs/src/content/docs/commands/doctor.mdx"),
         lambda: "# Something else\n\nBody\n",
         title_override=None,
         slug="doctor",
@@ -469,13 +469,15 @@ def test_validate_generated_pages_reports_each_invalid_render_shape() -> None:
         docs,
         "GENERATED_DOC_TARGETS",
         (
-            docs.DocTarget(Path("docs/commands/no-frontmatter.md"), lambda: "# heading\n"),
             docs.DocTarget(
-                Path("docs/commands/malformed-frontmatter.md"),
+                Path("docs/src/content/docs/commands/no-frontmatter.mdx"), lambda: "# heading\n"
+            ),
+            docs.DocTarget(
+                Path("docs/src/content/docs/commands/malformed-frontmatter.mdx"),
                 lambda: "---\nname: x\n# heading\n",
             ),
             docs.DocTarget(
-                Path("docs/commands/no-h1.md"),
+                Path("docs/src/content/docs/commands/no-h1.mdx"),
                 lambda: "---\nname: x\n---\nplain body\n",
             ),
         ),

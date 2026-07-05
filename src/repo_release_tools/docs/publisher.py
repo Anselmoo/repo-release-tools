@@ -50,7 +50,7 @@ from repo_release_tools.workflow import hooks as hooks_module
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_OUTPUT: Path = Path("docs/commands/rrt-cli.md")
+DEFAULT_OUTPUT: Path = Path("docs/src/content/docs/commands/rrt-cli.mdx")
 PINNED_COLUMNS: str = "120"
 AUTOGEN_NOTE: str = (
     "<!-- Auto-generated from repo_release_tools.cli.build_parser(); "
@@ -561,16 +561,16 @@ def _get_title_overrides(cfg_docs: object = None) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
-    "branch": Path("docs/commands/branch.md"),
-    "git": Path("docs/commands/git_cmd.md"),
-    "tree": Path("docs/commands/tree.md"),
-    "hooks": Path("docs/commands/hooks.md"),
-    "action": Path("docs/action.md"),
-    "skill": Path("docs/commands/skill.md"),
-    "install": Path("docs/commands/install.md"),
-    "agent-instructions": Path("docs/agent-instructions.md"),
-    "doctor": Path("docs/commands/doctor.md"),
-    "eol": Path("docs/commands/eol_check.md"),
+    "branch": Path("docs/src/content/docs/commands/branch.mdx"),
+    "git": Path("docs/src/content/docs/commands/git_cmd.mdx"),
+    "tree": Path("docs/src/content/docs/commands/tree.mdx"),
+    "hooks": Path("docs/src/content/docs/commands/hooks.mdx"),
+    "action": Path("docs/src/content/docs/action.mdx"),
+    "skill": Path("docs/src/content/docs/commands/skill.mdx"),
+    "install": Path("docs/src/content/docs/commands/install.mdx"),
+    "agent-instructions": Path("docs/src/content/docs/agent-instructions.mdx"),
+    "doctor": Path("docs/src/content/docs/commands/doctor.mdx"),
+    "eol": Path("docs/src/content/docs/commands/eol_check.mdx"),
 }
 
 
@@ -643,7 +643,7 @@ def _wrap_with_frontmatter(
         # Ensure quotes in title are escaped
         title = title.replace('"', '\\"')
 
-        if output_path.suffix.lower() == ".md" and output_path.parts[:2] == ("docs", "commands"):
+        if output_path.suffix.lower() == ".mdx" and output_path.parent.name == "commands":
             content = _ensure_primary_h1(content, title)
 
         permalink = _compute_permalink_for_output(output_path)
@@ -669,7 +669,7 @@ def _build_generated_doc_targets(cfg_docs: object = None) -> tuple[DocTarget, ..
     topic_page_outputs = _get_topic_page_outputs(cfg_docs)
     title_overrides = _get_title_overrides(cfg_docs)
     group_ref_outputs: dict[str, Path] = {
-        slug: Path(f"docs/commands/{slug}.md") for slug, _, _ in command_groups
+        slug: Path(f"docs/src/content/docs/commands/{slug}.mdx") for slug, _, _ in command_groups
     }
 
     targets: list[DocTarget] = [
@@ -683,7 +683,7 @@ def _build_generated_doc_targets(cfg_docs: object = None) -> tuple[DocTarget, ..
             ),
         ),
         DocTarget(
-            Path("docs/index.md"),
+            Path("docs/src/content/docs/index.mdx"),
             generate_index_topic_links_markdown,
             anchor_id="index-topic-links",
         ),
@@ -750,7 +750,9 @@ def validate_generated_page(target: DocTarget, rendered: str) -> list[str]:
     """Return consistency issues for one generated command page rendering."""
     if target.anchor_id is not None:
         return []
-    if target.output_path.parts[:2] != ("docs", "commands"):
+    if not (
+        target.output_path.suffix.lower() == ".mdx" and target.output_path.parent.name == "commands"
+    ):
         return []
 
     issues: list[str] = []
