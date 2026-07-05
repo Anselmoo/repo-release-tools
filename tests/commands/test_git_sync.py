@@ -588,6 +588,357 @@ def test_register_adds_git_purge_cache_parser() -> None:
     assert args.handler.__name__ == "cmd_purge_cache"
 
 
+def test_register_adds_git_publish_snapshot_parser() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+    git_sub = subparsers.add_parser("git")
+    inner = git_sub.add_subparsers(dest="git_command", parser_class=type(git_sub))
+    git_sync.register_sync(inner)
+
+    args = parser.parse_args(["git", "publish-snapshot", "demo", "--remote", "mirror"])
+
+    assert args.command == "git"
+    assert args.git_command == "publish-snapshot"
+    assert args.target == "demo"
+    assert args.remote == "mirror"
+    assert args.handler.__name__ == "cmd_publish_snapshot"
+
+
+def test_publish_snapshot_aborts_when_remote_equals_origin(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: (
+            "https://github.com/org/repo.git" if name == "origin" else "git@github.com:org/repo.git"
+        ),
+    )
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 1
+    assert "same" in capsys.readouterr().err.lower()
+
+
+def test_publish_snapshot_without_confirmation_flag_forces_preview(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+    commands: list[tuple[list[str], bool]] = []
+    monkeypatch.setattr(
+        git_sync.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append((cmd, dry_run)) or "",
+    )
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 0
+    assert all(dry_run is True for _cmd, dry_run in commands)
+    out = capsys.readouterr().out
+    assert "Refusing to push" in out
+    assert "[DRY RUN]" in out
+
+
+def test_publish_snapshot_happy_path_pushes_and_cleans_up(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_sync.git, "run", lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or ""
+    )
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=True,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 0
+    assert commands == [
+        ["git", "checkout", "--orphan", "rrt-snapshot-tmp-20260705120000"],
+        ["git", "add", "-u"],
+        ["git", "commit", "-m", "Initial commit"],
+        ["git", "push", "--force", "mirror", "rrt-snapshot-tmp-20260705120000:main"],
+        ["git", "checkout", "main"],
+        ["git", "branch", "-D", "rrt-snapshot-tmp-20260705120000"],
+    ]
+
+
+def test_publish_snapshot_cleans_up_on_push_failure(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+    commands: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], cwd: pathlib.Path, *, dry_run: bool, label: str) -> str:
+        commands.append(cmd)
+        if cmd[:2] == ["git", "push"]:
+            raise RuntimeError("push failed (exit 1): remote rejected")
+        return ""
+
+    monkeypatch.setattr(git_sync.git, "run", _fake_run)
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=True,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="push failed"):
+        git_sync.cmd_publish_snapshot(args)
+    assert commands[-2:] == [
+        ["git", "checkout", "main"],
+        ["git", "branch", "-D", "rrt-snapshot-tmp-20260705120000"],
+    ]
+
+
+def test_publish_snapshot_resolves_named_config_target(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from repo_release_tools.config.model import PublishTarget, RrtConfig
+
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[],
+        publish_targets={
+            "demo": PublishTarget(remote="mirror", branch="main", message="Initial commit")
+        },
+    )
+    monkeypatch.setattr(git_sync, "load_or_autodetect_config", lambda root: config)
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_sync.git, "run", lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or ""
+    )
+    args = argparse.Namespace(
+        target="demo",
+        remote=None,
+        branch=None,
+        message=None,
+        yes_i_know_this_overwrites_remote_history=True,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 0
+    assert commands[3] == [
+        "git",
+        "push",
+        "--force",
+        "mirror",
+        "rrt-snapshot-tmp-20260705120000:main",
+    ]
+
+
+def test_publish_snapshot_aborts_when_config_target_remote_equals_origin(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from repo_release_tools.config.model import PublishTarget, RrtConfig
+
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[],
+        publish_targets={
+            "demo": PublishTarget(remote="mirror", branch="main", message="Initial commit")
+        },
+    )
+    monkeypatch.setattr(git_sync, "load_or_autodetect_config", lambda root: config)
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: (
+            "https://github.com/org/repo.git" if name == "origin" else "git@github.com:org/repo.git"
+        ),
+    )
+    args = argparse.Namespace(
+        target="demo",
+        remote=None,
+        branch=None,
+        message=None,
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 1
+    assert "same" in capsys.readouterr().err.lower()
+
+
+def test_publish_snapshot_allows_when_origin_not_configured(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: None if name == "origin" else "git@github.com:org/repo.git",
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+    commands: list[tuple[list[str], bool]] = []
+    monkeypatch.setattr(
+        git_sync.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append((cmd, dry_run)) or "",
+    )
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 0
+    err = capsys.readouterr().err
+    assert "same URL as origin" not in err
+    assert all(dry_run is True for _cmd, dry_run in commands)
+
+
+def test_publish_snapshot_requires_git_repository(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: False)
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=False,
+    )
+    assert git_sync.cmd_publish_snapshot(args) == 1
+    assert "is not inside a Git work tree" in capsys.readouterr().err
+
+
+def test_publish_snapshot_rejects_unknown_config_target(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from repo_release_tools.config.model import RrtConfig
+
+    config = RrtConfig(root=tmp_path, config_file=tmp_path / "pyproject.toml", version_groups=[])
+    monkeypatch.setattr(git_sync, "load_or_autodetect_config", lambda root: config)
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    args = argparse.Namespace(
+        target="missing",
+        remote=None,
+        branch=None,
+        message=None,
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 1
+    err = capsys.readouterr().err
+    assert "No publish target named 'missing'" in err
+
+
+def test_publish_snapshot_requires_remote(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    args = argparse.Namespace(
+        target=None,
+        remote=None,
+        branch=None,
+        message=None,
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 1
+    assert "No --remote given and no config target resolved one" in capsys.readouterr().err
+
+
+def test_publish_snapshot_rejects_in_progress_operation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: "rebase")
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=True,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 1
+    assert "Cannot publish while a rebase is in progress" in capsys.readouterr().err
+
+
 def test_cmd_sync_truncates_conflicts(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

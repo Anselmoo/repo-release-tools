@@ -8,6 +8,10 @@
 - `rebootstrap` backs up `.git`, reinitializes the repository, and creates a
   fresh history snapshot or empty bootstrap commit.
 - `purge-cache` expires reflogs and runs `git gc` to reclaim local cache space.
+- `publish-snapshot` force-pushes a single-commit snapshot of tracked content to a
+  secondary remote. It refuses to run when `--remote` resolves to the same URL as
+  `origin`, and requires `--yes-i-know-this-overwrites-remote-history` to do
+  anything beyond a preview.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from repo_release_tools.commands._git_shared import (
     load_status_lines,
     summarize_status,
 )
+from repo_release_tools.config import load_or_autodetect_config
 from repo_release_tools.ui import (
     DryRunPrinter,
     VerbosePrinter,
@@ -372,6 +377,100 @@ def cmd_purge_cache(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_publish_snapshot(args: argparse.Namespace) -> int:
+    """Force-push a single-commit snapshot of tracked content to a secondary remote."""
+    verbose: int = getattr(args, "verbose", 0) or 0
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        p = VerbosePrinter(verbose=verbose)
+        p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
+        return 1
+
+    remote = args.remote
+    branch = args.branch
+    message = args.message
+    if getattr(args, "target", None):
+        config = load_or_autodetect_config(root)
+        target = config.publish_targets.get(args.target)
+        if target is None:
+            p = VerbosePrinter(verbose=verbose)
+            p.line(
+                f"No publish target named {args.target!r} in [tool.rrt.publish_targets].",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        remote = remote or target.remote
+        branch = branch or target.branch
+        message = message or target.message
+    branch = branch or "main"
+    message = message or "Initial commit"
+
+    if not remote:
+        p = VerbosePrinter(verbose=verbose)
+        p.line("No --remote given and no config target resolved one.", ok=False, stream=sys.stderr)
+        return 1
+
+    origin_url = git.remote_url(root, "origin")
+    remote_url_value = git.remote_url(root, remote) or remote
+    if origin_url is not None and git.normalize_remote_url(origin_url) == git.normalize_remote_url(
+        remote_url_value
+    ):
+        p = VerbosePrinter(verbose=verbose)
+        p.line(
+            f"Refusing to publish: --remote {remote!r} resolves to the same URL as origin ({origin_url}).",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+
+    operation = git.in_progress_operation(root)
+    if operation is not None:
+        p = VerbosePrinter(verbose=verbose)
+        p.line(
+            f"Cannot publish while a {operation} is in progress. Resolve or abort it first.",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+
+    confirmed = bool(args.yes_i_know_this_overwrites_remote_history)
+    dry_run = args.dry_run or not confirmed
+    original_branch = git.current_branch(root) or "main"
+    tmp_branch = git.unique_snapshot_branch_name(root)
+
+    p = DryRunPrinter(dry_run, verbose=verbose)
+    p.blank_line()
+    p.header("Publish snapshot", Remote=remote, Branch=branch, Message=message)
+    if not confirmed:
+        p.warn(
+            "Refusing to push without --yes-i-know-this-overwrites-remote-history. Showing a preview instead.",
+        )
+    p.section("Git")
+    try:
+        git.run(
+            ["git", "checkout", "--orphan", tmp_branch],
+            root,
+            dry_run=dry_run,
+            label="git checkout --orphan",
+        )
+        git.run(["git", "add", "-u"], root, dry_run=dry_run, label="git add -u")
+        git.run(["git", "commit", "-m", message], root, dry_run=dry_run, label="git commit")
+        git.run(
+            ["git", "push", "--force", remote, f"{tmp_branch}:{branch}"],
+            root,
+            dry_run=dry_run,
+            label="git push --force",
+        )
+    finally:
+        git.run(["git", "checkout", original_branch], root, dry_run=dry_run, label="git checkout")
+        git.run(["git", "branch", "-D", tmp_branch], root, dry_run=dry_run, label="git branch -D")
+
+    p.blank_line()
+    p.footer(f"Done. Pushed a single-commit snapshot to {remote}:{branch}.")
+    return 0
+
+
 GIT_SYNC_EXAMPLES = "  $ rrt git sync\n  $ rrt git sync --merge\n  $ rrt git sync --dry-run"
 
 GIT_MOVE_EXAMPLES = "  $ rrt git move release/v1.2.0\n  $ rrt git move -b feat/help-copy --dry-run"
@@ -389,6 +488,13 @@ GIT_REBOOTSTRAP_EXAMPLES = (
 )
 
 GIT_PURGE_CACHE_EXAMPLES = "  $ rrt git purge-cache\n  $ rrt git purge-cache --dry-run"
+
+GIT_PUBLISH_SNAPSHOT_EXAMPLES = (
+    "  $ rrt git publish-snapshot --remote mirror --dry-run\n"
+    "  $ rrt git publish-snapshot demo --yes-i-know-this-overwrites-remote-history\n"
+    '  $ rrt git publish-snapshot --remote mirror --branch main --message "Initial commit" '
+    "--yes-i-know-this-overwrites-remote-history"
+)
 
 
 def register_sync(git_sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -496,3 +602,37 @@ def register_sync(git_sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     )
     add_dry_run_flag(purge_cache_parser)
     purge_cache_parser.set_defaults(handler=cmd_purge_cache)
+
+    publish_snapshot_parser = git_sub.add_parser(
+        "publish-snapshot",
+        help="Force-push a single-commit snapshot of tracked content to a secondary remote.",
+        description=(
+            "Create an orphan branch from tracked content, commit it once, and force-push "
+            "it to a secondary remote. Refuses to run if --remote resolves to the same URL "
+            "as origin, and requires --yes-i-know-this-overwrites-remote-history to do "
+            "anything beyond a preview."
+        ),
+        epilog=GIT_PUBLISH_SNAPSHOT_EXAMPLES,
+    )
+    publish_snapshot_parser.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="Named [tool.rrt.publish_targets.<name>] entry to resolve remote/branch/message from.",
+    )
+    publish_snapshot_parser.add_argument(
+        "--remote", default=None, help="Remote name or URL to force-push to."
+    )
+    publish_snapshot_parser.add_argument(
+        "--branch", default=None, help="Remote branch to force-push to. Defaults to main."
+    )
+    publish_snapshot_parser.add_argument(
+        "--message", default=None, help="Commit message for the snapshot commit."
+    )
+    publish_snapshot_parser.add_argument(
+        "--yes-i-know-this-overwrites-remote-history",
+        action="store_true",
+        help="Required confirmation to actually force-push. Without it, behaves as --dry-run.",
+    )
+    add_dry_run_flag(publish_snapshot_parser)
+    publish_snapshot_parser.set_defaults(handler=cmd_publish_snapshot)

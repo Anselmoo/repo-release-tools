@@ -37,6 +37,7 @@ permalink: "/commands/git-workflow/"
   - [`rrt git undo-safe`](#rrt-git-undo-safe)
   - [`rrt git rebootstrap`](#rrt-git-rebootstrap)
   - [`rrt git purge-cache`](#rrt-git-purge-cache)
+  - [`rrt git publish-snapshot`](#rrt-git-publish-snapshot)
 <!-- rrt:auto:end:toc -->
 
 ## `rrt branch`
@@ -307,6 +308,7 @@ Arguments
   undo-safe         Undo a commit while keeping work staged or in the working tree.
   rebootstrap       Destroy current git history and create a fresh repository history.
   purge-cache       Expire reflogs and run git garbage collection.
+  publish-snapshot  Force-push a single-commit snapshot of tracked content to a secondary remote.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -321,6 +323,7 @@ Examples
   $ rrt git commit --type fix "make output clearer"
   $ rrt git sync
   $ rrt git undo-safe
+  $ rrt git publish-snapshot --remote mirror --dry-run
 ```
 
 ### `rrt git status`
@@ -684,6 +687,36 @@ Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt git purge-cache
   $ rrt git purge-cache --dry-run
+```
+
+### `rrt git publish-snapshot`
+
+```text
+Usage:  rrt git publish-snapshot [OPTIONS] <target>
+
+Create an orphan branch from tracked content, commit it once, and force-push it to a secondary remote. Refuses to run if --remote resolves to the same URL as origin, and requires --yes-i-know-this-overwrites-remote-history to do anything beyond a preview.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <target>                                     Named [tool.rrt.publish_targets.<name>] entry to resolve remote/branch/message from.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help                                   Show this message and exit.
+  --remote                                     Remote name or URL to force-push to.
+  --branch                                     Remote branch to force-push to. Defaults to main.
+  --message                                    Commit message for the snapshot commit.
+  --yes-i-know-this-overwrites-remote-history  Required confirmation to actually force-push. Without it, behaves as --dry-run.
+  --dry-run                                    Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git publish-snapshot --remote mirror --dry-run
+  $ rrt git publish-snapshot demo --yes-i-know-this-overwrites-remote-history
+  $ rrt git publish-snapshot --remote mirror --branch main --message "Initial commit" --yes-i-know-this-overwrites-remote-history
 ```
 
 <!-- rrt:auto:start:doc-footer -->

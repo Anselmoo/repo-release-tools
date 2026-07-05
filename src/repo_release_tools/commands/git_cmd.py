@@ -90,7 +90,8 @@ GIT_EPILOG = (
     "  $ rrt git diff --against HEAD~1\n"
     '  $ rrt git commit --type fix "make output clearer"\n'
     "  $ rrt git sync\n"
-    "  $ rrt git undo-safe"
+    "  $ rrt git undo-safe\n"
+    "  $ rrt git publish-snapshot --remote mirror --dry-run"
 )
 
 
