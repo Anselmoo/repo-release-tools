@@ -1,0 +1,1356 @@
+---
+title: "rrt Repository Health"
+description: "Generated command reference for the Repository Health command group."
+---
+
+# rrt Repository Health
+
+{/* Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. */}
+
+{/* rrt:auto:start:toc */}
+- [`rrt doctor`](#rrt-doctor)
+  - [Overview](#overview)
+  - [What it checks](#what-it-checks)
+  - [Output and severity](#output-and-severity)
+  - [Config discovery behavior](#config-discovery-behavior)
+  - [Examples](#examples)
+  - [Caveats](#caveats)
+  - [Related docs](#related-docs)
+- [`rrt artifacts`](#rrt-artifacts)
+  - [Overview](#overview-1)
+  - [Configuration](#configuration)
+  - [Subcommands](#subcommands)
+  - [Examples](#examples-1)
+- [`rrt config`](#rrt-config)
+  - [Overview](#overview-2)
+  - [What the command reports](#what-the-command-reports)
+  - [Raw mode](#raw-mode)
+  - [Validate mode](#validate-mode)
+  - [Schema mode](#schema-mode)
+  - [Failure behavior](#failure-behavior)
+  - [Examples](#examples-2)
+  - [Caveats](#caveats-1)
+- [`rrt env`](#rrt-env)
+  - [Overview](#overview-3)
+  - [What it reports](#what-it-reports)
+  - [JSON mode](#json-mode)
+  - [Examples](#examples-3)
+  - [Caveats](#caveats-2)
+  - [`rrt env check`](#rrt-env-check)
+- [`rrt eol`](#rrt-eol)
+  - [Overview](#overview-4)
+  - [What the command checks](#what-the-command-checks)
+  - [Data sources](#data-sources)
+  - [Policy behavior](#policy-behavior)
+  - [Output](#output)
+  - [Examples](#examples-4)
+  - [Caveats](#caveats-3)
+  - [`rrt eol check`](#rrt-eol-check)
+- [`rrt toc`](#rrt-toc)
+  - [Overview](#overview-5)
+  - [Usage](#usage)
+  - [Anchors](#anchors)
+  - [Options](#options)
+- [`rrt tree`](#rrt-tree)
+  - [Overview](#overview-6)
+  - [Ignore behavior](#ignore-behavior)
+  - [Output formats](#output-formats)
+  - [Common options](#common-options)
+  - [Failure behavior](#failure-behavior-1)
+  - [Examples](#examples-5)
+  - [Embedding a tree into a Markdown file](#embedding-a-tree-into-a-markdown-file)
+  - [Caveats](#caveats-4)
+  - [Related docs](#related-docs-1)
+- [`rrt docs`](#rrt-docs)
+  - [Overview](#overview-7)
+  - [Responsibilities](#responsibilities)
+  - [Sub-actions](#sub-actions)
+  - [Extraction modes](#extraction-modes)
+  - [Supported languages](#supported-languages)
+  - [Lockfile](#lockfile)
+  - [Examples](#examples-6)
+  - [Related docs](#related-docs-2)
+  - [`rrt docs generate`](#rrt-docs-generate)
+  - [`rrt docs check`](#rrt-docs-check)
+  - [`rrt docs publish`](#rrt-docs-publish)
+  - [`rrt docs inject`](#rrt-docs-inject)
+  - [`rrt docs suggest`](#rrt-docs-suggest)
+  - [`rrt docs badges`](#rrt-docs-badges)
+  - [`rrt docs api`](#rrt-docs-api)
+  - [`rrt docs map`](#rrt-docs-map)
+- [`rrt drift`](#rrt-drift)
+  - [Overview](#overview-8)
+  - [Responsibilities](#responsibilities-1)
+  - [Tracked Surfaces](#tracked-surfaces)
+  - [Behavior](#behavior)
+  - [Examples](#examples-7)
+  - [Caveats](#caveats-5)
+  - [`rrt drift generate`](#rrt-drift-generate)
+  - [`rrt drift check`](#rrt-drift-check)
+- [`rrt folder`](#rrt-folder)
+  - [`rrt folder check`](#rrt-folder-check)
+  - [`rrt folder scaffold`](#rrt-folder-scaffold)
+  - [`rrt folder design`](#rrt-folder-design)
+{/* rrt:auto:end:toc */}
+
+## `rrt doctor`
+
+Validate the core automation health of the resolved rrt configuration.
+
+### Overview
+
+`rrt doctor` is the basics-first repository health check. It focuses on the
+shared automation wiring around the resolved configuration — local hooks, CI
+workflows, and guidance to the feature-specific checks that own deeper policy
+validation.
+
+### What it checks
+
+The command checks the automation surfaces that tell you whether repository
+basics are wired correctly:
+
+- `.pre-commit-config.yaml` when present
+- `lefthook.yml` when present
+- `.husky/*` hook scripts when present
+- `.github/workflows/*.yml` / `.yaml` when present
+
+The checks are intentionally light-touch: they verify presence, readability,
+and whether the file appears to reference repo-release-tools policy checks.
+They do **not** replace the deeper feature validators.
+
+### Output and severity
+
+The command prints one grouped report for the core automation surfaces and an
+overall status at the end.
+
+- unreadable automation files are errors
+- missing hook-manager surfaces are obsolete when another hook manager is active
+- missing optional integration surfaces are warnings when no equivalent surface is active
+- surfaces that exist but do not appear to reference repo-release-tools are warnings
+- readable, recognized surfaces are reported as OK
+
+At the end, `rrt doctor` also points you to the feature-specific commands that
+own deeper validation, such as `rrt release check`, `rrt docs check`, and
+`rrt eol`.
+
+### Config discovery behavior
+
+If no config file can be found, the command prints repository guidance and
+exits with an error.
+
+If a config is auto-detected, the command emits a notice on stderr before the
+main report so you can tell that rrt did not use an explicitly selected file.
+
+### Examples
+
+```bash
+rrt doctor
+```
+
+### Caveats
+
+- The command reports core automation health for the resolved configuration,
+    not just the visible file in the current directory.
+- Feature-specific checks belong to their own surfaces: `rrt release check`,
+    `rrt docs check`, and `rrt eol`.
+- A warning does not fail the command; only error-level findings do.
+
+### Related docs
+
+- [Runtime EOL tracking](eol.md)
+- [rrt eol (CLI)](rrt-cli.md)
+- [rrt release check](rrt-cli.md)
+- [pre-commit / lefthook / husky](hooks.md)
+- [GitHub Action](action.md)
+
+```text
+Usage:  rrt doctor [OPTIONS]
+
+Validate the core automation wiring for the current repository.
+
+Use `rrt doctor` for repository basics, then run feature-specific checks like `rrt release check`, `rrt docs check`, or `rrt eol` for deeper validation.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --fix          Auto-repair fixable issues (e.g. missing [Unreleased] changelog section).
+  --fix-dry-run  Preview what --fix would change without writing files.
+  --snapshot     Write current health check results to .rrt/health.lock.toml as a baseline.
+  --check        Compare current health against .rrt/health.lock.toml and report regressions.
+  --strict       With --check: exit 1 on any regression (default: advisory, exit 0).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt doctor
+  $ rrt release check
+  $ rrt docs check
+```
+
+## `rrt artifacts`
+
+Content-addressed integrity tracking for generated repository artifacts.
+
+### Overview
+
+`rrt artifacts` provides a general-purpose fingerprinting mechanism for any
+set of generated files in the repository. It hashes every file matched by
+configured glob patterns, writes the hashes to `.rrt/artifacts.lock.toml`,
+and can verify that freshly-generated artifacts still match the committed
+fingerprints.
+
+This closes the trust loop for generated assets: the code that produces them
+is version-controlled, the expected hashes are committed, and CI re-generates
+and re-verifies before any artifact reaches users.
+
+### Configuration
+
+Add `[[tool.rrt.artifact_targets]]` entries to `pyproject.toml` (or `.rrt.toml`):
+
+```toml
+[[tool.rrt.artifact_targets]]
+path = "src/repo_release_tools/assets/badges/*.svg"
+description = "Platform badge SVG files"
+
+[[tool.rrt.artifact_targets]]
+path = "docs/assets/banner-*.png"
+description = "Banner PNG renders"
+```
+
+### Subcommands
+
+- `--snapshot` — hash all configured targets, write `.rrt/artifacts.lock.toml`
+- `--check` — verify hashes match (advisory, exits 0 on mismatch by default)
+- `--check --strict` — exits 1 on any hash mismatch (for CI gates)
+- `--list` — display all tracked artifacts and their current hash status
+
+### Examples
+
+```bash
+rrt artifacts --snapshot
+rrt artifacts --check
+rrt artifacts --check --strict
+rrt artifacts --list
+```
+
+```text
+Usage:  rrt artifacts [OPTIONS]
+
+Hash and verify generated files against a committed fingerprint lock.
+Run --snapshot to record current hashes; --check to verify them in CI.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help    Show this message and exit.
+  --snapshot    Hash all configured artifact_targets and write .rrt/artifacts.lock.toml.
+  --check       Verify artifact hashes match the committed lock. Advisory by default.
+  --list        Display all tracked artifacts and their current hash status.
+  --regenerate  Run each target's command to regenerate outputs, then re-snapshot.
+  --dry-run     Show what --regenerate would do without running commands or writing the lock.
+  --strict      With --check: exit 1 on any hash mismatch (for CI gates).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt artifacts --snapshot
+  $ rrt artifacts --check --strict
+  $ rrt artifacts --list
+```
+
+## `rrt config`
+
+Inspect the resolved rrt configuration for the current repository.
+
+### Overview
+
+This command shows the configuration that rrt will actually use after
+repository discovery and any automatic config-file detection. It is the
+fastest way to answer:
+
+- Which config file did rrt pick?
+- Which version groups were resolved?
+- Which files and targets belong to each group?
+
+Use this command when you want to verify release metadata before running a
+bump, changelog update, or release workflow.
+
+### What the command reports
+
+The default view renders a tree-style summary with:
+
+- the config file source, or an "auto-detected" notice when no explicit file
+  was selected
+- the number of version groups in the resolved configuration
+- each version group name
+- per-group details for:
+  - `release_branch`
+  - `changelog`
+  - `lock_command`, when configured
+  - `generated_files`, when configured
+  - `version_targets`
+
+Each version target is rendered using the same internal description that rrt
+uses elsewhere, so the output is intended to be directly useful in generated
+CLI documentation.
+
+### Raw mode
+
+`--raw` prints the underlying config file instead of the rendered tree. The
+file is syntax-highlighted when possible and written directly to standard
+output.
+
+This is useful when you want to inspect the exact TOML/text content that rrt
+loaded, rather than the resolved structure.
+
+### Validate mode
+
+`--validate` runs every config check and reports pass/fail for each validation
+step.  Exits non-zero on any failure.
+
+### Schema mode
+
+`--schema` prints the bundled JSON Schema for `[tool.rrt]` to stdout.  Redirect
+the output to a file and reference it from your TOML language server settings to
+enable IDE completion and inline validation.
+
+### Failure behavior
+
+The command exits with a non-zero status when:
+
+- no config file can be found
+- the config file cannot be loaded
+- the resolved config is invalid
+- the raw file cannot be read in `--raw` mode
+
+In these cases, the command writes the error or discovery guidance to stderr.
+
+### Examples
+
+```bash
+rrt config
+rrt config --raw
+rrt config --validate
+rrt config --schema > rrt-config.schema.json
+```
+
+### Caveats
+
+- Paths in the tree are shown relative to the current repository root.
+- The resolved output reflects discovery and auto-detection, not just the
+  contents of one file.
+
+```text
+Usage:  rrt config [OPTIONS]
+
+Inspect the resolved rrt configuration after discovery and auto-detection.
+
+Shows which config file rrt will use, the version groups it resolved, and the targets each group manages. Use --raw to print the underlying config file instead of the rendered tree view.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --raw        Show the raw config file with syntax highlighting instead of the tree view.
+  --validate   Validate the config and report pass/fail for each check.
+  --schema     Print the JSON Schema for [tool.rrt] to stdout.
+  --reference  Generate the annotated .rrt.toml config reference.
+  --check      With --reference: verify docs/rrt-config-reference.toml is current; exit 1 on drift.
+  --dry-run    With --reference: print without writing.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt config
+  $ rrt config --raw
+  $ rrt config --validate
+  $ rrt config --schema
+  $ rrt config --reference
+  $ rrt config --reference --check
+  $ rrt config --reference --dry-run
+```
+
+## `rrt env`
+
+Inspect the process environment and runtime context used by rrt.
+
+### Overview
+
+This command is a compact diagnostics tool for answering "what environment am
+I running in?" It does not read repository configuration. Instead, it reports
+the interpreter and terminal-related values that can affect rrt output.
+
+### What it reports
+
+The standard text view prints:
+
+- platform
+- Python version
+- Python executable path
+- `TERM`
+- `COLORTERM`
+- whether `NO_COLOR` is enabled
+- `RRT_COLOR`
+
+The `NO_COLOR` field is normalized to a friendly enabled/disabled value rather
+than echoing the raw environment variable.
+
+### JSON mode
+
+Use `--json` to emit the same fields as a JSON object. This is useful for
+automation, debugging, and documentation tooling that prefers structured
+output.
+
+### Examples
+
+```bash
+rrt env
+rrt env --json
+```
+
+### Caveats
+
+- This command reports only a small set of environment values that are most
+  relevant to rrt behavior.
+- It is a snapshot of the current process, not a probe of the wider shell or
+  login environment.
+
+```text
+Usage:  rrt env [OPTIONS] <env_action>
+
+Show environment variables and interpreter details that affect rrt behavior.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check       Run environment sanity checks (duplicates in PATH/PYTHONPATH).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --json      Output the environment as JSON.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt env
+  $ rrt env --json
+```
+
+### `rrt env check`
+
+```text
+Usage:  rrt env check [OPTIONS]
+
+Run a small set of environment sanity checks and exit non-zero on failure.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --json      (Ignored) kept for interface parity with `rrt env`.
+```
+
+## `rrt eol`
+
+Check detected runtimes and project minimum versions against end-of-life policy.
+
+### Overview
+
+`rrt eol` helps you answer two questions for one or more languages:
+
+- Is the current host runtime still supported?
+- Is the repository's declared minimum version still supported?
+
+It is designed for release pipelines and maintenance workflows where runtime
+support windows matter.
+
+### What the command checks
+
+For each requested language, the command checks:
+
+- the host runtime detected on the current machine
+- the project minimum version detected from the repository
+
+Each version is compared against EOL records and classified as:
+
+- supported
+- expiring soon
+- end-of-life
+- unknown
+
+When the runtime cannot be detected, the command prints `not detected` instead
+of failing that check.
+
+### Data sources
+
+By default, rrt uses bundled EOL data. With `--fetch-live`, it refreshes the
+records from endoflife.date for the current run.
+
+Language selection comes from the resolved configuration when available. If no
+EOL config is present, the command defaults to Python.
+
+### Policy behavior
+
+The effective thresholds come from `[tool.rrt.eol]` when configured, with CLI
+flags applied on top for the current invocation.
+
+Important policy switches:
+
+- `--warn-days` sets the warning window
+- `--error-days` sets the failure window
+- `--allow-eol` downgrades EOL failures to warnings
+- `--language` limits the check to one language
+
+### Output
+
+The command prints a small summary first, then one section per language with
+host runtime and project minimum results. If all checks pass it ends with a
+success line; otherwise it prints a failure line and returns a non-zero exit
+code.
+
+### Examples
+
+```bash
+rrt eol
+rrt eol --language node --fetch-live
+rrt eol --warn-days 90 --error-days 30
+```
+
+### Caveats
+
+- Supported languages are limited to the values exposed by rrt's EOL helpers.
+- Configured EOL overrides apply per language and version cycle.
+- `--allow-eol` changes exit-code behavior, not the underlying status labels.
+
+```text
+Usage:  rrt eol [OPTIONS] <eol_action>
+
+Check detected host runtimes and project minimum versions against end-of-life dates.
+
+Uses bundled EOL data by default and can refresh from endoflife.date on demand. When [tool.rrt.eol] is configured, CLI flags override the configured thresholds for this invocation.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check            Exit non-zero when any EOL check fails.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --language LANG  Check one language only (go, node, nodejs, python, rust). Default: from config or python.
+  --fetch-live     Fetch fresh EOL data from endoflife.date instead of using bundled snapshot.
+  --warn-days N    Warn when EOL is within N days (default: 180 or from config).
+  --error-days N   Error when EOL is within N days (default: 0 or from config = only on actual EOL).
+  --allow-eol      Downgrade errors to warnings (useful during migration grace periods).
+  --host-only      Only check the host runtime; skip project minimum checks.
+  --project-only   Only check the project minimum version; skip host runtime checks.
+  --snapshot       Merge EOL check results into .rrt/health.lock.toml after running.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt eol
+  $ rrt eol --language node --fetch-live
+  $ rrt eol --warn-days 90 --error-days 30
+```
+
+### `rrt eol check`
+
+```text
+Usage:  rrt eol check [OPTIONS]
+
+Run the configured EOL checks for the current repository and exit non-zero when any failure is detected.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --language LANG  Check one language only (go, node, nodejs, python, rust). Default: from config or python.
+  --fetch-live     Fetch fresh EOL data from endoflife.date instead of using bundled snapshot.
+  --warn-days N    Warn when EOL is within N days (default: 180 or from config).
+  --error-days N   Error when EOL is within N days (default: 0 or from config = only on actual EOL).
+  --allow-eol      Downgrade errors to warnings (useful during migration grace periods).
+  --host-only      Only check the host runtime; skip project minimum checks.
+  --project-only   Only check the project minimum version; skip host runtime checks.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt eol
+  $ rrt eol --language node --fetch-live
+  $ rrt eol --warn-days 90 --error-days 30
+```
+
+## `rrt toc`
+
+``rrt toc`` — generate and inject a Markdown table of contents.
+
+### Overview
+
+``rrt toc FILE`` reads a Markdown file and prints a nested bullet list of its
+headings to stdout.  With ``--inject`` and ``--anchor``, the generated TOC is
+written in-place inside a marked anchor block in a target file.
+
+### Usage
+
+```
+rrt toc FILE [--min-level N] [--max-level N]
+rrt toc FILE --inject TARGET --anchor ID [--min-level N] [--max-level N] [--dry-run]
+```
+
+### Anchors
+
+Place a pair of HTML comments in the target file to mark where the TOC
+should live:
+
+```markdown
+<!-- rrt:auto:start:toc -->
+<!-- rrt:auto:end:toc -->
+```
+
+The content between the markers is replaced on every ``rrt toc --inject`` run.
+Everything outside the markers is preserved unchanged.
+
+### Options
+
+| Flag | Default | Description |
+|---|---|---|
+| ``FILE`` | — | Markdown file to parse for headings |
+| ``--inject FILE`` | — | Target file to update in-place |
+| ``--anchor ID`` | — | Anchor ID inside the inject target |
+| ``--min-level N`` | 1 | Shallowest heading level to include (1 = ``#``) |
+| ``--max-level N`` | 6 | Deepest heading level to include (6 = ``######``) |
+| ``--dry-run`` | — | Print result instead of writing (requires ``--inject``) |
+
+``--inject`` and ``--anchor`` must always be used together.
+
+```text
+Usage:  rrt toc [OPTIONS] FILE
+
+Read a Markdown file and print a nested bullet-list TOC to stdout.
+
+With --inject and --anchor the generated TOC is written in-place inside
+an anchor block in a target file.  Markers delimit the block:
+
+  <!-- rrt:auto:start:ID -->
+  <!-- rrt:auto:end:ID -->
+
+Everything outside the markers is preserved unchanged.
+--inject and --anchor must always be used together.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  FILE           Markdown file to parse for headings.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --inject FILE  Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
+  --anchor ID    Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
+  --min-level N  Shallowest heading level to include (default: 1 = #).
+  --max-level N  Deepest heading level to include (default: 6 = ######).
+  --dry-run      Print the result instead of writing (only effective with --inject).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt toc README.md
+  $ rrt toc README.md --min-level 2 --max-level 3
+  $ rrt toc README.md --inject README.md --anchor toc
+  $ rrt toc README.md --inject README.md --anchor toc --dry-run
+```
+
+## `rrt tree`
+
+Render a project tree with gitignore-aware filtering.
+
+### Overview
+
+`rrt tree` prints a repository or directory tree suitable for terminal review,
+docs snippets, and quick project orientation.
+
+The command is read-only and intentionally deterministic:
+
+- stable ordering (directories first, then files)
+- optional depth limiting for large repositories
+- optional hidden-file inclusion
+- optional directories-only mode
+
+### Ignore behavior
+
+When the selected root is inside a Git repository, ignore checks use Git's own
+exclude engine via `git check-ignore`, so matching follows active repository
+rules and precedence semantics.
+
+When the root is not in a Git worktree, the command falls back to a conservative
+local skip list for well-known transient directories (for example `.git`,
+`node_modules`, `.venv`) while still honoring explicit CLI flags.
+
+### Output formats
+
+- `classic` (default): platform-aware tree connectors through `GLYPHS.tree`
+- `ascii`: forced ASCII connectors for paste-safe logs or legacy terminals
+- `markdown`: nested bullet output for Markdown docs and issue comments
+- `rich`: Rich tree rendering when the optional package is installed; falls
+    back to `classic` with a warning when Rich is unavailable
+
+### Common options
+
+- `--root PATH` selects the traversal root
+- `--max-depth N` limits recursion depth (unlimited by default)
+- `--dirs-only` suppresses files
+- `--show-hidden` includes dotfiles and dot-directories
+
+### Failure behavior
+
+The command exits non-zero when:
+
+- the root path does not exist
+- the root path is not a directory
+
+Unreadable subdirectories are reported as warnings and do not fail the command.
+
+### Examples
+
+```bash
+rrt tree
+rrt tree --format ascii
+rrt tree --format markdown --max-depth 3
+rrt tree --root src/repo_release_tools --dirs-only
+rrt tree --format markdown --inject README.md --anchor project-tree
+rrt tree --format markdown --inject README.md --anchor project-tree --dry-run
+```
+
+### Embedding a tree into a Markdown file
+
+Use `--inject` and `--anchor` to automatically update a block inside any
+Markdown document without touching the surrounding prose.
+
+**Step 1 — add anchor markers once** (HTML comments, invisible when rendered):
+
+```markdown
+## Project layout
+
+Some intro text above — preserved on every run.
+
+<!-- rrt:auto:start:project-tree -->
+<!-- rrt:auto:end:project-tree -->
+
+Some text below — also preserved.
+```
+
+**Step 2 — run `rrt tree` with `--inject`**:
+
+```bash
+rrt tree --format markdown --inject README.md --anchor project-tree
+```
+
+Only the content between the markers is replaced; everything else in the file
+stays untouched.
+
+#### Anchor ID rules
+
+An anchor ID must start with an ASCII letter or digit followed by any
+combination of ASCII letters, digits, dots, underscores, or hyphens.
+
+Valid examples: `project-tree`, `src.layout`, `tree_v2`
+
+### Caveats
+
+- Symlinked directories are listed but not recursively traversed.
+- The root itself is not printed as a tree node; output begins with its
+    children.
+- Rich formatting is optional and never required for baseline output.
+
+### Related docs
+
+- [Generated CLI reference](rrt-cli.md)
+- [rrt git](git_cmd.md)
+
+```text
+Usage:  rrt tree [OPTIONS] PATH
+
+Render a directory tree from the selected root while respecting gitignore rules.
+
+Formats: classic, ascii, markdown, rich, json, flat. Rich output falls back to classic if the optional rich package is unavailable. json/flat emit machine-consumable output (a nested document or one path per line, respectively).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  PATH                   Root directory to render. Equivalent to --root and takes precedence when both are supplied.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help             Show this message and exit.
+  --format               Output format. Defaults to classic.
+  --max-depth N          Maximum recursion depth (default: unlimited).
+  --dirs-only            Show directories only.
+  --show-hidden          Include dotfiles and dot-directories.
+  --root PATH            Root directory to render (default: current directory).
+  --inject FILE          Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
+  --anchor ID            Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
+  --dry-run              Print planned actions instead of writing (with --inject or --fix-empty-dirs).
+  --snapshot             Write a tree structure snapshot to .rrt/tree.lock.toml as a baseline.
+  --check                Compare current tree against .rrt/tree.lock.toml and report structural drift.
+  --manifest             Write a machine-readable manifest to .rrt/tree.manifest.json containing per-file metadata (size, mtime, sha256, mode, uid, gid, symlink_target). This enables deterministic, atomic manifest generation and implies hashing of file contents.
+  --compressed           Write the manifest as a compressed gzip file (.rrt/tree.manifest.json.gz). Implied: --manifest.
+  --strict               With --check: exit 1 on structural drift (default: advisory, exit 0).
+  --strict-empty-dirs    Exit 1 when truly-empty (non-.gitkept) directories are present. Such directories cannot be tracked by git and cause local/CI manifest drift. Use --fix-empty-dirs to resolve interactively.
+  --fix-empty-dirs       Interactively resolve truly-empty directories by adding a .gitkeep placeholder or removing the directory. Honors --dry-run and --yes.
+  --yes, -y              With --fix-empty-dirs: assume yes (add .gitkeep) for every prompt.
+  --auto-resolve ACTION  With --fix-empty-dirs: apply ACTION to every phantom directory without prompting. 'git-rm' stages the removal via `git rm -rf`.
+  --absolute             Emit absolute paths in the json and flat formats (and in the manifest). Default: paths are relative to the scan root.
+  --output PATH          Write the rendered tree to PATH instead of stdout. Honors --format. Ignored when --inject, --snapshot, --check, or --fix-empty-dirs is used (those have their own targets).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt tree
+  $ rrt tree --format ascii
+  $ rrt tree --format markdown --max-depth 3
+  $ rrt tree --root src/repo_release_tools --dirs-only
+  $ rrt tree --format markdown --inject README.md --anchor project-tree
+```
+
+## `rrt docs`
+
+rrt docs — extract and manage source-owned documentation blocks.
+
+### Overview
+
+`rrt docs` provides a specialized toolset for managing documentation that lives
+directly within the source code. By extracting inline blocks from multiple
+programming languages and verifying them against a cryptographic lockfile, the
+tool ensures that your documentation stays accurate, up-to-date, and tightly
+coupled with the implementation.
+
+It supports a variety of languages including Python, TypeScript, Go, Rust, and
+several shell dialects, using regex-based extraction that doesn't require
+heavyweight AST parsers.
+
+### Responsibilities
+
+- extract inline documentation blocks from source files recursively
+- generate documentation in multiple formats (Markdown, JSON, TOML, Rich)
+- maintain a documentation lockfile (`docs.lock.toml`) to detect drift in CI
+- emit machine-readable indices of CLI commands and arguments
+- suggest or scaffold missing module docstrings for project alignment
+
+### Sub-actions
+
+- **generate**: Scans the source tree and emits documentation. Use `--format toml`
+  to write or update the documentation lockfile.
+- **check**: Validates that the current documentation lockfile matches the
+  source tree. Exits with a non-zero status if drift is detected.
+- **publish**: Generates the complete Markdown reference documentation from
+  the live CLI parser.
+- **inject**: Synchronizes shared anchor blocks (headers, footers) across
+  multiple Markdown files.
+- **suggest**: Analyzes Python modules for missing or thin docstrings and
+  provides scaffolded improvements.
+- **api**: Emits a structured index of all `rrt` commands for use in
+  external tooling.
+
+### Extraction modes
+
+Controlled by `[tool.rrt.docs] extraction_mode` in config:
+
+- `explicit` (default): only extract blocks preceded by a ``# sym: NAME``
+  (Python/Bash/PowerShell) or ``// sym: NAME`` (JS/TS/Go/Rust) marker.
+  PowerShell also supports ``<# sym: NAME #>``.
+- `implicit`: extract language-native docstrings / comment blocks.
+- `both`: explicit markers take priority; fall back to implicit.
+
+### Supported languages
+
+| Slug        | Extensions               |
+|-------------|--------------------------|
+| python      | .py                      |
+| ts          | .ts, .tsx                |
+| js          | .js, .mjs, .cjs, .jsx    |
+| go          | .go                      |
+| rust        | .rs                      |
+| bash        | .sh, .bash, .zsh         |
+| fish        | .fish                    |
+| powershell  | .ps1, .psm1, .psd1       |
+
+### Lockfile
+
+`rrt docs generate --format toml` writes `.rrt/docs.lock.toml` (default),
+a human-readable TOML file tracking each source file's SHA-256 hash and the
+symbols it exports.  Use `rrt docs check` or the `rrt-docs-check` pre-commit
+hook to fail fast when docs drift from source.
+
+### Examples
+
+```bash
+rrt docs generate --format rich            # colourised terminal preview
+rrt docs generate --format toml --dry-run  # show lock without writing
+rrt docs check                             # exits 1 if lockfile is stale
+rrt docs api --format json                 # machine-readable API index
+```
+
+### Related docs
+
+- [CLI reference](rrt-cli.md)
+- [Project tree command](tree.md)
+
+```text
+Usage:  rrt docs [OPTIONS] <docs_action>
+
+Scan source files and extract inline documentation blocks
+across Python, TypeScript/JavaScript, Go, Rust, Bash/Zsh, Fish, and PowerShell.
+
+Sub-actions: generate (default), check, publish, inject, suggest, api
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  generate     Extract docs and emit in the selected format.
+  check        Exit 1 if the docs lockfile is stale.
+  publish      Write CLI-reference docs from the live rrt parser.
+  inject       Inject shared anchor blocks defined in [tool.rrt.docs.shared_blocks].
+  suggest      Suggest or scaffold rich module docstrings for Python files.
+  badges       Generate platform SVG badge files into docs/public/assets/badges/.
+  api          Emit a structured index of all rrt CLI commands and arguments.
+  map          Generate per-directory purpose docs from [tool.rrt.docs.map].
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --root PATH  Project root directory (default: current directory).
+  --dry-run    Print what would be done without writing files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples:
+  rrt docs generate                         # explicit mode, md output to stdout
+  rrt docs generate --format toml           # write .rrt/docs.lock.toml
+  rrt docs generate --format rich           # colourised terminal preview
+    rrt docs check                            # exits 1 if lockfile is stale
+    rrt docs suggest                          # suggest rich module docstrings
+  rrt docs generate --lang python,go        # multi-language extraction
+  rrt docs api                              # emit rrt API index (Markdown)
+  rrt docs api --format json                # emit rrt API index as JSON
+```
+
+### `rrt docs generate`
+
+```text
+Usage:  rrt docs generate [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help    Show this message and exit.
+  --format      Output format (default: first format in config, usually md).
+  --lang LANGS  Comma-separated language filter, e.g. python,go (overrides config).
+  --root PATH   Project root directory (default: current directory).
+  --dry-run     Print what would be done without writing files.
+```
+
+### `rrt docs check`
+
+```text
+Usage:  rrt docs check [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --lock-file PATH  Path to the lock file (default: from config or .rrt/docs.lock.toml).
+  --root PATH       Project root directory (default: current directory).
+```
+
+### `rrt docs publish`
+
+```text
+Usage:  rrt docs publish [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --check           Fail if any generated file is stale; do not write.
+  --fail-on-change  Exit 1 after writing (for pre-commit hook workflows).
+  --dry-run         Print which files would be written without doing so.
+```
+
+### `rrt docs inject`
+
+```text
+Usage:  rrt docs inject [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --check        Fail if any anchor block is stale; do not write.
+  --root PATH    Project root directory (default: current directory).
+  --dry-run      Print which files would be updated without writing.
+  --add-anchors  Prepend missing anchor stubs to target files (first-time setup).
+```
+
+### `rrt docs suggest`
+
+```text
+Usage:  rrt docs suggest [OPTIONS] <paths>
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <paths>        Optional files or directories to scan; defaults to the command modules.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --root PATH    Project root directory (default: current directory).
+  --min-chars N  Minimum docstring length to accept (default: config or 150).
+  --apply        Write scaffold docstrings back into the target files.
+```
+
+### `rrt docs badges`
+
+```text
+Usage:  rrt docs badges [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help           Show this message and exit.
+  --platform PLATFORM  Generate badge for a single platform (e.g. github, gitlab).
+  --all-platforms      Generate badges for all known platforms (default when --platform is omitted).
+  --output-dir PATH    Override output directory (default: badge_assets_dir from config).
+  --check              Fail if any badge file is stale; do not write.
+  --root PATH          Project root directory (default: current directory).
+  --dry-run            Print which files would be written without doing so.
+  --variant            Generate only one visual variant (default: all available).
+```
+
+### `rrt docs api`
+
+```text
+Usage:  rrt docs api [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --format       Output format for the API index (default: md).
+  --output FILE  Write output to FILE instead of stdout.
+  --root PATH    Project root directory (default: current directory).
+  --dry-run      Print what would be written without writing files.
+```
+
+### `rrt docs map`
+
+```text
+Usage:  rrt docs map [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --check      Fail if any directory's purpose doc disagrees with the lockfile.
+  --root PATH  Project root directory (default: current directory).
+  --dry-run    Preview changes without writing files or the lockfile.
+```
+
+## `rrt drift`
+
+Lock and check agent-surface drift for repo-release-tools.
+
+### Overview
+
+`rrt drift` provides a mechanism for tracking the integrity of "agent-facing"
+surfaces—files that define the behavior, skills, and instructions for LLM-based
+agents within the repository. It creates a cryptographic lockfile that records
+the state of these surfaces, allowing developers and CI to detect when
+sensitive agent configurations have drifted from their approved state.
+
+This is critical for ensuring that automated hooks, agent prompts, and shared
+skill documentation remain consistent and haven't been modified without a
+corresponding lockfile update.
+
+### Responsibilities
+
+- scan for agent-facing surface files across multiple tool directories
+- compute stable cryptographic hashes for each tracked file
+- generate and maintain a `drift.lock.toml` file in the `.rrt/` directory
+- validate current repository state against the lock to detect drift
+- provide actionable guidance for resolving detected inconsistencies
+
+### Tracked Surfaces
+
+The command tracks a variety of sensitive agentic surfaces, including:
+
+- **Claude**: `.claude/settings.json`, `.claude/hooks/*.py`
+- **Copilot**: `.github/copilot-instructions.md`, `.github/instructions/*.md`
+- **Skills**: `.github/skills/*/SKILL.md`
+- **Agent Definitions**: `.github/agents/*.agent.md`
+
+### Behavior
+
+- **generate**: Scans the repository for all recognized agent surfaces,
+  computes their hashes, and writes the `drift.lock.toml` file. Supports
+  `--dry-run` to preview the lock content.
+- **check**: Compares the current hashes of the tracked surfaces against the
+  values stored in the lockfile. Exits with a non-zero status if any drift is
+  detected (missing files, extra files, or modified content).
+- Filtering: Automatically ignores files matched by the project's `.gitignore`
+  rules.
+
+### Examples
+
+- `rrt drift generate`
+- `rrt drift generate --dry-run`
+- `rrt drift check`
+- `rrt drift check --root ./some-other-repo`
+
+### Caveats
+
+- The lockfile itself should be committed to the repository to serve as the
+  ground truth for CI checks.
+- Changes to agent surfaces must be accompanied by a `rrt drift generate`
+  call to update the lock.
+- Only files matching the predefined surface patterns are tracked.
+
+```text
+Usage:  rrt drift [OPTIONS] <drift_command>
+
+Lock and check the repo's agent-facing surfaces, such as Claude hooks, agent prompts, and shared skill docs.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  generate    Write the drift lockfile for agent surfaces.
+  check       Check whether the drift lockfile is current.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt drift generate --dry-run
+  $ rrt drift check
+```
+
+### `rrt drift generate`
+
+```text
+Usage:  rrt drift generate [OPTIONS]
+
+Write a TOML lockfile that records hashes for the configured agent-facing surfaces.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --root PATH       Repository root to scan. Defaults to the current directory.
+  --lock-file PATH  Lock file path relative to .rrt/ (default: drift.lock.toml).
+  --dry-run         Preview without writing files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt drift generate --dry-run
+  $ rrt drift check
+```
+
+### `rrt drift check`
+
+```text
+Usage:  rrt drift check [OPTIONS]
+
+Compare the current agent-facing surfaces against the stored drift lockfile.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --root PATH       Repository root to scan. Defaults to the current directory.
+  --lock-file PATH  Lock file path relative to .rrt/ (default: drift.lock.toml).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt drift generate --dry-run
+  $ rrt drift check
+```
+
+## `rrt folder`
+
+Folder supervision and scaffolding command family.
+
+Overview
+
+`rrt folder` validates, scaffolds, and infers folder structures for a
+project. It supports three primary flows:
+
+- `check` — validate an existing tree against configured folder policies or
+    built-in templates and report violations.
+- `scaffold` — create missing files and directories from named templates,
+    optionally running in `--dry-run` mode to preview changes.
+- `design` — capture an existing directory tree and emit a reusable
+    template description (TOML) that can be applied elsewhere.
+
+Usage examples:
+
+    rrt folder check --template python-package
+    rrt folder scaffold --template cargo-inspired --dry-run
+    rrt folder design --name captured-template --root src
+
+This module implements the command handlers exposed via the top-level
+`rrt folder` command and is intentionally documented so contributors and
+automation can rely on a clear, multi-line module-level docstring.
+
+```text
+Usage:  rrt folder [OPTIONS] <folder_command>
+
+Supervise folder structures against config-defined rules or built-in templates, scaffold missing structure, and infer new templates from existing trees.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check       Validate folder structure against templates or configured rules.
+  scaffold    Create missing files and folders from templates or configured rules.
+  design      Infer a custom template from an existing directory.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt folder check --template python-package
+  $ rrt folder scaffold --template cargo-inspired --dry-run
+  $ rrt folder design --name captured-template --root src
+```
+
+### `rrt folder check`
+
+```text
+Usage:  rrt folder check [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --root PATH    Root to validate.
+  --template     Built-in or custom template name to apply at the root. Available built-ins: bash-powershell-project, cargo-inspired, cli-tool, docs-only, go-module, javascript-package, library-module, loose-starter, loose-validate, monorepo-workspace, plugin-extension, python-package.
+  --report-only  Downgrade violations to warnings for this invocation.
+  --snapshot     Merge folder check results into .rrt/health.lock.toml after running.
+```
+
+### `rrt folder scaffold`
+
+```text
+Usage:  rrt folder scaffold [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --root PATH  Root to scaffold.
+  --template   Built-in or custom template name to apply at the root.
+  --force      Overwrite existing scaffold-managed files.
+  --dry-run    Preview scaffold actions without writing files.
+```
+
+### `rrt folder design`
+
+```text
+Usage:  rrt folder design [OPTIONS]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --root PATH      Directory to inspect.
+  --name NAME      Template name to emit.
+  --selector GLOB  Selector to pair with the emitted rule snippet.
+  --loose          Emit a permissive loose template instead of an exact one.
+```

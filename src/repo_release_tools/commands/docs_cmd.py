@@ -96,7 +96,10 @@ from repo_release_tools.config import (
 from repo_release_tools.docs.extractor import DocEntry, extract_docs_from_dir
 from repo_release_tools.docs.formats import render
 from repo_release_tools.state import build_lock, docs_lock_path, lock_is_current
+from repo_release_tools.tools.inject import ANCHOR_START_TOKEN as _MD_ANCHOR_START_TOKEN
 from repo_release_tools.tools.inject import (
+    MDX_ANCHOR_START_TOKEN,
+    _detect_inject_format,
     apply_generated_docs,
     ensure_anchor_stub,
     insert_anchor_stub_str,
@@ -299,7 +302,7 @@ def _cmd_publish(args: argparse.Namespace) -> int:
             if target.anchor_id is None
             else content
         )
-        full_content = _embed_toc_in_content(full_content)
+        full_content = _embed_toc_in_content(full_content, target.output_path)
         exit_code = max(
             exit_code,
             apply_generated_docs(
@@ -554,23 +557,29 @@ def _embed_shared_blocks_in_content(
 
 
 _TOC_ANCHOR = "toc"
-_TOC_START = f"<!-- rrt:auto:start:{_TOC_ANCHOR} -->"
 
 
 def _embed_toc_in_content(
     content: str,
+    output_path: Path,
     *,
     min_level: int = 2,
     max_level: int = 3,
 ) -> str:
-    if _TOC_START not in content:
+    fmt = _detect_inject_format(output_path)
+    toc_start = (
+        f"{{/* {MDX_ANCHOR_START_TOKEN}{_TOC_ANCHOR} */}}"
+        if fmt == "mdx"
+        else f"<!-- {_MD_ANCHOR_START_TOKEN}{_TOC_ANCHOR} -->"
+    )
+    if toc_start not in content:
         return content
     headings = parse_headings(content)
     if not headings:
         return content
     toc = render_toc(headings, min_level=min_level, max_level=max_level)
     try:
-        replaced = replace_anchored_block(content, anchor_id=_TOC_ANCHOR, content=toc)
+        replaced = replace_anchored_block(content, anchor_id=_TOC_ANCHOR, content=toc, fmt=fmt)
     except ValueError:
         return content
     return replaced if replaced is not None else content

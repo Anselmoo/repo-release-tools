@@ -42,6 +42,13 @@ from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
 from repo_release_tools.docs.formats.markdown import heading_level, normalize_markdown_headings
 from repo_release_tools.integrations import action as action_module
+from repo_release_tools.tools.inject import (
+    ANCHOR_END_TOKEN,
+    ANCHOR_START_TOKEN,
+    MDX_ANCHOR_END_TOKEN,
+    MDX_ANCHOR_START_TOKEN,
+    _detect_inject_format,
+)
 from repo_release_tools.tools.inject import apply_generated_docs as apply_generated_docs
 from repo_release_tools.workflow import git as git_helpers
 from repo_release_tools.workflow import hooks as hooks_module
@@ -52,10 +59,42 @@ from repo_release_tools.workflow import hooks as hooks_module
 
 DEFAULT_OUTPUT: Path = Path("docs/src/content/docs/commands/rrt-cli.mdx")
 PINNED_COLUMNS: str = "120"
-AUTOGEN_NOTE: str = (
-    "<!-- Auto-generated from repo_release_tools.cli.build_parser(); "
-    "run `rrt docs publish` to refresh. -->"
+_AUTOGEN_NOTE_TEXT: str = (
+    "Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh."
 )
+AUTOGEN_NOTE: str = f"<!-- {_AUTOGEN_NOTE_TEXT} -->"
+
+
+def _autogen_note(output_path: Path) -> str:
+    """Return the auto-generated banner comment, wrapped for *output_path*'s format.
+
+    ``.mdx`` targets get an MDX-safe JSX comment (``{/* ... */}``); every other
+    format (including RST, which never used ``AUTOGEN_NOTE`` historically) gets
+    the original HTML-comment form unchanged.
+    """
+    if _detect_inject_format(output_path) == "mdx":
+        return f"{{/* {_AUTOGEN_NOTE_TEXT} */}}"
+    return AUTOGEN_NOTE
+
+
+def _anchor_stub_pair(anchor_id: str, output_path: Path) -> tuple[str, str]:
+    """Return the ``(start, end)`` anchor marker literals for *anchor_id*.
+
+    The wrapper syntax is chosen by :func:`_detect_inject_format` on
+    *output_path*, matching what
+    :func:`~repo_release_tools.tools.inject.replace_anchored_block` will later
+    look for when it fills in the block between these markers.
+    """
+    if _detect_inject_format(output_path) == "mdx":
+        return (
+            f"{{/* {MDX_ANCHOR_START_TOKEN}{anchor_id} */}}",
+            f"{{/* {MDX_ANCHOR_END_TOKEN}{anchor_id} */}}",
+        )
+    return (
+        f"<!-- {ANCHOR_START_TOKEN}{anchor_id} -->",
+        f"<!-- {ANCHOR_END_TOKEN}{anchor_id} -->",
+    )
+
 
 _README_BASE: str = "https://github.com/Anselmoo/repo-release-tools/blob/main"
 
@@ -383,15 +422,16 @@ def render_help(argv: Sequence[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate_markdown() -> str:
+def generate_markdown(output_path: Path = DEFAULT_OUTPUT) -> str:
     """Return the generated CLI reference Markdown (compact command index)."""
+    toc_start, toc_end = _anchor_stub_pair("toc", output_path)
     parts = [
         "# rrt CLI",
         "",
-        AUTOGEN_NOTE,
+        _autogen_note(output_path),
         "",
-        "<!-- rrt:auto:start:toc -->",
-        "<!-- rrt:auto:end:toc -->",
+        toc_start,
+        toc_end,
         "",
         "This reference is generated from the live `argparse` configuration in",
         "`repo_release_tools.cli` and `src/repo_release_tools/commands/*.py`.",
@@ -449,15 +489,18 @@ def iter_help_sections_for_commands(commands: Sequence[str]) -> Iterator[HelpSec
             yield from walk((name,), child)
 
 
-def generate_group_reference_markdown(group_display_name: str, commands: Sequence[str]) -> str:
+def generate_group_reference_markdown(
+    group_display_name: str, commands: Sequence[str], output_path: Path = DEFAULT_OUTPUT
+) -> str:
     """Return generated reference Markdown for a CLI command group."""
+    toc_start, toc_end = _anchor_stub_pair("toc", output_path)
     parts = [
         f"# rrt {group_display_name}",
         "",
-        AUTOGEN_NOTE,
+        _autogen_note(output_path),
         "",
-        "<!-- rrt:auto:start:toc -->",
-        "<!-- rrt:auto:end:toc -->",
+        toc_start,
+        toc_end,
         "",
     ]
 
@@ -697,7 +740,7 @@ def _build_generated_doc_targets(cfg_docs: object = None) -> tuple[DocTarget, ..
             DEFAULT_OUTPUT,
             _wrap_with_frontmatter(
                 DEFAULT_OUTPUT,
-                generate_markdown,
+                lambda: generate_markdown(DEFAULT_OUTPUT),
                 title_override=title_overrides.get("rrt-cli"),
                 slug="rrt-cli",
             ),
@@ -728,7 +771,7 @@ def _build_generated_doc_targets(cfg_docs: object = None) -> tuple[DocTarget, ..
         title = f"rrt {display}"
         render_fn = _wrap_with_frontmatter(
             output_path,
-            lambda d=display, c=commands: generate_group_reference_markdown(d, c),
+            lambda d=display, c=commands, p=output_path: generate_group_reference_markdown(d, c, p),
             title_override=title,
             slug=slug,
         )

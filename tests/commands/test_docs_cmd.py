@@ -1361,11 +1361,11 @@ class TestEmbedTocInContent:
 
     def test_no_toc_stub_returns_unchanged(self) -> None:
         content = "# Heading\n\nSome content with no TOC stub.\n"
-        assert _embed_toc_in_content(content) == content
+        assert _embed_toc_in_content(content, Path("target.md")) == content
 
     def test_toc_stub_with_no_headings_returns_unchanged(self) -> None:
         content = "<!-- rrt:auto:start:toc -->\n<!-- rrt:auto:end:toc -->\n\nNo headings here.\n"
-        assert _embed_toc_in_content(content) == content
+        assert _embed_toc_in_content(content, Path("target.md")) == content
 
     def test_toc_stub_with_headings_populates_toc(self) -> None:
         content = (
@@ -1377,7 +1377,7 @@ class TestEmbedTocInContent:
             "### Subsection\n\n"
             "More text.\n"
         )
-        result = _embed_toc_in_content(content)
+        result = _embed_toc_in_content(content, Path("target.md"))
         assert "- [`Section One`](#section-one)" in result or "Section One" in result
         assert "<!-- rrt:auto:start:toc -->" in result
         assert "<!-- rrt:auto:end:toc -->" in result
@@ -1385,7 +1385,7 @@ class TestEmbedTocInContent:
     def test_missing_end_anchor_returns_content_unchanged(self) -> None:
         # Start anchor present but end anchor missing → ValueError caught → content unchanged.
         content = "# Title\n\n<!-- rrt:auto:start:toc -->\n\n## Section\n\nText.\n"
-        assert _embed_toc_in_content(content) == content
+        assert _embed_toc_in_content(content, Path("target.md")) == content
 
     def test_toc_stub_replaces_existing_toc_content(self) -> None:
         content = (
@@ -1396,6 +1396,28 @@ class TestEmbedTocInContent:
             "## New Section\n\n"
             "Text.\n"
         )
-        result = _embed_toc_in_content(content)
+        result = _embed_toc_in_content(content, Path("target.md"))
         assert "Old entry" not in result
         assert "New Section" in result
+
+    def test_mdx_target_uses_jsx_comment_stub(self) -> None:
+        content = (
+            "# Title\n\n"
+            "{/* rrt:auto:start:toc */}\n"
+            "{/* rrt:auto:end:toc */}\n\n"
+            "## Section One\n\n"
+            "Some text.\n"
+        )
+        result = _embed_toc_in_content(content, Path("target.mdx"))
+        assert "Section One" in result
+        assert "{/* rrt:auto:start:toc */}" in result
+        assert "{/* rrt:auto:end:toc */}" in result
+        assert "<!--" not in result
+
+    def test_mdx_target_ignores_html_comment_stub(self) -> None:
+        # An .mdx target should not match an HTML-comment-style stub — the
+        # presence check itself is format-aware.
+        content = (
+            "# Title\n\n<!-- rrt:auto:start:toc -->\n<!-- rrt:auto:end:toc -->\n\n## Section\n"
+        )
+        assert _embed_toc_in_content(content, Path("target.mdx")) == content
