@@ -5,26 +5,30 @@
  * `title` overrides the default all-caps label.
  *
  * Ported from components/feedback/Callout.jsx (Reto design system mirror).
+ * Tone colors are resolved to one CSS class per tone (`.reto-callout--<tone>`)
+ * in the scoped <style> block below, matching the class-per-variant pattern
+ * used by Button.astro/StatusPanel.astro — frontmatter only picks the class
+ * name, no inline style for tone-driven values.
  */
 interface Props {
   tone?: "note" | "tip" | "warning" | "danger";
   title?: string;
 }
 
-const { tone = "note", title } = Astro.props as Props;
-
-const TONE: Record<string, { border: string; label: string; glyph: string }> = {
-  note: { border: "var(--reto-accent-strong)", label: "NOTE", glyph: "»" },
-  tip: { border: "var(--reto-success-strong)", label: "TIP", glyph: "★" },
-  warning: { border: "var(--reto-accent-strong)", label: "WARNING", glyph: "▲" },
-  danger: { border: "var(--reto-danger-strong)", label: "DANGER", glyph: "✕" },
+const TONE_META: Record<string, { label: string; glyph: string }> = {
+  note: { label: "NOTE", glyph: "»" },
+  tip: { label: "TIP", glyph: "★" },
+  warning: { label: "WARNING", glyph: "▲" },
+  danger: { label: "DANGER", glyph: "✕" },
 };
 
-const t = TONE[tone] || TONE.note;
+const { tone = "note", title } = Astro.props as Props;
+
+const t = TONE_META[tone] || TONE_META.note;
 ---
 
-<div class="reto-callout" style={{ borderLeftColor: t.border }}>
-  <div class="reto-callout__label" style={{ color: t.border }}>
+<div class={`reto-callout reto-callout--${tone}`}>
+  <div class="reto-callout__label">
     <span aria-hidden="true">{t.glyph}</span>
     {title || t.label}
   </div>
@@ -57,5 +61,34 @@ const t = TONE[tone] || TONE.note;
     color: var(--reto-text-soft);
     font-family: var(--reto-font-body);
     line-height: var(--leading-body);
+  }
+
+  /* Tones — border-left + label color per tone (mirrors Callout.jsx's TONE map) */
+  .reto-callout--note {
+    border-left-color: var(--reto-accent-strong);
+  }
+  .reto-callout--note .reto-callout__label {
+    color: var(--reto-accent-strong);
+  }
+
+  .reto-callout--tip {
+    border-left-color: var(--reto-success-strong);
+  }
+  .reto-callout--tip .reto-callout__label {
+    color: var(--reto-success-strong);
+  }
+
+  .reto-callout--warning {
+    border-left-color: var(--reto-accent-strong);
+  }
+  .reto-callout--warning .reto-callout__label {
+    color: var(--reto-accent-strong);
+  }
+
+  .reto-callout--danger {
+    border-left-color: var(--reto-danger-strong);
+  }
+  .reto-callout--danger .reto-callout__label {
+    color: var(--reto-danger-strong);
   }
 </style>

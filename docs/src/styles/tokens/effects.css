@@ -17,7 +17,10 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  /* Guarded with html:not([data-theme]) so an explicit
+     html[data-theme="light"|"dark"] override always takes precedence,
+     regardless of CSS import/source order. Matches the real reto.css. */
+  html:not([data-theme]) {
     --reto-shadow: 0 10px 35px rgb(0 0 0 / 80%);
     --reto-glow: 0 0 12px rgba(255, 179, 108, 0.4);
     --reto-phosphor-glow: 0 0 8px rgba(255, 179, 108, 0.6);

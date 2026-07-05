@@ -58,10 +58,10 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  /* Auto dark-mode: applies whenever no explicit data-theme override exists.
-     Uses plain :root (not :not([data-theme])) so token-scope detection picks
-     it up; explicit html[data-theme] rules below always win by source order. */
-  :root {
+  /* Auto dark-mode: guarded with html:not([data-theme]) so an explicit
+     html[data-theme="light"|"dark"] override always takes precedence,
+     regardless of CSS import/source order. Matches the real reto.css. */
+  html:not([data-theme]) {
     --reto-bg: var(--carbon-950);
     --reto-bg-elevated: var(--carbon-900);
     --reto-surface: var(--carbon-800);
