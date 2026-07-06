@@ -2,9 +2,8 @@
    List of imports only; every token file below is what ships to consumers.
    See tokens/*.css for source values and provenance.
 
-   NOT YET WIRED IN: this file is inert until a later task (Task 5) adds it
-   to astro.config.mjs's Starlight `customCss` array. Landing it here only
-   stages the asset; it has zero effect on the current build. */
+   Wired into Starlight's `customCss` array in docs/astro.config.mjs, so this
+   file is live in every build. */
 
 @import "./tokens/fonts.css";
 @import "./tokens/colors.css";

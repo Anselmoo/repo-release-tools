@@ -41,15 +41,15 @@ Everything in this system was read directly from the live repository —
 nothing was invented from a screenshot.
 
 - Repo: [github.com/Anselmoo/repo-release-tools](https://github.com/Anselmoo/repo-release-tools)
-- Theme stylesheet: [`docs/assets/css/reto.css`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/css/reto.css) — the ground truth for every color, font, border, and glow value in this system
-- Theme toggle script: [`docs/assets/js/theme-toggle.js`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/js/theme-toggle.js)
-- Docs index / command-group table: [`docs/index.md`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md)
-- CLI reference: [`docs/commands/rrt-cli.md`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md)
+- Theme stylesheet: [`docs/src/styles/tokens/*.css`](https://github.com/Anselmoo/repo-release-tools/tree/main/docs/src/styles/tokens) — the ground truth for every color, font, border, and glow value in this system
+- Theme toggle: Starlight's native `ThemeSelect` component, re-skinned via `docs/src/styles/starlight-bridge.css`
+- Docs index / command-group table: [`docs/src/content/docs/index.mdx`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/src/content/docs/index.mdx)
+- CLI reference: [`docs/src/content/docs/commands/rrt-cli.mdx`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/src/content/docs/commands/rrt-cli.mdx)
 - Terminal banners + badges: [`docs/assets/banner-dark.png`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-dark.png), [`docs/assets/readme-badges/`](https://github.com/Anselmoo/repo-release-tools/tree/main/docs/assets/readme-badges)
 
-If you have access to this repo, read `reto.css` directly before making
-major changes here — this page distills it, but the source is the ground
-truth.
+If you have access to this repo, read `docs/src/styles/tokens/*.css` directly
+before making major changes here — this page distills it, but the source is
+the ground truth.
 
 ## Content fundamentals
 
