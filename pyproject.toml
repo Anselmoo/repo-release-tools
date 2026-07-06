@@ -202,6 +202,10 @@ kind = "pep621"
 path = "src/repo_release_tools/__init__.py"
 kind = "python_version"
 
+[[tool.rrt.version_targets]]
+path = "docs/package.json"
+kind = "package_json"
+
 [[tool.rrt.pin_targets]]
 path = "README.md"
 pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
