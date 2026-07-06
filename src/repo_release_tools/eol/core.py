@@ -61,10 +61,10 @@ eol      = "2026-06-01"
 
 ## Related docs
 
-- [rrt eol (CLI)](rrt-cli.md)
-- [rrt doctor](doctor.md)
-- [GitHub Action](action.md)
-- [pre-commit / lefthook](hooks.md)
+- [rrt eol (CLI)](/repo-release-tools/commands/rrt-cli/)
+- [rrt doctor](/repo-release-tools/commands/doctor/)
+- [GitHub Action](/repo-release-tools/action/)
+- [pre-commit / lefthook](/repo-release-tools/commands/hooks/)
 """
 
 from __future__ import annotations

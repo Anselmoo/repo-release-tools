@@ -120,10 +120,6 @@ COMMAND_GROUPS_CONFIG: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("setup-tooling", "Setup & Tooling", ("install", "init", "skill", "agents", "hooks")),
 )
 
-GROUP_REFERENCE_OUTPUTS: dict[str, Path] = {
-    slug: Path(f"docs/commands/{slug}.md") for slug, _, _ in COMMAND_GROUPS_CONFIG
-}
-
 
 # ---------------------------------------------------------------------------
 # Protocols and data structures
@@ -455,8 +451,8 @@ def generate_markdown(output_path: Path = DEFAULT_OUTPUT) -> str:
 
     for slug, display, commands in COMMAND_GROUPS_CONFIG:
         cmd_list = ", ".join(f"`{c}`" for c in commands)
-        ref_file = f"{slug}.md"
-        parts.append(f"| **{display}** | {cmd_list} | [{display}]({ref_file}) |")
+        ref_href = f"/repo-release-tools/commands/{slug}/"
+        parts.append(f"| **{display}** | {cmd_list} | [{display}]({ref_href}) |")
 
     parts.append("")
     return "\n".join(parts).rstrip() + "\n"
@@ -528,13 +524,15 @@ def generate_git_markdown() -> str:
 
 
 def generate_index_topic_links_markdown() -> str:
-    """Return the generated topic-link bullets for docs/index.md."""
+    """Return the generated topic-link bullets for docs/src/content/docs/index.mdx."""
     links = [
-        "- [rrt branch](commands/branch.md) — generated branch naming model and allowed branch types",
-        "- [rrt git](commands/git_cmd.md) — generated Git helpers and workflow shortcuts",
-        "- [rrt tree](commands/tree.md) — generated guide for `rrt tree` output modes, "
-        "ignore behavior, and traversal controls",
-        "- [MCP Server](mcp-server.md) — MCP install and connect guide",
+        "- [rrt branch](/repo-release-tools/commands/branch/) — generated branch naming "
+        "model and allowed branch types",
+        "- [rrt git](/repo-release-tools/commands/git_cmd/) — generated Git helpers and "
+        "workflow shortcuts",
+        "- [rrt tree](/repo-release-tools/commands/tree/) — generated guide for `rrt tree` "
+        "output modes, ignore behavior, and traversal controls",
+        "- [MCP Server](/repo-release-tools/mcp-server/) — MCP install and connect guide",
     ]
     return "\n".join(links)
 

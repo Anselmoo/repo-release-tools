@@ -76,8 +76,8 @@ rrt docs api --format json                 # machine-readable API index
 
 ## Related docs
 
-- [CLI reference](rrt-cli.md)
-- [Project tree command](tree.md)
+- [CLI reference](/repo-release-tools/commands/rrt-cli/)
+- [Project tree command](/repo-release-tools/commands/tree/)
 """
 
 from __future__ import annotations

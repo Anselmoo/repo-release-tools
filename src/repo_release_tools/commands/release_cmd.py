@@ -54,10 +54,10 @@ you need to keep multiple language surfaces aligned.
 
 ## Related docs
 
-- [rrt doctor](doctor.md)
-- [rrt eol (CLI)](rrt-cli.md)
-- [pre-commit / lefthook](hooks.md)
-- [GitHub Action](action.md)
+- [rrt doctor](/repo-release-tools/commands/doctor/)
+- [rrt eol (CLI)](/repo-release-tools/commands/rrt-cli/)
+- [pre-commit / lefthook](/repo-release-tools/commands/hooks/)
+- [GitHub Action](/repo-release-tools/action/)
 """
 
 from __future__ import annotations

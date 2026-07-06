@@ -100,8 +100,8 @@ Valid examples: `project-tree`, `src.layout`, `tree_v2`
 
 ## Related docs
 
-- [Generated CLI reference](rrt-cli.md)
-- [rrt git](git_cmd.md)
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/)
+- [rrt git](/repo-release-tools/commands/git_cmd/)
 """
 
 from __future__ import annotations

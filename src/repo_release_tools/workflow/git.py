@@ -47,8 +47,8 @@ summary first, followed by the details needed to act on the result.
 
 ## See also
 
-- [Conventional branches](branch.md)
-- [Generated CLI reference](rrt-cli.md)
+- [Conventional branches](/repo-release-tools/commands/branch/)
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/)
 """
 
 from __future__ import annotations

@@ -50,8 +50,8 @@ def test_generate_markdown_has_stable_sections_without_ansi_sequences() -> None:
     assert "Version & Release" in content
     assert "Repository Health" in content
     assert "Git Workflow" in content
-    assert "version-release.md" in content
-    assert "repo-health.md" in content
+    assert "/repo-release-tools/commands/version-release/" in content
+    assert "/repo-release-tools/commands/repo-health/" in content
     # Per-command sections are no longer in the compact index (they live in group pages)
     assert "### `rrt branch new`" not in content
     assert "RRT CLI" not in content
@@ -314,10 +314,10 @@ def test_generate_index_topic_links_markdown_lists_expected_entries() -> None:
 
     content = docs.generate_index_topic_links_markdown()
 
-    assert "commands/branch.md" in content
-    assert "commands/git_cmd.md" in content
-    assert "commands/tree.md" in content
-    assert "mcp-server.md" in content
+    assert "/repo-release-tools/commands/branch/" in content
+    assert "/repo-release-tools/commands/git_cmd/" in content
+    assert "/repo-release-tools/commands/tree/" in content
+    assert "/repo-release-tools/mcp-server/" in content
 
 
 def test_generate_readme_links_markdown_includes_mcp_server_doc() -> None:
