@@ -35,13 +35,21 @@ h2 { font-size: var(--text-display-md); }
 h3 { font-size: var(--text-display-sm); }
 h4 { font-size: var(--text-lg); }
 
-h2::before, h3::before {
+/* Scoped to .sl-markdown-content (not bare h2/h3) so this out-specifies
+   Starlight's own .sl-markdown-content .sl-heading-wrapper > :first-child
+   rule outright, rather than winning only by cascade-layer accident (see
+   docs-backend-migration-cuddly-manatee.md, "Fix round" section). The
+   explicit inline-block box keeps this decoration from colliding with
+   Starlight's padding-inline-end reserved for its anchor-link icon. */
+.sl-markdown-content h2::before, .sl-markdown-content h3::before {
+  display: inline-block;
+  line-height: 1;
   color: var(--reto-accent-strong);
   font-family: var(--reto-font-code);
   margin-right: var(--space-2);
 }
-h2::before { content: "\2588"; animation: reto-blink 1s step-end infinite; }
-h3::before { content: ">>"; }
+.sl-markdown-content h2::before { content: "\2588"; animation: reto-blink 1s step-end infinite; }
+.sl-markdown-content h3::before { content: ">>"; }
 
 p, li, td, th { color: var(--reto-text); }
 

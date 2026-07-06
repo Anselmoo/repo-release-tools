@@ -134,7 +134,7 @@ export default defineConfig({
             src: "https://context7.com/widget.js",
             "data-library": "/anselmoo/repo-release-tools",
             "data-color": "#b65e13",
-            "data-position": "bottom-left",
+            "data-position": "bottom-right",
             "data-placeholder": "Ask about releases, docs, or workflows",
           },
         },
