@@ -53,3 +53,25 @@ const navLinks = [
     <ThemeSelect />
   </Fragment>
 </Header>
+
+<script>
+  // Starlight reserves top space for its fixed header via the static
+  // --sl-nav-height custom property (3.5rem / 4rem depending on breakpoint,
+  // src/styles/props.css). Our header carries a second row (nav links +
+  // search) that Starlight's own single-row header never had, so it's
+  // taller than that assumption at every breakpoint — and how much taller
+  // varies with viewport width as the nav links wrap. A fixed override
+  // can't track that, so measure the real height and keep it in sync.
+  function syncNavHeight() {
+    const header = document.querySelector<HTMLElement>(".reto-header");
+    if (!header) return;
+    document.documentElement.style.setProperty("--sl-nav-height", `${header.offsetHeight}px`);
+  }
+
+  syncNavHeight();
+  window.addEventListener("resize", syncNavHeight);
+  document.addEventListener("astro:page-load", syncNavHeight);
+
+  const header = document.querySelector(".reto-header");
+  if (header) new ResizeObserver(syncNavHeight).observe(header);
+</script>
