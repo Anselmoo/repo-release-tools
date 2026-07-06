@@ -62,16 +62,28 @@ const navLinks = [
   // taller than that assumption at every breakpoint — and how much taller
   // varies with viewport width as the nav links wrap. A fixed override
   // can't track that, so measure the real height and keep it in sync.
+  let observedHeader: HTMLElement | null = null;
+  const resizeObserver = new ResizeObserver(syncNavHeight);
+
   function syncNavHeight() {
     const header = document.querySelector<HTMLElement>(".reto-header");
     if (!header) return;
     document.documentElement.style.setProperty("--sl-nav-height", `${header.offsetHeight}px`);
+
+    // Re-point the (single, long-lived) observer at whichever `.reto-header`
+    // element is currently in the DOM — view-transition navigations swap in a
+    // new header node, and an observer left on the old (detached) one would
+    // never fire again. Only re-observe when the node actually changed:
+    // calling `.observe()` unconditionally here would requeue an initial
+    // callback on every call, creating a self-feeding loop.
+    if (header !== observedHeader) {
+      if (observedHeader) resizeObserver.unobserve(observedHeader);
+      resizeObserver.observe(header);
+      observedHeader = header;
+    }
   }
 
   syncNavHeight();
   window.addEventListener("resize", syncNavHeight);
   document.addEventListener("astro:page-load", syncNavHeight);
-
-  const header = document.querySelector(".reto-header");
-  if (header) new ResizeObserver(syncNavHeight).observe(header);
 </script>
