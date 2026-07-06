@@ -116,11 +116,19 @@ help = "Verify generated docs and shared anchors are current."
 sequence = ["docs-generate", "docs-check", "docs-inject-check"]
 
 [tool.poe.groups.docs.tasks.serve]
-help = "Serve the docs site locally with Astro's dev server at http://localhost:4321/."
+help = "Generate badge assets, then serve the docs site locally with Astro's dev server at http://localhost:4321/."
+sequence = ["badge-export", "badge-sync", "serve-run"]
+
+[tool.poe.groups.docs.tasks.serve-run]
+help = "Start Astro's dev server (assumes badge assets already exist; use 'serve' otherwise)."
 shell = "cd docs && npm ci && npm run dev"
 
 [tool.poe.groups.docs.tasks.preview]
-help = "Build and serve the production build (base-aware, via astro preview) to simulate GitHub Pages exactly."
+help = "Generate badge assets, then build and serve the production build (base-aware, via astro preview) to simulate GitHub Pages exactly."
+sequence = ["badge-export", "badge-sync", "preview-run"]
+
+[tool.poe.groups.docs.tasks.preview-run]
+help = "Build and serve the production build (assumes badge assets already exist; use 'preview' otherwise)."
 shell = "cd docs && npm run build && npm run preview"
 
 [tool.poe.groups.docs.tasks.sync-assets]
