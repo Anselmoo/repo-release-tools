@@ -55,13 +55,12 @@ const navLinks = [
 </Header>
 
 <script>
-  // Starlight reserves top space for its fixed header via the static
-  // --sl-nav-height custom property (3.5rem / 4rem depending on breakpoint,
-  // src/styles/props.css). Our header carries a second row (nav links +
-  // search) that Starlight's own single-row header never had, so it's
-  // taller than that assumption at every breakpoint — and how much taller
-  // varies with viewport width as the nav links wrap. A fixed override
-  // can't track that, so measure the real height and keep it in sync.
+  // The 8 nav links wrap onto a second line once the brand + utility group
+  // (search/GitHub/theme) leave too little room for them on the current
+  // line — a *content*-width condition, not a viewport-width one, so no
+  // fixed set of `@media` breakpoints can predict it (a longer/shorter
+  // translated label, or a locale with more nav items, shifts the wrap
+  // point independent of viewport size). Measure the real height instead.
   let observedHeader: HTMLElement | null = null;
   const resizeObserver = new ResizeObserver(syncNavHeight);
 
@@ -70,12 +69,10 @@ const navLinks = [
     if (!header) return;
     document.documentElement.style.setProperty("--sl-nav-height", `${header.offsetHeight}px`);
 
-    // Re-point the (single, long-lived) observer at whichever `.reto-header`
-    // element is currently in the DOM — view-transition navigations swap in a
-    // new header node, and an observer left on the old (detached) one would
-    // never fire again. Only re-observe when the node actually changed:
-    // calling `.observe()` unconditionally here would requeue an initial
-    // callback on every call, creating a self-feeding loop.
+    // View-transition navigations swap in a new header node; re-point the
+    // (single, long-lived) observer only when the node actually changed —
+    // calling `.observe()` unconditionally would requeue an initial
+    // callback every time, creating a self-feeding loop.
     if (header !== observedHeader) {
       if (observedHeader) resizeObserver.unobserve(observedHeader);
       resizeObserver.observe(header);

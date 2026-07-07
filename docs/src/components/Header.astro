@@ -30,17 +30,21 @@ const { title = "repo-release-tools", href = "#", links = [], logo = "⬡" } = A
     {title}
   </a>
 
-  <nav class="reto-header__nav">
-    {links.map((link) => (
-      <a
-        href={link.href || "#"}
-        class={link.active ? "reto-header__link reto-header__link--active" : "reto-header__link"}
-      >
-        {link.label}
-      </a>
-    ))}
-    <slot name="right" />
-  </nav>
+  <div class="reto-header__bar">
+    <nav class="reto-header__links">
+      {links.map((link) => (
+        <a
+          href={link.href || "#"}
+          class={link.active ? "reto-header__link reto-header__link--active" : "reto-header__link"}
+        >
+          {link.label}
+        </a>
+      ))}
+    </nav>
+    <div class="reto-header__utility">
+      <slot name="right" />
+    </div>
+  </div>
 </header>
 
 <style>
@@ -51,7 +55,6 @@ const { title = "repo-release-tools", href = "#", links = [], logo = "⬡" } = A
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
     gap: 1rem;
   }
 
@@ -66,6 +69,7 @@ const { title = "repo-release-tools", href = "#", links = [], logo = "⬡" } = A
     text-transform: uppercase;
     letter-spacing: var(--tracking-display);
     text-shadow: var(--reto-phosphor-glow);
+    flex-shrink: 0;
   }
 
   .reto-header__logo {
@@ -73,11 +77,56 @@ const { title = "repo-release-tools", href = "#", links = [], logo = "⬡" } = A
     font-size: 1.4em;
   }
 
-  .reto-header__nav {
+  /* Single row holding both the primary nav links and the utility controls
+     (search / GitHub / theme toggle) — the two groups used to share one
+     wrapping flex container with no separation between them, so at normal
+     desktop widths they'd overflow onto their own line below the links,
+     collapsing the header into 3 stacked rows instead of 1. */
+  .reto-header__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 1rem;
+  }
+
+  .reto-header__links {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .reto-header__utility {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 900px) {
+    .reto-header {
+      flex-wrap: wrap;
+    }
+
+    .reto-header__bar {
+      flex-basis: 100%;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .reto-header__bar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .reto-header__utility {
+      flex-basis: 100%;
+    }
   }
 
   .reto-header__link {
