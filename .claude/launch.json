@@ -12,6 +12,12 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", "uv run poe serve"],
       "port": 4321
+    },
+    {
+      "name": "docs-poe-preview",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "uv run poe preview"],
+      "port": 4321
     }
   ]
 }

@@ -39,6 +39,32 @@
   --sl-font: var(--reto-font-body);
   --sl-font-mono: var(--reto-font-code);
   --__sl-font: var(--reto-font-body);
+
+  /* Content width — reuses the design system's own spacing scale instead of
+     Starlight's unbridged default, so the reading column matches the old
+     Jekyll site's intended max width. */
+  --sl-content-width: var(--container-max);
+}
+
+/* ---- Header height — static fallback only, used for the first paint
+   before overrides/Header.astro's ResizeObserver measures the real height
+   and overwrites this inline on :root. A fixed breakpoint table can't
+   replace that measurement: the 8 nav links wrap onto a second line based
+   on available *content* width (brand + utility-group width eating into
+   the row), not on viewport width alone, so the same viewport can need
+   either a 1-row or 2-row height depending on nothing CSS alone can see. */
+:root {
+  --sl-nav-height: 76px;
+}
+
+/* Starlight's own header wrapper (the fixed `<header class="header">` that
+   hosts our `.reto-header` override) draws its own default border-bottom.
+   Our override already draws its own border-bottom, so the two stack up
+   right where Starlight's mobile "On this page" toggle bar sits (that bar
+   has its own border-top too) — visually reading as a doubled/parallel
+   line. We own the border now; suppress Starlight's. */
+header:has(> .reto-header) {
+  border-bottom: none;
 }
 
 /* ---- Search input (Pagefind) — leading `>` glyph, mono, code-bg fill ---- */
@@ -48,6 +74,13 @@ site-search button[data-open-modal] {
   border: 1px solid var(--reto-border);
   border-radius: var(--radius-sm);
   min-width: 220px;
+}
+
+@media (max-width: 640px) {
+  site-search button[data-open-modal] {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 site-search button[data-open-modal]::before {
