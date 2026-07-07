@@ -1,0 +1,70 @@
+---
+/**
+ * Docs table — double-bordered cells, uppercase display-font header row,
+ * zebra striping, matching source. First column renders in monospace (for
+ * command names); the rest use body font.
+ *
+ * Ported from components/content/Table.jsx (Reto design system mirror).
+ */
+interface Props {
+  columns?: string[];
+  rows?: string[][];
+}
+
+const { columns = [], rows = [] } = Astro.props as Props;
+---
+
+<table class="reto-table">
+  <thead>
+    <tr>
+      {columns.map((col) => (
+        <th class="reto-table__th">{col}</th>
+      ))}
+    </tr>
+  </thead>
+  <tbody>
+    {rows.map((row) => (
+      <tr class="reto-table__row">
+        {row.map((cell, j) => (
+          <td class={j === 0 ? "reto-table__td reto-table__td--mono" : "reto-table__td"}>{cell}</td>
+        ))}
+      </tr>
+    ))}
+  </tbody>
+</table>
+
+<style>
+  .reto-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--reto-border);
+  }
+
+  .reto-table__th {
+    border: 1px solid var(--reto-border);
+    padding: 0.75rem;
+    text-align: left;
+    background: var(--reto-bg-elevated);
+    font-family: var(--reto-font-display);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--reto-accent);
+  }
+
+  .reto-table__row:nth-child(2n) {
+    background: rgba(255, 179, 108, 0.03);
+  }
+
+  .reto-table__td {
+    border: 1px solid var(--reto-border);
+    padding: 0.75rem;
+    font-family: var(--reto-font-body);
+    color: var(--reto-text);
+    font-size: 0.92rem;
+  }
+
+  .reto-table__td--mono {
+    font-family: var(--reto-font-code);
+  }
+</style>

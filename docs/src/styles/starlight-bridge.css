@@ -1,0 +1,153 @@
+/* ==========================================================================
+   Starlight bridge — Reto Design System
+   Maps Starlight's own `--sl-*` custom-property namespace onto this repo's
+   `--reto-*` tokens (src/styles/tokens/*.css, imported via reto.css) so that
+   Starlight-native chrome we deliberately do NOT replace with full component
+   overrides — CodeBlock/Expressive Code, the Pagefind search input, the
+   table of contents, and the theme select control — still renders in the
+   Reto visual language. Per task-5-brief.md and design-system.mdx's
+   "Visual reference for the four Starlight-native replacements" section.
+
+   This file is additive CSS layered on top of Starlight's own `starlight.*`
+   layers (it is NOT itself wrapped in a `@layer`, so it wins the cascade
+   over Starlight's layered rules without needing !important).
+   ========================================================================== */
+
+:root {
+  /* Core color bridge */
+  --sl-color-bg: var(--reto-bg);
+  --sl-color-bg-nav: var(--reto-bg-elevated);
+  --sl-color-bg-sidebar: var(--reto-bg-elevated);
+  --sl-color-text: var(--reto-text);
+  --sl-color-text-accent: var(--reto-accent);
+  --sl-color-white: var(--reto-text);
+  --sl-color-gray-1: var(--reto-text);
+  --sl-color-gray-2: var(--reto-text-soft);
+  --sl-color-gray-3: var(--reto-text-soft);
+  --sl-color-gray-4: var(--reto-border);
+  --sl-color-gray-5: var(--reto-border);
+  --sl-color-gray-6: var(--reto-bg-elevated);
+  --sl-color-black: var(--reto-bg);
+  --sl-color-accent-low: var(--reto-code-bg);
+  --sl-color-accent: var(--reto-accent);
+  --sl-color-accent-high: var(--reto-accent-strong);
+  --sl-color-hairline: var(--reto-border);
+  --sl-color-hairline-light: var(--reto-border);
+  --sl-color-hairline-shade: var(--reto-border);
+
+  /* Typography bridge */
+  --sl-font: var(--reto-font-body);
+  --sl-font-mono: var(--reto-font-code);
+  --__sl-font: var(--reto-font-body);
+}
+
+/* ---- Search input (Pagefind) — leading `>` glyph, mono, code-bg fill ---- */
+site-search button[data-open-modal] {
+  font-family: var(--reto-font-code);
+  background: var(--reto-code-bg);
+  border: 1px solid var(--reto-border);
+  border-radius: var(--radius-sm);
+  min-width: 220px;
+}
+
+site-search button[data-open-modal]::before {
+  content: "\203A";
+  margin-inline-end: 0.4em;
+  color: var(--reto-accent);
+}
+
+/* ---- Table of contents — sticky, left accent bar, uppercase title ---- */
+starlight-toc {
+  --sl-toc-width: 200px;
+}
+
+starlight-toc nav {
+  font-family: var(--reto-font-body);
+}
+
+starlight-toc .toc-header,
+starlight-toc h2 {
+  font-family: var(--reto-font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  font-size: var(--text-xs);
+}
+
+starlight-toc a {
+  border-inline-start: 2px solid var(--reto-border);
+}
+
+starlight-toc a[aria-current="true"] {
+  border-inline-start: 2px solid var(--reto-accent-strong);
+  color: var(--reto-accent-strong);
+}
+
+/* ---- Code blocks (Expressive Code) — bordered, code-bg body ---- */
+.expressive-code {
+  --ec-brdRad: var(--radius-sm);
+  --ec-brdWd: 1px;
+  --ec-brdCol: var(--reto-border);
+  --ec-frm-edBg: var(--reto-bg-elevated);
+  --ec-frm-edActTabBg: var(--reto-code-bg);
+  font-family: var(--reto-font-code);
+}
+
+.expressive-code pre {
+  background: var(--reto-code-bg) !important;
+  font-size: var(--text-code-sm);
+  line-height: 1.6;
+}
+
+/* ---- Theme select — re-skinned to the ThemeToggle visual reference:
+   fixed circular button, 48x48px, 4px radius, 2px border, glow shadow.
+   Glyphs are injected via ::before/data-value since the native control is a
+   <select> (kept for its accessible, JS-driven data-theme behavior — see
+   ThemeSelect.astro override). ---- */
+starlight-theme-select {
+  display: inline-flex;
+}
+
+starlight-theme-select label {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  border: 2px solid var(--reto-border);
+  background: var(--reto-bg-elevated);
+  box-shadow: var(--reto-glow);
+  color: var(--reto-accent);
+  justify-content: center;
+  gap: 0;
+}
+
+starlight-theme-select .icon {
+  display: none;
+}
+
+starlight-theme-select select {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  color: transparent;
+}
+
+starlight-theme-select label::after {
+  content: "\25D0";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  pointer-events: none;
+}
+
+html[data-theme="dark"] starlight-theme-select label::after {
+  content: "\263E";
+}
+
+html[data-theme="light"] starlight-theme-select label::after {
+  content: "\2600";
+}

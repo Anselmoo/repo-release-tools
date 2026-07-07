@@ -1,0 +1,89 @@
+---
+/**
+ * Starlight `Header` component override.
+ *
+ * Per the current @astrojs/starlight (v0.41) override contract, component
+ * overrides receive no props — the default Header.astro reads everything
+ * it needs from `Astro.locals.starlightRoute` and `virtual:starlight/*`
+ * modules. This adapter does the same, then hands `siteTitle`/the 8
+ * top-nav links to the native Task 2 `Header.astro` (which expects plain
+ * `title`/`links` props), and renders Starlight's own Search, SocialIcons,
+ * and ThemeSelect into the native component's `right` slot so search,
+ * GitHub link, and theme toggle keep working exactly as Starlight wired
+ * them (Pagefind, `social` config, `data-theme` persistence).
+ *
+ * Nav links reproduce docs/_layouts/default.html:38-45's top nav order
+ * (Action / CLI / Version / Health / Git / Setup / MCP / Agents) — the same
+ * order the sidebar groups use.
+ */
+import config from "virtual:starlight/user-config";
+import Search from "virtual:starlight/components/Search";
+import SocialIcons from "virtual:starlight/components/SocialIcons";
+import ThemeSelect from "virtual:starlight/components/ThemeSelect";
+
+import Header from "../Header.astro";
+
+const shouldRenderSearch =
+  config.pagefind || config.components.Search !== "@astrojs/starlight/components/Search.astro";
+
+const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const withBase = (path: string) => `${base}${path}`;
+
+const currentPath = Astro.url.pathname;
+const isActive = (href: string) => currentPath === href || currentPath === `${href}/`;
+
+const navLinks = [
+  { label: "Action", href: withBase("/action/") },
+  { label: "CLI", href: withBase("/commands/rrt-cli/") },
+  { label: "Version", href: withBase("/commands/version-release/") },
+  { label: "Health", href: withBase("/commands/repo-health/") },
+  { label: "Git", href: withBase("/commands/git-workflow/") },
+  { label: "Setup", href: withBase("/commands/setup-tooling/") },
+  { label: "MCP", href: withBase("/mcp-server/") },
+  { label: "Agents", href: withBase("/agent-instructions/") },
+].map((link) => ({ ...link, active: isActive(link.href) }));
+---
+
+<Header title={siteTitle} href={siteTitleHref} links={navLinks} logo="⬡">
+  <Fragment slot="right">
+    {shouldRenderSearch && <Search />}
+    <SocialIcons />
+    <ThemeSelect />
+  </Fragment>
+</Header>
+
+<script>
+  // Starlight reserves top space for its fixed header via the static
+  // --sl-nav-height custom property (3.5rem / 4rem depending on breakpoint,
+  // src/styles/props.css). Our header carries a second row (nav links +
+  // search) that Starlight's own single-row header never had, so it's
+  // taller than that assumption at every breakpoint — and how much taller
+  // varies with viewport width as the nav links wrap. A fixed override
+  // can't track that, so measure the real height and keep it in sync.
+  let observedHeader: HTMLElement | null = null;
+  const resizeObserver = new ResizeObserver(syncNavHeight);
+
+  function syncNavHeight() {
+    const header = document.querySelector<HTMLElement>(".reto-header");
+    if (!header) return;
+    document.documentElement.style.setProperty("--sl-nav-height", `${header.offsetHeight}px`);
+
+    // Re-point the (single, long-lived) observer at whichever `.reto-header`
+    // element is currently in the DOM — view-transition navigations swap in a
+    // new header node, and an observer left on the old (detached) one would
+    // never fire again. Only re-observe when the node actually changed:
+    // calling `.observe()` unconditionally here would requeue an initial
+    // callback on every call, creating a self-feeding loop.
+    if (header !== observedHeader) {
+      if (observedHeader) resizeObserver.unobserve(observedHeader);
+      resizeObserver.observe(header);
+      observedHeader = header;
+    }
+  }
+
+  syncNavHeight();
+  window.addEventListener("resize", syncNavHeight);
+  document.addEventListener("astro:page-load", syncNavHeight);
+</script>

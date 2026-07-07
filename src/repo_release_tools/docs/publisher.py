@@ -42,6 +42,13 @@ from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
 from repo_release_tools.docs.formats.markdown import heading_level, normalize_markdown_headings
 from repo_release_tools.integrations import action as action_module
+from repo_release_tools.tools.inject import (
+    ANCHOR_END_TOKEN,
+    ANCHOR_START_TOKEN,
+    MDX_ANCHOR_END_TOKEN,
+    MDX_ANCHOR_START_TOKEN,
+    _detect_inject_format,
+)
 from repo_release_tools.tools.inject import apply_generated_docs as apply_generated_docs
 from repo_release_tools.workflow import git as git_helpers
 from repo_release_tools.workflow import hooks as hooks_module
@@ -50,12 +57,44 @@ from repo_release_tools.workflow import hooks as hooks_module
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_OUTPUT: Path = Path("docs/commands/rrt-cli.md")
+DEFAULT_OUTPUT: Path = Path("docs/src/content/docs/commands/rrt-cli.mdx")
 PINNED_COLUMNS: str = "120"
-AUTOGEN_NOTE: str = (
-    "<!-- Auto-generated from repo_release_tools.cli.build_parser(); "
-    "run `rrt docs publish` to refresh. -->"
+_AUTOGEN_NOTE_TEXT: str = (
+    "Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh."
 )
+AUTOGEN_NOTE: str = f"<!-- {_AUTOGEN_NOTE_TEXT} -->"
+
+
+def _autogen_note(output_path: Path) -> str:
+    """Return the auto-generated banner comment, wrapped for *output_path*'s format.
+
+    ``.mdx`` targets get an MDX-safe JSX comment (``{/* ... */}``); every other
+    format (including RST, which never used ``AUTOGEN_NOTE`` historically) gets
+    the original HTML-comment form unchanged.
+    """
+    if _detect_inject_format(output_path) == "mdx":
+        return f"{{/* {_AUTOGEN_NOTE_TEXT} */}}"
+    return AUTOGEN_NOTE
+
+
+def _anchor_stub_pair(anchor_id: str, output_path: Path) -> tuple[str, str]:
+    """Return the ``(start, end)`` anchor marker literals for *anchor_id*.
+
+    The wrapper syntax is chosen by :func:`_detect_inject_format` on
+    *output_path*, matching what
+    :func:`~repo_release_tools.tools.inject.replace_anchored_block` will later
+    look for when it fills in the block between these markers.
+    """
+    if _detect_inject_format(output_path) == "mdx":
+        return (
+            f"{{/* {MDX_ANCHOR_START_TOKEN}{anchor_id} */}}",
+            f"{{/* {MDX_ANCHOR_END_TOKEN}{anchor_id} */}}",
+        )
+    return (
+        f"<!-- {ANCHOR_START_TOKEN}{anchor_id} -->",
+        f"<!-- {ANCHOR_END_TOKEN}{anchor_id} -->",
+    )
+
 
 _README_BASE: str = "https://github.com/Anselmoo/repo-release-tools/blob/main"
 
@@ -80,10 +119,6 @@ COMMAND_GROUPS_CONFIG: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("ci-automation", "CI & Automation", ("action",)),
     ("setup-tooling", "Setup & Tooling", ("install", "init", "skill", "agents", "hooks")),
 )
-
-GROUP_REFERENCE_OUTPUTS: dict[str, Path] = {
-    slug: Path(f"docs/commands/{slug}.md") for slug, _, _ in COMMAND_GROUPS_CONFIG
-}
 
 
 # ---------------------------------------------------------------------------
@@ -383,15 +418,16 @@ def render_help(argv: Sequence[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate_markdown() -> str:
+def generate_markdown(output_path: Path = DEFAULT_OUTPUT) -> str:
     """Return the generated CLI reference Markdown (compact command index)."""
+    toc_start, toc_end = _anchor_stub_pair("toc", output_path)
     parts = [
         "# rrt CLI",
         "",
-        AUTOGEN_NOTE,
+        _autogen_note(output_path),
         "",
-        "<!-- rrt:auto:start:toc -->",
-        "<!-- rrt:auto:end:toc -->",
+        toc_start,
+        toc_end,
         "",
         "This reference is generated from the live `argparse` configuration in",
         "`repo_release_tools.cli` and `src/repo_release_tools/commands/*.py`.",
@@ -415,8 +451,8 @@ def generate_markdown() -> str:
 
     for slug, display, commands in COMMAND_GROUPS_CONFIG:
         cmd_list = ", ".join(f"`{c}`" for c in commands)
-        ref_file = f"{slug}.md"
-        parts.append(f"| **{display}** | {cmd_list} | [{display}]({ref_file}) |")
+        ref_href = f"/repo-release-tools/commands/{slug}/"
+        parts.append(f"| **{display}** | {cmd_list} | [{display}]({ref_href}) |")
 
     parts.append("")
     return "\n".join(parts).rstrip() + "\n"
@@ -449,15 +485,18 @@ def iter_help_sections_for_commands(commands: Sequence[str]) -> Iterator[HelpSec
             yield from walk((name,), child)
 
 
-def generate_group_reference_markdown(group_display_name: str, commands: Sequence[str]) -> str:
+def generate_group_reference_markdown(
+    group_display_name: str, commands: Sequence[str], output_path: Path = DEFAULT_OUTPUT
+) -> str:
     """Return generated reference Markdown for a CLI command group."""
+    toc_start, toc_end = _anchor_stub_pair("toc", output_path)
     parts = [
         f"# rrt {group_display_name}",
         "",
-        AUTOGEN_NOTE,
+        _autogen_note(output_path),
         "",
-        "<!-- rrt:auto:start:toc -->",
-        "<!-- rrt:auto:end:toc -->",
+        toc_start,
+        toc_end,
         "",
     ]
 
@@ -485,13 +524,15 @@ def generate_git_markdown() -> str:
 
 
 def generate_index_topic_links_markdown() -> str:
-    """Return the generated topic-link bullets for docs/index.md."""
+    """Return the generated topic-link bullets for docs/src/content/docs/index.mdx."""
     links = [
-        "- [rrt branch](commands/branch.md) — generated branch naming model and allowed branch types",
-        "- [rrt git](commands/git_cmd.md) — generated Git helpers and workflow shortcuts",
-        "- [rrt tree](commands/tree.md) — generated guide for `rrt tree` output modes, "
-        "ignore behavior, and traversal controls",
-        "- [MCP Server](mcp-server.md) — MCP install and connect guide",
+        "- [rrt branch](/repo-release-tools/commands/branch/) — generated branch naming "
+        "model and allowed branch types",
+        "- [rrt git](/repo-release-tools/commands/git_cmd/) — generated Git helpers and "
+        "workflow shortcuts",
+        "- [rrt tree](/repo-release-tools/commands/tree/) — generated guide for `rrt tree` "
+        "output modes, ignore behavior, and traversal controls",
+        "- [MCP Server](/repo-release-tools/mcp-server/) — MCP install and connect guide",
     ]
     return "\n".join(links)
 
@@ -561,21 +602,21 @@ def _get_title_overrides(cfg_docs: object = None) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
-    "branch": Path("docs/commands/branch.md"),
-    "git": Path("docs/commands/git_cmd.md"),
-    "tree": Path("docs/commands/tree.md"),
-    "hooks": Path("docs/commands/hooks.md"),
-    "action": Path("docs/action.md"),
-    "skill": Path("docs/commands/skill.md"),
-    "install": Path("docs/commands/install.md"),
-    "agent-instructions": Path("docs/agent-instructions.md"),
-    "doctor": Path("docs/commands/doctor.md"),
-    "eol": Path("docs/commands/eol_check.md"),
+    "branch": Path("docs/src/content/docs/commands/branch.mdx"),
+    "git": Path("docs/src/content/docs/commands/git_cmd.mdx"),
+    "tree": Path("docs/src/content/docs/commands/tree.mdx"),
+    "hooks": Path("docs/src/content/docs/commands/hooks.mdx"),
+    "action": Path("docs/src/content/docs/action.mdx"),
+    "skill": Path("docs/src/content/docs/commands/skill.mdx"),
+    "install": Path("docs/src/content/docs/commands/install.mdx"),
+    "agent-instructions": Path("docs/src/content/docs/agent-instructions.mdx"),
+    "doctor": Path("docs/src/content/docs/commands/doctor.mdx"),
+    "eol": Path("docs/src/content/docs/commands/eol_check.mdx"),
 }
 
 
 # ---------------------------------------------------------------------------
-# Title / permalink helpers for generated pages
+# Title / description helpers for generated pages
 # ---------------------------------------------------------------------------
 
 TITLE_OVERRIDES: dict[str, str] = {
@@ -593,28 +634,46 @@ TITLE_OVERRIDES: dict[str, str] = {
     **{slug: f"rrt {display}" for slug, display, _ in COMMAND_GROUPS_CONFIG},
 }
 
+DESCRIPTION_OVERRIDES: dict[str, str] = {
+    "rrt-cli": (
+        "Generated reference for the full rrt CLI, covering every command group and "
+        "argparse option."
+    ),
+    "branch": (
+        "Conventional branch naming model, allowed branch types, and validation rules "
+        "for rrt branch."
+    ),
+    "git": "Git workflow helpers and shortcuts bundled with rrt git.",
+    "tree": (
+        "Guide to rrt tree output modes, ignore behavior, and traversal controls for "
+        "project structure snapshots."
+    ),
+    "hooks": (
+        "Pre-commit and lefthook setup for incremental or squash-based changelog "
+        "workflows via rrt-hooks."
+    ),
+    "action": (
+        "CI policy gate wrapping rrt-hooks for branch, commit, and changelog checks in "
+        "GitHub Actions."
+    ),
+    "skill": "Bundled uvx and installed-CLI agent skills managed by rrt skill install.",
+    "install": "Installing the rrt CLI and its optional extras with rrt install.",
+    "agent-instructions": (
+        "Reference for hook and Action enforcement points used by agent-driven workflows."
+    ),
+    "doctor": "Configuration health checks and diagnostics performed by rrt doctor.",
+    "eol": "Runtime end-of-life tracking and warnings surfaced by rrt eol.",
+    **{
+        slug: f"Generated command reference for the {display} command group."
+        for slug, display, _ in COMMAND_GROUPS_CONFIG
+    },
+}
+
 
 def _extract_first_h1(text: str) -> str | None:
     """Return the first top-level heading text from *text*, or ``None``."""
     m = re.search(r"(?m)^\s*#\s+(.+)$", text)
     return m[1].strip() if m else None
-
-
-def _compute_permalink_for_output(output_path: Path) -> str:
-    """Compute a reasonable permalink for *output_path* when under `docs/`.
-
-    Examples:
-    - `docs/index.md` -> `/`
-    - `docs/commands/rrt-cli.md` -> `/commands/rrt-cli/`
-    """
-    try:
-        rel = output_path.relative_to("docs")
-    except ValueError:
-        return ""
-    if rel.name == "index.md":
-        return "/"
-    # drop the suffix and produce a posix path with trailing slash
-    return "/" + str(rel.with_suffix("")).replace(os.sep, "/") + "/"
 
 
 def _wrap_with_frontmatter(
@@ -626,8 +685,10 @@ def _wrap_with_frontmatter(
 ) -> Callable[[], str]:
     """Return a render callable that prefixes generated content with YAML frontmatter.
 
-    The frontmatter contains at least a `title:` and, when applicable, a
-    `permalink:` so Jekyll/minima uses a stable label and URL for the page.
+    The frontmatter contains at least a `title:` and, when a description
+    override is registered for *slug*, a `description:` field for Starlight's
+    SEO metadata. Starlight derives the page's route from its file path, so no
+    explicit permalink/URL field is needed.
     """
 
     def _wrapped() -> str:
@@ -643,14 +704,14 @@ def _wrap_with_frontmatter(
         # Ensure quotes in title are escaped
         title = title.replace('"', '\\"')
 
-        if output_path.suffix.lower() == ".md" and output_path.parts[:2] == ("docs", "commands"):
+        if output_path.suffix.lower() == ".mdx" and output_path.parent.name == "commands":
             content = _ensure_primary_h1(content, title)
 
-        permalink = _compute_permalink_for_output(output_path)
-
         fm_lines = [f'title: "{title}"']
-        if permalink:
-            fm_lines.append(f'permalink: "{permalink}"')
+        description = DESCRIPTION_OVERRIDES.get(slug) if slug else None
+        if description:
+            description = description.replace('"', '\\"')
+            fm_lines.append(f'description: "{description}"')
 
         frontmatter = "---\n" + "\n".join(fm_lines) + "\n---\n\n"
         return frontmatter + content
@@ -669,7 +730,7 @@ def _build_generated_doc_targets(cfg_docs: object = None) -> tuple[DocTarget, ..
     topic_page_outputs = _get_topic_page_outputs(cfg_docs)
     title_overrides = _get_title_overrides(cfg_docs)
     group_ref_outputs: dict[str, Path] = {
-        slug: Path(f"docs/commands/{slug}.md") for slug, _, _ in command_groups
+        slug: Path(f"docs/src/content/docs/commands/{slug}.mdx") for slug, _, _ in command_groups
     }
 
     targets: list[DocTarget] = [
@@ -677,13 +738,13 @@ def _build_generated_doc_targets(cfg_docs: object = None) -> tuple[DocTarget, ..
             DEFAULT_OUTPUT,
             _wrap_with_frontmatter(
                 DEFAULT_OUTPUT,
-                generate_markdown,
+                lambda: generate_markdown(DEFAULT_OUTPUT),
                 title_override=title_overrides.get("rrt-cli"),
                 slug="rrt-cli",
             ),
         ),
         DocTarget(
-            Path("docs/index.md"),
+            Path("docs/src/content/docs/index.mdx"),
             generate_index_topic_links_markdown,
             anchor_id="index-topic-links",
         ),
@@ -708,7 +769,7 @@ def _build_generated_doc_targets(cfg_docs: object = None) -> tuple[DocTarget, ..
         title = f"rrt {display}"
         render_fn = _wrap_with_frontmatter(
             output_path,
-            lambda d=display, c=commands: generate_group_reference_markdown(d, c),
+            lambda d=display, c=commands, p=output_path: generate_group_reference_markdown(d, c, p),
             title_override=title,
             slug=slug,
         )
@@ -750,7 +811,9 @@ def validate_generated_page(target: DocTarget, rendered: str) -> list[str]:
     """Return consistency issues for one generated command page rendering."""
     if target.anchor_id is not None:
         return []
-    if target.output_path.parts[:2] != ("docs", "commands"):
+    if not (
+        target.output_path.suffix.lower() == ".mdx" and target.output_path.parent.name == "commands"
+    ):
         return []
 
     issues: list[str] = []

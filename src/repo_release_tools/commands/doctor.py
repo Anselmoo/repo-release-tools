@@ -60,11 +60,11 @@ rrt doctor
 
 ## Related docs
 
-- [Runtime EOL tracking](eol.md)
-- [rrt eol (CLI)](rrt-cli.md)
-- [rrt release check](rrt-cli.md)
-- [pre-commit / lefthook / husky](hooks.md)
-- [GitHub Action](action.md)
+- [Runtime EOL tracking](/repo-release-tools/commands/eol_check/)
+- [rrt eol (CLI)](/repo-release-tools/commands/rrt-cli/)
+- [rrt release check](/repo-release-tools/commands/rrt-cli/)
+- [pre-commit / lefthook / husky](/repo-release-tools/commands/hooks/)
+- [GitHub Action](/repo-release-tools/action/)
 """
 
 from __future__ import annotations

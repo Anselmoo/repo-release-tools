@@ -1,0 +1,13 @@
+/* Reto Design System — global stylesheet entry point.
+   List of imports only; every token file below is what ships to consumers.
+   See tokens/*.css for source values and provenance.
+
+   Wired into Starlight's `customCss` array in docs/astro.config.mjs, so this
+   file is live in every build. */
+
+@import "./tokens/fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/effects.css";
+@import "./tokens/base.css";

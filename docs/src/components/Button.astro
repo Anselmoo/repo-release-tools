@@ -1,0 +1,117 @@
+---
+/**
+ * Reto-terminal button. Default "outline" variant matches the source
+ * `.btn-reto` / `.page-link` treatment exactly: transparent fill, 1px
+ * accent border, square corners, uppercase tracked label, phosphor-glow
+ * + fill-swap on hover.
+ *
+ * Variants: outline (default), solid (filled CTA), ghost (low-emphasis).
+ * Sizes: sm / md / lg. Set disabled to dim and disable pointer events.
+ *
+ * Ported from components/core/Button.jsx (Reto design system mirror). The
+ * source uses React.useState + onMouseEnter/onMouseLeave purely to
+ * simulate a :hover state in the JSX prototype — translated here directly
+ * to a plain CSS :hover pseudo-class, no client JS needed.
+ */
+interface Props {
+  variant?: "outline" | "solid" | "ghost";
+  size?: "sm" | "md" | "lg";
+  as?: "button" | "a";
+  href?: string;
+  disabled?: boolean;
+  icon?: string;
+  class?: string;
+}
+
+const {
+  variant = "outline",
+  size = "md",
+  as = "button",
+  href,
+  disabled = false,
+  icon,
+  class: className,
+  ...rest
+} = Astro.props as Props;
+
+const Tag = as === "a" ? "a" : "button";
+const classes = ["reto-btn", `reto-btn--${variant}`, `reto-btn--${size}`, className]
+  .filter(Boolean)
+  .join(" ");
+---
+
+<Tag
+  class={classes}
+  href={as === "a" ? href : undefined}
+  disabled={as === "button" ? disabled : undefined}
+  aria-disabled={disabled || undefined}
+  {...rest}
+>
+  {icon ? <span aria-hidden="true">{icon}</span> : null}
+  <slot />
+</Tag>
+
+<style>
+  .reto-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--reto-font-display);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    border-radius: var(--radius-none);
+    cursor: pointer;
+    transition: all 0.1s ease;
+    text-decoration: none;
+  }
+
+  .reto-btn[disabled],
+  .reto-btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+  }
+
+  /* Sizes */
+  .reto-btn--sm { padding: 0.35rem 0.9rem; font-size: 0.78rem; }
+  .reto-btn--md { padding: 0.5rem 1.2rem; font-size: 0.9rem; }
+  .reto-btn--lg { padding: 0.7rem 1.6rem; font-size: 1rem; }
+
+  /* Variants — resting state */
+  .reto-btn--outline {
+    color: var(--reto-accent);
+    background: transparent;
+    border: 1px solid var(--reto-accent);
+  }
+
+  .reto-btn--solid {
+    color: var(--reto-bg);
+    background: var(--reto-accent-strong);
+    border: 1px solid var(--reto-accent-strong);
+    box-shadow: var(--reto-glow);
+  }
+
+  .reto-btn--ghost {
+    color: var(--reto-text-soft);
+    background: transparent;
+    border: 1px solid transparent;
+  }
+
+  /* Variants — hover state (was React.useState(hover) in the JSX prototype) */
+  .reto-btn--outline:hover:not([disabled]):not([aria-disabled="true"]) {
+    background: var(--reto-accent);
+    color: var(--reto-bg);
+    box-shadow: var(--reto-phosphor-glow);
+    transform: scale(1.05);
+  }
+
+  .reto-btn--solid:hover:not([disabled]):not([aria-disabled="true"]) {
+    filter: brightness(1.08);
+    transform: scale(1.05);
+  }
+
+  .reto-btn--ghost:hover:not([disabled]):not([aria-disabled="true"]) {
+    color: var(--reto-accent-strong);
+    border-color: var(--reto-border);
+  }
+</style>

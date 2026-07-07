@@ -3258,6 +3258,42 @@ def test_load_badge_assets_dir_valid() -> None:
     assert _load_badge_assets_dir({"badge_assets_dir": " assets/icons "}) == "assets/icons"
 
 
+def test_load_badge_assets_dir_default() -> None:
+    """_load_badge_assets_dir defaults to the Astro public/ location when absent."""
+    from repo_release_tools.config.docs_config import _load_badge_assets_dir
+
+    assert _load_badge_assets_dir({}) == "docs/public/assets/badges"
+
+
+def test_load_base_url_default() -> None:
+    """_load_base_url defaults to an empty string when absent."""
+    from repo_release_tools.config.docs_config import _load_base_url
+
+    assert _load_base_url({}) == ""
+
+
+def test_load_base_url_valid() -> None:
+    """_load_base_url returns the configured root-absolute prefix as-is."""
+    from repo_release_tools.config.docs_config import _load_base_url
+
+    assert _load_base_url({"base_url": "/repo-release-tools"}) == "/repo-release-tools"
+
+
+def test_load_base_url_accepts_empty_string() -> None:
+    """_load_base_url treats an explicit empty string as a legitimate 'no subpath' value."""
+    from repo_release_tools.config.docs_config import _load_base_url
+
+    assert _load_base_url({"base_url": ""}) == ""
+
+
+def test_load_base_url_invalid_type() -> None:
+    """_load_base_url raises when the value is not a string."""
+    from repo_release_tools.config.docs_config import _load_base_url
+
+    with pytest.raises(ValueError, match="base_url"):
+        _load_base_url({"base_url": 123})
+
+
 def test_load_optional_docs_int_invalid() -> None:
     """_load_optional_docs_int raises when provided a non-integer."""
     from repo_release_tools.config.docs_config import _load_optional_docs_int

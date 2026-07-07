@@ -1,0 +1,88 @@
+---
+/**
+ * Starlight `Sidebar` component override.
+ *
+ * Starlight component overrides receive NO props — per the current
+ * @astrojs/starlight (v0.41) override contract, they read page/site data
+ * from the `Astro.locals.starlightRoute` global instead (confirmed via
+ * node_modules/@astrojs/starlight/components/Sidebar.astro, which does
+ * exactly this: `const { sidebar } = Astro.locals.starlightRoute;`).
+ *
+ * `starlightRoute.sidebar` is a recursive tree of `SidebarLink | SidebarGroup`
+ * entries (see reference/route-data.mdx), which does not match the flat
+ * `{ label, items }[]` shape the native Task 2 `Sidebar.astro` component
+ * expects (that component has no nested-group rendering). This adapter
+ * maps each top-level `sidebar` entry to exactly one `FlatGroup`:
+ *  - a standalone top-level link (e.g. "Action") becomes a single-item
+ *    group so it still gets its own labeled section header;
+ *  - a top-level group (e.g. "CLI") becomes a group whose direct link
+ *    children are flattened in; any *nested* subgroup within it (e.g. the
+ *    collapsed "Commands" bucket of individual `rrt <cmd>` pages) is
+ *    promoted to its own separate top-level `FlatGroup` rather than being
+ *    inlined as fake indented text — the native component has no
+ *    non-link "heading" item type, so faking one as a dead `href="#"`
+ *    link would be worse than a flat extra section.
+ */
+import Sidebar from "../Sidebar.astro";
+
+interface FlatItem {
+  label: string;
+  href?: string;
+  active?: boolean;
+}
+
+interface FlatGroup {
+  label: string;
+  items: FlatItem[];
+}
+
+type SidebarEntry = {
+  type: "link" | "group";
+  label: string;
+  href?: string;
+  isCurrent?: boolean;
+  entries?: SidebarEntry[];
+};
+
+const { sidebar } = Astro.locals.starlightRoute as {
+  sidebar: SidebarEntry[];
+};
+
+const groups: FlatGroup[] = [];
+
+for (const entry of sidebar) {
+  if (entry.type === "link") {
+    groups.push({
+      label: entry.label,
+      items: [{ label: entry.label, href: entry.href, active: entry.isCurrent }],
+    });
+  } else if (entry.type === "group" && entry.entries) {
+    const directItems: FlatItem[] = [];
+    const promoted: FlatGroup[] = [];
+    for (const child of entry.entries) {
+      if (child.type === "link") {
+        directItems.push({ label: child.label, href: child.href, active: child.isCurrent });
+      } else if (child.type === "group" && child.entries) {
+        // Promote nested subgroup to its own top-level section, placed
+        // directly after its parent so reading order stays intuitive.
+        promoted.push({
+          label: child.label,
+          items: child.entries
+            .filter((grandchild): grandchild is SidebarEntry & { type: "link" } => grandchild.type === "link")
+            .map((grandchild) => ({
+              label: grandchild.label,
+              href: grandchild.href,
+              active: grandchild.isCurrent,
+            })),
+        });
+      }
+    }
+    if (directItems.length > 0) {
+      groups.push({ label: entry.label, items: directItems });
+    }
+    groups.push(...promoted);
+  }
+}
+---
+
+<Sidebar groups={groups} />

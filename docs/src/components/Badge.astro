@@ -1,0 +1,92 @@
+---
+/**
+ * Small monospace status chip or shields.io-style tag — use for command
+ * types, health states, and platform/language labels.
+ *
+ * Tones: neutral / accent / success / warning / danger.
+ * Variants: soft (default), outline, shield (dark rounded-rect badge look).
+ *
+ * Ported from components/core/Badge.jsx (Reto design system mirror).
+ * Tone colors are resolved to one CSS class per tone (`.reto-badge--<tone>`)
+ * in the scoped <style> block below, matching the class-per-variant pattern
+ * used by Button.astro/StatusPanel.astro — frontmatter only picks the class
+ * name, no inline style for tone-driven values.
+ */
+interface Props {
+  tone?: "neutral" | "accent" | "success" | "warning" | "danger";
+  variant?: "soft" | "outline" | "shield";
+  icon?: string;
+}
+
+const { tone = "neutral", variant = "soft", icon } = Astro.props as Props;
+
+const classes = [
+  "reto-badge",
+  `reto-badge--${tone}`,
+  variant === "shield" ? "reto-badge--shield" : null,
+  variant === "outline" ? "reto-badge--outline" : null,
+]
+  .filter(Boolean)
+  .join(" ");
+---
+
+<span class={classes}>
+  {icon ? <span aria-hidden="true">{icon}</span> : null}
+  <slot />
+</span>
+
+<style>
+  .reto-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    font-family: var(--reto-font-code);
+    font-size: var(--text-xs);
+    letter-spacing: 0.04em;
+    border: 1px solid var(--reto-border);
+    border-radius: var(--radius-badge);
+    padding: 0.15rem 0.55rem;
+    background: var(--reto-code-bg);
+    text-transform: uppercase;
+  }
+
+  .reto-badge--neutral {
+    color: var(--reto-text-soft);
+    border-color: var(--reto-border);
+  }
+
+  .reto-badge--accent {
+    color: var(--reto-accent);
+    border-color: var(--reto-accent);
+  }
+
+  .reto-badge--success {
+    color: var(--reto-success-strong);
+    border-color: var(--reto-success);
+  }
+
+  .reto-badge--warning {
+    color: var(--reto-accent-strong);
+    border-color: var(--reto-accent-strong);
+  }
+
+  .reto-badge--danger {
+    color: var(--reto-danger-strong);
+    border-color: var(--reto-danger);
+  }
+
+  .reto-badge--outline {
+    background: transparent;
+  }
+
+  .reto-badge--shield {
+    font-family: var(--reto-font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--reto-bg-elevated);
+    border-radius: var(--radius-badge);
+    padding: 0.22rem 0.6rem;
+    filter: drop-shadow(0 0 2px rgba(255, 179, 108, 0.35));
+    text-transform: none;
+  }
+</style>

@@ -1,0 +1,95 @@
+---
+/**
+ * The "service catalog" tile: one command group (e.g. "Version & Release")
+ * with a short description and its member commands. Designed so a huge
+ * CLI surface (39+ commands) reads as a handful of simple tiles rather
+ * than one giant flat list.
+ *
+ * Ported from components/catalog/ServiceCard.jsx (Reto design system mirror).
+ */
+import CommandRow from "./CommandRow.astro";
+
+interface ServiceCardCommand {
+  command: string;
+  description: string;
+}
+
+interface Props {
+  /** Unicode glyph icon (no icon font in this system — see design-system.mdx Iconography). */
+  icon?: string;
+  title: string;
+  description: string;
+  commands?: ServiceCardCommand[];
+  href?: string;
+}
+
+const { icon = "⬣", title, description, commands = [], href } = Astro.props as Props;
+---
+
+<div class="reto-service-card">
+  <div class="reto-service-card__heading">
+    <span class="reto-service-card__icon" aria-hidden="true">{icon}</span>
+    <h3 class="reto-service-card__title">
+      {href ? <a href={href} class="reto-service-card__title-link">{title}</a> : title}
+    </h3>
+  </div>
+  <p class="reto-service-card__description">{description}</p>
+  {commands.length > 0 ? (
+    <div class="reto-service-card__commands">
+      {commands.map((c) => (
+        <CommandRow command={c.command} description={c.description} />
+      ))}
+    </div>
+  ) : null}
+</div>
+
+<style>
+  .reto-service-card {
+    border: 1px solid var(--reto-border);
+    background: var(--reto-surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--reto-shadow);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .reto-service-card__heading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .reto-service-card__icon {
+    font-size: 1.4rem;
+    color: var(--reto-accent-strong);
+  }
+
+  .reto-service-card__title {
+    margin: 0;
+    font-family: var(--reto-font-display);
+    font-size: var(--text-display-sm);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-display);
+    color: var(--reto-accent);
+  }
+
+  .reto-service-card__title-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .reto-service-card__description {
+    margin: 0;
+    color: var(--reto-text-soft);
+    font-family: var(--reto-font-body);
+    font-size: 0.92rem;
+  }
+
+  .reto-service-card__commands {
+    border-top: 1px solid var(--reto-border);
+    margin-top: 0.25rem;
+    padding-top: 0.5rem;
+  }
+</style>

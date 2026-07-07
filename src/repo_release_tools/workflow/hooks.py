@@ -1859,11 +1859,11 @@ rrt-hooks commit-msg "$1"
 
 AGENT_INSTRUCTIONS_DOC = """# Hook & Action Reference
 
-<!-- Static context for agents: read this before using any prompt block below. -->
+*Static context for agents: read this before using any prompt block below.*
 
 ## Agent context
 
-**Repo:** <https://github.com/Anselmoo/repo-release-tools> · Python ≥ 3.12 · `uv_build`
+**Repo:** [github.com/Anselmoo/repo-release-tools](https://github.com/Anselmoo/repo-release-tools) · Python ≥ 3.12 · `uv_build`
 
 **Entry points** (from `pyproject.toml`):
 - `rrt-hooks` → `repo_release_tools.workflow.hooks:main` — git hook runner (installed binary, NOT a uvx shortcut)

@@ -1,0 +1,57 @@
+---
+/**
+ * Simple slash-separated breadcrumb trail for docs pages. The last item
+ * (no href) renders as the current-page label in accent color.
+ *
+ * Ported from components/navigation/Breadcrumbs.jsx (Reto design system mirror).
+ */
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
+interface Props {
+  items?: BreadcrumbItem[];
+}
+
+const { items = [] } = Astro.props as Props;
+---
+
+<nav aria-label="Breadcrumb" class="reto-breadcrumbs">
+  {items.map((item, i) => (
+    <Fragment>
+      {i > 0 ? <span aria-hidden="true" class="reto-breadcrumbs__sep">/</span> : null}
+      {item.href && i !== items.length - 1 ? (
+        <a href={item.href} class="reto-breadcrumbs__link">{item.label}</a>
+      ) : (
+        <span class="reto-breadcrumbs__current">{item.label}</span>
+      )}
+    </Fragment>
+  ))}
+</nav>
+
+<style>
+  .reto-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--reto-font-code);
+    font-size: 0.82rem;
+    color: var(--reto-text-soft);
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .reto-breadcrumbs__sep {
+    opacity: 0.5;
+  }
+
+  .reto-breadcrumbs__link {
+    color: var(--reto-link);
+    text-decoration: underline;
+  }
+
+  .reto-breadcrumbs__current {
+    color: var(--reto-accent);
+  }
+</style>

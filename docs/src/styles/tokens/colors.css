@@ -1,0 +1,114 @@
+/* ==========================================================================
+   Colors — Reto Design System
+   Base palette (raw scale) + semantic aliases. All resolved semantic values
+   below are verified 1:1 against the real, currently-shipping
+   docs/assets/css/reto.css (413 lines) — see task report for the diff.
+   Light = "paper terminal" (warm cream/brown). Dark = "amber phosphor CRT".
+   Theme switches automatically via prefers-color-scheme, or is pinned with
+   html[data-theme="dark"|"light"] (see components/feedback/ThemeToggle,
+   re-skinned onto Starlight's native theme toggle in a later task).
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- Base palette: warm paper (light mode) ---- */
+  --paper-50: #fff9ef;
+  --paper-100: #f5f0e6;
+  --paper-200: #f8ebd8;
+  --paper-300: #d2bc9d;
+  --ink-900: #2a1c10;
+  --ink-600: #6d5135;
+  --umber-700: #7a4d1c;
+  --umber-600: #8f3f03;
+  --umber-500: #b65e13;
+
+  /* ---- Base palette: amber phosphor (dark mode) ---- */
+  --carbon-950: #0c0805;
+  --carbon-900: #160f0a;
+  --carbon-800: #1a120b;
+  --carbon-700: #4a2f18;
+  --carbon-600: #120c08;
+  --amber-300: #ffca86;
+  --amber-400: #ffb36c;
+  --amber-500: #ff9f3f;
+  --amber-600: #b65e13;
+
+  /* ---- Semantic feedback colors: warm-harmonized via oklch, kept out of
+     the source's monochrome amber but pulled from the same hue family.
+     Not present in the real reto.css (that file is monochrome) — this is
+     an intentional addition documented in readme.md. ---- */
+  --reto-success: oklch(56% 0.11 142);
+  --reto-success-strong: oklch(64% 0.14 142);
+  --reto-danger: oklch(54% 0.19 27);
+  --reto-danger-strong: oklch(60% 0.21 27);
+
+  /* ---- Semantic aliases: LIGHT (default) ---- */
+  --reto-bg: var(--paper-100);
+  --reto-bg-elevated: var(--paper-50);
+  --reto-surface: #fff;
+  --reto-text: var(--ink-900);
+  --reto-text-soft: var(--ink-600);
+  --reto-border: var(--paper-300);
+  --reto-accent: var(--umber-700);
+  --reto-accent-strong: var(--umber-500);
+  --reto-link: var(--umber-600);
+  --reto-code-bg: var(--paper-200);
+  --reto-footer-badge: "\2699 repo-release-tools docs / reto-mode"; /* @kind other */
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Auto dark-mode: guarded with html:not([data-theme]) so an explicit
+     html[data-theme="light"|"dark"] override always takes precedence,
+     regardless of CSS import/source order. Matches the real reto.css. */
+  html:not([data-theme]) {
+    --reto-bg: var(--carbon-950);
+    --reto-bg-elevated: var(--carbon-900);
+    --reto-surface: var(--carbon-800);
+    --reto-text: var(--amber-400);
+    --reto-text-soft: var(--amber-600);
+    --reto-border: var(--carbon-700);
+    --reto-accent: var(--amber-400);
+    --reto-accent-strong: var(--amber-500);
+    --reto-link: var(--amber-300);
+    --reto-code-bg: var(--carbon-600);
+    --reto-success: oklch(70% 0.15 142);
+    --reto-success-strong: oklch(78% 0.17 142);
+    --reto-danger: oklch(66% 0.2 27);
+    --reto-danger-strong: oklch(72% 0.22 27);
+  }
+}
+
+html[data-theme="dark"] {
+  --reto-bg: var(--carbon-950);
+  --reto-bg-elevated: var(--carbon-900);
+  --reto-surface: var(--carbon-800);
+  --reto-text: var(--amber-400);
+  --reto-text-soft: var(--amber-600);
+  --reto-border: var(--carbon-700);
+  --reto-accent: var(--amber-400);
+  --reto-accent-strong: var(--amber-500);
+  --reto-link: var(--amber-300);
+  --reto-code-bg: var(--carbon-600);
+  --reto-success: oklch(70% 0.15 142);
+  --reto-success-strong: oklch(78% 0.17 142);
+  --reto-danger: oklch(66% 0.2 27);
+  --reto-danger-strong: oklch(72% 0.22 27);
+}
+
+html[data-theme="light"] {
+  --reto-bg: var(--paper-100);
+  --reto-bg-elevated: var(--paper-50);
+  --reto-surface: #fff;
+  --reto-text: var(--ink-900);
+  --reto-text-soft: var(--ink-600);
+  --reto-border: var(--paper-300);
+  --reto-accent: var(--umber-700);
+  --reto-accent-strong: var(--umber-500);
+  --reto-link: var(--umber-600);
+  --reto-code-bg: var(--paper-200);
+  --reto-success: oklch(56% 0.11 142);
+  --reto-success-strong: oklch(64% 0.14 142);
+  --reto-danger: oklch(54% 0.19 27);
+  --reto-danger-strong: oklch(60% 0.21 27);
+}

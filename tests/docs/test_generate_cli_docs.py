@@ -50,8 +50,8 @@ def test_generate_markdown_has_stable_sections_without_ansi_sequences() -> None:
     assert "Version & Release" in content
     assert "Repository Health" in content
     assert "Git Workflow" in content
-    assert "version-release.md" in content
-    assert "repo-health.md" in content
+    assert "/repo-release-tools/commands/version-release/" in content
+    assert "/repo-release-tools/commands/repo-health/" in content
     # Per-command sections are no longer in the compact index (they live in group pages)
     assert "### `rrt branch new`" not in content
     assert "RRT CLI" not in content
@@ -69,6 +69,71 @@ def test_generate_group_reference_markdown_contains_per_command_sections() -> No
     assert "## `rrt git`" in content
     assert "### `rrt git diff`" in content
     assert "\x1b[" not in content
+
+
+def test_generate_markdown_uses_mdx_comments_for_mdx_output_path() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_markdown(Path("docs/src/content/docs/commands/rrt-cli.mdx"))
+
+    assert "{/* Auto-generated from repo_release_tools.cli.build_parser();" in content
+    assert "{/* rrt:auto:start:toc */}" in content
+    assert "{/* rrt:auto:end:toc */}" in content
+    assert "<!--" not in content
+
+
+def test_generate_markdown_uses_html_comments_for_md_output_path() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_markdown(Path("docs/commands/rrt-cli.md"))
+
+    assert "<!-- Auto-generated from repo_release_tools.cli.build_parser();" in content
+    assert "<!-- rrt:auto:start:toc -->" in content
+    assert "<!-- rrt:auto:end:toc -->" in content
+    assert "{/*" not in content
+
+
+def test_generate_group_reference_markdown_uses_mdx_comments_for_mdx_output_path() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_group_reference_markdown(
+        "Git Workflow",
+        ("branch", "git"),
+        Path("docs/src/content/docs/commands/git-workflow.mdx"),
+    )
+
+    assert "{/* Auto-generated from repo_release_tools.cli.build_parser();" in content
+    assert "{/* rrt:auto:start:toc */}" in content
+    assert "{/* rrt:auto:end:toc */}" in content
+    assert "<!--" not in content
+
+
+def test_generate_group_reference_markdown_uses_html_comments_for_md_output_path() -> None:
+    docs = _load_generator_module()
+
+    content = docs.generate_group_reference_markdown(
+        "Git Workflow", ("branch", "git"), Path("docs/commands/git-workflow.md")
+    )
+
+    assert "<!-- Auto-generated from repo_release_tools.cli.build_parser();" in content
+    assert "<!-- rrt:auto:start:toc -->" in content
+    assert "<!-- rrt:auto:end:toc -->" in content
+    assert "{/*" not in content
+
+
+def test_autogen_note_and_anchor_stub_pair_are_format_aware() -> None:
+    docs = _load_generator_module()
+
+    assert docs._autogen_note(Path("a.mdx")).startswith("{/* Auto-generated")
+    assert docs._autogen_note(Path("a.md")).startswith("<!-- Auto-generated")
+
+    mdx_start, mdx_end = docs._anchor_stub_pair("toc", Path("a.mdx"))
+    assert mdx_start == "{/* rrt:auto:start:toc */}"
+    assert mdx_end == "{/* rrt:auto:end:toc */}"
+
+    md_start, md_end = docs._anchor_stub_pair("toc", Path("a.md"))
+    assert md_start == "<!-- rrt:auto:start:toc -->"
+    assert md_end == "<!-- rrt:auto:end:toc -->"
 
 
 def test_render_command_docs_only_for_top_level_commands() -> None:
@@ -249,10 +314,10 @@ def test_generate_index_topic_links_markdown_lists_expected_entries() -> None:
 
     content = docs.generate_index_topic_links_markdown()
 
-    assert "commands/branch.md" in content
-    assert "commands/git_cmd.md" in content
-    assert "commands/tree.md" in content
-    assert "mcp-server.md" in content
+    assert "/repo-release-tools/commands/branch/" in content
+    assert "/repo-release-tools/commands/git_cmd/" in content
+    assert "/repo-release-tools/commands/tree/" in content
+    assert "/repo-release-tools/mcp-server/" in content
 
 
 def test_generate_readme_links_markdown_includes_mcp_server_doc() -> None:
@@ -269,7 +334,7 @@ def test_iter_generated_doc_targets_exposes_all_targets() -> None:
     targets = list(docs.iter_generated_doc_targets())
 
     assert targets
-    assert targets[0].output_path.name == "rrt-cli.md"
+    assert targets[0].output_path.name == "rrt-cli.mdx"
     assert any(target.anchor_id == "index-topic-links" for target in targets)
     assert any(target.anchor_id == "readme-links" for target in targets)
 
@@ -281,7 +346,7 @@ def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
     assert docs.generate_git_markdown() == docs.git_helpers.GIT_DOC
     assert docs.generate_semantic_branches_markdown().startswith("# rrt branch")
     assert docs.generate_git_markdown().startswith("# rrt git")
-    assert docs.GENERATED_DOC_TARGETS[0].output_path.name == "rrt-cli.md"
+    assert docs.GENERATED_DOC_TARGETS[0].output_path.name == "rrt-cli.mdx"
     assert len(docs.GENERATED_DOC_TARGETS) >= 3
     assert "branch" in docs.TOPIC_PAGE_OUTPUTS
     assert "git" in docs.TOPIC_PAGE_OUTPUTS
@@ -293,7 +358,7 @@ def test_generated_doc_targets_include_anchored_index_block() -> None:
     index_targets = [
         target
         for target in docs.GENERATED_DOC_TARGETS
-        if str(target.output_path).endswith("docs/index.md")
+        if str(target.output_path).endswith("docs/src/content/docs/index.mdx")
     ]
 
     assert len(index_targets) == 1
@@ -317,9 +382,9 @@ def test_generated_command_topics_have_frontmatter_and_command_h1() -> None:
 
     by_name = {target.output_path.name: target for target in docs.GENERATED_DOC_TARGETS}
 
-    doctor = by_name["doctor.md"].render()
-    eol = by_name["eol_check.md"].render()
-    git_doc = by_name["git_cmd.md"].render()
+    doctor = by_name["doctor.mdx"].render()
+    eol = by_name["eol_check.mdx"].render()
+    git_doc = by_name["git_cmd.mdx"].render()
 
     _assert_frontmatter_and_h1(doctor, title="rrt doctor")
     _assert_frontmatter_and_h1(eol, title="rrt eol")
@@ -361,25 +426,11 @@ def test_generate_group_reference_markdown_includes_docstring_prose() -> None:
     assert between, "no prose injected for rrt branch"
 
 
-def test_extract_first_h1_and_compute_permalink_helpers() -> None:
+def test_extract_first_h1_helper() -> None:
     docs = _load_generator_module()
 
     assert docs._extract_first_h1("# Title\n\nBody\n") == "Title"
     assert docs._extract_first_h1("No heading here\n") is None
-
-    assert docs._compute_permalink_for_output(Path("docs/index.md")) == "/"
-
-
-def test_compute_permalink_only_swallows_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    docs = _load_generator_module()
-
-    def boom(self: Path, other: object) -> Path:
-        raise RuntimeError("unexpected path error")
-
-    monkeypatch.setattr(Path, "relative_to", boom)
-
-    with pytest.raises(RuntimeError, match="unexpected path error"):
-        docs._compute_permalink_for_output(Path("docs/example.md"))
 
 
 def test_cmd_publish_renders_each_target_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -416,17 +467,13 @@ def test_cmd_publish_renders_each_target_once(monkeypatch: pytest.MonkeyPatch) -
     assert exit_code == 0
     assert [target.render_calls for target in targets] == [1, 1]
     assert len(calls) == 2
-    assert (
-        docs._compute_permalink_for_output(Path("docs/commands/rrt-cli.md")) == "/commands/rrt-cli/"
-    )
-    assert docs._compute_permalink_for_output(Path("README.md")) == ""
 
 
 def test_wrap_with_frontmatter_falls_back_to_h1_or_stem_for_unknown_slug() -> None:
     docs = _load_generator_module()
 
     wrapped_h1 = docs._wrap_with_frontmatter(
-        Path("docs/commands/custom-topic.md"),
+        Path("docs/src/content/docs/commands/custom-topic.mdx"),
         lambda: "# Custom Topic\n\nBody\n",
         title_override=None,
         slug="custom-topic",
@@ -436,7 +483,7 @@ def test_wrap_with_frontmatter_falls_back_to_h1_or_stem_for_unknown_slug() -> No
     assert "\n# Custom Topic\n" in rendered_h1
 
     wrapped_stem = docs._wrap_with_frontmatter(
-        Path("docs/commands/no-heading.md"),
+        Path("docs/src/content/docs/commands/no-heading.mdx"),
         lambda: "Body without heading\n",
         title_override=None,
         slug="not-registered",
@@ -450,7 +497,7 @@ def test_wrap_with_frontmatter_uses_title_override_registry_when_slug_known() ->
     docs = _load_generator_module()
 
     wrapped = docs._wrap_with_frontmatter(
-        Path("docs/commands/doctor.md"),
+        Path("docs/src/content/docs/commands/doctor.mdx"),
         lambda: "# Something else\n\nBody\n",
         title_override=None,
         slug="doctor",
@@ -469,13 +516,15 @@ def test_validate_generated_pages_reports_each_invalid_render_shape() -> None:
         docs,
         "GENERATED_DOC_TARGETS",
         (
-            docs.DocTarget(Path("docs/commands/no-frontmatter.md"), lambda: "# heading\n"),
             docs.DocTarget(
-                Path("docs/commands/malformed-frontmatter.md"),
+                Path("docs/src/content/docs/commands/no-frontmatter.mdx"), lambda: "# heading\n"
+            ),
+            docs.DocTarget(
+                Path("docs/src/content/docs/commands/malformed-frontmatter.mdx"),
                 lambda: "---\nname: x\n# heading\n",
             ),
             docs.DocTarget(
-                Path("docs/commands/no-h1.md"),
+                Path("docs/src/content/docs/commands/no-h1.mdx"),
                 lambda: "---\nname: x\n---\nplain body\n",
             ),
         ),
@@ -1123,6 +1172,124 @@ def test_apply_generated_docs_rst_missing_file_with_anchor_returns_error(tmp_pat
 
     assert exit_code == 1
     assert "missing" in stderr.getvalue().lower()
+
+
+# ---------------------------------------------------------------------------
+# MDX anchor injection tests
+# ---------------------------------------------------------------------------
+
+
+def test_detect_inject_format_returns_mdx_for_mdx_suffix() -> None:
+    from repo_release_tools.tools.inject import _detect_inject_format
+
+    assert _detect_inject_format(Path("docs/commands/rrt-cli.mdx")) == "mdx"
+    assert _detect_inject_format("rrt-cli.MDX") == "mdx"
+    assert _detect_inject_format(Path("docs/commands/rrt-cli.md")) == "md"
+    assert _detect_inject_format(Path("readme.rst")) == "rst"
+
+
+def test_replace_anchored_block_mdx_updates_between_markers() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = (
+        "# header\n"
+        "{/* rrt:auto:start:example */}\n"
+        "old content\n"
+        "{/* rrt:auto:end:example */}\n"
+        "# footer\n"
+    )
+
+    updated = replace_anchored_block(existing, anchor_id="example", content="new line", fmt="mdx")
+
+    assert updated is not None
+    assert "old content" not in updated
+    assert "new line\n" in updated
+    assert "# header" in updated and "# footer" in updated
+    assert "<!--" not in updated
+
+
+def test_replace_anchored_block_mdx_returns_none_when_markers_absent() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = "plain MDX text\nno markers here\n"
+
+    updated = replace_anchored_block(existing, anchor_id="missing", content="x", fmt="mdx")
+
+    assert updated is None
+
+
+def test_replace_anchored_block_mdx_does_not_match_html_comment_markers() -> None:
+    # An .mdx-formatted replace must not accidentally match the HTML-comment
+    # form still present in legacy content.
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = "<!-- rrt:auto:start:example -->\nold\n<!-- rrt:auto:end:example -->\n"
+
+    updated = replace_anchored_block(existing, anchor_id="example", content="new", fmt="mdx")
+
+    assert updated is None
+
+
+def test_replace_anchored_block_mdx_raises_for_missing_end_marker() -> None:
+    from repo_release_tools.tools.inject import replace_anchored_block
+
+    existing = "{/* rrt:auto:start:broken */}\ncontent\n"
+
+    with pytest.raises(ValueError, match="Missing end anchor"):
+        replace_anchored_block(existing, anchor_id="broken", content="x", fmt="mdx")
+
+
+def test_apply_generated_docs_mdx_anchor_mode_replaces_block(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "target.mdx"
+    output_path.write_text(
+        "Before\n\n{/* rrt:auto:start:block */}\nold\n{/* rrt:auto:end:block */}\n\nAfter\n",
+        encoding="utf-8",
+    )
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new content",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    rendered = output_path.read_text(encoding="utf-8")
+    assert exit_code == 0
+    assert "Before\n" in rendered and "After\n" in rendered
+    assert "old" not in rendered
+    assert "new content" in rendered
+    assert "<!--" not in rendered
+    assert stderr.getvalue() == ""
+
+
+def test_apply_generated_docs_mdx_missing_anchor_returns_error(tmp_path: Path) -> None:
+    docs = _load_generator_module()
+    output_path = tmp_path / "target.mdx"
+    output_path.write_text("Before\n\nAfter\n", encoding="utf-8")
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = docs.apply_generated_docs(
+        "new content",
+        output_path=output_path,
+        check=False,
+        write=True,
+        fail_on_change=False,
+        stdout=stdout,
+        stderr=stderr,
+        anchor_id="block",
+    )
+
+    assert exit_code == 1
+    assert "rrt:auto:start:block" in stderr.getvalue()
+    assert "{/*" in stderr.getvalue()
 
 
 def test_insert_anchor_stub_str_rejects_invalid_position() -> None:

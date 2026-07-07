@@ -116,16 +116,20 @@ help = "Verify generated docs and shared anchors are current."
 sequence = ["docs-generate", "docs-check", "docs-inject-check"]
 
 [tool.poe.groups.docs.tasks.serve]
-help = "Serve the docs site locally with Jekyll at http://localhost:4000/ (requires Ruby)."
-shell = "cd docs && bundle install && bundle exec jekyll serve --baseurl '' --livereload"
+help = "Generate badge assets, then serve the docs site locally with Astro's dev server at http://localhost:4321/."
+sequence = ["badge-export", "badge-sync", "serve-run"]
 
-[tool.poe.groups.docs.tasks.serve-pages]
-help = "Serve with the production baseurl (/repo-release-tools) to simulate GitHub Pages exactly (requires Ruby)."
-shell = "cd docs && bundle install && bundle exec jekyll serve --baseurl '/repo-release-tools'"
+[tool.poe.groups.docs.tasks.serve-run]
+help = "Start Astro's dev server (assumes badge assets already exist; use 'serve' otherwise)."
+shell = "cd docs && npm ci && npm run dev"
 
-[tool.poe.groups.docs.tasks.serve-python]
-help = "Serve raw docs directory via Python HTTP server at http://localhost:4000/ (no Jekyll rendering — templates stay as Liquid/Markdown)."
-cmd = "python -m http.server 4000 --directory docs"
+[tool.poe.groups.docs.tasks.preview]
+help = "Generate badge assets, then build and serve the production build (base-aware, via astro preview) to simulate GitHub Pages exactly."
+sequence = ["badge-export", "badge-sync", "preview-run"]
+
+[tool.poe.groups.docs.tasks.preview-run]
+help = "Build and serve the production build (assumes badge assets already exist; use 'preview' otherwise)."
+shell = "cd docs && npm run build && npm run preview"
 
 [tool.poe.groups.docs.tasks.sync-assets]
 help = "Validate source-owned skill and agent assets are present (no copy needed)."
@@ -140,8 +144,8 @@ help = "Export all platform/variant badge SVGs to src/repo_release_tools/assets/
 cmd = "python -m repo_release_tools.assets.badges src/repo_release_tools/assets/badges"
 
 [tool.poe.groups.docs.tasks.badge-sync]
-help = "Sync already-generated src/badges SVGs to docs/assets/badges/ (run after badge-export)."
-cmd = "python -m repo_release_tools.assets.badges docs/assets/badges"
+help = "Sync already-generated src/badges SVGs to docs/public/assets/badges/ (run after badge-export)."
+cmd = "python -m repo_release_tools.assets.badges docs/public/assets/badges"
 
 [tool.rrt]
 pin_target_missing = "warn"
@@ -206,17 +210,9 @@ kind = "pep621"
 path = "src/repo_release_tools/__init__.py"
 kind = "python_version"
 
-[[tool.rrt.pin_targets]]
-path = "docs/action.md"
-pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
-
-[[tool.rrt.pin_targets]]
-path = "docs/commands/hooks.md"
-pattern = '(rev: v)(\d+\.\d+\.\d+)()'
-
-[[tool.rrt.pin_targets]]
-path = "docs/agent-instructions.md"
-pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+[[tool.rrt.version_targets]]
+path = "docs/package.json"
+kind = "package_json"
 
 [[tool.rrt.pin_targets]]
 path = "README.md"
@@ -448,6 +444,8 @@ suggest_roots = ["src/repo_release_tools/commands"]
 suggest_exempt = ["__init__.py", "__main__.py"]
 suggest_min_chars = 2500
 badge_variant = "adaptive"
+# Must exactly match docs/astro.config.mjs's `base:` value.
+base_url = "/repo-release-tools"
 
 # Source-link settings used by docs exporters to build file/line URLs.
 source_repo_url = "https://github.com/Anselmoo/repo-release-tools"

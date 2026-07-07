@@ -684,7 +684,7 @@ class TestEmbedSharedBlocksInContent:
         )
         monkeypatch.setattr(
             "repo_release_tools.commands.docs_cmd._expand_platform_vars",
-            lambda content, docs, *, root, target_path: content,
+            lambda content, docs: content,
         )
 
         base = '---\ntitle: "branch"\n---\n\n# branch\n'
@@ -1032,64 +1032,37 @@ class TestPlatformHelpers:
         result = _expand_platform_vars("{platform} - {platform_label}", docs)
         assert "gitlab - GitLab" == result
 
-    def test_expand_platform_vars_svg_badge_uses_target_relative_assets_path(
-        self, tmp_path: Path
+    @pytest.mark.parametrize(
+        "target_rel",
+        ["docs/commands/skill.md", "docs/index.md", "README.md"],
+    )
+    def test_expand_platform_vars_svg_badge_uses_root_absolute_base_url_path(
+        self, tmp_path: Path, target_rel: str
     ) -> None:
+        # Badge asset links are now root-absolute and base_url-prefixed, independent
+        # of where the embedding file lives in the site tree (Astro serves
+        # docs/public/... at the site root — no per-target-location depth math).
         docs = DocsConfig(
             source_repo_url="https://github.com/o/r",
             badge_style="svg",
-            badge_assets_dir="docs/assets/badges",
+            badge_assets_dir="docs/public/assets/badges",
+            base_url="/repo-release-tools",
         )
-        target = tmp_path / "docs" / "commands" / "skill.md"
-        target.parent.mkdir(parents=True)
-        result = _expand_platform_vars(
-            "{platform_badge}",
-            docs,
-            root=tmp_path,
-            target_path=target,
-        )
-        # Jekyll `permalink: pretty` serves skill.md at /commands/skill/ (one level deeper
-        # than the file's parent), so the correct relative path is two levels up.
-        assert "](../../assets/badges/github.svg)" in result
+        target = tmp_path / target_rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        result = _expand_platform_vars("{platform_badge}", docs)
+        assert "](/repo-release-tools/assets/badges/github.svg)" in result
 
-    def test_expand_platform_vars_svg_badge_index_md_uses_direct_parent_path(
+    def test_expand_platform_vars_svg_badge_without_base_url_is_site_root_relative(
         self, tmp_path: Path
     ) -> None:
         docs = DocsConfig(
             source_repo_url="https://github.com/o/r",
             badge_style="svg",
-            badge_assets_dir="docs/assets/badges",
+            badge_assets_dir="docs/public/assets/badges",
         )
-        # index.md is exempt from the Jekyll pretty-permalink depth adjustment
-        target = tmp_path / "docs" / "index.md"
-        target.parent.mkdir(parents=True)
-        result = _expand_platform_vars(
-            "{platform_badge}",
-            docs,
-            root=tmp_path,
-            target_path=target,
-        )
-        # index.md is not subject to Jekyll pretty-permalink depth; badges are a sibling dir
-        assert "](assets/badges/github.svg)" in result
-
-    def test_expand_platform_vars_svg_badge_readme_md_uses_direct_parent_path(
-        self, tmp_path: Path
-    ) -> None:
-        docs = DocsConfig(
-            source_repo_url="https://github.com/o/r",
-            badge_style="svg",
-            badge_assets_dir="docs/assets/badges",
-        )
-        # README.md lives at repo root, outside docs/ — must not receive the Jekyll
-        # virtual-depth adjustment that would incorrectly produce ../docs/assets/...
-        target = tmp_path / "README.md"
-        result = _expand_platform_vars(
-            "{platform_badge}",
-            docs,
-            root=tmp_path,
-            target_path=target,
-        )
-        assert "](docs/assets/badges/github.svg)" in result
+        result = _expand_platform_vars("{platform_badge}", docs)
+        assert "](/assets/badges/github.svg)" in result
 
 
 class TestCmdBadges:
@@ -1388,11 +1361,11 @@ class TestEmbedTocInContent:
 
     def test_no_toc_stub_returns_unchanged(self) -> None:
         content = "# Heading\n\nSome content with no TOC stub.\n"
-        assert _embed_toc_in_content(content) == content
+        assert _embed_toc_in_content(content, Path("target.md")) == content
 
     def test_toc_stub_with_no_headings_returns_unchanged(self) -> None:
         content = "<!-- rrt:auto:start:toc -->\n<!-- rrt:auto:end:toc -->\n\nNo headings here.\n"
-        assert _embed_toc_in_content(content) == content
+        assert _embed_toc_in_content(content, Path("target.md")) == content
 
     def test_toc_stub_with_headings_populates_toc(self) -> None:
         content = (
@@ -1404,7 +1377,7 @@ class TestEmbedTocInContent:
             "### Subsection\n\n"
             "More text.\n"
         )
-        result = _embed_toc_in_content(content)
+        result = _embed_toc_in_content(content, Path("target.md"))
         assert "- [`Section One`](#section-one)" in result or "Section One" in result
         assert "<!-- rrt:auto:start:toc -->" in result
         assert "<!-- rrt:auto:end:toc -->" in result
@@ -1412,7 +1385,7 @@ class TestEmbedTocInContent:
     def test_missing_end_anchor_returns_content_unchanged(self) -> None:
         # Start anchor present but end anchor missing → ValueError caught → content unchanged.
         content = "# Title\n\n<!-- rrt:auto:start:toc -->\n\n## Section\n\nText.\n"
-        assert _embed_toc_in_content(content) == content
+        assert _embed_toc_in_content(content, Path("target.md")) == content
 
     def test_toc_stub_replaces_existing_toc_content(self) -> None:
         content = (
@@ -1423,6 +1396,28 @@ class TestEmbedTocInContent:
             "## New Section\n\n"
             "Text.\n"
         )
-        result = _embed_toc_in_content(content)
+        result = _embed_toc_in_content(content, Path("target.md"))
         assert "Old entry" not in result
         assert "New Section" in result
+
+    def test_mdx_target_uses_jsx_comment_stub(self) -> None:
+        content = (
+            "# Title\n\n"
+            "{/* rrt:auto:start:toc */}\n"
+            "{/* rrt:auto:end:toc */}\n\n"
+            "## Section One\n\n"
+            "Some text.\n"
+        )
+        result = _embed_toc_in_content(content, Path("target.mdx"))
+        assert "Section One" in result
+        assert "{/* rrt:auto:start:toc */}" in result
+        assert "{/* rrt:auto:end:toc */}" in result
+        assert "<!--" not in result
+
+    def test_mdx_target_ignores_html_comment_stub(self) -> None:
+        # An .mdx target should not match an HTML-comment-style stub — the
+        # presence check itself is format-aware.
+        content = (
+            "# Title\n\n<!-- rrt:auto:start:toc -->\n<!-- rrt:auto:end:toc -->\n\n## Section\n"
+        )
+        assert _embed_toc_in_content(content, Path("target.mdx")) == content

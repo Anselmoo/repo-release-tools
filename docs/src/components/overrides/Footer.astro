@@ -1,0 +1,46 @@
+---
+/**
+ * Starlight `Footer` component override.
+ *
+ * Renders Starlight's own footer (EditLink, LastUpdated, Pagination,
+ * GitHub social icon from `social` config) via the "wrap the default"
+ * pattern (see guides/overriding-components.mdx's ConditionalFooter
+ * example: `import Default from '@astrojs/starlight/components/Footer.astro'`),
+ * then appends the two disclaimer paragraphs from the old Jekyll layout
+ * (docs/_layouts/default.html:69-74) verbatim underneath.
+ *
+ * `<Default />` is self-closing: Starlight's own Footer.astro defines no
+ * `<slot />` of its own, and Page.astro always renders `<Footer />` with no
+ * children, so there is nothing to forward here.
+ */
+import Default from "@astrojs/starlight/components/Footer.astro";
+---
+
+<Default />
+
+<p class="site-disclaimer">Badge families are intentionally complete for the current icon registry across
+  platform, registry, and language labels; see <code>src/repo_release_tools/tools/platform.py</code> if you
+  think one is missing.</p>
+<p class="site-disclaimer">Chat is powered by <a href="https://context7.com/anselmoo/repo-release-tools"
+    rel="noopener noreferrer" target="_blank">Context7</a>, a third-party service with its own terms and
+  privacy policy.</p>
+
+<style>
+  .site-disclaimer {
+    max-width: 60ch;
+    margin: 0.75rem auto 0;
+    font-family: var(--reto-font-body);
+    font-size: var(--text-xs);
+    color: var(--reto-text-soft);
+    text-align: center;
+  }
+
+  .site-disclaimer a {
+    color: var(--reto-link);
+  }
+
+  .site-disclaimer code {
+    font-family: var(--reto-font-code);
+    font-size: 0.9em;
+  }
+</style>

@@ -106,17 +106,14 @@ uv run poe docs
 # Inject TOC into group reference pages:
 uv run poe docs-toc
 
-# Serve locally at http://localhost:4000/ (mirrors GitHub Pages, baseurl overridden):
+# Serve locally with Astro's dev server at http://localhost:4321/:
 uv run poe serve
 
-# Serve with production baseurl /repo-release-tools for full simulation:
-uv run poe serve-pages
-
-# Quick raw-file preview via Python (no Jekyll rendering — templates stay as Liquid/Markdown):
-uv run poe serve-python
+# Build and serve the production build (base-aware, via astro preview) to simulate GitHub Pages exactly:
+uv run poe preview
 ```
 
-The 5 auto-generated command-group reference pages live in `docs/commands/`:
+The 5 auto-generated command-group reference pages live in `docs/src/content/docs/commands/`:
 `version-release.md`, `repo-health.md`, `git-workflow.md`, `ci-automation.md`, `setup-tooling.md`.
 Regenerate with `uv run poe docs-generate`. TOC anchor stubs are embedded in their H1; fill
 them with `uv run poe docs-toc`.

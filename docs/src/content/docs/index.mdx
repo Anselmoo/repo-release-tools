@@ -1,0 +1,177 @@
+---
+title: "repo-release-tools"
+description: "Local release automation, Git workflow helpers, and CI policy gates for Conventional Commits and Keep a Changelog projects."
+---
+
+# repo-release-tools
+
+`repo-release-tools` has three main surfaces:
+
+- **[Generated CLI reference](/repo-release-tools/commands/rrt-cli/)** for local release automation, Git
+  helpers, config inspection, and the bundled `rrt skill install` command
+- **[GitHub Action](/repo-release-tools/action/)** for CI policy checks that mirror the
+  local workflow
+- **Generated topic docs**:
+  [Semantic branches](/repo-release-tools/commands/branch/) and [rrt git](/repo-release-tools/commands/git_cmd/) for
+  the branch naming model and Git workflow guidance
+
+If you need command syntax, start with the generated CLI reference first. It is
+the canonical home for the current `rrt` command surface.
+
+## Start here
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — generated reference for branches, bumps, Git
+  workflow helpers, config checks, and skill installation
+- [GitHub Action](/repo-release-tools/action/) — CI checks for branch names, commit
+  subjects, changelog policy, and optional doctor/dirty-tree gates
+- [pre-commit / lefthook](/repo-release-tools/commands/hooks/) — local hook setup for incremental or
+  squash-based changelog workflows
+- [Skills](/repo-release-tools/commands/skill/) — bundled `uvx` and installed-CLI agent skills
+
+## Then follow the workflow
+
+{/* rrt:auto:start:index-topic-links */}
+- [rrt branch](/repo-release-tools/commands/branch/) — generated branch naming model and allowed branch types
+- [rrt git](/repo-release-tools/commands/git_cmd/) — generated Git helpers and workflow shortcuts
+- [rrt tree](/repo-release-tools/commands/tree/) — generated guide for `rrt tree` output modes, ignore behavior, and traversal controls
+- [MCP Server](/repo-release-tools/mcp-server/) — MCP install and connect guide
+{/* rrt:auto:end:index-topic-links */}
+
+## Command reference by group
+
+The CLI is split into per-group reference pages (auto-generated from the live argparse tree) and
+prose topic pages for individual commands.
+
+### Auto-generated group reference pages
+
+| Group | Commands | Page |
+|---|---|---|
+| **Version & Release** | `bump`, `changelog`, `ci-version`, `release`, `workspace`, `tag` | [version-release](/repo-release-tools/commands/version-release/) |
+| **Repository Health** | `doctor`, `artifacts`, `config`, `env`, `eol`, `toc`, `tree`, `docs`, `drift`, `folder` | [repo-health](/repo-release-tools/commands/repo-health/) |
+| **Git Workflow** | `branch`, `git` | [git-workflow](/repo-release-tools/commands/git-workflow/) |
+| **CI & Automation** | `action` | [ci-automation](/repo-release-tools/commands/ci-automation/) |
+| **Setup & Tooling** | `install`, `init`, `skill`, `agents`, `hooks` | [setup-tooling](/repo-release-tools/commands/setup-tooling/) |
+
+The [rrt CLI index](/repo-release-tools/commands/rrt-cli/) page has the global help and links to all groups.
+
+### Prose topic pages
+
+| Doc | Content |
+|---|---|
+| [branch](/repo-release-tools/commands/branch/) | Branch naming model and allowed types |
+| [bump](/repo-release-tools/commands/version-release/) | Stub — see [version-release](/repo-release-tools/commands/version-release/) |
+| [ci_version](/repo-release-tools/commands/version-release/) | Stub — see [version-release](/repo-release-tools/commands/version-release/) |
+| [config_cmd](/repo-release-tools/commands/repo-health/) | Stub — see [repo-health](/repo-release-tools/commands/repo-health/) |
+| [doctor](/repo-release-tools/commands/doctor/) | Repository automation health checks |
+| [drift](/repo-release-tools/commands/repo-health/) | Agent-facing surface drift detection |
+| [env_cmd](/repo-release-tools/commands/repo-health/) | Stub — see [repo-health](/repo-release-tools/commands/repo-health/) |
+| [eol_check](/repo-release-tools/commands/eol_check/) | Runtime end-of-life checks |
+| [folder](/repo-release-tools/commands/repo-health/) | Folder structure supervision |
+| [git_cmd](/repo-release-tools/commands/git_cmd/) | Git workflow helpers |
+| [hooks](/repo-release-tools/commands/hooks/) | pre-commit / lefthook hook setup |
+| [init](/repo-release-tools/commands/setup-tooling/) | Stub — see [setup-tooling](/repo-release-tools/commands/setup-tooling/) |
+| [install](/repo-release-tools/commands/install/) | Agent surface installation |
+| [skill](/repo-release-tools/commands/skill/) | Bundled agent skills |
+| [toc](/repo-release-tools/commands/repo-health/) | Markdown TOC generation |
+| [tree](/repo-release-tools/commands/tree/) | Directory tree rendering |
+
+## Changelog workflow
+
+`repo-release-tools` supports two changelog styles:
+
+- `incremental` *(default)* — maintain changelog state during development
+- `squash` — skip per-commit changelog enforcement and generate or correct
+  changelog entries when changes are squashed together
+
+If you are unsure where to start:
+
+1. Read [`rrt-cli`](/repo-release-tools/commands/rrt-cli/) to confirm the available CLI commands and
+   `changelog_workflow` config
+2. Read [`hooks`](/repo-release-tools/commands/hooks/) for the matching local hook setup
+3. Read [`action`](/repo-release-tools/action/) to see how
+   `changelog-strategy: auto` follows that workflow in CI
+
+## Visual identity
+
+### Terminal banners
+
+Rendered by `rrt` at launch — ASCII art generated by `banner.py` using Pillow. See
+[`docs/assets/banner-dark.png`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-dark.png)
+and
+[`docs/assets/banner-light.png`](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/banner-light.png)
+on GitHub for the dark- and light-theme renders.
+
+### Badge families
+
+Adaptive SVG badges switch automatically between dark and light variants based
+on the viewer's system preference (`prefers-color-scheme`). Five variants per
+badge family are available: `color`, `dark`, `light`, `reto-dark`, `reto-light`.
+
+These badges are intentionally complete for the current source-of-truth icon
+registry in [`src/repo_release_tools/tools/platform.py`](https://github.com/Anselmoo/repo-release-tools/blob/main/src/repo_release_tools/tools/platform.py).
+If an icon appears missing, update the registry and badge mappings together so
+the docs, source-code anchors, and icon list stay in lockstep across platform,
+registry, and language labels.
+
+#### Platform
+
+| Label | Color | Dark | Light | Reto Dark | Reto Light |
+|---|---|---|---|---|---|
+| GitHub | ![](/repo-release-tools/assets/badges/github.svg) | ![](/repo-release-tools/assets/badges/github-dark.svg) | ![](/repo-release-tools/assets/badges/github-light.svg) | ![](/repo-release-tools/assets/badges/github-reto-dark.svg) | ![](/repo-release-tools/assets/badges/github-reto-light.svg) |
+| GitLab | ![](/repo-release-tools/assets/badges/gitlab.svg) | ![](/repo-release-tools/assets/badges/gitlab-dark.svg) | ![](/repo-release-tools/assets/badges/gitlab-light.svg) | ![](/repo-release-tools/assets/badges/gitlab-reto-dark.svg) | ![](/repo-release-tools/assets/badges/gitlab-reto-light.svg) |
+| Bitbucket | ![](/repo-release-tools/assets/badges/bitbucket.svg) | ![](/repo-release-tools/assets/badges/bitbucket-dark.svg) | ![](/repo-release-tools/assets/badges/bitbucket-light.svg) | ![](/repo-release-tools/assets/badges/bitbucket-reto-dark.svg) | ![](/repo-release-tools/assets/badges/bitbucket-reto-light.svg) |
+| Azure DevOps | ![](/repo-release-tools/assets/badges/azure.svg) | ![](/repo-release-tools/assets/badges/azure-dark.svg) | ![](/repo-release-tools/assets/badges/azure-light.svg) | ![](/repo-release-tools/assets/badges/azure-reto-dark.svg) | ![](/repo-release-tools/assets/badges/azure-reto-light.svg) |
+| Codeberg | ![](/repo-release-tools/assets/badges/codeberg.svg) | ![](/repo-release-tools/assets/badges/codeberg-dark.svg) | ![](/repo-release-tools/assets/badges/codeberg-light.svg) | ![](/repo-release-tools/assets/badges/codeberg-reto-dark.svg) | ![](/repo-release-tools/assets/badges/codeberg-reto-light.svg) |
+| Gitea | ![](/repo-release-tools/assets/badges/gitea.svg) | ![](/repo-release-tools/assets/badges/gitea-dark.svg) | ![](/repo-release-tools/assets/badges/gitea-light.svg) | ![](/repo-release-tools/assets/badges/gitea-reto-dark.svg) | ![](/repo-release-tools/assets/badges/gitea-reto-light.svg) |
+| Helm | ![](/repo-release-tools/assets/badges/helm.svg) | ![](/repo-release-tools/assets/badges/helm-dark.svg) | ![](/repo-release-tools/assets/badges/helm-light.svg) | ![](/repo-release-tools/assets/badges/helm-reto-dark.svg) | ![](/repo-release-tools/assets/badges/helm-reto-light.svg) |
+| Kubernetes | ![](/repo-release-tools/assets/badges/kubernetes.svg) | ![](/repo-release-tools/assets/badges/kubernetes-dark.svg) | ![](/repo-release-tools/assets/badges/kubernetes-light.svg) | ![](/repo-release-tools/assets/badges/kubernetes-reto-dark.svg) | ![](/repo-release-tools/assets/badges/kubernetes-reto-light.svg) |
+| GitHub Actions | ![](/repo-release-tools/assets/badges/githubactions.svg) | ![](/repo-release-tools/assets/badges/githubactions-dark.svg) | ![](/repo-release-tools/assets/badges/githubactions-light.svg) | ![](/repo-release-tools/assets/badges/githubactions-reto-dark.svg) | ![](/repo-release-tools/assets/badges/githubactions-reto-light.svg) |
+| Bash | ![](/repo-release-tools/assets/badges/bash.svg) | ![](/repo-release-tools/assets/badges/bash-dark.svg) | ![](/repo-release-tools/assets/badges/bash-light.svg) | ![](/repo-release-tools/assets/badges/bash-reto-dark.svg) | ![](/repo-release-tools/assets/badges/bash-reto-light.svg) |
+| Java | ![](/repo-release-tools/assets/badges/java.svg) | ![](/repo-release-tools/assets/badges/java-dark.svg) | ![](/repo-release-tools/assets/badges/java-light.svg) | ![](/repo-release-tools/assets/badges/java-reto-dark.svg) | ![](/repo-release-tools/assets/badges/java-reto-light.svg) |
+| Generic | ![](/repo-release-tools/assets/badges/generic.svg) | ![](/repo-release-tools/assets/badges/generic-dark.svg) | ![](/repo-release-tools/assets/badges/generic-light.svg) | ![](/repo-release-tools/assets/badges/generic-reto-dark.svg) | ![](/repo-release-tools/assets/badges/generic-reto-light.svg) |
+
+#### Registry
+
+| Label | Color | Dark | Light | Reto Dark | Reto Light |
+|---|---|---|---|---|---|
+| PyPI | ![](/repo-release-tools/assets/badges/pypi.svg) | ![](/repo-release-tools/assets/badges/pypi-dark.svg) | ![](/repo-release-tools/assets/badges/pypi-light.svg) | ![](/repo-release-tools/assets/badges/pypi-reto-dark.svg) | ![](/repo-release-tools/assets/badges/pypi-reto-light.svg) |
+| npm | ![](/repo-release-tools/assets/badges/npm.svg) | ![](/repo-release-tools/assets/badges/npm-dark.svg) | ![](/repo-release-tools/assets/badges/npm-light.svg) | ![](/repo-release-tools/assets/badges/npm-reto-dark.svg) | ![](/repo-release-tools/assets/badges/npm-reto-light.svg) |
+| NuGet | ![](/repo-release-tools/assets/badges/nuget.svg) | ![](/repo-release-tools/assets/badges/nuget-dark.svg) | ![](/repo-release-tools/assets/badges/nuget-light.svg) | ![](/repo-release-tools/assets/badges/nuget-reto-dark.svg) | ![](/repo-release-tools/assets/badges/nuget-reto-light.svg) |
+| Cargo | ![](/repo-release-tools/assets/badges/cargo.svg) | ![](/repo-release-tools/assets/badges/cargo-dark.svg) | ![](/repo-release-tools/assets/badges/cargo-light.svg) | ![](/repo-release-tools/assets/badges/cargo-reto-dark.svg) | ![](/repo-release-tools/assets/badges/cargo-reto-light.svg) |
+| RubyGems | ![](/repo-release-tools/assets/badges/rubygems.svg) | ![](/repo-release-tools/assets/badges/rubygems-dark.svg) | ![](/repo-release-tools/assets/badges/rubygems-light.svg) | ![](/repo-release-tools/assets/badges/rubygems-reto-dark.svg) | ![](/repo-release-tools/assets/badges/rubygems-reto-light.svg) |
+| Packagist | ![](/repo-release-tools/assets/badges/packagist.svg) | ![](/repo-release-tools/assets/badges/packagist-dark.svg) | ![](/repo-release-tools/assets/badges/packagist-light.svg) | ![](/repo-release-tools/assets/badges/packagist-reto-dark.svg) | ![](/repo-release-tools/assets/badges/packagist-reto-light.svg) |
+| Docker | ![](/repo-release-tools/assets/badges/docker.svg) | ![](/repo-release-tools/assets/badges/docker-dark.svg) | ![](/repo-release-tools/assets/badges/docker-light.svg) | ![](/repo-release-tools/assets/badges/docker-reto-dark.svg) | ![](/repo-release-tools/assets/badges/docker-reto-light.svg) |
+
+#### Language
+
+| Label | Color | Dark | Light | Reto Dark | Reto Light |
+|---|---|---|---|---|---|
+| Python | ![](/repo-release-tools/assets/badges/python.svg) | ![](/repo-release-tools/assets/badges/python-dark.svg) | ![](/repo-release-tools/assets/badges/python-light.svg) | ![](/repo-release-tools/assets/badges/python-reto-dark.svg) | ![](/repo-release-tools/assets/badges/python-reto-light.svg) |
+| JavaScript | ![](/repo-release-tools/assets/badges/js.svg) | ![](/repo-release-tools/assets/badges/js-dark.svg) | ![](/repo-release-tools/assets/badges/js-light.svg) | ![](/repo-release-tools/assets/badges/js-reto-dark.svg) | ![](/repo-release-tools/assets/badges/js-reto-light.svg) |
+| TypeScript | ![](/repo-release-tools/assets/badges/ts.svg) | ![](/repo-release-tools/assets/badges/ts-dark.svg) | ![](/repo-release-tools/assets/badges/ts-light.svg) | ![](/repo-release-tools/assets/badges/ts-reto-dark.svg) | ![](/repo-release-tools/assets/badges/ts-reto-light.svg) |
+| Go | ![](/repo-release-tools/assets/badges/go.svg) | ![](/repo-release-tools/assets/badges/go-dark.svg) | ![](/repo-release-tools/assets/badges/go-light.svg) | ![](/repo-release-tools/assets/badges/go-reto-dark.svg) | ![](/repo-release-tools/assets/badges/go-reto-light.svg) |
+| Rust | ![](/repo-release-tools/assets/badges/rust.svg) | ![](/repo-release-tools/assets/badges/rust-dark.svg) | ![](/repo-release-tools/assets/badges/rust-light.svg) | ![](/repo-release-tools/assets/badges/rust-reto-dark.svg) | ![](/repo-release-tools/assets/badges/rust-reto-light.svg) |
+| .NET | ![](/repo-release-tools/assets/badges/dotnet.svg) | ![](/repo-release-tools/assets/badges/dotnet-dark.svg) | ![](/repo-release-tools/assets/badges/dotnet-light.svg) | ![](/repo-release-tools/assets/badges/dotnet-reto-dark.svg) | ![](/repo-release-tools/assets/badges/dotnet-reto-light.svg) |
+| Ruby | ![](/repo-release-tools/assets/badges/ruby.svg) | ![](/repo-release-tools/assets/badges/ruby-dark.svg) | ![](/repo-release-tools/assets/badges/ruby-light.svg) | ![](/repo-release-tools/assets/badges/ruby-reto-dark.svg) | ![](/repo-release-tools/assets/badges/ruby-reto-light.svg) |
+| PHP | ![](/repo-release-tools/assets/badges/php.svg) | ![](/repo-release-tools/assets/badges/php-dark.svg) | ![](/repo-release-tools/assets/badges/php-light.svg) | ![](/repo-release-tools/assets/badges/php-reto-dark.svg) | ![](/repo-release-tools/assets/badges/php-reto-light.svg) |
+| C++ | ![](/repo-release-tools/assets/badges/cplusplus.svg) | ![](/repo-release-tools/assets/badges/cplusplus-dark.svg) | ![](/repo-release-tools/assets/badges/cplusplus-light.svg) | ![](/repo-release-tools/assets/badges/cplusplus-reto-dark.svg) | ![](/repo-release-tools/assets/badges/cplusplus-reto-light.svg) |
+| Swift | ![](/repo-release-tools/assets/badges/swift.svg) | ![](/repo-release-tools/assets/badges/swift-dark.svg) | ![](/repo-release-tools/assets/badges/swift-light.svg) | ![](/repo-release-tools/assets/badges/swift-reto-dark.svg) | ![](/repo-release-tools/assets/badges/swift-reto-light.svg) |
+| Kotlin | ![](/repo-release-tools/assets/badges/kotlin.svg) | ![](/repo-release-tools/assets/badges/kotlin-dark.svg) | ![](/repo-release-tools/assets/badges/kotlin-light.svg) | ![](/repo-release-tools/assets/badges/kotlin-reto-dark.svg) | ![](/repo-release-tools/assets/badges/kotlin-reto-light.svg) |
+| Dart | ![](/repo-release-tools/assets/badges/dart.svg) | ![](/repo-release-tools/assets/badges/dart-dark.svg) | ![](/repo-release-tools/assets/badges/dart-light.svg) | ![](/repo-release-tools/assets/badges/dart-reto-dark.svg) | ![](/repo-release-tools/assets/badges/dart-reto-light.svg) |
+| Perl | ![](/repo-release-tools/assets/badges/perl.svg) | ![](/repo-release-tools/assets/badges/perl-dark.svg) | ![](/repo-release-tools/assets/badges/perl-light.svg) | ![](/repo-release-tools/assets/badges/perl-reto-dark.svg) | ![](/repo-release-tools/assets/badges/perl-reto-light.svg) |
+| Scala | ![](/repo-release-tools/assets/badges/scala.svg) | ![](/repo-release-tools/assets/badges/scala-dark.svg) | ![](/repo-release-tools/assets/badges/scala-light.svg) | ![](/repo-release-tools/assets/badges/scala-reto-dark.svg) | ![](/repo-release-tools/assets/badges/scala-reto-light.svg) |
+| Haskell | ![](/repo-release-tools/assets/badges/haskell.svg) | ![](/repo-release-tools/assets/badges/haskell-dark.svg) | ![](/repo-release-tools/assets/badges/haskell-light.svg) | ![](/repo-release-tools/assets/badges/haskell-reto-dark.svg) | ![](/repo-release-tools/assets/badges/haskell-reto-light.svg) |
+
+Badge icons sourced from [Simple Icons](https://simpleicons.org) (CC0-1.0) and
+[Google Material Icons](https://fonts.google.com/icons) (Apache-2.0). See
+[`src/repo_release_tools/tools/platform.py`](https://github.com/Anselmoo/repo-release-tools/blob/main/src/repo_release_tools/tools/platform.py) for full attribution.
+`Bash` and `Java` appear in both the Platform and Language label sets; they are
+listed under Platform only.
+
+:::note
+Badge SVGs are generated into `docs/public/assets/badges/` before the Astro
+build runs — CI does this via `.github/workflows/pages.yml`, and
+`uv run poe serve` / `uv run poe preview` do it automatically too. They are
+only missing if you bypass `poe` and run `npm run dev` directly inside
+`docs/` without generating badges first.
+:::
