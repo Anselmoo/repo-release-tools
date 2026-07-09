@@ -1064,6 +1064,41 @@ kind = "package_json"
         load_config(tmp_path)
 
 
+def test_load_config_rejects_whitespace_only_primary_remote(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = "   "
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="primary_remote must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_strips_primary_remote_whitespace(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = "  gitlab  "
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.primary_remote == "gitlab"
+
+
 def test_load_primary_remote_returns_origin_when_no_config(tmp_path: Path) -> None:
     assert load_primary_remote(tmp_path) == "origin"
 

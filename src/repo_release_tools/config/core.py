@@ -1028,9 +1028,9 @@ def _load_primary_remote(value: object) -> str:
     """Parse and validate the primary_remote setting."""
     if value is None:
         return "origin"
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value.strip():
         raise ValueError("primary_remote must be a non-empty string")
-    return value
+    return value.strip()
 
 
 def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
