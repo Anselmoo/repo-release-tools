@@ -800,6 +800,46 @@ kind = "package_json"
     assert result.error is None
 
 
+def test_rrt_publish_snapshot_allows_raw_url_target_when_primary_remote_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue #135's second repro: passing origin's raw URL (not the name 'origin')
+    must not be refused either, once a non-default primary_remote is configured."""
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = "gitlab"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {
+            "origin": "https://github.com/org/repo.git",
+            "gitlab": "https://gitlab.example.org/org/repo.git",
+        }.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="https://github.com/org/repo.git", branch="main", dry_run=True
+        )
+
+    result = asyncio.run(_run())
+    assert result.dry_run is True
+    assert result.published is False
+    assert result.error is None
+
+
 def test_rrt_publish_snapshot_in_progress_operation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
