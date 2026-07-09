@@ -688,6 +688,20 @@ def test_run_post_correct_and_main_dispatch(
     )
 
 
+def test_main_dispatches_publish_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, SimpleNamespace]] = []
+    monkeypatch.setattr(
+        hooks,
+        "cmd_publish_snapshot",
+        lambda parsed: calls.append(("publish-snapshot", parsed)) or 0,
+    )
+
+    assert hooks.main(["publish-snapshot", "public-preview"]) == 0
+
+    assert calls[0][0] == "publish-snapshot"
+    assert calls[0][1].target == "public-preview"
+
+
 def test_read_commit_subject_skips_blank_lines(tmp_path: Path) -> None:
     message_file = tmp_path / "COMMIT_EDITMSG"
     message_file.write_text("\n\n feat: add parser \n", encoding="utf-8")
