@@ -135,5 +135,65 @@ artifact hashes against the committed `.rrt/artifacts.lock.toml`. It detects
 artifacts that were regenerated but not re-snapshotted, or vice versa.
 """
 
+GITHUB_ACTION_PUBLISH_SNAPSHOT_DOC = """# publish-snapshot Action
+
+A dedicated composite Action for `rrt git publish-snapshot` — force-pushing a
+single-commit, no-history snapshot of tracked content to a secondary remote
+(e.g. a public downstream mirror of a privately developed repository).
+
+It is deliberately **not** part of the main `repo-release-tools` Action.
+That action is a set of read-only, idempotent policy checks meant to run on
+every PR; `publish-snapshot` is destructive (force-push) and belongs on a
+different trigger (push-to-main, a schedule, or `workflow_dispatch`). Keeping
+it in its own composite action isolates that risk profile instead of mixing
+it into a check that most workflows run unconditionally.
+
+## Usage
+
+```yaml
+name: Refresh public mirror
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  publish-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: Anselmoo/repo-release-tools/actions/publish-snapshot@v1.11.1
+        with:
+          target: public-preview
+          confirm: "true"
+```
+
+## Inputs
+
+| Input | Default | Description |
+|---|---|---|
+| `target` | — (required) | Named `[tool.rrt.publish_targets.<name>]` entry to resolve remote/branch/message/exclude from |
+| `confirm` | `"false"` | Set `"true"` to actually force-push; otherwise this only previews with `--dry-run` |
+| `python-version` | `"3.12"` | Python version used to run repo-release-tools |
+| `working-directory` | `"."` | Repository path to install and run repo-release-tools from |
+
+## Safety notes
+
+Force-pushing does not immediately purge old objects on the remote host —
+they can remain fetchable by direct SHA until the host runs garbage
+collection. If secrets were ever committed, run `git filter-repo` or the BFG
+Repo-Cleaner first; this action only controls what is visible going forward.
+Clones or forks made before the force-push retain the old history locally,
+which is outside this tool's control. Always run with `confirm: "false"`
+(the default) first and inspect the dry-run output before flipping it on.
+"""
+
 # Ordered source-owned topic docs for docs generation.
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("action", GITHUB_ACTION_DOC),)
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (
+    ("action", GITHUB_ACTION_DOC),
+    ("publish-snapshot-action", GITHUB_ACTION_PUBLISH_SNAPSHOT_DOC),
+)
