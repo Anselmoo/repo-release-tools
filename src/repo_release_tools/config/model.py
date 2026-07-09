@@ -359,6 +359,7 @@ class PublishTarget:
     remote: str
     branch: str = "main"
     message: str = "Initial commit"
+    exclude: tuple[str, ...] = ()
 
     def validate(self) -> None:
         """Validate publish target configuration."""

@@ -25,6 +25,7 @@ import argparse
 import datetime as dt
 import shutil
 import sys
+from fnmatch import fnmatch
 from pathlib import Path
 
 from repo_release_tools.commands._git_shared import (
@@ -46,6 +47,13 @@ DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE = "chore: bootstrap repository"
 DEFAULT_REBOOTSTRAP_MESSAGE = "chore: initial commit"
 MOVE_STASH_MESSAGE = "rrt git move auto-stash"
 SYNC_STASH_MESSAGE = "rrt git sync auto-stash"
+
+
+def resolve_excluded_paths(tracked_files: list[str], patterns: tuple[str, ...]) -> list[str]:
+    """Return tracked_files entries matching any exclude glob (fnmatch, repo-relative POSIX)."""
+    if not patterns:
+        return []
+    return [f for f in tracked_files if any(fnmatch(f, pat) for pat in patterns)]
 
 
 def backup_path_for_git_dir(root: Path) -> Path:

@@ -896,6 +896,22 @@ def test_publish_snapshot_cleanup_failure_after_success_returns_ok(
     assert "Cleanup: failed to delete temp branch" in out
 
 
+def test_resolve_excluded_paths_matches_fnmatch_globs_recursively() -> None:
+    tracked = [
+        "README.md",
+        "docs/superpowers/plans/x.md",
+        "docs/superpowers/specs/y.md",
+        "src/a.py",
+    ]
+    result = git_sync.resolve_excluded_paths(tracked, ("docs/superpowers/*",))
+    assert result == ["docs/superpowers/plans/x.md", "docs/superpowers/specs/y.md"]
+
+
+def test_resolve_excluded_paths_returns_empty_for_no_patterns() -> None:
+    tracked = ["README.md", "src/a.py"]
+    assert git_sync.resolve_excluded_paths(tracked, ()) == []
+
+
 def test_publish_snapshot_resolves_named_config_target(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
