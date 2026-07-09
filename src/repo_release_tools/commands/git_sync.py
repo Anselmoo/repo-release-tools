@@ -402,6 +402,7 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
     remote = args.remote
     branch = args.branch
     message = args.message
+    exclude_patterns = tuple(getattr(args, "exclude", None) or ())
     if getattr(args, "target", None):
         config = load_or_autodetect_config(root)
         target = config.publish_targets.get(args.target)
@@ -416,6 +417,7 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
         remote = remote or target.remote
         branch = branch or target.branch
         message = message or target.message
+        exclude_patterns = tuple(target.exclude) + exclude_patterns
     branch = branch or "main"
     message = message or "Initial commit"
 
@@ -461,6 +463,16 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
             dry_run=dry_run,
             label="git checkout --orphan",
         )
+        if exclude_patterns:
+            tracked = git.capture(["git", "ls-files"], root).splitlines()
+            to_remove = resolve_excluded_paths(tracked, exclude_patterns)
+            if to_remove:
+                git.run(
+                    ["git", "rm", "-r", "--ignore-unmatch", "--", *to_remove],
+                    root,
+                    dry_run=dry_run,
+                    label="git rm",
+                )
         git.run(["git", "add", "-u"], root, dry_run=dry_run, label="git add -u")
         git.run(["git", "commit", "-m", message], root, dry_run=dry_run, label="git commit")
         git.run(
@@ -513,7 +525,8 @@ GIT_PUBLISH_SNAPSHOT_EXAMPLES = (
     "  $ rrt git publish-snapshot --remote mirror --dry-run\n"
     "  $ rrt git publish-snapshot demo --yes-i-know-this-overwrites-remote-history\n"
     '  $ rrt git publish-snapshot --remote mirror --branch main --message "Initial commit" '
-    "--yes-i-know-this-overwrites-remote-history"
+    "--yes-i-know-this-overwrites-remote-history\n"
+    "  $ rrt git publish-snapshot --remote mirror --exclude 'docs/internal/*' --dry-run"
 )
 
 
@@ -654,6 +667,14 @@ def register_sync(git_sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
     )
     publish_snapshot_parser.add_argument(
         "--message", default=None, help="Commit message for the snapshot commit."
+    )
+    publish_snapshot_parser.add_argument(
+        "--exclude",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Glob (fnmatch, repo-relative) to exclude from the snapshot. Repeatable; extends "
+        "the resolved target's [tool.rrt.publish_targets.<name>].exclude list.",
     )
     publish_snapshot_parser.add_argument(
         "--yes-i-know-this-overwrites-remote-history",
