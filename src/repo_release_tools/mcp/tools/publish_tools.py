@@ -42,17 +42,17 @@ def register(mcp: FastMCP) -> None:
                 error=f"{root} is not inside a Git work tree.",
             )
 
-        origin_url = git.remote_url(root, "origin")
-        remote_url_value = git.remote_url(root, remote) or remote
-        if origin_url is not None and git.normalize_remote_url(
-            origin_url
-        ) == git.normalize_remote_url(remote_url_value):
+        from repo_release_tools.config import load_primary_remote
+
+        primary_remote = load_primary_remote(root)
+        conflict = git.primary_remote_conflict(root, remote, primary_remote)
+        if conflict is not None:
             return PublishSnapshotResult(
                 remote=remote,
                 branch=branch,
                 published=False,
                 dry_run=dry_run,
-                error=f"--remote {remote!r} resolves to the same URL as origin ({origin_url}).",
+                error=conflict,
             )
 
         operation = git.in_progress_operation(root)

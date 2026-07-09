@@ -628,6 +628,42 @@ def test_publish_snapshot_aborts_when_remote_equals_origin(
     assert "same" in capsys.readouterr().err.lower()
 
 
+def test_publish_snapshot_allows_origin_when_primary_remote_configured(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A repo with primary_remote = 'gitlab' can publish-snapshot to origin."""
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {
+            "origin": "https://github.com/org/repo.git",
+            "gitlab": "https://gitlab.example.org/org/repo.git",
+        }.get(name),
+    )
+    monkeypatch.setattr(git_sync, "load_primary_remote", lambda root: "gitlab")
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snapshot-tmp-20260705120000"
+    )
+    monkeypatch.setattr(
+        git_sync.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: "",
+    )
+    args = argparse.Namespace(
+        target=None,
+        remote="origin",
+        branch="main",
+        message="Initial commit",
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=True,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 0
+
+
 def test_publish_snapshot_without_confirmation_flag_forces_preview(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

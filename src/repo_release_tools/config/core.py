@@ -100,6 +100,25 @@ def load_extra_branch_types(cwd: Path) -> tuple[str, ...]:
         raise ValueError(f"Failed to load extra_branch_types configuration: {exc}") from exc
 
 
+def load_primary_remote(cwd: Path) -> str:
+    """Load primary_remote from the rrt config in *cwd*, if available.
+
+    Returns ``"origin"`` when no config file exists or when the config does not
+    contain an ``[tool.rrt]`` section. Raises ``ValueError`` for any other
+    configuration error (e.g. TOML parse errors or an invalid ``primary_remote``
+    value) so that misconfiguration is visible rather than silently ignored.
+    """
+    try:
+        cfg = load_config(cwd)
+        return cfg.primary_remote
+    except FileNotFoundError:
+        return "origin"
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return "origin"
+        raise ValueError(f"Failed to load primary_remote configuration: {exc}") from exc
+
+
 def ignore_dir_names() -> frozenset[str]:
     """Return directory names skipped during recursive source scanning."""
     return _IGNORE_DIR_NAMES
@@ -721,6 +740,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         folders=_load_folders_config(raw.get("folders")),
         artifact_targets=_load_artifact_targets(raw.get("artifact_targets", [])),
         pin_target_missing=_load_pin_target_missing(raw.get("pin_target_missing")),
+        primary_remote=_load_primary_remote(raw.get("primary_remote")),
         extra_commit_types=_load_extra_commit_types(raw.get("extra_commit_types", [])),
         extra_section_map=_load_extra_section_map(raw.get("extra_section_map", {})),
     )
@@ -1001,6 +1021,15 @@ def _load_pin_target_missing(value: object) -> str:
     if value not in VALID_PIN_TARGET_MISSING:
         allowed = ", ".join(sorted(VALID_PIN_TARGET_MISSING))
         raise ValueError(f"pin_target_missing must be one of {allowed}, got {value!r}")
+    return value
+
+
+def _load_primary_remote(value: object) -> str:
+    """Parse and validate the primary_remote setting."""
+    if value is None:
+        return "origin"
+    if not isinstance(value, str) or not value:
+        raise ValueError("primary_remote must be a non-empty string")
     return value
 
 
@@ -1353,6 +1382,7 @@ __all__ = [
     "load_config_from_path",
     "load_extra_branch_types",
     "load_or_autodetect_config",
+    "load_primary_remote",
     "recommend_init_config",
     "recommend_init_config_for_go",
     "recommend_init_section_for_cargo",

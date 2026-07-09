@@ -331,6 +331,17 @@ def normalize_remote_url(url: str) -> str:
     return f"{host.lower()}/{path}"
 
 
+def primary_remote_conflict(cwd: Path, remote: str, primary_remote: str = "origin") -> str | None:
+    """Return an error message if *remote* resolves to the same URL as *primary_remote*, else None."""
+    primary_url = remote_url(cwd, primary_remote)
+    remote_url_value = remote_url(cwd, remote) or remote
+    if primary_url is not None and normalize_remote_url(primary_url) == normalize_remote_url(
+        remote_url_value
+    ):
+        return f"--remote {remote!r} resolves to the same URL as {primary_remote} ({primary_url})."
+    return None
+
+
 def unique_snapshot_branch_name(
     cwd: Path,
     *,

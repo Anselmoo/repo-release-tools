@@ -34,7 +34,7 @@ from repo_release_tools.commands._git_shared import (
     load_status_lines,
     summarize_status,
 )
-from repo_release_tools.config import load_or_autodetect_config
+from repo_release_tools.config import load_or_autodetect_config, load_primary_remote
 from repo_release_tools.ui import (
     DryRunPrinter,
     VerbosePrinter,
@@ -416,17 +416,11 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
         p.line("No --remote given and no config target resolved one.", ok=False, stream=sys.stderr)
         return 1
 
-    origin_url = git.remote_url(root, "origin")
-    remote_url_value = git.remote_url(root, remote) or remote
-    if origin_url is not None and git.normalize_remote_url(origin_url) == git.normalize_remote_url(
-        remote_url_value
-    ):
+    primary_remote = load_primary_remote(root)
+    conflict = git.primary_remote_conflict(root, remote, primary_remote)
+    if conflict is not None:
         p = VerbosePrinter(verbose=verbose)
-        p.line(
-            f"Refusing to publish: --remote {remote!r} resolves to the same URL as origin ({origin_url}).",
-            ok=False,
-            stream=sys.stderr,
-        )
+        p.line(f"Refusing to publish: {conflict}", ok=False, stream=sys.stderr)
         return 1
 
     operation = git.in_progress_operation(root)
@@ -627,7 +621,8 @@ def register_sync(git_sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
         description=(
             "Create an orphan branch from tracked content, commit it once, and force-push "
             "it to a secondary remote. Refuses to run if --remote resolves to the same URL "
-            "as origin, and requires --yes-i-know-this-overwrites-remote-history to do "
+            "as the configured primary remote (tool.rrt.primary_remote, default: origin), "
+            "and requires --yes-i-know-this-overwrites-remote-history to do "
             "anything beyond a preview. Safety notes: force-pushing does not immediately "
             "purge old objects on the remote host — they can remain fetchable by direct SHA "
             "until the host runs garbage collection. If secrets were ever committed, run "
