@@ -37,6 +37,7 @@ from repo_release_tools.config import (
     load_config_from_path,
     load_extra_branch_types,
     load_or_autodetect_config,
+    load_primary_remote,
     recommend_init_config,
     recommend_init_config_for_go,
     recommend_init_section_for_cargo,
@@ -996,6 +997,148 @@ kind = "package_json"
     )
 
     assert load_extra_branch_types(tmp_path) == ("snyk", "greenkeeper")
+
+
+# ---------------------------------------------------------------------------
+# primary_remote
+# ---------------------------------------------------------------------------
+
+
+def test_load_config_defaults_primary_remote_to_origin(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    assert config.primary_remote == "origin"
+
+
+def test_load_config_parses_primary_remote(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = "gitlab"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.primary_remote == "gitlab"
+
+
+def test_load_config_rejects_non_string_primary_remote(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = 123
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="primary_remote must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_empty_primary_remote(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = ""
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="primary_remote must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_whitespace_only_primary_remote(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = "   "
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="primary_remote must be a non-empty string"):
+        load_config(tmp_path)
+
+
+def test_load_config_strips_primary_remote_whitespace(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = "  gitlab  "
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.primary_remote == "gitlab"
+
+
+def test_load_primary_remote_returns_origin_when_no_config(tmp_path: Path) -> None:
+    assert load_primary_remote(tmp_path) == "origin"
+
+
+def test_load_primary_remote_returns_origin_when_no_rrt_section(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[tool.other]\n", encoding="utf-8")
+    assert load_primary_remote(tmp_path) == "origin"
+
+
+def test_load_primary_remote_surfaces_invalid_config_error(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = ""
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Failed to load primary_remote configuration"):
+        load_primary_remote(tmp_path)
+
+
+def test_load_primary_remote_returns_configured_remote(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+primary_remote = "gitlab"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    assert load_primary_remote(tmp_path) == "gitlab"
 
 
 # ---------------------------------------------------------------------------

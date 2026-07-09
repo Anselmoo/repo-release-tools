@@ -721,6 +721,7 @@ class RrtConfig:
     extra_branch_types: tuple[str, ...] = ()
     global_pin_targets: list[PinTarget] = field(default_factory=list)
     publish_targets: dict[str, PublishTarget] = field(default_factory=dict)
+    primary_remote: str = "origin"
     eol: EolConfig | None = None
     docs: DocsConfig | None = None
     folders: FolderPolicyConfig | None = None

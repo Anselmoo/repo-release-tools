@@ -406,6 +406,63 @@ def test_normalize_remote_url_treats_different_local_paths_as_different() -> Non
     )
 
 
+def test_primary_remote_conflict_detects_conflict(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://example.com/x.git"],
+        cwd=tmp_path,
+        check=True,
+    )
+    assert git.primary_remote_conflict(tmp_path, "https://example.com/x.git", "origin") == (
+        "--remote 'https://example.com/x.git' resolves to the same URL as origin "
+        "(https://example.com/x.git)."
+    )
+
+
+def test_primary_remote_conflict_allows_distinct_remote(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://example.com/x.git"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "gitlab", "https://gitlab.example.org/x.git"],
+        cwd=tmp_path,
+        check=True,
+    )
+    assert git.primary_remote_conflict(tmp_path, "gitlab", "origin") is None
+
+
+def test_primary_remote_conflict_allows_when_primary_remote_unset(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://example.com/x.git"],
+        cwd=tmp_path,
+        check=True,
+    )
+    assert git.primary_remote_conflict(tmp_path, "origin", "gitlab") is None
+
+
+def test_primary_remote_conflict_uses_configured_primary_remote(tmp_path: Path) -> None:
+    """A repo with a non-default primary_remote can publish-snapshot to `origin`."""
+    _init_repo(tmp_path)
+    subprocess.run(
+        ["git", "remote", "add", "gitlab", "https://gitlab.example.org/x.git"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/x.git"],
+        cwd=tmp_path,
+        check=True,
+    )
+    assert git.primary_remote_conflict(tmp_path, "origin", "gitlab") is None
+    assert git.primary_remote_conflict(tmp_path, "gitlab", "gitlab") == (
+        "--remote 'gitlab' resolves to the same URL as gitlab (https://gitlab.example.org/x.git)."
+    )
+
+
 def test_unique_snapshot_branch_name_avoids_collision(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
