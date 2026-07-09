@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+## [1.11.1] - 2026-07-09
+
+### Fixed
+- **git**: make publish-snapshot's protected remote configurable (#136)
+- **docs**: fix header layout collapse, missing favicon, and dead design tokens (#134)
+
+### Documentation
+- migrate Jekyll to Astro Starlight, port Reto design system (#130)
+
 ## [1.11.0] - 2026-07-05
 ### Added
 - Add `rrt git publish-snapshot` to force-push a single-commit snapshot of tracked content to a secondary remote

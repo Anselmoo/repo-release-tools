@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -137,7 +138,7 @@ def test_mcp_default_handlers_print_help_when_no_subcommand(
         for action in mcp_parser._actions  # type: ignore[attr-defined]
         if isinstance(action, argparse._SubParsersAction)
     )
-    tool_parser = tool_subparsers_action.choices["tool"]
+    tool_parser = cast("argparse.ArgumentParser", tool_subparsers_action.choices["tool"])
     tool_handler = tool_parser.get_default("handler")
     assert tool_handler is not None
     rc = tool_handler(argparse.Namespace())

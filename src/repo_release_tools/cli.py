@@ -574,7 +574,7 @@ def _generate_completion(shell: str, parser: argparse.ArgumentParser) -> str:
         for name, sub in (subparsers_action.choices or {}).items():
             subcommands.append(name)
             opts: list[str] = []
-            for action in sub._actions:
+            for action in cast("argparse.ArgumentParser", sub)._actions:
                 opts.extend(getattr(action, "option_strings", []))
             subcommand_opts[name] = opts
 
