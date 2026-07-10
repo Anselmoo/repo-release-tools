@@ -54,6 +54,7 @@ from repo_release_tools.changelog import (
     get_unreleased_entries,
     insert_generated_section,
 )
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     PinTarget,
@@ -61,8 +62,6 @@ from repo_release_tools.config import (
     VersionGroup,
     VersionTarget,
     find_repo_root,
-    format_missing_tool_rrt_guidance,
-    is_missing_tool_rrt_error,
     iter_config_files,
     load_or_autodetect_config,
 )
@@ -642,26 +641,17 @@ def _load_config_and_group(
     p = VerbosePrinter(verbose=verbose)
     try:
         config = load_or_autodetect_config(root)
-    except FileNotFoundError:
-        p.line(
-            format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-            ok=False,
-            stream=sys.stderr,
-        )
+    except FileNotFoundError as exc:
+        err = describe_config_load_error(exc, root, no_config_file_checked=iter_config_files(root))
+        p.line(err.text, ok=False, stream=sys.stderr)
         return None, None, 1
-    except ValueError as exc:
-        if is_missing_tool_rrt_error(exc):
+    except (ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        if err.kind == "missing_tool_rrt":
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
-            p.line(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-                ok=False,
-                stream=sys.stderr,
-            )
-            return None, None, 1
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return None, None, 1
-    except RuntimeError as exc:
-        p.line(str(exc), ok=False, stream=sys.stderr)
+            p.line(err.text, ok=False, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
         return None, None, 1
 
     requested_group = getattr(args, "group", None)

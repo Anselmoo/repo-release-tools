@@ -55,14 +55,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     VALID_CI_FORMATS,
     find_repo_root,
     format_autodetected_config_notice,
-    format_missing_tool_rrt_guidance,
-    is_missing_tool_rrt_error,
-    iter_config_files,
     load_or_autodetect_config,
 )
 from repo_release_tools.ui import (
@@ -183,26 +181,17 @@ def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
                 return None
         group = config.resolve_group(getattr(args, "group", None))
         return str(read_group_current_version(group))
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
         p = VerbosePrinter()
-        p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
-        p.action(format_missing_tool_rrt_guidance(root, []), stream=sys.stderr)
-        return None
-    except ValueError as exc:
-        if is_missing_tool_rrt_error(exc):
-            p = VerbosePrinter()
+        if err.kind == "no_config_file":
+            p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
+            p.action(err.text, stream=sys.stderr)
+        elif err.kind == "missing_tool_rrt":
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
-            p.action(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-                stream=sys.stderr,
-            )
-            return None
-        p = VerbosePrinter()
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return None
-    except RuntimeError as exc:
-        p = VerbosePrinter()
-        p.line(str(exc), ok=False, stream=sys.stderr)
+            p.action(err.text, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
         return None
 
 
@@ -254,26 +243,17 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             p = VerbosePrinter(verbose=verbose)
             p.line(format_autodetected_config_notice(config), ok=False, stream=sys.stderr)
         group = config.resolve_group(getattr(args, "group", None))
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
         p = VerbosePrinter(verbose=verbose)
-        p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
-        p.action(format_missing_tool_rrt_guidance(root, []), stream=sys.stderr)
-        return 1
-    except ValueError as exc:
-        if is_missing_tool_rrt_error(exc):
-            p = VerbosePrinter(verbose=verbose)
+        if err.kind == "no_config_file":
+            p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
+            p.action(err.text, stream=sys.stderr)
+        elif err.kind == "missing_tool_rrt":
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
-            p.action(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-                stream=sys.stderr,
-            )
-            return 1
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-    except RuntimeError as exc:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
+            p.action(err.text, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
         return 1
 
     ci_targets = [t for t in group.version_targets if t.ci_format in VALID_CI_FORMATS]

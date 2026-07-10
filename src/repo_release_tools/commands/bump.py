@@ -77,15 +77,14 @@ from repo_release_tools.changelog import (
     insert_generated_section,
     promote_unreleased,
 )
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     RrtConfig,
     VersionGroup,
     find_repo_root,
     format_autodetected_config_notice,
-    format_missing_tool_rrt_guidance,
-    is_missing_tool_rrt_error,
-    iter_config_files,
+    iter_config_files,  # noqa: F401 -- re-exported for test monkeypatch compatibility
     load_or_autodetect_config,
 )
 from repo_release_tools.preflight import PreflightError, run_preflight
@@ -276,27 +275,17 @@ def cmd_bump(args: argparse.Namespace) -> int:
     force = getattr(args, "force", False)
     try:
         config = load_or_autodetect_config(root)
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
         p = VerbosePrinter(verbose=verbose)
-        p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
-        p.line(format_missing_tool_rrt_guidance(root, []), ok=False, stream=sys.stderr)
-        return 1
-    except ValueError as exc:
-        if is_missing_tool_rrt_error(exc):
-            p = VerbosePrinter(verbose=verbose)
+        if err.kind == "no_config_file":
+            p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
+            p.line(err.text, ok=False, stream=sys.stderr)
+        elif err.kind == "missing_tool_rrt":
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
-            p.line(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-                ok=False,
-                stream=sys.stderr,
-            )
-            return 1
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-    except RuntimeError as exc:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
+            p.line(err.text, ok=False, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
         return 1
 
     if config.autodetected:

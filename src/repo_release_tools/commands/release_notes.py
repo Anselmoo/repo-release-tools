@@ -72,10 +72,9 @@ from repo_release_tools.changelog import (
     get_unreleased_section_body,
     has_unreleased_section,
 )
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.config import (
     find_repo_root,
-    format_missing_tool_rrt_guidance,
-    is_missing_tool_rrt_error,
     iter_config_files,
     load_or_autodetect_config,
 )
@@ -143,27 +142,18 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
 
     try:
         config = load_or_autodetect_config(root)
-    except FileNotFoundError:
-        checked = iter_config_files(root)
-        p = VerbosePrinter(verbose=verbose)
-        p.line(format_missing_tool_rrt_guidance(root, checked), ok=False, stream=sys.stderr)
+    except FileNotFoundError as exc:
+        err = describe_config_load_error(exc, root, no_config_file_checked=iter_config_files(root))
+        VerbosePrinter(verbose=verbose).line(err.text, ok=False, stream=sys.stderr)
         return 1
-    except ValueError as exc:
-        if is_missing_tool_rrt_error(exc):
-            p = VerbosePrinter(verbose=verbose)
+    except (ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        p = VerbosePrinter(verbose=verbose)
+        if err.kind == "missing_tool_rrt":
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
-            p.line(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-                ok=False,
-                stream=sys.stderr,
-            )
-            return 1
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-    except RuntimeError as exc:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
+            p.line(err.text, ok=False, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
         return 1
 
     try:
