@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from repo_release_tools.sync.pypi import fetch_pypi_versions
@@ -41,9 +42,23 @@ def _fetch_json(
 # ---------------------------------------------------------------------------
 
 
+def _quote_npm_package(package: str) -> str:
+    """Percent-encode an npm package identifier, handling ``@scope/name`` form.
+
+    The npm registry expects a scoped package's ``/`` separator to be
+    percent-encoded as ``%2F`` (``@scope%2Fname``) — an unencoded ``/`` would
+    otherwise be a second path segment. Quote with ``safe="@"`` so the scope
+    marker stays literal, then encode the separating slash. Any *other*
+    slash in the input (not the single scope separator) is left encoded by
+    ``quote`` too, so it cannot introduce extra path segments (CWE-20).
+    """
+    quoted = urllib.parse.quote(package, safe="@")
+    return quoted.replace("/", "%2F")
+
+
 def _fetch_npm_versions(package: str, *, timeout: int = 10) -> list[str]:
     """Return all versions of *package* from the npm registry."""
-    url = f"https://registry.npmjs.org/{package}"
+    url = f"https://registry.npmjs.org/{_quote_npm_package(package)}"
     data = _fetch_json(url, timeout=timeout)
     if not isinstance(data, dict):
         return []
@@ -55,7 +70,10 @@ def _fetch_npm_versions(package: str, *, timeout: int = 10) -> list[str]:
 
 def _fetch_nuget_versions(package: str, *, timeout: int = 10) -> list[str]:
     """Return all versions of *package* from NuGet (package id is lowercased)."""
-    url = f"https://api.nuget.org/v3-flatcontainer/{package.lower()}/index.json"
+    url = (
+        "https://api.nuget.org/v3-flatcontainer/"
+        f"{urllib.parse.quote(package.lower(), safe='')}/index.json"
+    )
     data = _fetch_json(url, timeout=timeout)
     if not isinstance(data, dict):
         return []
@@ -67,7 +85,7 @@ def _fetch_nuget_versions(package: str, *, timeout: int = 10) -> list[str]:
 
 def _fetch_crates_versions(package: str, *, timeout: int = 10) -> list[str]:
     """Return all versions of *package* from crates.io (requires User-Agent)."""
-    url = f"https://crates.io/api/v1/crates/{package}/versions"
+    url = f"https://crates.io/api/v1/crates/{urllib.parse.quote(package, safe='')}/versions"
     data = _fetch_json(url, timeout=timeout, headers={"User-Agent": USER_AGENT})
     if not isinstance(data, dict):
         return []
@@ -83,9 +101,21 @@ def _fetch_crates_versions(package: str, *, timeout: int = 10) -> list[str]:
     return result
 
 
+def _quote_vendor_name_package(package: str) -> str:
+    """Percent-encode a Packagist ``vendor/name`` identifier, segment by segment.
+
+    Packagist routes on a literal two-segment ``vendor/name`` path, so the
+    single separating ``/`` must stay literal — but each segment (and any
+    *extra* ``/`` beyond the first, e.g. a ``../`` traversal attempt) is
+    percent-encoded with ``safe=""`` so the value cannot smuggle additional
+    path segments (CWE-20).
+    """
+    return "/".join(urllib.parse.quote(part, safe="") for part in package.split("/"))
+
+
 def _fetch_packagist_versions(package: str, *, timeout: int = 10) -> list[str]:
     """Return all versions of *package* from Packagist (vendor/name format)."""
-    url = f"https://packagist.org/packages/{package}.json"
+    url = f"https://packagist.org/packages/{_quote_vendor_name_package(package)}.json"
     data = _fetch_json(url, timeout=timeout)
     if not isinstance(data, dict):
         return []
