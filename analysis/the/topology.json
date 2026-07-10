@@ -1,0 +1,3283 @@
+{
+ "system": "repo-release-tools (rrt)",
+ "root": {
+  "id": "sys",
+  "name": "repo-release-tools",
+  "kind": "system",
+  "children": [
+   {
+    "id": "dom:cli",
+    "name": "CLI shell & assets",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "repo_release_tools",
+      "name": "repo_release_tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 57,
+      "file": "src/repo_release_tools/__init__.py"
+     },
+     {
+      "id": "__main__",
+      "name": "__main__",
+      "kind": "module",
+      "language": "python",
+      "loc": 6,
+      "file": "src/repo_release_tools/__main__.py"
+     },
+     {
+      "id": "assets",
+      "name": "assets",
+      "kind": "module",
+      "language": "python",
+      "loc": 1,
+      "file": "src/repo_release_tools/assets/__init__.py"
+     },
+     {
+      "id": "assets.badges",
+      "name": "assets.badges",
+      "kind": "module",
+      "language": "python",
+      "loc": 51,
+      "file": "src/repo_release_tools/assets/badges/__init__.py"
+     },
+     {
+      "id": "assets.badges.__main__",
+      "name": "assets.badges.__main__",
+      "kind": "module",
+      "language": "python",
+      "loc": 10,
+      "file": "src/repo_release_tools/assets/badges/__main__.py"
+     },
+     {
+      "id": "assets.banner",
+      "name": "assets.banner",
+      "kind": "module",
+      "language": "python",
+      "loc": 852,
+      "file": "src/repo_release_tools/assets/banner.py"
+     },
+     {
+      "id": "cli",
+      "name": "cli",
+      "kind": "module",
+      "language": "python",
+      "loc": 796,
+      "file": "src/repo_release_tools/cli.py"
+     },
+     {
+      "id": "commands",
+      "name": "commands",
+      "kind": "module",
+      "language": "python",
+      "loc": 1,
+      "file": "src/repo_release_tools/commands/__init__.py"
+     },
+     {
+      "id": "commands.action_cmd",
+      "name": "commands.action_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 156,
+      "file": "src/repo_release_tools/commands/action_cmd.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:config",
+    "name": "Config",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "commands.config_cmd",
+      "name": "commands.config_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 395,
+      "file": "src/repo_release_tools/commands/config_cmd.py"
+     },
+     {
+      "id": "commands.init",
+      "name": "commands.init",
+      "kind": "module",
+      "language": "python",
+      "loc": 356,
+      "file": "src/repo_release_tools/commands/init.py"
+     },
+     {
+      "id": "commands.project_cmd",
+      "name": "commands.project_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 179,
+      "file": "src/repo_release_tools/commands/project_cmd.py"
+     },
+     {
+      "id": "config",
+      "name": "config",
+      "kind": "module",
+      "language": "python",
+      "loc": 153,
+      "file": "src/repo_release_tools/config/__init__.py"
+     },
+     {
+      "id": "config.core",
+      "name": "config.core",
+      "kind": "module",
+      "language": "python",
+      "loc": 1391,
+      "file": "src/repo_release_tools/config/core.py"
+     },
+     {
+      "id": "config.docs_config",
+      "name": "config.docs_config",
+      "kind": "module",
+      "language": "python",
+      "loc": 535,
+      "file": "src/repo_release_tools/config/docs_config.py"
+     },
+     {
+      "id": "config.folders_config",
+      "name": "config.folders_config",
+      "kind": "module",
+      "language": "python",
+      "loc": 209,
+      "file": "src/repo_release_tools/config/folders_config.py"
+     },
+     {
+      "id": "config.model",
+      "name": "config.model",
+      "kind": "module",
+      "language": "python",
+      "loc": 801,
+      "file": "src/repo_release_tools/config/model.py"
+     },
+     {
+      "id": "config.project_meta",
+      "name": "config.project_meta",
+      "kind": "module",
+      "language": "python",
+      "loc": 283,
+      "file": "src/repo_release_tools/config/project_meta.py"
+     },
+     {
+      "id": "config.reference",
+      "name": "config.reference",
+      "kind": "module",
+      "language": "python",
+      "loc": 233,
+      "file": "src/repo_release_tools/config/reference.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:data",
+    "name": "Data stores",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "ds:rrt-config",
+      "name": "[tool.rrt] config (pyproject/.rrt.toml/Cargo.toml/package.json)",
+      "kind": "datastore"
+     },
+     {
+      "id": "ds:rrt-locks",
+      "name": ".rrt/ lock files (docs/health/tree/artifacts/drift/docs_map)",
+      "kind": "datastore"
+     },
+     {
+      "id": "ds:changelog",
+      "name": "CHANGELOG.md",
+      "kind": "datastore"
+     },
+     {
+      "id": "ds:version-targets",
+      "name": "Version-target files (pyproject, package.json, pins...)",
+      "kind": "datastore"
+     },
+     {
+      "id": "ds:git-repo",
+      "name": "Git repository (subprocess)",
+      "kind": "datastore"
+     },
+     {
+      "id": "ds:npm-registry",
+      "name": "registry.npmjs.org API",
+      "kind": "datastore"
+     },
+     {
+      "id": "ds:crates-io",
+      "name": "crates.io API",
+      "kind": "datastore"
+     },
+     {
+      "id": "ds:pypi",
+      "name": "pypi.org API",
+      "kind": "datastore"
+     },
+     {
+      "id": "ds:endoflife",
+      "name": "endoflife.date API",
+      "kind": "datastore"
+     }
+    ]
+   },
+   {
+    "id": "dom:docs",
+    "name": "Docs engine",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "commands.docs_cmd",
+      "name": "commands.docs_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 1178,
+      "file": "src/repo_release_tools/commands/docs_cmd.py"
+     },
+     {
+      "id": "commands.docs_map",
+      "name": "commands.docs_map",
+      "kind": "module",
+      "language": "python",
+      "loc": 272,
+      "file": "src/repo_release_tools/commands/docs_map.py"
+     },
+     {
+      "id": "commands.docs_map_lock",
+      "name": "commands.docs_map_lock",
+      "kind": "module",
+      "language": "python",
+      "loc": 136,
+      "file": "src/repo_release_tools/commands/docs_map_lock.py"
+     },
+     {
+      "id": "commands.docs_suggest",
+      "name": "commands.docs_suggest",
+      "kind": "module",
+      "language": "python",
+      "loc": 256,
+      "file": "src/repo_release_tools/commands/docs_suggest.py"
+     },
+     {
+      "id": "commands.toc",
+      "name": "commands.toc",
+      "kind": "module",
+      "language": "python",
+      "loc": 188,
+      "file": "src/repo_release_tools/commands/toc.py"
+     },
+     {
+      "id": "docs",
+      "name": "docs",
+      "kind": "module",
+      "language": "python",
+      "loc": 24,
+      "file": "src/repo_release_tools/docs/__init__.py"
+     },
+     {
+      "id": "docs.api_index",
+      "name": "docs.api_index",
+      "kind": "module",
+      "language": "python",
+      "loc": 319,
+      "file": "src/repo_release_tools/docs/api_index.py"
+     },
+     {
+      "id": "docs.extractor",
+      "name": "docs.extractor",
+      "kind": "module",
+      "language": "python",
+      "loc": 756,
+      "file": "src/repo_release_tools/docs/extractor.py"
+     },
+     {
+      "id": "docs.formats",
+      "name": "docs.formats",
+      "kind": "module",
+      "language": "python",
+      "loc": 162,
+      "file": "src/repo_release_tools/docs/formats/__init__.py"
+     },
+     {
+      "id": "docs.formats._shared",
+      "name": "docs.formats._shared",
+      "kind": "module",
+      "language": "python",
+      "loc": 48,
+      "file": "src/repo_release_tools/docs/formats/_shared.py"
+     },
+     {
+      "id": "docs.formats.html",
+      "name": "docs.formats.html",
+      "kind": "module",
+      "language": "python",
+      "loc": 18,
+      "file": "src/repo_release_tools/docs/formats/html.py"
+     },
+     {
+      "id": "docs.formats.json",
+      "name": "docs.formats.json",
+      "kind": "module",
+      "language": "python",
+      "loc": 23,
+      "file": "src/repo_release_tools/docs/formats/json.py"
+     },
+     {
+      "id": "docs.formats.markdown",
+      "name": "docs.formats.markdown",
+      "kind": "module",
+      "language": "python",
+      "loc": 93,
+      "file": "src/repo_release_tools/docs/formats/markdown.py"
+     },
+     {
+      "id": "docs.formats.richtext",
+      "name": "docs.formats.richtext",
+      "kind": "module",
+      "language": "python",
+      "loc": 65,
+      "file": "src/repo_release_tools/docs/formats/richtext.py"
+     },
+     {
+      "id": "docs.formats.text",
+      "name": "docs.formats.text",
+      "kind": "module",
+      "language": "python",
+      "loc": 61,
+      "file": "src/repo_release_tools/docs/formats/text.py"
+     },
+     {
+      "id": "docs.markdown",
+      "name": "docs.markdown",
+      "kind": "module",
+      "language": "python",
+      "loc": 17,
+      "file": "src/repo_release_tools/docs/markdown.py"
+     },
+     {
+      "id": "docs.publisher",
+      "name": "docs.publisher",
+      "kind": "module",
+      "language": "python",
+      "loc": 979,
+      "file": "src/repo_release_tools/docs/publisher.py"
+     },
+     {
+      "id": "tools",
+      "name": "tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 1,
+      "file": "src/repo_release_tools/tools/__init__.py"
+     },
+     {
+      "id": "tools.inject",
+      "name": "tools.inject",
+      "kind": "module",
+      "language": "python",
+      "loc": 325,
+      "file": "src/repo_release_tools/tools/inject.py"
+     },
+     {
+      "id": "tools.platform",
+      "name": "tools.platform",
+      "kind": "module",
+      "language": "python",
+      "loc": 878,
+      "file": "src/repo_release_tools/tools/platform.py"
+     },
+     {
+      "id": "tools.toc",
+      "name": "tools.toc",
+      "kind": "module",
+      "language": "python",
+      "loc": 122,
+      "file": "src/repo_release_tools/tools/toc.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:git",
+    "name": "Git workflow",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "commands._git_shared",
+      "name": "commands._git_shared",
+      "kind": "module",
+      "language": "python",
+      "loc": 64,
+      "file": "src/repo_release_tools/commands/_git_shared.py"
+     },
+     {
+      "id": "commands.branch",
+      "name": "commands.branch",
+      "kind": "module",
+      "language": "python",
+      "loc": 535,
+      "file": "src/repo_release_tools/commands/branch.py"
+     },
+     {
+      "id": "commands.git_cmd",
+      "name": "commands.git_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 114,
+      "file": "src/repo_release_tools/commands/git_cmd.py"
+     },
+     {
+      "id": "commands.git_commit",
+      "name": "commands.git_commit",
+      "kind": "module",
+      "language": "python",
+      "loc": 274,
+      "file": "src/repo_release_tools/commands/git_commit.py"
+     },
+     {
+      "id": "commands.git_inspect",
+      "name": "commands.git_inspect",
+      "kind": "module",
+      "language": "python",
+      "loc": 604,
+      "file": "src/repo_release_tools/commands/git_inspect.py"
+     },
+     {
+      "id": "commands.git_sync",
+      "name": "commands.git_sync",
+      "kind": "module",
+      "language": "python",
+      "loc": 685,
+      "file": "src/repo_release_tools/commands/git_sync.py"
+     },
+     {
+      "id": "workflow.git",
+      "name": "workflow.git",
+      "kind": "module",
+      "language": "python",
+      "loc": 393,
+      "file": "src/repo_release_tools/workflow/git.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:health",
+    "name": "Repo health & drift",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "commands._tree_fix",
+      "name": "commands._tree_fix",
+      "kind": "module",
+      "language": "python",
+      "loc": 185,
+      "file": "src/repo_release_tools/commands/_tree_fix.py"
+     },
+     {
+      "id": "commands.artifacts_cmd",
+      "name": "commands.artifacts_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 301,
+      "file": "src/repo_release_tools/commands/artifacts_cmd.py"
+     },
+     {
+      "id": "commands.doctor",
+      "name": "commands.doctor",
+      "kind": "module",
+      "language": "python",
+      "loc": 466,
+      "file": "src/repo_release_tools/commands/doctor.py"
+     },
+     {
+      "id": "commands.drift_cmd",
+      "name": "commands.drift_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 217,
+      "file": "src/repo_release_tools/commands/drift_cmd.py"
+     },
+     {
+      "id": "commands.eol_check",
+      "name": "commands.eol_check",
+      "kind": "module",
+      "language": "python",
+      "loc": 430,
+      "file": "src/repo_release_tools/commands/eol_check.py"
+     },
+     {
+      "id": "commands.folder",
+      "name": "commands.folder",
+      "kind": "module",
+      "language": "python",
+      "loc": 254,
+      "file": "src/repo_release_tools/commands/folder.py"
+     },
+     {
+      "id": "commands.tree",
+      "name": "commands.tree",
+      "kind": "module",
+      "language": "python",
+      "loc": 1227,
+      "file": "src/repo_release_tools/commands/tree.py"
+     },
+     {
+      "id": "eol",
+      "name": "eol",
+      "kind": "module",
+      "language": "python",
+      "loc": 45,
+      "file": "src/repo_release_tools/eol/__init__.py"
+     },
+     {
+      "id": "eol.core",
+      "name": "eol.core",
+      "kind": "module",
+      "language": "python",
+      "loc": 323,
+      "file": "src/repo_release_tools/eol/core.py"
+     },
+     {
+      "id": "eol.data",
+      "name": "eol.data",
+      "kind": "module",
+      "language": "python",
+      "loc": 54,
+      "file": "src/repo_release_tools/eol/data.py"
+     },
+     {
+      "id": "eol.detect",
+      "name": "eol.detect",
+      "kind": "module",
+      "language": "python",
+      "loc": 145,
+      "file": "src/repo_release_tools/eol/detect.py"
+     },
+     {
+      "id": "folders",
+      "name": "folders",
+      "kind": "module",
+      "language": "python",
+      "loc": 19,
+      "file": "src/repo_release_tools/folders/__init__.py"
+     },
+     {
+      "id": "folders.core",
+      "name": "folders.core",
+      "kind": "module",
+      "language": "python",
+      "loc": 399,
+      "file": "src/repo_release_tools/folders/core.py"
+     },
+     {
+      "id": "folders.data",
+      "name": "folders.data",
+      "kind": "module",
+      "language": "python",
+      "loc": 100,
+      "file": "src/repo_release_tools/folders/data.py"
+     },
+     {
+      "id": "folders.designer",
+      "name": "folders.designer",
+      "kind": "module",
+      "language": "python",
+      "loc": 66,
+      "file": "src/repo_release_tools/folders/designer.py"
+     },
+     {
+      "id": "folders.templates",
+      "name": "folders.templates",
+      "kind": "module",
+      "language": "python",
+      "loc": 164,
+      "file": "src/repo_release_tools/folders/templates.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:hooks",
+    "name": "Hooks & CI gates",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "commands.hooks_cmd",
+      "name": "commands.hooks_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 640,
+      "file": "src/repo_release_tools/commands/hooks_cmd.py"
+     },
+     {
+      "id": "hooks",
+      "name": "hooks",
+      "kind": "module",
+      "language": "python",
+      "loc": 15,
+      "file": "src/repo_release_tools/hooks.py"
+     },
+     {
+      "id": "integrations.action",
+      "name": "integrations.action",
+      "kind": "module",
+      "language": "python",
+      "loc": 199,
+      "file": "src/repo_release_tools/integrations/action.py"
+     },
+     {
+      "id": "workflow",
+      "name": "workflow",
+      "kind": "module",
+      "language": "python",
+      "loc": 3,
+      "file": "src/repo_release_tools/workflow/__init__.py"
+     },
+     {
+      "id": "workflow.hooks",
+      "name": "workflow.hooks",
+      "kind": "module",
+      "language": "python",
+      "loc": 2014,
+      "file": "src/repo_release_tools/workflow/hooks.py"
+     },
+     {
+      "id": "action.yml",
+      "name": "action.yml (GitHub Action)",
+      "kind": "job",
+      "language": "yaml",
+      "loc": 266,
+      "file": "action.yml"
+     }
+    ]
+   },
+   {
+    "id": "dom:mcp",
+    "name": "MCP server (extra)",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "mcp",
+      "name": "mcp",
+      "kind": "module",
+      "language": "python",
+      "loc": 118,
+      "file": "src/repo_release_tools/mcp/__init__.py"
+     },
+     {
+      "id": "mcp.apps",
+      "name": "mcp.apps",
+      "kind": "module",
+      "language": "python",
+      "loc": 799,
+      "file": "src/repo_release_tools/mcp/apps.py"
+     },
+     {
+      "id": "mcp.models",
+      "name": "mcp.models",
+      "kind": "module",
+      "language": "python",
+      "loc": 227,
+      "file": "src/repo_release_tools/mcp/models.py"
+     },
+     {
+      "id": "mcp.prompts",
+      "name": "mcp.prompts",
+      "kind": "module",
+      "language": "python",
+      "loc": 377,
+      "file": "src/repo_release_tools/mcp/prompts.py"
+     },
+     {
+      "id": "mcp.resources",
+      "name": "mcp.resources",
+      "kind": "module",
+      "language": "python",
+      "loc": 91,
+      "file": "src/repo_release_tools/mcp/resources.py"
+     },
+     {
+      "id": "mcp.server",
+      "name": "mcp.server",
+      "kind": "module",
+      "language": "python",
+      "loc": 111,
+      "file": "src/repo_release_tools/mcp/server.py"
+     },
+     {
+      "id": "mcp.tools",
+      "name": "mcp.tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 105,
+      "file": "src/repo_release_tools/mcp/tools/__init__.py"
+     },
+     {
+      "id": "mcp.tools.changelog_tools",
+      "name": "mcp.tools.changelog_tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 48,
+      "file": "src/repo_release_tools/mcp/tools/changelog_tools.py"
+     },
+     {
+      "id": "mcp.tools.config_tools",
+      "name": "mcp.tools.config_tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 71,
+      "file": "src/repo_release_tools/mcp/tools/config_tools.py"
+     },
+     {
+      "id": "mcp.tools.git_tools",
+      "name": "mcp.tools.git_tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 96,
+      "file": "src/repo_release_tools/mcp/tools/git_tools.py"
+     },
+     {
+      "id": "mcp.tools.lock_tools",
+      "name": "mcp.tools.lock_tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 83,
+      "file": "src/repo_release_tools/mcp/tools/lock_tools.py"
+     },
+     {
+      "id": "mcp.tools.publish_tools",
+      "name": "mcp.tools.publish_tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 142,
+      "file": "src/repo_release_tools/mcp/tools/publish_tools.py"
+     },
+     {
+      "id": "mcp.tools.validation_tools",
+      "name": "mcp.tools.validation_tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 59,
+      "file": "src/repo_release_tools/mcp/tools/validation_tools.py"
+     },
+     {
+      "id": "mcp.tools.version_tools",
+      "name": "mcp.tools.version_tools",
+      "kind": "module",
+      "language": "python",
+      "loc": 108,
+      "file": "src/repo_release_tools/mcp/tools/version_tools.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:release",
+    "name": "Version & release",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "changelog",
+      "name": "changelog",
+      "kind": "module",
+      "language": "python",
+      "loc": 610,
+      "file": "src/repo_release_tools/changelog.py"
+     },
+     {
+      "id": "commands.bump",
+      "name": "commands.bump",
+      "kind": "module",
+      "language": "python",
+      "loc": 759,
+      "file": "src/repo_release_tools/commands/bump.py"
+     },
+     {
+      "id": "commands.changelog_cmd",
+      "name": "commands.changelog_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 77,
+      "file": "src/repo_release_tools/commands/changelog_cmd.py"
+     },
+     {
+      "id": "commands.changelog_compare",
+      "name": "commands.changelog_compare",
+      "kind": "module",
+      "language": "python",
+      "loc": 248,
+      "file": "src/repo_release_tools/commands/changelog_compare.py"
+     },
+     {
+      "id": "commands.changelog_lint",
+      "name": "commands.changelog_lint",
+      "kind": "module",
+      "language": "python",
+      "loc": 282,
+      "file": "src/repo_release_tools/commands/changelog_lint.py"
+     },
+     {
+      "id": "commands.ci_version",
+      "name": "commands.ci_version",
+      "kind": "module",
+      "language": "python",
+      "loc": 499,
+      "file": "src/repo_release_tools/commands/ci_version.py"
+     },
+     {
+      "id": "commands.release_cmd",
+      "name": "commands.release_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 307,
+      "file": "src/repo_release_tools/commands/release_cmd.py"
+     },
+     {
+      "id": "commands.release_notes",
+      "name": "commands.release_notes",
+      "kind": "module",
+      "language": "python",
+      "loc": 307,
+      "file": "src/repo_release_tools/commands/release_notes.py"
+     },
+     {
+      "id": "commands.release_repair",
+      "name": "commands.release_repair",
+      "kind": "module",
+      "language": "python",
+      "loc": 777,
+      "file": "src/repo_release_tools/commands/release_repair.py"
+     },
+     {
+      "id": "commands.sync_cmd",
+      "name": "commands.sync_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 374,
+      "file": "src/repo_release_tools/commands/sync_cmd.py"
+     },
+     {
+      "id": "commands.tag",
+      "name": "commands.tag",
+      "kind": "module",
+      "language": "python",
+      "loc": 323,
+      "file": "src/repo_release_tools/commands/tag.py"
+     },
+     {
+      "id": "commands.workspace",
+      "name": "commands.workspace",
+      "kind": "module",
+      "language": "python",
+      "loc": 266,
+      "file": "src/repo_release_tools/commands/workspace.py"
+     },
+     {
+      "id": "preflight",
+      "name": "preflight",
+      "kind": "module",
+      "language": "python",
+      "loc": 67,
+      "file": "src/repo_release_tools/preflight.py"
+     },
+     {
+      "id": "sync",
+      "name": "sync",
+      "kind": "module",
+      "language": "python",
+      "loc": 1,
+      "file": "src/repo_release_tools/sync/__init__.py"
+     },
+     {
+      "id": "sync.providers",
+      "name": "sync.providers",
+      "kind": "module",
+      "language": "python",
+      "loc": 122,
+      "file": "src/repo_release_tools/sync/providers.py"
+     },
+     {
+      "id": "sync.pypi",
+      "name": "sync.pypi",
+      "kind": "module",
+      "language": "python",
+      "loc": 25,
+      "file": "src/repo_release_tools/sync/pypi.py"
+     },
+     {
+      "id": "version",
+      "name": "version",
+      "kind": "module",
+      "language": "python",
+      "loc": 26,
+      "file": "src/repo_release_tools/version/__init__.py"
+     },
+     {
+      "id": "version.calver",
+      "name": "version.calver",
+      "kind": "module",
+      "language": "python",
+      "loc": 113,
+      "file": "src/repo_release_tools/version/calver.py"
+     },
+     {
+      "id": "version.semver",
+      "name": "version.semver",
+      "kind": "module",
+      "language": "python",
+      "loc": 126,
+      "file": "src/repo_release_tools/version/semver.py"
+     },
+     {
+      "id": "version.targets",
+      "name": "version.targets",
+      "kind": "module",
+      "language": "python",
+      "loc": 400,
+      "file": "src/repo_release_tools/version/targets.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:setup",
+    "name": "Setup & integrations",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "commands.agents_cmd",
+      "name": "commands.agents_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 335,
+      "file": "src/repo_release_tools/commands/agents_cmd.py"
+     },
+     {
+      "id": "commands.env_cmd",
+      "name": "commands.env_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 156,
+      "file": "src/repo_release_tools/commands/env_cmd.py"
+     },
+     {
+      "id": "commands.install_cmd",
+      "name": "commands.install_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 204,
+      "file": "src/repo_release_tools/commands/install_cmd.py"
+     },
+     {
+      "id": "commands.mcp_cmd",
+      "name": "commands.mcp_cmd",
+      "kind": "module",
+      "language": "python",
+      "loc": 215,
+      "file": "src/repo_release_tools/commands/mcp_cmd.py"
+     },
+     {
+      "id": "commands.skill",
+      "name": "commands.skill",
+      "kind": "module",
+      "language": "python",
+      "loc": 260,
+      "file": "src/repo_release_tools/commands/skill.py"
+     },
+     {
+      "id": "integrations",
+      "name": "integrations",
+      "kind": "module",
+      "language": "python",
+      "loc": 5,
+      "file": "src/repo_release_tools/integrations/__init__.py"
+     },
+     {
+      "id": "integrations.agent_assets",
+      "name": "integrations.agent_assets",
+      "kind": "module",
+      "language": "python",
+      "loc": 84,
+      "file": "src/repo_release_tools/integrations/agent_assets.py"
+     },
+     {
+      "id": "integrations.skill_assets",
+      "name": "integrations.skill_assets",
+      "kind": "module",
+      "language": "python",
+      "loc": 53,
+      "file": "src/repo_release_tools/integrations/skill_assets.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:state",
+    "name": "State & .rrt locks",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "state",
+      "name": "state",
+      "kind": "module",
+      "language": "python",
+      "loc": 548,
+      "file": "src/repo_release_tools/state.py"
+     }
+    ]
+   },
+   {
+    "id": "dom:ui",
+    "name": "UI layer",
+    "kind": "domain",
+    "children": [
+     {
+      "id": "ui",
+      "name": "ui",
+      "kind": "module",
+      "language": "python",
+      "loc": 135,
+      "file": "src/repo_release_tools/ui/__init__.py"
+     },
+     {
+      "id": "ui.color",
+      "name": "ui.color",
+      "kind": "module",
+      "language": "python",
+      "loc": 329,
+      "file": "src/repo_release_tools/ui/color.py"
+     },
+     {
+      "id": "ui.context",
+      "name": "ui.context",
+      "kind": "module",
+      "language": "python",
+      "loc": 26,
+      "file": "src/repo_release_tools/ui/context.py"
+     },
+     {
+      "id": "ui.font",
+      "name": "ui.font",
+      "kind": "module",
+      "language": "python",
+      "loc": 49,
+      "file": "src/repo_release_tools/ui/font.py"
+     },
+     {
+      "id": "ui.glyphs",
+      "name": "ui.glyphs",
+      "kind": "module",
+      "language": "python",
+      "loc": 489,
+      "file": "src/repo_release_tools/ui/glyphs.py"
+     },
+     {
+      "id": "ui.layout",
+      "name": "ui.layout",
+      "kind": "module",
+      "language": "python",
+      "loc": 420,
+      "file": "src/repo_release_tools/ui/layout.py"
+     },
+     {
+      "id": "ui.messaging",
+      "name": "ui.messaging",
+      "kind": "module",
+      "language": "python",
+      "loc": 343,
+      "file": "src/repo_release_tools/ui/messaging.py"
+     },
+     {
+      "id": "ui.progress",
+      "name": "ui.progress",
+      "kind": "module",
+      "language": "python",
+      "loc": 137,
+      "file": "src/repo_release_tools/ui/progress.py"
+     },
+     {
+      "id": "ui.prompt",
+      "name": "ui.prompt",
+      "kind": "module",
+      "language": "python",
+      "loc": 71,
+      "file": "src/repo_release_tools/ui/prompt.py"
+     },
+     {
+      "id": "ui.syntax",
+      "name": "ui.syntax",
+      "kind": "module",
+      "language": "python",
+      "loc": 205,
+      "file": "src/repo_release_tools/ui/syntax.py"
+     }
+    ]
+   }
+  ]
+ },
+ "edges": [
+  {
+   "source": "__main__",
+   "target": "cli",
+   "kind": "call"
+  },
+  {
+   "source": "action.yml",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "action.yml",
+   "target": "workflow.hooks",
+   "kind": "dispatch"
+  },
+  {
+   "source": "assets.badges",
+   "target": "tools.inject",
+   "kind": "call"
+  },
+  {
+   "source": "assets.badges",
+   "target": "tools.platform",
+   "kind": "call"
+  },
+  {
+   "source": "assets.badges.__main__",
+   "target": "assets.badges",
+   "kind": "call"
+  },
+  {
+   "source": "assets.banner",
+   "target": "assets.badges",
+   "kind": "call"
+  },
+  {
+   "source": "assets.banner",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "changelog",
+   "target": "ds:changelog",
+   "kind": "read"
+  },
+  {
+   "source": "cli",
+   "target": "assets.banner",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands",
+   "kind": "dispatch"
+  },
+  {
+   "source": "cli",
+   "target": "commands.action_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.agents_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.artifacts_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.branch",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.bump",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.changelog_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.ci_version",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.config_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.docs_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.doctor",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.drift_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.env_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.eol_check",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.folder",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.git_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.hooks_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.init",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.install_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.mcp_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.project_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.release_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.skill",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.sync_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.tag",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.toc",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.tree",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "commands.workspace",
+   "kind": "call"
+  },
+  {
+   "source": "cli",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands._git_shared",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands._git_shared",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands._tree_fix",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands._tree_fix",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands._tree_fix",
+   "target": "ui.prompt",
+   "kind": "call"
+  },
+  {
+   "source": "commands.action_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.agents_cmd",
+   "target": "integrations.agent_assets",
+   "kind": "call"
+  },
+  {
+   "source": "commands.agents_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.artifacts_cmd",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.artifacts_cmd",
+   "target": "ds:rrt-locks",
+   "kind": "write"
+  },
+  {
+   "source": "commands.artifacts_cmd",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "commands.artifacts_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.artifacts_cmd",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands.branch",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.branch",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.branch",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands.bump",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "commands.bump",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.bump",
+   "target": "ds:changelog",
+   "kind": "write"
+  },
+  {
+   "source": "commands.bump",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.bump",
+   "target": "preflight",
+   "kind": "call"
+  },
+  {
+   "source": "commands.bump",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.bump",
+   "target": "version.calver",
+   "kind": "call"
+  },
+  {
+   "source": "commands.bump",
+   "target": "version.semver",
+   "kind": "call"
+  },
+  {
+   "source": "commands.bump",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "commands.bump",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_cmd",
+   "target": "commands.changelog_compare",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_cmd",
+   "target": "commands.changelog_lint",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_compare",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_compare",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_compare",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_lint",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_lint",
+   "target": "commands.changelog_compare",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_lint",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.changelog_lint",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.ci_version",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.ci_version",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.ci_version",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "commands.config_cmd",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.config_cmd",
+   "target": "config.reference",
+   "kind": "call"
+  },
+  {
+   "source": "commands.config_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "cli",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "commands.docs_map",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "commands.docs_map_lock",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "commands.docs_suggest",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "docs.api_index",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "docs.formats",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "docs.publisher",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "tools.inject",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "tools.platform",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "tools.toc",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_map",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_map",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "commands.docs_map",
+   "target": "tools.inject",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_map_lock",
+   "target": "commands.docs_map",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_map_lock",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_map_lock",
+   "target": "ds:rrt-locks",
+   "kind": "write"
+  },
+  {
+   "source": "commands.docs_suggest",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.docs_suggest",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.doctor",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "commands.doctor",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.doctor",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "commands.doctor",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "commands.doctor",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.drift_cmd",
+   "target": "ds:rrt-locks",
+   "kind": "write"
+  },
+  {
+   "source": "commands.drift_cmd",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "commands.drift_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.env_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.eol_check",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.eol_check",
+   "target": "ds:endoflife",
+   "kind": "read"
+  },
+  {
+   "source": "commands.eol_check",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "commands.eol_check",
+   "target": "eol",
+   "kind": "call"
+  },
+  {
+   "source": "commands.eol_check",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "commands.eol_check",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.folder",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.folder",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "commands.folder",
+   "target": "folders",
+   "kind": "call"
+  },
+  {
+   "source": "commands.folder",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "commands.folder",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_cmd",
+   "target": "commands.git_commit",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_cmd",
+   "target": "commands.git_inspect",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_cmd",
+   "target": "commands.git_sync",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_commit",
+   "target": "commands._git_shared",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_commit",
+   "target": "commands.branch",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_commit",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.git_commit",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_commit",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_commit",
+   "target": "workflow.hooks",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_inspect",
+   "target": "commands._git_shared",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_inspect",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_inspect",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.git_inspect",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_inspect",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_inspect",
+   "target": "workflow.hooks",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_sync",
+   "target": "commands._git_shared",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_sync",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_sync",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.git_sync",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.git_sync",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands.hooks_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.init",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.init",
+   "target": "ds:rrt-config",
+   "kind": "write"
+  },
+  {
+   "source": "commands.init",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.install_cmd",
+   "target": "commands.agents_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "commands.install_cmd",
+   "target": "commands.hooks_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "commands.install_cmd",
+   "target": "commands.skill",
+   "kind": "call"
+  },
+  {
+   "source": "commands.install_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.mcp_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.project_cmd",
+   "target": "config.project_meta",
+   "kind": "call"
+  },
+  {
+   "source": "commands.project_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_cmd",
+   "target": "commands.release_notes",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_cmd",
+   "target": "commands.release_repair",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_cmd",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_cmd",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_notes",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_notes",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_notes",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.release_notes",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_repair",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_repair",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_repair",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.release_repair",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_repair",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "commands.release_repair",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands.skill",
+   "target": "integrations.skill_assets",
+   "kind": "call"
+  },
+  {
+   "source": "commands.skill",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "commands.bump",
+   "kind": "call"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "commands.tag",
+   "kind": "call"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "ds:crates-io",
+   "kind": "read"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "sync.providers",
+   "kind": "call"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "version.semver",
+   "kind": "call"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "commands.sync_cmd",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "commands.tag",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.tag",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.tag",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.tag",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "commands.toc",
+   "target": "tools.inject",
+   "kind": "call"
+  },
+  {
+   "source": "commands.toc",
+   "target": "tools.toc",
+   "kind": "call"
+  },
+  {
+   "source": "commands.toc",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.tree",
+   "target": "commands._tree_fix",
+   "kind": "call"
+  },
+  {
+   "source": "commands.tree",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "commands.tree",
+   "target": "ds:rrt-locks",
+   "kind": "write"
+  },
+  {
+   "source": "commands.tree",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "commands.tree",
+   "target": "tools.inject",
+   "kind": "call"
+  },
+  {
+   "source": "commands.tree",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.workspace",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "commands.workspace",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "commands.workspace",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "commands.workspace",
+   "target": "version.calver",
+   "kind": "call"
+  },
+  {
+   "source": "commands.workspace",
+   "target": "version.semver",
+   "kind": "call"
+  },
+  {
+   "source": "commands.workspace",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "config",
+   "target": "config.core",
+   "kind": "call"
+  },
+  {
+   "source": "config.core",
+   "target": "config.docs_config",
+   "kind": "call"
+  },
+  {
+   "source": "config.core",
+   "target": "config.folders_config",
+   "kind": "call"
+  },
+  {
+   "source": "config.core",
+   "target": "config.model",
+   "kind": "call"
+  },
+  {
+   "source": "config.core",
+   "target": "ds:rrt-config",
+   "kind": "read"
+  },
+  {
+   "source": "config.docs_config",
+   "target": "config.model",
+   "kind": "call"
+  },
+  {
+   "source": "config.docs_config",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "config.folders_config",
+   "target": "config.model",
+   "kind": "call"
+  },
+  {
+   "source": "config.model",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "config.model",
+   "target": "sync.providers",
+   "kind": "call"
+  },
+  {
+   "source": "docs",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "docs",
+   "target": "docs.formats",
+   "kind": "call"
+  },
+  {
+   "source": "docs",
+   "target": "docs.formats.markdown",
+   "kind": "call"
+  },
+  {
+   "source": "docs.extractor",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "docs.extractor",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats",
+   "target": "config.core",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats",
+   "target": "docs.formats._shared",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats",
+   "target": "docs.formats.json",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats",
+   "target": "docs.formats.richtext",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats",
+   "target": "docs.formats.text",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "docs.formats",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats",
+   "target": "tools.inject",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats._shared",
+   "target": "config.core",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats._shared",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.html",
+   "target": "config.core",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.html",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.json",
+   "target": "config.core",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.json",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.json",
+   "target": "docs.formats._shared",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.richtext",
+   "target": "config.core",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.richtext",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.richtext",
+   "target": "docs.formats._shared",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.richtext",
+   "target": "docs.formats.markdown",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.richtext",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.text",
+   "target": "config.core",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.text",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.text",
+   "target": "docs.formats._shared",
+   "kind": "call"
+  },
+  {
+   "source": "docs.formats.text",
+   "target": "docs.formats.markdown",
+   "kind": "call"
+  },
+  {
+   "source": "docs.markdown",
+   "target": "docs.formats.markdown",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "cli",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.action_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.branch",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.bump",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.doctor",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.eol_check",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.install_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.release_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.skill",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.sync_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.toc",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "commands.tree",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "config.model",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "docs.formats.markdown",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "eol",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "integrations.action",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "repo_release_tools",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "tools.inject",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "docs.publisher",
+   "target": "workflow.hooks",
+   "kind": "call"
+  },
+  {
+   "source": "eol",
+   "target": "eol.core",
+   "kind": "call"
+  },
+  {
+   "source": "eol.core",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "eol.core",
+   "target": "ds:endoflife",
+   "kind": "read"
+  },
+  {
+   "source": "eol.core",
+   "target": "eol.data",
+   "kind": "call"
+  },
+  {
+   "source": "eol.core",
+   "target": "eol.detect",
+   "kind": "call"
+  },
+  {
+   "source": "eol.detect",
+   "target": "ds:endoflife",
+   "kind": "read"
+  },
+  {
+   "source": "eol.detect",
+   "target": "eol.data",
+   "kind": "call"
+  },
+  {
+   "source": "folders",
+   "target": "folders.core",
+   "kind": "call"
+  },
+  {
+   "source": "folders",
+   "target": "folders.designer",
+   "kind": "call"
+  },
+  {
+   "source": "folders.core",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "folders.core",
+   "target": "folders.data",
+   "kind": "call"
+  },
+  {
+   "source": "folders.core",
+   "target": "folders.templates",
+   "kind": "call"
+  },
+  {
+   "source": "folders.designer",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "folders.templates",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "hooks",
+   "target": "workflow.hooks",
+   "kind": "call"
+  },
+  {
+   "source": "integrations",
+   "target": "integrations.action",
+   "kind": "call"
+  },
+  {
+   "source": "integrations",
+   "target": "integrations.agent_assets",
+   "kind": "call"
+  },
+  {
+   "source": "integrations",
+   "target": "integrations.skill_assets",
+   "kind": "call"
+  },
+  {
+   "source": "integrations.action",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "mcp",
+   "target": "mcp.server",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.apps",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "mcp.apps",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "mcp.apps",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.apps",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.resources",
+   "target": "commands.config_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.resources",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.resources",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "mcp.resources",
+   "target": "mcp.server",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.resources",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.server",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.server",
+   "target": "mcp.apps",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.server",
+   "target": "mcp.prompts",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.server",
+   "target": "mcp.resources",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.server",
+   "target": "mcp.tools",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "mcp.tools",
+   "target": "mcp.tools.changelog_tools",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools",
+   "target": "mcp.tools.config_tools",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools",
+   "target": "mcp.tools.git_tools",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools",
+   "target": "mcp.tools.lock_tools",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools",
+   "target": "mcp.tools.publish_tools",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools",
+   "target": "mcp.tools.validation_tools",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools",
+   "target": "mcp.tools.version_tools",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.changelog_tools",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.changelog_tools",
+   "target": "mcp.models",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.config_tools",
+   "target": "commands.doctor",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.config_tools",
+   "target": "mcp.models",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.git_tools",
+   "target": "commands.branch",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.git_tools",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "mcp.tools.git_tools",
+   "target": "mcp.models",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.git_tools",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.lock_tools",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "mcp.tools.lock_tools",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.publish_tools",
+   "target": "commands.git_sync",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.publish_tools",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.publish_tools",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "mcp.tools.publish_tools",
+   "target": "mcp.models",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.publish_tools",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.validation_tools",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.validation_tools",
+   "target": "mcp.models",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.validation_tools",
+   "target": "workflow.hooks",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.version_tools",
+   "target": "mcp.models",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.version_tools",
+   "target": "version.semver",
+   "kind": "call"
+  },
+  {
+   "source": "mcp.tools.version_tools",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "preflight",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "preflight",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "preflight",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "preflight",
+   "target": "workflow.git",
+   "kind": "call"
+  },
+  {
+   "source": "state",
+   "target": "ds:rrt-locks",
+   "kind": "write"
+  },
+  {
+   "source": "state",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "sync.providers",
+   "target": "ds:crates-io",
+   "kind": "read"
+  },
+  {
+   "source": "sync.providers",
+   "target": "ds:npm-registry",
+   "kind": "read"
+  },
+  {
+   "source": "sync.providers",
+   "target": "sync.pypi",
+   "kind": "call"
+  },
+  {
+   "source": "sync.pypi",
+   "target": "ds:pypi",
+   "kind": "read"
+  },
+  {
+   "source": "tools.platform",
+   "target": "ds:crates-io",
+   "kind": "read"
+  },
+  {
+   "source": "tools.platform",
+   "target": "ds:pypi",
+   "kind": "read"
+  },
+  {
+   "source": "ui",
+   "target": "ui.color",
+   "kind": "call"
+  },
+  {
+   "source": "ui",
+   "target": "ui.context",
+   "kind": "call"
+  },
+  {
+   "source": "ui",
+   "target": "ui.font",
+   "kind": "call"
+  },
+  {
+   "source": "ui",
+   "target": "ui.glyphs",
+   "kind": "call"
+  },
+  {
+   "source": "ui",
+   "target": "ui.layout",
+   "kind": "call"
+  },
+  {
+   "source": "ui",
+   "target": "ui.messaging",
+   "kind": "call"
+  },
+  {
+   "source": "ui",
+   "target": "ui.progress",
+   "kind": "call"
+  },
+  {
+   "source": "ui",
+   "target": "ui.prompt",
+   "kind": "call"
+  },
+  {
+   "source": "ui",
+   "target": "ui.syntax",
+   "kind": "call"
+  },
+  {
+   "source": "ui.font",
+   "target": "ui.color",
+   "kind": "call"
+  },
+  {
+   "source": "ui.layout",
+   "target": "ui.color",
+   "kind": "call"
+  },
+  {
+   "source": "ui.layout",
+   "target": "ui.glyphs",
+   "kind": "call"
+  },
+  {
+   "source": "ui.messaging",
+   "target": "ui.color",
+   "kind": "call"
+  },
+  {
+   "source": "ui.messaging",
+   "target": "ui.context",
+   "kind": "call"
+  },
+  {
+   "source": "ui.messaging",
+   "target": "ui.font",
+   "kind": "call"
+  },
+  {
+   "source": "ui.messaging",
+   "target": "ui.glyphs",
+   "kind": "call"
+  },
+  {
+   "source": "ui.messaging",
+   "target": "ui.layout",
+   "kind": "call"
+  },
+  {
+   "source": "ui.messaging",
+   "target": "ui.syntax",
+   "kind": "call"
+  },
+  {
+   "source": "ui.progress",
+   "target": "ui.glyphs",
+   "kind": "call"
+  },
+  {
+   "source": "ui.syntax",
+   "target": "ui.color",
+   "kind": "call"
+  },
+  {
+   "source": "version",
+   "target": "version.calver",
+   "kind": "call"
+  },
+  {
+   "source": "version",
+   "target": "version.semver",
+   "kind": "call"
+  },
+  {
+   "source": "version",
+   "target": "version.targets",
+   "kind": "call"
+  },
+  {
+   "source": "version.targets",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "version.targets",
+   "target": "ds:version-targets",
+   "kind": "write"
+  },
+  {
+   "source": "version.targets",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "version.targets",
+   "target": "version.semver",
+   "kind": "call"
+  },
+  {
+   "source": "workflow",
+   "target": "ds:git-repo",
+   "kind": "read"
+  },
+  {
+   "source": "workflow.git",
+   "target": "ds:git-repo",
+   "kind": "write"
+  },
+  {
+   "source": "workflow.git",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "changelog",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.artifacts_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.branch",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.changelog_lint",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.config_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.docs_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.docs_suggest",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.doctor",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.drift_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.eol_check",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.folder",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.git_sync",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.release_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.sync_cmd",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.tag",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "commands.tree",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "config",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "docs.extractor",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "ds:changelog",
+   "kind": "write"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "ds:git-repo",
+   "kind": "write"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "ds:rrt-locks",
+   "kind": "read"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "state",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "ui",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "version.semver",
+   "kind": "call"
+  },
+  {
+   "source": "workflow.hooks",
+   "target": "workflow.git",
+   "kind": "call"
+  }
+ ],
+ "entryPoints": [
+  "cli",
+  "workflow.hooks",
+  "mcp.server",
+  "action.yml",
+  "__main__",
+  "assets.badges.__main__"
+ ],
+ "deadEnds": [
+  "docs.formats.html",
+  "docs.markdown",
+  "hooks"
+ ],
+ "observations": [
+  "workflow/hooks.py is the widest fan-in consumer: it imports 15 commands/* modules directly and re-declares their argparse defaults by hand \u2014 any CLI flag change can silently drift the hook surface (issue #140 bug class).",
+  "Git workflow <-> Hooks coupling is bidirectional: commands/git_commit.py and git_inspect.py import workflow.hooks validators while workflow/hooks.py imports commands/git_sync.py and commands/branch.py.",
+  "docs/publisher.py and docs/api_index.py lazy-import cli to break an import cycle \u2014 the docs engine depends on the CLI shell it is documented by.",
+  "The .rrt/ lock store has split ownership: state.py names four lock files but drift.lock.toml (commands/drift_cmd.py) and docs_map.lock.toml (commands/docs_map_lock.py) define their own filenames.",
+  "mcp/tools/version_tools.py writes version targets directly (partial bump) instead of sharing commands/bump.py's full pipeline \u2014 two writers with different semantics for ds:version-targets.",
+  "ui/ is a pure leaf imported by every domain \u2014 safest first extraction target.",
+  "Data-edge kinds are heuristic (pattern scan + explicit table in extract_topology.py); read/write direction verified only for the explicit table.",
+  "Eight package __init__ modules (assets, docs, integrations, mcp, sync, tools, version, workflow) have zero in-tree inbound imports \u2014 every consumer bypasses the package re-export surface and imports submodules directly. Suppressed from deadEnds because external code may import them."
+ ],
+ "flows": [
+  {
+   "name": "Maintainer releases a new version",
+   "persona": "Project maintainer",
+   "description": "A maintainer runs `rrt bump` and every version string, pin, changelog section, and release branch updates together.",
+   "steps": [
+    {
+     "label": "Maintainer runs `rrt bump minor`",
+     "nodes": [
+      "cli",
+      "commands.bump"
+     ]
+    },
+    {
+     "label": "Project config is loaded and validated",
+     "nodes": [
+      "config.core",
+      "ds:rrt-config"
+     ]
+    },
+    {
+     "label": "Next version is computed (semver/calver)",
+     "nodes": [
+      "version.semver",
+      "version.calver"
+     ]
+    },
+    {
+     "label": "Version strings are rewritten across all target files",
+     "nodes": [
+      "version.targets",
+      "ds:version-targets"
+     ]
+    },
+    {
+     "label": "[Unreleased] changelog section becomes the release section",
+     "nodes": [
+      "changelog",
+      "ds:changelog"
+     ]
+    },
+    {
+     "label": "Release branch and commit are created",
+     "nodes": [
+      "workflow.git",
+      "ds:git-repo"
+     ]
+    },
+    {
+     "label": "Preflight checks confirm the release is consistent",
+     "nodes": [
+      "preflight"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Contributor commits a change",
+   "persona": "Contributor",
+   "description": "On every `git commit`, hooks validate the branch name and commit message and auto-write the changelog entry.",
+   "steps": [
+    {
+     "label": "git commit triggers the pre-commit hook",
+     "nodes": [
+      "workflow.hooks",
+      "ds:git-repo"
+     ]
+    },
+    {
+     "label": "Branch name is checked against <type>/<kebab-slug>",
+     "nodes": [
+      "workflow.hooks",
+      "commands.branch"
+     ]
+    },
+    {
+     "label": "Commit subject is checked against Conventional Commits",
+     "nodes": [
+      "workflow.hooks"
+     ]
+    },
+    {
+     "label": "A changelog bullet is auto-written into [Unreleased]",
+     "nodes": [
+      "changelog",
+      "ds:changelog"
+     ]
+    },
+    {
+     "label": "Updated changelog is re-staged into the commit",
+     "nodes": [
+      "workflow.git",
+      "ds:git-repo"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "CI gates a pull request",
+   "persona": "Reviewer / release manager",
+   "description": "The GitHub Action re-runs the same policy checks in CI so nothing merges that a local hook would have rejected.",
+   "steps": [
+    {
+     "label": "PR triggers the composite Action",
+     "nodes": [
+      "action.yml"
+     ]
+    },
+    {
+     "label": "Action shells out to rrt-hooks checks",
+     "nodes": [
+      "workflow.hooks"
+     ]
+    },
+    {
+     "label": "Branch, commit, changelog, and tree cleanliness are validated",
+     "nodes": [
+      "workflow.hooks",
+      "ds:changelog",
+      "ds:git-repo"
+     ]
+    },
+    {
+     "label": "Repo health (doctor, EOL, folders, artifacts) is verified",
+     "nodes": [
+      "commands.doctor",
+      "eol.core",
+      "commands.folder",
+      "commands.artifacts_cmd",
+      "ds:rrt-locks"
+     ]
+    },
+    {
+     "label": "A health-summary JSON lands in the workflow output",
+     "nodes": [
+      "action.yml"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "AI agent operates the repo via MCP",
+   "persona": "AI coding agent",
+   "description": "An agent connected over MCP inspects versions, validates names, and previews bumps without shelling out to the CLI.",
+   "steps": [
+    {
+     "label": "Agent connects to the rrt-mcp server",
+     "nodes": [
+      "mcp.server"
+     ]
+    },
+    {
+     "label": "Agent inspects version and lock state",
+     "nodes": [
+      "mcp.tools.version_tools",
+      "mcp.tools.lock_tools",
+      "ds:rrt-locks"
+     ]
+    },
+    {
+     "label": "Agent validates branch/commit names with the same hook logic",
+     "nodes": [
+      "mcp.tools.validation_tools",
+      "workflow.hooks"
+     ]
+    },
+    {
+     "label": "Agent previews (dry-run) a version bump",
+     "nodes": [
+      "mcp.tools.version_tools",
+      "version.targets",
+      "ds:version-targets"
+     ]
+    },
+    {
+     "label": "Results return as typed Pydantic models",
+     "nodes": [
+      "mcp.models"
+     ]
+    }
+   ]
+  }
+ ]
+}

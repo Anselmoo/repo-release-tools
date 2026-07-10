@@ -1,0 +1,58 @@
+graph TD
+    subgraph Surfaces["Product surfaces"]
+        CLI["CLI shell & assets<br/>cli.py, assets/"]
+        HOOKS["Hooks & CI gates<br/>workflow/hooks.py, action.yml"]
+        MCP["MCP server (extra)<br/>mcp/"]
+    end
+
+    subgraph Commands["Command domains"]
+        REL["Version & release<br/>version/, changelog.py, sync/,<br/>commands/bump,tag,release_*,..."]
+        GIT["Git workflow<br/>workflow/git.py,<br/>commands/git_*,branch"]
+        HEALTH["Repo health & drift<br/>eol/, folders/,<br/>commands/doctor,drift,tree,..."]
+        DOCS["Docs engine<br/>docs/, tools/,<br/>commands/docs_*,toc"]
+        SETUP["Setup & integrations<br/>integrations/,<br/>commands/skill,agents,install"]
+    end
+
+    subgraph Shared["Shared infrastructure"]
+        CFG["Config<br/>config/"]
+        STATE["State & .rrt/ locks<br/>state.py"]
+        UI["UI layer<br/>ui/"]
+    end
+
+    CLI --> REL
+    CLI --> GIT
+    CLI --> HEALTH
+    CLI --> DOCS
+    CLI --> SETUP
+    CLI --> UI
+
+    HOOKS --> REL
+    HOOKS --> GIT
+    HOOKS --> HEALTH
+    HOOKS --> DOCS
+    HOOKS --> CFG
+    HOOKS --> STATE
+    GIT -.->|"git_commit/git_inspect<br/>import hook validators"| HOOKS
+
+    MCP --> REL
+    MCP --> GIT
+    MCP --> HEALTH
+    MCP --> HOOKS
+    MCP --> CFG
+    MCP --> STATE
+
+    REL --> CFG
+    REL --> GIT
+    REL --> UI
+    GIT --> CFG
+    GIT --> UI
+    HEALTH --> CFG
+    HEALTH --> STATE
+    HEALTH --> UI
+    DOCS --> CFG
+    DOCS --> STATE
+    DOCS --> UI
+    DOCS -.->|"api_index/publisher<br/>lazy-import cli"| CLI
+    SETUP --> UI
+    CFG -.->|"model.py imports<br/>sync.providers"| REL
+    STATE --> UI

@@ -120,7 +120,12 @@ jobs:
         run: uv sync --all-groups
 
       - name: Run tests
-        run: uv run pytest -q -m "not runtime"
+        run: uv run pytest -q -m "not runtime and not e2e"
+        env:
+          PYTHON: ${{ matrix.python-version }}
+
+      - name: Run e2e behavior-contract tests
+        run: uv run pytest -q -m e2e --no-cov
         env:
           PYTHON: ${{ matrix.python-version }}
 

@@ -571,6 +571,7 @@ addopts = [
 markers = [
     "runtime: end-to-end runtime/toolchain integration tests",
     "mcp: tests requiring the [mcp] optional extra (fastmcp, prefab_ui)",
+    "e2e: behavior-contract characterization tests (subprocess surfaces; run alone with --no-cov)",
 ]
 
 [tool.coverage.run]
