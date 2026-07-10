@@ -1,0 +1,51 @@
+graph LR
+    %% Programs → data stores. Solid = write, dotted = read.
+    classDef ds fill:#1e3a5f,stroke:#4a7ab5,color:#d4e4f4
+
+    CFGCORE["config/core.py"]
+    INIT["commands/init.py"]
+    STATE["state.py"]
+    DRIFT["commands/drift_cmd.py"]
+    DOCSMAP["commands/docs_map_lock.py"]
+    ARTIF["commands/artifacts_cmd.py"]
+    TREE["commands/tree.py"]
+    CHLOG["changelog.py"]
+    HOOKS["workflow/hooks.py"]
+    BUMP["commands/bump.py"]
+    VT["version/targets.py"]
+    MCPVT["mcp/tools/version_tools.py"]
+    WGIT["workflow/git.py"]
+    SYNC["sync/providers.py"]
+    EOL["eol/core.py"]
+
+    RRTCFG[("[tool.rrt] config<br/>pyproject / .rrt.toml /<br/>Cargo.toml / package.json")]:::ds
+    LOCKS[(".rrt/ locks<br/>docs · health · tree ·<br/>artifacts · drift · docs_map")]:::ds
+    CL[("CHANGELOG.md")]:::ds
+    TARGETS[("Version-target files<br/>+ pin targets")]:::ds
+    GITR[("Git repository<br/>(subprocess)")]:::ds
+    NPM[("registry.npmjs.org")]:::ds
+    CRATES[("crates.io")]:::ds
+    PYPI[("pypi.org")]:::ds
+    EOLAPI[("endoflife.date")]:::ds
+
+    CFGCORE -.-> RRTCFG
+    INIT --> RRTCFG
+    STATE --> LOCKS
+    DRIFT --> LOCKS
+    DOCSMAP --> LOCKS
+    ARTIF --> LOCKS
+    TREE --> LOCKS
+    CHLOG -.-> CL
+    HOOKS --> CL
+    BUMP --> CL
+    VT --> TARGETS
+    MCPVT --> TARGETS
+    WGIT --> GITR
+    HOOKS --> GITR
+    SYNC -.-> NPM
+    SYNC -.-> CRATES
+    SYNC -.-> PYPI
+    EOL -.-> EOLAPI
+
+    %% Two writers with different semantics for version targets (debt #2)
+    linkStyle 11 stroke:#cc4444,stroke-width:2px

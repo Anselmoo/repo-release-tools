@@ -1,0 +1,14 @@
+flowchart TD
+    %% Primary persona flow: "Maintainer releases a new version" (rrt bump)
+    %% No production telemetry available for this CLI tool — no timing annotations.
+
+    A["Maintainer runs<br/>`rrt bump minor`"] --> B["cli.py dispatches to<br/>commands/bump.py<br/>(cmd_bump, CCN 62)"]
+    B --> C["config/core.py loads + validates<br/>[tool.rrt] from pyproject"]
+    C --> D["version/semver.py · calver.py<br/>compute next version"]
+    D --> E["version/targets.py rewrites<br/>version strings in all targets + pins"]
+    E --> F["changelog.py promotes<br/>[Unreleased] → release section"]
+    F --> G["workflow/git.py creates<br/>release branch + commit"]
+    G --> H["preflight.py verifies<br/>tags/versions consistent"]
+    H --> I["✓ Release ready<br/>(PR → tag → publish)"]
+
+    E -. "same store, partial writer:<br/>mcp/tools/version_tools.py" .-> E

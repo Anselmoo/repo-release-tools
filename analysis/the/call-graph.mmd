@@ -1,0 +1,34 @@
+graph TD
+    %% Domain-level call graph — entry points highlighted
+    classDef entry fill:#cc785c,stroke:#8a4f3d,color:#fff
+    classDef shared fill:#2d2d2d,stroke:#888,color:#d4d4d4
+
+    CLI["rrt CLI<br/>(cli.py)"]:::entry
+    HOOKS["rrt-hooks<br/>(workflow/hooks.py)"]:::entry
+    ACTION["GitHub Action<br/>(action.yml)"]:::entry
+    MCP["rrt-mcp<br/>(mcp/server.py)"]:::entry
+
+    REL["Version & release"]
+    GIT["Git workflow"]
+    HEALTH["Repo health & drift"]
+    DOCS["Docs engine"]
+    SETUP["Setup & integrations"]
+    CFG["Config"]:::shared
+    STATE["State (.rrt locks)"]:::shared
+    UI["UI layer"]:::shared
+
+    ACTION -->|dispatch| HOOKS
+    CLI --> REL & GIT & HEALTH & DOCS & SETUP
+    HOOKS --> REL & GIT & HEALTH & DOCS
+    MCP --> REL & GIT & HEALTH & HOOKS
+    GIT -.->|"bidirectional:<br/>git_commit/git_inspect<br/>import hook validators"| HOOKS
+    DOCS -.->|"lazy import<br/>(cycle break)"| CLI
+
+    REL --> CFG & GIT
+    GIT --> CFG
+    HEALTH --> CFG & STATE
+    DOCS --> CFG & STATE
+    HOOKS --> CFG & STATE
+    MCP --> CFG & STATE
+    CFG -.->|"model.py →<br/>sync.providers"| REL
+    REL & GIT & HEALTH & DOCS & SETUP & CFG & STATE --> UI
