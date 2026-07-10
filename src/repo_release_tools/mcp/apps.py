@@ -158,6 +158,12 @@ def _overall_badge(severities: list[str]) -> tuple[str, str]:
     return "All Healthy", "success"
 
 
+# Mirrors the --target choices in commands/init.py's argparse spec (SEC-007:
+# rrt_init_run validates LLM-supplied `target` against this set before it
+# reaches subprocess argv, the same pattern git_tools.py uses for commit_type).
+INIT_TARGETS: tuple[str, ...] = ("rrt-toml", "pyproject", "cargo", "node", "go")
+
+
 class RrtInitForm(BaseModel):
     """Form model for rrt init configuration."""
 
@@ -587,6 +593,10 @@ def register_apps(mcp: FastMCP) -> None:
         import subprocess
         import sys
         from pathlib import Path
+
+        if target not in INIT_TARGETS:
+            allowed = ", ".join(INIT_TARGETS)
+            return f"[error]: Invalid target {target!r}. Choose one of: {allowed}"
 
         root: Path = ctx.lifespan_context.get("root", Path.cwd())
         cmd = [sys.executable, "-m", "repo_release_tools.cli", "init", f"--target={target}"]
