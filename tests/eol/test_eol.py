@@ -225,6 +225,25 @@ class TestFetchLiveData:
             result = fetch_live_data("python")
         assert result == []
 
+    def test_percent_encodes_language_slug_in_url(self) -> None:
+        """SEC-005: an adversarial language value cannot introduce extra URL path segments."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps([]).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        captured: dict[str, str] = {}
+
+        def fake_urlopen(url: str, timeout: int = 10) -> MagicMock:
+            captured["url"] = url
+            return mock_resp
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            fetch_live_data("../../evil")
+
+        assert "/../" not in captured["url"]
+        assert captured["url"] == ("https://endoflife.date/api/v1/products/..%2F..%2Fevil/")
+
 
 # ---------------------------------------------------------------------------
 # check_eol_status
