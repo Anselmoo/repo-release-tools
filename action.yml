@@ -131,9 +131,9 @@ runs:
 
         changelog_file="$INPUT_CHANGELOG_FILE"
         if [[ -f "$changelog_file" ]]; then
-          if grep -q '^\[Unreleased\]' "$changelog_file" 2>/dev/null; then
+          if grep -q '^## \[Unreleased\]' "$changelog_file" 2>/dev/null; then
             # Count non-empty lines under [Unreleased]
-            entries=$(awk '/^\[Unreleased\]/{p=1;next} /^\[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
+            entries=$(awk '/^## \[Unreleased\]/{p=1;next} /^## \[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
             if [[ "$entries" -gt 0 ]]; then
               changelog_status="dirty"
             else
