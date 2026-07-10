@@ -9,6 +9,7 @@ import pytest
 
 from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.version.targets import (
+    VersionWriteEvent,
     _detect_json_indent,
     check_autodetected_version_consistency,
     read_current_version,
@@ -87,9 +88,11 @@ def test_replace_python_version_dry_run_no_write(
     original = '__version__ = "1.0.0"\n'
     f.write_text(original, encoding="utf-8")
     target = VersionTarget(path=f, kind="python_version")
-    replace_version_in_file(target, "1.1.0", dry_run=True)
+    event = replace_version_in_file(target, "1.1.0", dry_run=True)
     assert f.read_text(encoding="utf-8") == original
-    assert "Would update" in capsys.readouterr().out
+    # The write primitive is headless: it returns an event and prints nothing.
+    assert capsys.readouterr().out == ""
+    assert event == VersionWriteEvent(path=f, new_version="1.1.0", dry_run=True)
 
 
 def test_replace_python_version_same_version_raises(tmp_path: Path) -> None:
@@ -221,9 +224,10 @@ def test_replace_go_version_dry_run_no_write(
     original = 'package version\n\nconst Version = "1.0.0"\n'
     f.write_text(original, encoding="utf-8")
     target = VersionTarget(path=f, kind="go_version")
-    replace_version_in_file(target, "2.0.0", dry_run=True)
+    event = replace_version_in_file(target, "2.0.0", dry_run=True)
     assert f.read_text(encoding="utf-8") == original
-    assert "Would update" in capsys.readouterr().out
+    assert capsys.readouterr().out == ""
+    assert event == VersionWriteEvent(path=f, new_version="2.0.0", dry_run=True)
 
 
 # ---------------------------------------------------------------------------
@@ -478,9 +482,10 @@ def test_replace_version_in_file_kind_pattern_dry_run(
     original = 'dependencies = ["ruff==0.15.18"]\n'
     f.write_text(original, encoding="utf-8")
     target = VersionTarget(path=f, kind="pattern", pattern=r'"ruff==(\d+\.\d+\.\d+)"')
-    replace_version_in_file(target, "1.0.0", dry_run=True)
+    event = replace_version_in_file(target, "1.0.0", dry_run=True)
     assert f.read_text(encoding="utf-8") == original  # file unchanged
-    assert "Would update" in capsys.readouterr().out
+    assert capsys.readouterr().out == ""
+    assert event == VersionWriteEvent(path=f, new_version="1.0.0", dry_run=True)
 
 
 def test_replace_all_versions_atomic_kind_pattern(tmp_path: Path) -> None:
@@ -725,11 +730,12 @@ def test_update_version_targets_atomic_dry_run(
     f.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
     target = VersionTarget(path=f, kind="python_version")
 
-    replace_all_versions_atomic([target], "2.0.0", dry_run=True)
+    events = replace_all_versions_atomic([target], "2.0.0", dry_run=True)
 
     # File must NOT be written in dry-run mode
     assert f.read_text() == '__version__ = "1.0.0"\n'
-    assert "2.0.0" in capsys.readouterr().out
+    assert capsys.readouterr().out == ""
+    assert events == [VersionWriteEvent(path=f, new_version="2.0.0", dry_run=True)]
 
 
 def test_update_version_targets_atomic_writes_file(tmp_path: Path) -> None:

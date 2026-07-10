@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
@@ -32,6 +33,21 @@ MAVEN_POM_PATTERN = re.compile(r"(<version>)([^<]+)(</version>)")
 GEMSPEC_VERSION_PATTERN = re.compile(r'(?m)^(\s*\w+\.version\s*=\s*)(["\'])([^"\']+)\2')
 # .NET .csproj: <Version>...</Version> tag.
 CSPROJ_VERSION_PATTERN = re.compile(r"(<Version>)([^<]+)(</Version>)")
+
+
+@dataclass(frozen=True, slots=True)
+class VersionWriteEvent:
+    """One version-target write, actual or dry-run-previewed.
+
+    Emitted by :func:`replace_version_in_file` and
+    :func:`replace_all_versions_atomic` instead of printing directly — the
+    core write primitives stay headless; callers render this event through
+    whichever printer matches their surface (CLI, hooks, MCP).
+    """
+
+    path: Path
+    new_version: str
+    dry_run: bool
 
 
 def _compute_updated_content(target: VersionTarget, text: str, new_version: str) -> str:
@@ -71,8 +87,13 @@ def replace_version_in_file(
     new_version: str,
     *,
     dry_run: bool,
-) -> None:
-    """Update a single configured version target."""
+) -> VersionWriteEvent:
+    """Update a single configured version target.
+
+    Returns a :class:`VersionWriteEvent` describing the write (or, in
+    dry-run mode, the write that would happen). This function performs no
+    rendering — callers are responsible for printing.
+    """
     path = target.path
     text = path.read_text(encoding="utf-8")
     current_version = read_version_string(target)
@@ -83,14 +104,10 @@ def replace_version_in_file(
     updated = _compute_updated_content(target, text, new_version)
 
     if dry_run:
-        p = DryRunPrinter(dry_run=True)
-        p.would_write(str(path), detail=f'version = "{new_version}"')
-        return
+        return VersionWriteEvent(path=path, new_version=new_version, dry_run=True)
 
     path.write_text(updated, encoding="utf-8")
-    msg = f'{path}  {GLYPHS.arrow.right}  version = "{new_version}"'
-    p = VerbosePrinter()
-    p.ok(msg)
+    return VersionWriteEvent(path=path, new_version=new_version, dry_run=False)
 
 
 def replace_all_versions_atomic(
@@ -98,17 +115,21 @@ def replace_all_versions_atomic(
     new_version: str,
     *,
     dry_run: bool,
-) -> None:
+) -> list[VersionWriteEvent]:
     """Update all version targets atomically: validate all substitutions first, then flush.
 
     If any target fails to produce a valid substitution, no files are written and
     the original content of any already-written files is restored.
+
+    Returns the list of :class:`VersionWriteEvent` describing every write (or,
+    in dry-run mode, every write that would happen), in target order. This
+    function performs no rendering — callers are responsible for printing.
     """
     if dry_run:
-        for target in targets:
-            p = DryRunPrinter(dry_run=True)
-            p.would_write(str(target.path), detail=f'version = "{new_version}"')
-        return
+        return [
+            VersionWriteEvent(path=target.path, new_version=new_version, dry_run=True)
+            for target in targets
+        ]
 
     # Phase 1: compute all updates in memory before touching disk.
     pending: list[tuple[Path, str, str]] = []  # (path, old_content, new_content)
@@ -135,9 +156,10 @@ def replace_all_versions_atomic(
                 pass
         raise
 
-    p = VerbosePrinter()
-    for path, _, _ in pending:
-        p.ok(f'{path}  {GLYPHS.arrow.right}  version = "{new_version}"')
+    return [
+        VersionWriteEvent(path=path, new_version=new_version, dry_run=False)
+        for path, _, _ in pending
+    ]
 
 
 def read_current_version(config: RrtConfig) -> Version:

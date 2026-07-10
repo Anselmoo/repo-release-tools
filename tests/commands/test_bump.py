@@ -24,6 +24,7 @@ from repo_release_tools.commands.bump import (
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.ui import GLYPHS, render_ok
 from repo_release_tools.version.semver import Version
+from repo_release_tools.version.targets import VersionWriteEvent
 
 # Compatibility shim — maps legacy output.X names to the canonical ui API.
 output = types.SimpleNamespace(
@@ -305,8 +306,12 @@ kind = "package_json"
         new_version: str,
         *,
         dry_run: bool,
-    ) -> None:
+    ) -> list[VersionWriteEvent]:
         version_calls.append((targets, new_version, dry_run))
+        return [
+            VersionWriteEvent(path=t.path, new_version=new_version, dry_run=dry_run)
+            for t in targets
+        ]
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
@@ -391,7 +396,7 @@ kind = "package_json"
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        lambda *a, **k: None,
+        lambda *a, **k: [],
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
 
@@ -475,7 +480,7 @@ kind = "package_json"
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        lambda *a, **k: None,
+        lambda *a, **k: [],
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
 
@@ -2088,7 +2093,7 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        lambda target, version, dry_run: None,
+        lambda target, version, dry_run: [],
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.update_changelog",
@@ -2415,7 +2420,7 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        lambda target, version, dry_run: None,
+        lambda target, version, dry_run: [],
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_pin_in_file",
@@ -2642,9 +2647,11 @@ def test_progress_bar_renders_25_50_75_100_on_same_line(
         new_version: str,
         *,
         dry_run: bool,
-    ) -> None:  # noqa: ARG001
-        for target in targets:
-            print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
+    ) -> list[VersionWriteEvent]:
+        return [
+            VersionWriteEvent(path=target.path, new_version=new_version, dry_run=dry_run)
+            for target in targets
+        ]
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.load_or_autodetect_config",

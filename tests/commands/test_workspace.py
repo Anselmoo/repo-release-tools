@@ -17,6 +17,7 @@ from repo_release_tools.commands.workspace import (
 from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import Version
+from repo_release_tools.version.targets import VersionWriteEvent
 
 
 def _make_pkg_config(pkg_path: Path, version: str = "1.0.0") -> RrtConfig:
@@ -226,8 +227,12 @@ def test_workspace_bump_uses_atomic_version_updates(
         new_version: str,
         *,
         dry_run: bool,
-    ) -> None:
+    ) -> list[VersionWriteEvent]:
         calls.append((targets, new_version, dry_run))
+        return [
+            VersionWriteEvent(path=t.path, new_version=new_version, dry_run=dry_run)
+            for t in targets
+        ]
 
     monkeypatch.setattr(
         "repo_release_tools.commands.workspace.load_or_autodetect_config",

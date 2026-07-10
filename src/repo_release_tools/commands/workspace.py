@@ -48,6 +48,7 @@ from repo_release_tools.changelog import (
     has_unreleased_section,
     promote_unreleased,
 )
+from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     RrtConfig,
     format_missing_tool_rrt_guidance,
@@ -195,7 +196,8 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
         current = read_group_current_version(group)
         pr.section(f"{pkg_path.name}: {current} {GLYPHS.arrow.right} {new}")
 
-        replace_all_versions_atomic(group.version_targets, str(new), dry_run=dry_run)
+        events = replace_all_versions_atomic(group.version_targets, str(new), dry_run=dry_run)
+        render_version_write_events(events)
 
         if not no_changelog:
             group_config = RrtConfig(
