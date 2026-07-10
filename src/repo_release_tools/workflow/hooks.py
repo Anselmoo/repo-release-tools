@@ -766,7 +766,7 @@ def run_update_unreleased(
     updated = append_to_unreleased(original, subject, fmt)
     if updated != original:
         changelog_path.write_text(updated, encoding="utf-8")
-        git.run(["git", "add", changelog_file], cwd, dry_run=False, label="stage changelog")
+        git.run(["git", "add", "--", changelog_file], cwd, dry_run=False, label="stage changelog")
         p = VerbosePrinter(verbose=verbose)
         p.line(f"[Unreleased] section updated in {changelog_file}.", ok=True, stream=sys.stderr)
     else:
@@ -934,7 +934,7 @@ def run_post_correct(
     if commit:
         try:
             git.run(
-                ["git", "add", changelog_file],
+                ["git", "add", "--", changelog_file],
                 cwd,
                 dry_run=False,
                 label="git add changelog",
