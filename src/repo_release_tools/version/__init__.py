@@ -3,6 +3,7 @@
 from .calver import CALVER_SCHEMES, CalVersion
 from .semver import Version
 from .targets import (
+    VersionWriteEvent,
     check_autodetected_version_consistency,
     read_current_version,
     read_group_current_version,
@@ -16,6 +17,7 @@ __all__ = [
     "CALVER_SCHEMES",
     "CalVersion",
     "Version",
+    "VersionWriteEvent",
     "check_autodetected_version_consistency",
     "read_current_version",
     "read_group_current_version",

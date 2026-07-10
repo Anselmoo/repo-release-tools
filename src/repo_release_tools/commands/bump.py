@@ -77,6 +77,7 @@ from repo_release_tools.changelog import (
     insert_generated_section,
     promote_unreleased,
 )
+from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     RrtConfig,
     VersionGroup,
@@ -131,7 +132,8 @@ def apply_version(
     file that was (or, in dry-run, would be) modified.  Callers use this list
     to stage the changes with ``git add``.
     """
-    replace_all_versions_atomic(group.version_targets, version, dry_run=dry_run)
+    events = replace_all_versions_atomic(group.version_targets, version, dry_run=dry_run)
+    render_version_write_events(events)
     changed: list[Path] = [target.path for target in group.version_targets]
 
     all_pins = group.pin_targets + config.global_pin_targets
