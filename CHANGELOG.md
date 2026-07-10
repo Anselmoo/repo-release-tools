@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Added
+- Add exclude glob patterns to publish-snapshot targets and CLI flag
+- Publish rrt-publish-snapshot pre-commit hook (manual stage)
+- Add dedicated publish-snapshot GitHub composite action
+
 ## [1.11.1] - 2026-07-09
 
 ### Fixed

@@ -902,6 +902,49 @@ def test_rrt_publish_snapshot_apply_success(
     assert any(cmd[:3] == ["git", "branch", "-D"] for cmd in run_calls)
 
 
+def test_rrt_publish_snapshot_excludes_matching_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(publish_tools.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        publish_tools.git, "unique_snapshot_branch_name", lambda root: "snapshot-tmp"
+    )
+    monkeypatch.setattr(
+        publish_tools.git, "capture", lambda cmd, root: "README.md\ndocs/superpowers/plans/x.md"
+    )
+    run_calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        run_calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr(publish_tools.git, "run", _fake_run)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx,
+            remote="mirror",
+            branch="main",
+            message="snap",
+            exclude=["docs/superpowers/*"],
+            dry_run=False,
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is True
+    assert result.excluded_paths == ("docs/superpowers/plans/x.md",)
+    assert ["git", "rm", "-r", "--ignore-unmatch", "--", "docs/superpowers/plans/x.md"] in run_calls
+
+
 def test_rrt_publish_snapshot_apply_push_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

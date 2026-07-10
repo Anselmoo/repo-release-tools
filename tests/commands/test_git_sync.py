@@ -738,6 +738,47 @@ def test_publish_snapshot_happy_path_pushes_and_cleans_up(
     ]
 
 
+def test_publish_snapshot_excludes_matching_paths_before_commit(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(git_sync.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(git_sync.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(git_sync.git, "unique_snapshot_branch_name", lambda root: "rrt-snap-tmp")
+    monkeypatch.setattr(
+        git_sync.git, "capture", lambda cmd, cwd: "README.md\ndocs/superpowers/plans/x.md"
+    )
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_sync.git, "run", lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or ""
+    )
+    args = argparse.Namespace(
+        target=None,
+        remote="mirror",
+        branch="main",
+        message="Initial commit",
+        exclude=["docs/superpowers/*"],
+        yes_i_know_this_overwrites_remote_history=True,
+        dry_run=False,
+    )
+    monkeypatch.chdir(tmp_path)
+    assert git_sync.cmd_publish_snapshot(args) == 0
+    assert commands == [
+        ["git", "checkout", "--orphan", "rrt-snap-tmp"],
+        ["git", "rm", "-r", "--ignore-unmatch", "--", "docs/superpowers/plans/x.md"],
+        ["git", "add", "-u"],
+        ["git", "commit", "-m", "Initial commit"],
+        ["git", "push", "--force", "--", "mirror", "rrt-snap-tmp:main"],
+        ["git", "checkout", "main"],
+        ["git", "branch", "-D", "rrt-snap-tmp"],
+    ]
+
+
 def test_publish_snapshot_push_command_has_option_terminator(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -894,6 +935,22 @@ def test_publish_snapshot_cleanup_failure_after_success_returns_ok(
     out = capsys.readouterr().out
     assert "Cleanup: failed to restore branch" in out
     assert "Cleanup: failed to delete temp branch" in out
+
+
+def test_resolve_excluded_paths_matches_fnmatch_globs_recursively() -> None:
+    tracked = [
+        "README.md",
+        "docs/superpowers/plans/x.md",
+        "docs/superpowers/specs/y.md",
+        "src/a.py",
+    ]
+    result = git_sync.resolve_excluded_paths(tracked, ("docs/superpowers/*",))
+    assert result == ["docs/superpowers/plans/x.md", "docs/superpowers/specs/y.md"]
+
+
+def test_resolve_excluded_paths_returns_empty_for_no_patterns() -> None:
+    tracked = ["README.md", "src/a.py"]
+    assert git_sync.resolve_excluded_paths(tracked, ()) == []
 
 
 def test_publish_snapshot_resolves_named_config_target(

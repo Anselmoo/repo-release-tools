@@ -233,6 +233,16 @@
   stages: [manual]
   minimum_pre_commit_version: "3.2.0"
 
+- id: rrt-publish-snapshot
+  name: repo-release-tools publish snapshot
+  description: Force-push a single-commit snapshot of tracked content to a secondary remote
+  entry: rrt-hooks publish-snapshot
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [manual]
+  minimum_pre_commit_version: "3.2.0"
+
 - id: rrt-config-validate
   name: repo-release-tools config validate
   description: Validate [tool.rrt] config — version targets, pin targets, and structure

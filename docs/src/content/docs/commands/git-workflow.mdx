@@ -700,6 +700,7 @@ Options
   --remote                                     Remote name or URL to force-push to.
   --branch                                     Remote branch to force-push to. Defaults to main.
   --message                                    Commit message for the snapshot commit.
+  --exclude PATTERN                            Glob (fnmatch, repo-relative) to exclude from the snapshot. Repeatable; extends the resolved target's [tool.rrt.publish_targets.<name>].exclude list.
   --yes-i-know-this-overwrites-remote-history  Required confirmation to actually force-push. Without it, behaves as --dry-run.
   --dry-run                                    Preview without changing git.
 
@@ -709,4 +710,5 @@ Examples
   $ rrt git publish-snapshot --remote mirror --dry-run
   $ rrt git publish-snapshot demo --yes-i-know-this-overwrites-remote-history
   $ rrt git publish-snapshot --remote mirror --branch main --message "Initial commit" --yes-i-know-this-overwrites-remote-history
+  $ rrt git publish-snapshot --remote mirror --exclude 'docs/internal/*' --dry-run
 ```

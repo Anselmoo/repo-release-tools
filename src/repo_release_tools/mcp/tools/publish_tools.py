@@ -8,6 +8,7 @@ from fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
 from repo_release_tools import __version__ as _PKG_VERSION
+from repo_release_tools.commands.git_sync import resolve_excluded_paths
 from repo_release_tools.mcp.models import PublishSnapshotResult
 from repo_release_tools.workflow import git
 
@@ -28,6 +29,7 @@ def register(mcp: FastMCP) -> None:
         remote: str,
         branch: str = "main",
         message: str = "Initial commit",
+        exclude: list[str] | None = None,
         dry_run: bool = True,
     ) -> PublishSnapshotResult:
         """Force-push a single-commit snapshot of tracked content to a secondary remote. dry_run=True by default; force-push additionally requires dry_run=False (no separate confirmation flag on this surface — treat dry_run=False as the explicit confirmation)."""
@@ -65,10 +67,20 @@ def register(mcp: FastMCP) -> None:
                 error=f"Cannot publish while a {operation} is in progress.",
             )
 
+        exclude_patterns = tuple(exclude or ())
+        excluded_paths: tuple[str, ...] = ()
+        if exclude_patterns:
+            tracked = git.capture(["git", "ls-files"], root).splitlines()
+            excluded_paths = tuple(resolve_excluded_paths(tracked, exclude_patterns))
+
         await ctx.info(f"Publish target: {remote}:{branch}")
         if dry_run:
             return PublishSnapshotResult(
-                remote=remote, branch=branch, published=False, dry_run=True
+                remote=remote,
+                branch=branch,
+                published=False,
+                dry_run=True,
+                excluded_paths=excluded_paths,
             )
 
         await ctx.warning(
@@ -83,6 +95,13 @@ def register(mcp: FastMCP) -> None:
                 dry_run=False,
                 label="git checkout --orphan",
             )
+            if excluded_paths:
+                git.run(
+                    ["git", "rm", "-r", "--ignore-unmatch", "--", *excluded_paths],
+                    root,
+                    dry_run=False,
+                    label="git rm",
+                )
             git.run(["git", "add", "-u"], root, dry_run=False, label="git add -u")
             git.run(["git", "commit", "-m", message], root, dry_run=False, label="git commit")
             git.run(
@@ -93,7 +112,12 @@ def register(mcp: FastMCP) -> None:
             )
         except RuntimeError as exc:
             return PublishSnapshotResult(
-                remote=remote, branch=branch, published=False, dry_run=False, error=str(exc)
+                remote=remote,
+                branch=branch,
+                published=False,
+                dry_run=False,
+                error=str(exc),
+                excluded_paths=excluded_paths,
             )
         finally:
             try:
@@ -109,4 +133,10 @@ def register(mcp: FastMCP) -> None:
             except RuntimeError as exc:
                 await ctx.warning(f"Cleanup: failed to delete temp branch {tmp_branch!r}: {exc}")
 
-        return PublishSnapshotResult(remote=remote, branch=branch, published=True, dry_run=False)
+        return PublishSnapshotResult(
+            remote=remote,
+            branch=branch,
+            published=True,
+            dry_run=False,
+            excluded_paths=excluded_paths,
+        )

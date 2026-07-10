@@ -214,6 +214,7 @@ class PublishSnapshotResult(BaseModel):
     published: bool
     dry_run: bool
     error: str | None = None
+    excluded_paths: tuple[str, ...] = ()
 
 
 class RawLockData(BaseModel):

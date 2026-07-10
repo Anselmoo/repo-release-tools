@@ -31,6 +31,7 @@ from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.commands.drift_cmd import cmd_check as cmd_drift_check
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.folder import cmd_folder_check
+from repo_release_tools.commands.git_sync import cmd_publish_snapshot
 from repo_release_tools.commands.release_cmd import cmd_release_check
 from repo_release_tools.commands.sync_cmd import cmd_sync
 from repo_release_tools.commands.tag import cmd_tag_check
@@ -1153,6 +1154,44 @@ def main(argv: list[str] | None = None) -> int:
         help="Preview without side effects (informational; sync is read-only).",
     )
 
+    publish_snapshot_parser = subparsers.add_parser(
+        "publish-snapshot",
+        help="Force-push a single-commit snapshot of tracked content to a secondary remote.",
+    )
+    publish_snapshot_parser.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="Named [tool.rrt.publish_targets.<name>] entry to resolve remote/branch/message from.",
+    )
+    publish_snapshot_parser.add_argument(
+        "--remote", default=None, help="Remote name or URL to force-push to."
+    )
+    publish_snapshot_parser.add_argument(
+        "--branch", default=None, help="Remote branch to force-push to. Defaults to main."
+    )
+    publish_snapshot_parser.add_argument(
+        "--message", default=None, help="Commit message for the snapshot commit."
+    )
+    publish_snapshot_parser.add_argument(
+        "--exclude",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Glob (fnmatch, repo-relative) to exclude from the snapshot. Repeatable; extends "
+        "the resolved target's [tool.rrt.publish_targets.<name>].exclude list.",
+    )
+    publish_snapshot_parser.add_argument(
+        "--yes-i-know-this-overwrites-remote-history",
+        action="store_true",
+        help="Required confirmation to actually force-push. Without it, behaves as --dry-run.",
+    )
+    publish_snapshot_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview without changing git.",
+    )
+
     subparsers.add_parser(
         "config-validate",
         help="Validate [tool.rrt] config (version/pin targets + structure).",
@@ -1309,6 +1348,9 @@ def main(argv: list[str] | None = None) -> int:
         case "sync":
             parsed.verbose = verbose
             return cmd_sync(parsed)
+        case "publish-snapshot":
+            parsed.verbose = verbose
+            return cmd_publish_snapshot(parsed)
         case "config-validate":
             return cmd_config(
                 argparse.Namespace(
