@@ -40,10 +40,10 @@ def register(mcp: FastMCP) -> None:
     )
     def rrt_drift(ctx: Context) -> dict[str, Any]:
         """Return source drift state from .rrt/drift.lock.toml (file hashes and symbols)."""
-        from repo_release_tools.state import read_lock, rrt_dir
+        from repo_release_tools.state import drift_lock_path, read_lock
 
         root: Path = ctx.lifespan_context.get("root", Path.cwd())
-        data = read_lock(rrt_dir(root) / "drift.lock.toml")
+        data = read_lock(drift_lock_path(root))
         if not data:
             return {"error": "No drift lock found. Run: rrt drift --snapshot"}
         return data

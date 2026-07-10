@@ -26,7 +26,13 @@ def conflict_status_lines(status_lines: list[str]) -> list[str]:
     return [line for line in status_lines if git.classify_status_line(line)[0] == "conflict"]
 
 
-def summarize_status(branch_name: str, status_lines: list[str], *, upstream: str | None) -> str:
+def summarize_status(
+    branch_name: str,
+    status_lines: list[str],
+    *,
+    upstream: str | None,
+    root: Path,
+) -> str:
     """Render a compact one-line branch status summary."""
     modified = 0
     untracked = 0
@@ -40,7 +46,7 @@ def summarize_status(branch_name: str, status_lines: list[str], *, upstream: str
     ahead = 0
     behind = 0
     if upstream is not None:
-        ahead, behind = git.ahead_behind(Path.cwd(), upstream)
+        ahead, behind = git.ahead_behind(root, upstream)
 
     return GLYPHS.git.status_line(
         branch_name,

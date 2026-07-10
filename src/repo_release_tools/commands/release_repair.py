@@ -54,6 +54,7 @@ from repo_release_tools.changelog import (
     get_unreleased_entries,
     insert_generated_section,
 )
+from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     PinTarget,
     RrtConfig,
@@ -226,7 +227,8 @@ def _recreate(
 
     targets_to_rewrite = _targets_needing_rewrite(group.version_targets, declared_version)
     if targets_to_rewrite:
-        replace_all_versions_atomic(targets_to_rewrite, declared_version, dry_run=False)
+        events = replace_all_versions_atomic(targets_to_rewrite, declared_version, dry_run=False)
+        render_version_write_events(events)
 
     all_pins = _unique_pins(group, config)
     _rewrite_matching_pins(all_pins, declared_version, config)
@@ -457,7 +459,10 @@ def _apply_drift_fixes(
     if needs_version_rewrite:
         targets_to_rewrite = _targets_needing_rewrite(group.version_targets, declared_version)
         if targets_to_rewrite:
-            replace_all_versions_atomic(targets_to_rewrite, declared_version, dry_run=False)
+            events = replace_all_versions_atomic(
+                targets_to_rewrite, declared_version, dry_run=False
+            )
+            render_version_write_events(events)
 
     if needs_pin_rewrite:
         _rewrite_matching_pins(_unique_pins(group, config), declared_version, config)

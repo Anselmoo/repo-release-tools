@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import io
 import os
 import sys
-import types
 from argparse import Namespace
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -22,14 +20,8 @@ from repo_release_tools.commands.bump import (
     update_changelog,
 )
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
-from repo_release_tools.ui import GLYPHS, render_ok
 from repo_release_tools.version.semver import Version
-
-# Compatibility shim — maps legacy output.X names to the canonical ui API.
-output = types.SimpleNamespace(
-    ok=render_ok,
-    GLYPHS=GLYPHS,
-)
+from repo_release_tools.version.targets import VersionWriteEvent
 
 
 def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
@@ -305,8 +297,12 @@ kind = "package_json"
         new_version: str,
         *,
         dry_run: bool,
-    ) -> None:
+    ) -> list[VersionWriteEvent]:
         version_calls.append((targets, new_version, dry_run))
+        return [
+            VersionWriteEvent(path=t.path, new_version=new_version, dry_run=dry_run)
+            for t in targets
+        ]
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
@@ -391,7 +387,7 @@ kind = "package_json"
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        lambda *a, **k: None,
+        lambda *a, **k: [],
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
 
@@ -475,7 +471,7 @@ kind = "package_json"
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        lambda *a, **k: None,
+        lambda *a, **k: [],
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
 
@@ -2088,7 +2084,7 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        lambda target, version, dry_run: None,
+        lambda target, version, dry_run: [],
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.update_changelog",
@@ -2415,7 +2411,7 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        lambda target, version, dry_run: None,
+        lambda target, version, dry_run: [],
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_pin_in_file",
@@ -2463,7 +2459,7 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
     assert add_calls[-1].count("docs/action.md") == 1
 
 
-def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
+def test_cmd_bump_uses_inline_lock_spinner(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -2507,22 +2503,8 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
         default_group_name="default",
     )
 
-    progress_updates: list[tuple[int, float]] = []
-    progress_clears: list[int] = []
     spinner_calls: list[tuple[str, str | None, object]] = []
     git_calls: list[tuple[list[str], bool]] = []
-    progress_instances: list[object] = []
-
-    class _FakeProgressLine:
-        def __init__(self, *, file: object = None) -> None:
-            self.file = file
-            progress_instances.append(self)
-
-        def update_bar(self, value: float, *, width: int = 20) -> None:
-            progress_updates.append((len(progress_instances) - 1, value))
-
-        def clear(self) -> None:
-            progress_clears.append(len(progress_instances) - 1)
 
     @contextmanager
     def fake_spinner_lines(
@@ -2563,7 +2545,6 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
         lambda root, branch: False,
     )
     monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
-    monkeypatch.setattr("repo_release_tools.commands.bump.ProgressLine", _FakeProgressLine)
     monkeypatch.setattr("repo_release_tools.commands.bump.spinner_lines", fake_spinner_lines)
     monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_git_run)
     monkeypatch.setattr(
@@ -2587,147 +2568,8 @@ def test_cmd_bump_uses_shared_progress_and_inline_lock_spinner(
     )
 
     assert result == 0
-    assert len(progress_instances) == 2
-    assert progress_updates == [(0, 0.5), (0, 1.0), (1, 0.5), (1, 1.0)]
-    assert (
-        progress_clears == [0, 0, 1, 1]
-    )  # clear() called before second item and again after the final update for each progress instance
     assert spinner_calls == [("Running lock command…", "$ uv lock -U", sys.stdout)]
     assert (["uv", "lock", "-U"], True) in git_calls
-
-
-class _TtyBuffer(io.StringIO):
-    """StringIO that reports itself as an interactive TTY."""
-
-    def isatty(self) -> bool:
-        return True
-
-
-def test_progress_bar_renders_25_50_75_100_on_same_line(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """25 / 50 / 75 / 100% bar renders each use \\r in-place — no bare \\n between renders.
-
-    The real ``ProgressLine`` is used (not mocked) so that the actual escape-code
-    sequence written to the TTY buffer is verified.  The "same line" property means:
-
-    * Every bar render starts with ``\\r`` (carriage-return overwrite).
-    * The character immediately following each bar render is ``\\r`` (start of
-      the next clear sequence) or end-of-section — never a bare ``\\n``.
-    * Exactly three ``\\r\\x1b[2K`` clear sequences appear (one before each of
-      the 2nd, 3rd, and 4th iteration).
-    """
-    tty = _TtyBuffer()
-
-    targets = [VersionTarget(path=tmp_path / f"file{i}.toml", kind="pep621") for i in range(4)]
-    group = VersionGroup(
-        name="default",
-        release_branch="release/v{version}",
-        changelog_file=tmp_path / "CHANGELOG.md",
-        lock_command=[],
-        generated_files=[],
-        version_targets=targets,
-        pin_targets=[],
-    )
-    config = RrtConfig(
-        root=tmp_path,
-        config_file=tmp_path / ".rrt.toml",
-        version_groups=[group],
-        default_group_name="default",
-    )
-
-    def fake_replace_version(
-        targets: list[VersionTarget],
-        new_version: str,
-        *,
-        dry_run: bool,
-    ) -> None:  # noqa: ARG001
-        for target in targets:
-            print(output.ok(f'{target.path.name}  \u2192  version = "{new_version}"'), file=tty)
-
-    monkeypatch.setattr(
-        "repo_release_tools.commands.bump.load_or_autodetect_config",
-        lambda root: config,
-    )
-    monkeypatch.setattr(
-        "repo_release_tools.commands.bump.read_group_current_version",
-        lambda grp: Version.parse("1.0.0"),
-    )
-    monkeypatch.setattr(
-        "repo_release_tools.commands.bump.replace_all_versions_atomic",
-        fake_replace_version,
-    )
-    monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.working_tree_clean",
-        lambda root: True,
-    )
-    monkeypatch.setattr(
-        "repo_release_tools.commands.bump.git.branch_exists",
-        lambda root, branch: False,
-    )
-    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
-    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", lambda *a, **kw: "")
-    monkeypatch.setattr(
-        "repo_release_tools.commands.bump.run_preflight",
-        lambda *args, **kwargs: None,
-    )
-    monkeypatch.chdir(tmp_path)
-    # Route all stdout to the TTY buffer so ProgressLine and print() in bump.py
-    # both write to the same captured stream.
-    monkeypatch.setattr(sys, "stdout", tty)
-    # Ensure ProgressLine is not disabled by legacy-terminal detection.
-    monkeypatch.setattr("repo_release_tools.ui.progress.IS_LEGACY_TERMINAL", False)
-
-    result = cmd_bump(
-        Namespace(
-            bump="patch",
-            dry_run=False,
-            force=False,
-            no_commit=True,
-            no_changelog=True,
-            no_update=True,
-            no_pin_sync=True,
-            include_maintenance=False,
-            base_branch=None,
-            group=None,
-        ),
-    )
-
-    assert result == 0
-    raw = tty.getvalue()
-
-    # -- 1. All four expected bar renders appear in order --------------------
-    expected_bars = [
-        f"\r  {output.GLYPHS.progress.render_bar(v)}" for v in [0.25, 0.50, 0.75, 1.00]
-    ]
-    for bar in expected_bars:
-        assert bar in raw, f"Expected bar render not found: {bar!r}"
-
-    positions = [raw.index(b) for b in expected_bars]
-    assert positions == sorted(positions), "Bar renders appeared out of order"
-
-    # -- 2. Each bar render uses \r (same-line overwrite, not a new line) ----
-    for bar in expected_bars:
-        assert bar.startswith("\r"), f"Bar does not start with \\r: {bar!r}"
-
-    # -- 3. Intermediate bars (25/50/75%) are NOT followed by \n ----------------------
-    # They must be overwritten by the next clear() before a new status line is printed.
-    # The final bar (100%) may be followed by \n from the next section header — that
-    # \n comes from print(f"\n{section(...)}"), not from the bar render itself.
-    for bar in expected_bars[:-1]:
-        idx = raw.index(bar)
-        char_after = raw[idx + len(bar) : idx + len(bar) + 1]
-        assert char_after != "\n", (
-            f"Bar render {bar!r} is followed by \\n — it printed on a NEW line"
-        )
-    # The 100% bar itself must not contain a \n (the \n that follows is the section separator).
-    assert "\n" not in expected_bars[-1], "100% bar render itself contains \\n"
-
-    # -- 4. Exactly three clear sequences (one before each of iterations 2/3/4)
-    assert raw.count("\r\x1b[2K") == 4, (
-        f"Expected 4 clear sequences, found {raw.count(chr(13) + chr(27) + '[2K')}"
-    )
 
 
 # ---------------------------------------------------------------------------
