@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import tomllib
+from collections.abc import Callable
+from dataclasses import dataclass
 from glob import has_magic
 from pathlib import Path
 from typing import cast
@@ -1033,6 +1035,73 @@ def _load_primary_remote(value: object) -> str:
     return value.strip()
 
 
+_MISSING = object()
+
+
+@dataclass(frozen=True)
+class FieldSpec:
+    """One key's type/presence/default rule, applied by ``_walk_fields``.
+
+    Construction of domain objects (path resolution, glob expansion,
+    cross-field checks) stays hand-written in the caller — this only
+    validates type/presence.
+    """
+
+    key: str
+    expected_type: type | tuple[type, ...]
+    default: object = _MISSING
+    error: str | Callable[[], str] = ""
+    validator: Callable[[object], object] | None = None
+    allow_none_default: bool = False
+
+
+def _walk_fields(raw: dict[str, object], specs: list[FieldSpec]) -> dict[str, object]:
+    """Validate ``raw`` against ``specs``; return checked values keyed by ``key``."""
+    result: dict[str, object] = {}
+    for spec in specs:
+        value = raw.get(spec.key, spec.default)
+        if spec.allow_none_default and value is None:
+            result[spec.key] = None
+            continue
+        if not isinstance(value, spec.expected_type):
+            raise ValueError(spec.error if isinstance(spec.error, str) else spec.error())
+        result[spec.key] = spec.validator(value) if spec.validator else value
+    return result
+
+
+def _str_field(key: str, message: str, *, default: object = _MISSING) -> FieldSpec:
+    """FieldSpec for a required non-empty string, reusing *message* for both checks."""
+
+    def _non_empty(value: object) -> object:
+        if not value:
+            raise ValueError(message)
+        return value
+
+    return FieldSpec(key, str, default=default, error=message, validator=_non_empty)
+
+
+def _str_list_field(key: str, message: str, *, default: object = _MISSING) -> FieldSpec:
+    """FieldSpec for a list of non-empty strings, reusing *message* for both checks."""
+
+    def _non_empty_items(value: object) -> object:
+        if not all(isinstance(part, str) and part for part in cast("list[object]", value)):
+            raise ValueError(message)
+        return value
+
+    return FieldSpec(key, list, default=default, error=message, validator=_non_empty_items)
+
+
+def _opt_str_field(key: str, message: str) -> FieldSpec:
+    """FieldSpec for an optional string that may be omitted (defaults to ``None``)."""
+    return FieldSpec(key, str, default=None, error=message, allow_none_default=True)
+
+
+_PIN_TARGET_FIELDS = [
+    _str_field("path", "Each pin_targets entry must have a non-empty 'path' string"),
+    _str_field("pattern", "Each pin_targets entry must have a non-empty 'pattern' string"),
+]
+
+
 def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
     """Parse a list of pin target tables into ``PinTarget`` objects."""
     if not isinstance(raw_pins, list):
@@ -1049,12 +1118,9 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
         if not isinstance(item, dict):
             raise ValueError("Each pin_targets entry must be a table")
         typed_item = cast("dict[str, object]", item)
-        raw_path = typed_item.get("path")
-        raw_pattern = typed_item.get("pattern")
-        if not isinstance(raw_path, str) or not raw_path:
-            raise ValueError("Each pin_targets entry must have a non-empty 'path' string")
-        if not isinstance(raw_pattern, str) or not raw_pattern:
-            raise ValueError("Each pin_targets entry must have a non-empty 'pattern' string")
+        fields = _walk_fields(typed_item, _PIN_TARGET_FIELDS)
+        raw_path = cast("str", fields["path"])
+        raw_pattern = cast("str", fields["pattern"])
 
         # Reject absolute paths early — pin targets must be repository-local
         # relative paths so downstream code can safely call ``relative_to(root)``.
@@ -1099,6 +1165,15 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
     return pins
 
 
+_GENERATED_ASSET_FIELDS = [
+    _str_field("path", "Each generated_assets entry must have a non-empty 'path' string"),
+    _str_list_field(
+        "command",
+        "Each generated_assets entry must have a non-empty 'command' list of strings",
+    ),
+]
+
+
 def _load_generated_assets(root: Path, raw_assets: object) -> list[GeneratedAsset]:
     """Parse a list of generated asset tables into ``GeneratedAsset`` objects."""
     if not isinstance(raw_assets, list):
@@ -1109,24 +1184,31 @@ def _load_generated_assets(root: Path, raw_assets: object) -> list[GeneratedAsse
         if not isinstance(item, dict):
             raise ValueError("Each generated_assets entry must be a table")
         typed_item = cast("dict[str, object]", item)
-        raw_path = typed_item.get("path")
-        raw_command = typed_item.get("command")
+        fields = _walk_fields(typed_item, _GENERATED_ASSET_FIELDS)
+        raw_path = cast("str", fields["path"])
+        raw_command = cast("list[str]", fields["command"])
 
-        if not isinstance(raw_path, str) or not raw_path:
-            raise ValueError("Each generated_assets entry must have a non-empty 'path' string")
-        if not isinstance(raw_command, list) or not all(
-            isinstance(part, str) and part for part in raw_command
-        ):
-            raise ValueError(
-                "Each generated_assets entry must have a non-empty 'command' list of strings",
-            )
-
-        asset = GeneratedAsset(path=Path(raw_path), command=cast("list[str]", raw_command))
+        asset = GeneratedAsset(path=Path(raw_path), command=raw_command)
         asset.validate()
         assets.append(
             GeneratedAsset(path=root / asset.path, command=asset.command),
         )
     return assets
+
+
+_ARTIFACT_TARGET_FIELDS = [
+    _str_field("path", "Each artifact_targets entry must have a non-empty 'path' string"),
+    _str_list_field(
+        "command",
+        "artifact_targets.command must be a list of non-empty strings",
+        default=[],
+    ),
+    _str_list_field(
+        "inputs",
+        "artifact_targets.inputs must be a list of non-empty strings",
+        default=[],
+    ),
+]
 
 
 def _load_artifact_targets(raw_targets: object) -> list[ArtifactTarget]:
@@ -1138,25 +1220,13 @@ def _load_artifact_targets(raw_targets: object) -> list[ArtifactTarget]:
         if not isinstance(item, dict):
             raise ValueError("Each artifact_targets entry must be a table")
         typed_item = cast("dict[str, object]", item)
-        raw_path = typed_item.get("path")
-        if not isinstance(raw_path, str) or not raw_path:
-            raise ValueError("Each artifact_targets entry must have a non-empty 'path' string")
+        fields = _walk_fields(typed_item, _ARTIFACT_TARGET_FIELDS)
         description = str(typed_item.get("description", ""))
-        raw_command = typed_item.get("command", [])
-        if not isinstance(raw_command, list) or not all(
-            isinstance(p, str) and p for p in raw_command
-        ):
-            raise ValueError("artifact_targets.command must be a list of non-empty strings")
-        raw_inputs = typed_item.get("inputs", [])
-        if not isinstance(raw_inputs, list) or not all(
-            isinstance(s, str) and s for s in raw_inputs
-        ):
-            raise ValueError("artifact_targets.inputs must be a list of non-empty strings")
         target = ArtifactTarget(
-            path=raw_path,
+            path=cast("str", fields["path"]),
             description=description,
-            command=cast("list[str]", raw_command),
-            inputs=cast("list[str]", raw_inputs),
+            command=cast("list[str]", fields["command"]),
+            inputs=cast("list[str]", fields["inputs"]),
         )
         target.validate()
         targets.append(target)
@@ -1172,19 +1242,42 @@ def _load_publish_targets(raw_targets: object) -> dict[str, PublishTarget]:
         if not isinstance(raw_entry, dict):
             raise ValueError(f"publish_targets.{name} must be a table")
         typed_entry = cast("dict[str, object]", raw_entry)
-        remote = typed_entry.get("remote", "")
-        if not isinstance(remote, str) or not remote:
-            raise ValueError(f"publish_targets.{name} must have a non-empty 'remote'")
-        branch = typed_entry.get("branch", "main")
-        if not isinstance(branch, str) or not branch:
-            raise ValueError(f"publish_targets.{name} must have a non-empty 'branch'")
-        message = typed_entry.get("message", "Initial commit")
-        if not isinstance(message, str) or not message:
-            raise ValueError(f"publish_targets.{name} must have a non-empty 'message'")
-        target = PublishTarget(remote=remote, branch=branch, message=message)
+        fields = _walk_fields(
+            typed_entry,
+            [
+                _str_field(
+                    "remote", f"publish_targets.{name} must have a non-empty 'remote'", default=""
+                ),
+                _str_field(
+                    "branch",
+                    f"publish_targets.{name} must have a non-empty 'branch'",
+                    default="main",
+                ),
+                _str_field(
+                    "message",
+                    f"publish_targets.{name} must have a non-empty 'message'",
+                    default="Initial commit",
+                ),
+            ],
+        )
+        target = PublishTarget(
+            remote=cast("str", fields["remote"]),
+            branch=cast("str", fields["branch"]),
+            message=cast("str", fields["message"]),
+        )
         target.validate()
         targets[name] = target
     return targets
+
+
+_VERSION_TARGET_FIELDS = [
+    _str_field("path", "Each version target must have a non-empty 'path' string"),
+    _opt_str_field("kind", "kind must be a string when provided"),
+    _opt_str_field("pattern", "pattern must be a string when provided"),
+    _opt_str_field("section", "section must be a string when provided"),
+    _opt_str_field("field", "field must be a string when provided"),
+    _opt_str_field("ci_format", "ci_format must be a string when provided"),
+]
 
 
 def _load_version_group(
@@ -1205,46 +1298,45 @@ def _load_version_group(
         if not isinstance(item, dict):
             raise ValueError("Each version target must be a table")
         typed_item = cast("dict[str, object]", item)
-        raw_path = typed_item.get("path")
-        if not isinstance(raw_path, str) or not raw_path:
-            raise ValueError("Each version target must have a non-empty 'path' string")
-        raw_kind = typed_item.get("kind")
-        raw_pattern = typed_item.get("pattern")
-        raw_section = typed_item.get("section")
-        raw_field = typed_item.get("field")
-        raw_ci_format = typed_item.get("ci_format")
-        if raw_kind is not None and not isinstance(raw_kind, str):
-            raise ValueError("kind must be a string when provided")
-        if raw_pattern is not None and not isinstance(raw_pattern, str):
-            raise ValueError("pattern must be a string when provided")
-        if raw_section is not None and not isinstance(raw_section, str):
-            raise ValueError("section must be a string when provided")
-        if raw_field is not None and not isinstance(raw_field, str):
-            raise ValueError("field must be a string when provided")
-        if raw_ci_format is not None and not isinstance(raw_ci_format, str):
-            raise ValueError("ci_format must be a string when provided")
+        fields = _walk_fields(typed_item, _VERSION_TARGET_FIELDS)
+        raw_path = cast("str", fields["path"])
         target = VersionTarget(
             path=root / raw_path,
-            kind=raw_kind,
-            pattern=raw_pattern,
-            section=raw_section,
-            field=raw_field,
-            ci_format=raw_ci_format,
+            kind=cast("str | None", fields["kind"]),
+            pattern=cast("str | None", fields["pattern"]),
+            section=cast("str | None", fields["section"]),
+            field=cast("str | None", fields["field"]),
+            ci_format=cast("str | None", fields["ci_format"]),
         )
         target.validate()
         targets.append(target)
 
-    release_branch = raw_group.get("release_branch", defaults["release_branch"])
-    if not isinstance(release_branch, str):
-        raise ValueError("release_branch must be a string")
-
-    changelog_value = raw_group.get("changelog_file", defaults["changelog_file"])
-    if not isinstance(changelog_value, str):
-        raise ValueError("changelog_file must be a string")
-
-    changelog_workflow = raw_group.get("changelog_workflow", defaults["changelog_workflow"])
-    if not isinstance(changelog_workflow, str):
-        raise ValueError("changelog_workflow must be a string")
+    simple_fields = _walk_fields(
+        raw_group,
+        [
+            FieldSpec(
+                "release_branch",
+                str,
+                default=defaults["release_branch"],
+                error="release_branch must be a string",
+            ),
+            FieldSpec(
+                "changelog_file",
+                str,
+                default=defaults["changelog_file"],
+                error="changelog_file must be a string",
+            ),
+            FieldSpec(
+                "changelog_workflow",
+                str,
+                default=defaults["changelog_workflow"],
+                error="changelog_workflow must be a string",
+            ),
+        ],
+    )
+    release_branch = cast("str", simple_fields["release_branch"])
+    changelog_value = cast("str", simple_fields["changelog_file"])
+    changelog_workflow = cast("str", simple_fields["changelog_workflow"])
     if changelog_workflow not in VALID_CHANGELOG_WORKFLOWS:
         allowed = ", ".join(sorted(VALID_CHANGELOG_WORKFLOWS))
         raise ValueError(f"changelog_workflow must be one of {allowed}, got {changelog_workflow!r}")
@@ -1288,20 +1380,27 @@ def _load_version_group(
     upstream_tbl = raw_group.get("upstream", {})
     if not isinstance(upstream_tbl, dict):
         raise ValueError("upstream must be a table when provided")
-    upstream_package = upstream_tbl.get("package")
-    if upstream_package is not None and not isinstance(upstream_package, str):
-        raise ValueError("upstream.package must be a string when provided")
-    upstream_provider = upstream_tbl.get("provider", "pypi")
-    if not isinstance(upstream_provider, str):
-        raise ValueError("upstream.provider must be a string")
+    upstream_fields = _walk_fields(
+        cast("dict[str, object]", upstream_tbl),
+        [
+            _opt_str_field("package", "upstream.package must be a string when provided"),
+            FieldSpec("provider", str, default="pypi", error="upstream.provider must be a string"),
+            FieldSpec(
+                "commit_message",
+                str,
+                default="Mirror: {version}",
+                error="upstream.commit_message must be a string",
+            ),
+        ],
+    )
+    upstream_package = cast("str | None", upstream_fields["package"])
+    upstream_provider = cast("str", upstream_fields["provider"])
     if upstream_provider not in VALID_UPSTREAM_PROVIDERS:
         allowed = ", ".join(sorted(VALID_UPSTREAM_PROVIDERS))
         raise ValueError(
             f"upstream.provider {upstream_provider!r} is not valid; must be one of {allowed}"
         )
-    upstream_commit_message = upstream_tbl.get("commit_message", "Mirror: {version}")
-    if not isinstance(upstream_commit_message, str):
-        raise ValueError("upstream.commit_message must be a string")
+    upstream_commit_message = cast("str", upstream_fields["commit_message"])
 
     return VersionGroup(
         name=group_name,
