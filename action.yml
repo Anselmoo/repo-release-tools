@@ -144,7 +144,8 @@ runs:
           fi
         fi
 
-        health_summary="{\"version\":\"${detected_version}\",\"changelog_status\":\"${changelog_status}\"}"
+        health_summary=$(jq -nc --arg version "$detected_version" --arg changelog_status "$changelog_status" \
+          '{version: $version, changelog_status: $changelog_status}')
 
         echo "detected_version=${detected_version}" >> "$GITHUB_OUTPUT"
         echo "changelog_status=${changelog_status}" >> "$GITHUB_OUTPUT"
