@@ -351,6 +351,97 @@ kind = "package_json"
     assert ["git", "commit", "-m", "chore: bump version to v0.2.0"] in calls
 
 
+def test_cmd_bump_retries_commit_once_after_hook_auto_fix(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A pre-commit hook that auto-regenerates files (e.g. rrt-cli-docs) always
+    fails its first pass even though the fix is correct. bump should re-stage
+    and retry the commit once instead of aborting the release.
+    """
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+    calls: list[list[str]] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
+        lambda *a, **k: None,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+
+    commit_attempts = 0
+
+    def fake_run(
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
+    ) -> str:
+        nonlocal commit_attempts
+        calls.append(cmd)
+        if cmd[:2] == ["git", "commit"]:
+            commit_attempts += 1
+            if commit_attempts == 1:
+                raise RuntimeError(
+                    "git commit failed (exit 1): rrt cli docs - files were modified by this hook"
+                )
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=False,
+            no_changelog=False,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+
+    assert result == 0
+    assert commit_attempts == 2
+    commit_calls = [c for c in calls if c[:2] == ["git", "commit"]]
+    assert commit_calls == [["git", "commit", "-m", "chore: bump version to v0.2.0"]] * 2
+    # A re-stage must happen between the failed attempt and the retry.
+    last_commit_index = (
+        len(calls) - 1 - calls[::-1].index(["git", "commit", "-m", "chore: bump version to v0.2.0"])
+    )
+    first_commit_index = calls.index(["git", "commit", "-m", "chore: bump version to v0.2.0"])
+    assert ["git", "add", "-u"] in calls[first_commit_index + 1 : last_commit_index + 1]
+
+
 def test_cmd_bump_no_verify_appends_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
