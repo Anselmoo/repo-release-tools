@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+- **action**: use env-var indirection for `verbose` and `changelog-file` Action inputs instead of interpolating them directly into shell script text (SEC-001)
+- **action**: correct the changelog-status grep so a populated `[Unreleased]` section is classified `dirty` instead of always falling through to `clean` (D8)
+
 ## [1.11.2] - 2026-07-10
 ### Added
 - Add exclude glob patterns to publish-snapshot targets and CLI flag
