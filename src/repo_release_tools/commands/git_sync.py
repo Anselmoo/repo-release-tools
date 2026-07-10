@@ -122,7 +122,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         Strategy=strategy,
         **{
             "Working tree": "dirty" if dirty else "clean",
-            "Status": summarize_status(branch_name, status_lines, upstream=upstream),
+            "Status": summarize_status(branch_name, status_lines, upstream=upstream, root=root),
         },
     )
     p.section("Syncing")
