@@ -128,11 +128,46 @@ def cmd_commit_all(args: argparse.Namespace) -> int:
     return run_commit(args, stage_all=True)
 
 
+@dataclass(frozen=True)
+class SquashLocalOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git squash-local``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_squash_local` so
+    every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` / ``args.x`` calls throughout the
+    function body.
+    """
+
+    base_ref: str | None
+    dry_run: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> SquashLocalOptions:
+        """Build a :class:`SquashLocalOptions` from a parsed ``argparse.Namespace``.
+
+        ``base_ref`` and ``dry_run`` are given real defaults by git_commit.py's
+        own register_commit() (squash-local's own parser), so a Namespace produced
+        by argparse always carries both. ``verbose`` is set globally by cli.py's
+        parser, but every test in tests/commands/test_git_commit.py that exercises
+        cmd_squash_local constructs a sparse argparse.Namespace by hand (e.g.
+        Namespace(base_ref=None, description=[...], type="feat", scope=None,
+        breaking=False, dry_run=False)) that never sets ``verbose``, so the
+        getattr fallback here absorbs that gap.
+        """
+        return cls(
+            base_ref=args.base_ref,
+            dry_run=args.dry_run,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_squash_local(args: argparse.Namespace) -> int:
     """Squash local commits since a base ref into one conventional commit."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = SquashLocalOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
-    if not args.dry_run and not git.working_tree_clean(root):
+    if not opts.dry_run and not git.working_tree_clean(root):
         p = VerbosePrinter(verbose=verbose)
         p.line(
             "Working tree has uncommitted changes. Commit or stash them first.",
@@ -141,7 +176,7 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
         )
         return 1
 
-    base_ref = args.base_ref or git.upstream_branch(root)
+    base_ref = opts.base_ref or git.upstream_branch(root)
     if base_ref is None:
         p = VerbosePrinter(verbose=verbose)
         p.line(
@@ -178,7 +213,7 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
         )
         return 1
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Squash local",
@@ -195,10 +230,10 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
     git.run(
         ["git", "reset", "--soft", squash_base],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git reset --soft",
     )
-    git.run(["git", "commit", "-m", subject], root, dry_run=args.dry_run, label="git commit")
+    git.run(["git", "commit", "-m", subject], root, dry_run=opts.dry_run, label="git commit")
 
     p.blank_line()
     p.footer(f"Done. Squashed {len(commits)} commit(s) into {subject!r}.")

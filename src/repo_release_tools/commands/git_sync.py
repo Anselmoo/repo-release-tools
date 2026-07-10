@@ -25,6 +25,7 @@ import argparse
 import datetime as dt
 import shutil
 import sys
+from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -67,9 +68,42 @@ def require_explicit_confirmation(args: argparse.Namespace) -> bool:
     return bool(args.yes_i_know_this_destroys_history)
 
 
+@dataclass(frozen=True)
+class SyncOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git sync``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_sync` so both
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    merge: bool
+    dry_run: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> SyncOptions:
+        """Build a :class:`SyncOptions` from a parsed ``argparse.Namespace``.
+
+        ``merge`` and ``dry_run`` are given real defaults by git_sync.py's own
+        register_sync(), so a Namespace produced by argparse always carries
+        both and they are read directly. ``verbose`` is set globally by
+        cli.py's parser, but every test in tests/commands/test_git_sync.py
+        that exercises cmd_sync calls it with
+        ``argparse.Namespace(merge=..., dry_run=...)`` that never sets
+        ``verbose``, so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            merge=args.merge,
+            dry_run=args.dry_run,
+        )
+
+
 def cmd_sync(args: argparse.Namespace) -> int:
     """Fetch, stash when needed, and pull the current branch."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = SyncOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
@@ -112,8 +146,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
         if len(conflicts) > STATUS_MAX:
             p.action(f"…and {len(conflicts) - STATUS_MAX} more", stream=sys.stderr)
         return 1
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
-    strategy = "merge" if args.merge else "rebase"
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
+    strategy = "merge" if opts.merge else "rebase"
     p.blank_line()
     p.header(
         "Sync",
@@ -127,23 +161,23 @@ def cmd_sync(args: argparse.Namespace) -> int:
     )
     p.section("Syncing")
     with spinner_lines("Fetching…"):
-        git.run(["git", "fetch", "--prune"], root, dry_run=args.dry_run, label="git fetch")
+        git.run(["git", "fetch", "--prune"], root, dry_run=opts.dry_run, label="git fetch")
     if dirty:
         git.run(
             ["git", "stash", "push", "-u", "-m", SYNC_STASH_MESSAGE],
             root,
-            dry_run=args.dry_run,
+            dry_run=opts.dry_run,
             label="git stash push",
         )
 
     pull_command = ["git", "pull"]
-    if not args.merge:
+    if not opts.merge:
         pull_command.append("--rebase")
 
     try:
-        git.run(pull_command, root, dry_run=args.dry_run, label="git pull")
+        git.run(pull_command, root, dry_run=opts.dry_run, label="git pull")
     except RuntimeError:
-        if dirty and not args.dry_run:
+        if dirty and not opts.dry_run:
             p.line(
                 "Pull failed. The auto-stash remains on the stash stack.",
                 ok=False,
@@ -152,25 +186,60 @@ def cmd_sync(args: argparse.Namespace) -> int:
         raise
 
     if dirty:
-        git.run(["git", "stash", "pop"], root, dry_run=args.dry_run, label="git stash pop")
+        git.run(["git", "stash", "pop"], root, dry_run=opts.dry_run, label="git stash pop")
 
     p.blank_line()
     p.footer(f"Done. {branch_name} is synced from {upstream} using {strategy}.")
     return 0
 
 
+@dataclass(frozen=True)
+class MoveOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git move``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_move` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    target: str
+    create: bool
+    dry_run: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> MoveOptions:
+        """Build a :class:`MoveOptions` from a parsed ``argparse.Namespace``.
+
+        ``target``, ``create``, and ``dry_run`` are given real values/defaults
+        by git_sync.py's own register_sync(), so a Namespace produced by
+        argparse always carries all three and they are read directly.
+        ``verbose`` is set globally by cli.py's parser, but every test in
+        tests/commands/test_git_sync.py that exercises cmd_move calls it with
+        ``argparse.Namespace(target=..., create=..., dry_run=...)`` that
+        never sets ``verbose``, so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            target=args.target,
+            create=args.create,
+            dry_run=args.dry_run,
+        )
+
+
 def cmd_move(args: argparse.Namespace) -> int:
     """Switch branches safely by stashing and restoring local changes."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = MoveOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     current = git.current_branch(root) or "<detached>"
     dirty = not git.working_tree_clean(root)
-    target_label = f"new branch {args.target}" if args.create else args.target
+    target_label = f"new branch {opts.target}" if opts.create else opts.target
     p.blank_line()
     p.header(
         "Move",
@@ -183,17 +252,17 @@ def cmd_move(args: argparse.Namespace) -> int:
         git.run(
             ["git", "stash", "push", "-u", "-m", MOVE_STASH_MESSAGE],
             root,
-            dry_run=args.dry_run,
+            dry_run=opts.dry_run,
             label="git stash push",
         )
 
     checkout = (
-        ["git", "checkout", "-b", args.target] if args.create else ["git", "checkout", args.target]
+        ["git", "checkout", "-b", opts.target] if opts.create else ["git", "checkout", opts.target]
     )
     try:
-        git.run(checkout, root, dry_run=args.dry_run, label="git checkout")
+        git.run(checkout, root, dry_run=opts.dry_run, label="git checkout")
     except RuntimeError:
-        if dirty and not args.dry_run:
+        if dirty and not opts.dry_run:
             p.line(
                 "Branch switch failed. The auto-stash remains on the stash stack.",
                 ok=False,
@@ -202,39 +271,138 @@ def cmd_move(args: argparse.Namespace) -> int:
         raise
 
     if dirty:
-        git.run(["git", "stash", "pop"], root, dry_run=args.dry_run, label="git stash pop")
+        git.run(["git", "stash", "pop"], root, dry_run=opts.dry_run, label="git stash pop")
 
     p.blank_line()
-    p.footer(f"Done. Switched to {args.target!r}.")
+    p.footer(f"Done. Switched to {opts.target!r}.")
     return 0
+
+
+@dataclass(frozen=True)
+class UndoSafeOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git undo-safe``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_undo_safe` so
+    all flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    target: str
+    keep_staged: bool
+    dry_run: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> UndoSafeOptions:
+        """Build an :class:`UndoSafeOptions` from a parsed ``argparse.Namespace``.
+
+        ``target``, ``keep_staged``, and ``dry_run`` are given real
+        values/defaults by git_sync.py's own register_sync(), so a Namespace
+        produced by argparse always carries all three and they are read
+        directly. ``verbose`` is set globally by cli.py's parser, but every
+        test in tests/commands/test_git_sync.py that exercises
+        cmd_undo_safe calls it with
+        ``argparse.Namespace(target=..., keep_staged=..., dry_run=...)`` that
+        never sets ``verbose``, so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            target=args.target,
+            keep_staged=args.keep_staged,
+            dry_run=args.dry_run,
+        )
 
 
 def cmd_undo_safe(args: argparse.Namespace) -> int:
     """Undo the last commit while keeping work in the index or working tree."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    mode = "--soft" if args.keep_staged else "--mixed"
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    opts = UndoSafeOptions.from_args(args)
+    verbose = opts.verbose
+    mode = "--soft" if opts.keep_staged else "--mixed"
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Undo safe",
-        Target=args.target,
-        Mode="keep staged" if args.keep_staged else "keep files",
+        Target=opts.target,
+        Mode="keep staged" if opts.keep_staged else "keep files",
     )
 
     git.run(
-        ["git", "reset", mode, args.target],
+        ["git", "reset", mode, opts.target],
         Path.cwd(),
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git reset",
     )
     p.blank_line()
-    p.footer(f"Done. Reset to {args.target!r} using {mode}.")
+    p.footer(f"Done. Reset to {opts.target!r} using {mode}.")
     return 0
+
+
+@dataclass(frozen=True)
+class RebootstrapOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git rebootstrap``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_rebootstrap` so
+    all flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    yes_i_know_this_destroys_history: bool
+    hard_init: bool
+    empty_first: bool
+    allow_remote: bool
+    branch: str | None
+    message: str | None
+    empty_message: str
+    dry_run: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> RebootstrapOptions:
+        """Build a :class:`RebootstrapOptions` from a parsed ``argparse.Namespace``.
+
+        Every flag other than ``yes_i_know_this_destroys_history`` and
+        ``verbose`` is given a real value/default by git_sync.py's own
+        register_sync(), so a Namespace produced by argparse always carries
+        it. But cmd_rebootstrap's original body only reads
+        ``yes_i_know_this_destroys_history`` before its first early return
+        (the missing-confirmation guard) and reads every other field only
+        after that guard passes. tests/commands/test_git_sync.py exploits
+        that short-circuit: test_cmd_rebootstrap_requires_confirmation and
+        test_cmd_rebootstrap_rejects_missing_git_dir construct
+        ``argparse.Namespace(yes_i_know_this_destroys_history=False)`` (the
+        second one has no attributes at all reachable before the git_dir
+        check), omitting hard_init/empty_first/allow_remote/branch/message/
+        empty_message/dry_run entirely. Since Options is built eagerly at
+        the top of cmd_rebootstrap -- before that guard runs -- every field
+        needs a getattr fallback to preserve the original lazy-access
+        behavior; the guard itself still runs first inside cmd_rebootstrap
+        and returns before any of these defaulted values would be used.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            yes_i_know_this_destroys_history=getattr(
+                args,
+                "yes_i_know_this_destroys_history",
+                False,
+            ),
+            hard_init=getattr(args, "hard_init", False),
+            empty_first=getattr(args, "empty_first", False),
+            allow_remote=getattr(args, "allow_remote", False),
+            branch=getattr(args, "branch", None),
+            message=getattr(args, "message", None),
+            empty_message=getattr(
+                args,
+                "empty_message",
+                DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+            ),
+            dry_run=getattr(args, "dry_run", False),
+        )
 
 
 def cmd_rebootstrap(args: argparse.Namespace) -> int:
     """Remove repository history and create a fresh initial history."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = RebootstrapOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     git_dir = git.git_dir(root) or (root / ".git")
     if not git_dir.exists():
@@ -250,13 +418,13 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
         )
         return 1
 
-    if args.hard_init and args.empty_first:
+    if opts.hard_init and opts.empty_first:
         p = VerbosePrinter(verbose=verbose)
         p.line("Use either --hard-init or --empty-first, not both.", ok=False, stream=sys.stderr)
         return 1
 
     remotes = git.remote_names(root)
-    if remotes and not args.allow_remote:
+    if remotes and not opts.allow_remote:
         p = VerbosePrinter(verbose=verbose)
         p.line(
             "Refusing to rebootstrap a repository with configured remotes. Use --allow-remote if that is intentional.",
@@ -265,44 +433,44 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
         )
         return 1
 
-    branch_name = args.branch or git.current_branch(root) or "main"
+    branch_name = opts.branch or git.current_branch(root) or "main"
     backup_path = backup_path_for_git_dir(root)
-    commit_message = args.message
+    commit_message = opts.message
     if commit_message is None:
         commit_message = (
-            DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE if args.hard_init else DEFAULT_REBOOTSTRAP_MESSAGE
+            DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE if opts.hard_init else DEFAULT_REBOOTSTRAP_MESSAGE
         )
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Rebootstrap history",
         Branch=branch_name,
-        Mode="empty hard-init" if args.hard_init else "snapshot current files",
+        Mode="empty hard-init" if opts.hard_init else "snapshot current files",
         Backup=str(backup_path),
         **{
-            "Remote guard": "ignored" if args.allow_remote else "enabled",
+            "Remote guard": "ignored" if opts.allow_remote else "enabled",
             "Commit": commit_message,
         },
     )
     p.section("Reinitializing")
-    if args.dry_run:
+    if opts.dry_run:
         p.would_run(f"mv {git_dir} {backup_path}")
         git.run(["git", "init", "-b", branch_name], root, dry_run=True, label="git init")
-        if args.hard_init:
+        if opts.hard_init:
             git.run(
                 ["git", "commit", "--allow-empty", "-m", commit_message],
                 root,
                 dry_run=True,
                 label="git commit --allow-empty",
             )
-        elif args.empty_first:
+        elif opts.empty_first:
             git.run(
-                ["git", "commit", "--allow-empty", "-m", args.empty_message],
+                ["git", "commit", "--allow-empty", "-m", opts.empty_message],
                 root,
                 dry_run=True,
                 label="git commit --allow-empty",
             )
-        if not args.hard_init:
+        if not opts.hard_init:
             git.run(["git", "add", "."], root, dry_run=True, label="git add")
             git.run(["git", "commit", "-m", commit_message], root, dry_run=True, label="git commit")
         p.footer("Done. Reinit preview complete.")
@@ -313,21 +481,21 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
 
     try:
         git.run(["git", "init", "-b", branch_name], root, dry_run=False, label="git init")
-        if args.hard_init:
+        if opts.hard_init:
             git.run(
                 ["git", "commit", "--allow-empty", "-m", commit_message],
                 root,
                 dry_run=False,
                 label="git commit --allow-empty",
             )
-        elif args.empty_first:
+        elif opts.empty_first:
             git.run(
-                ["git", "commit", "--allow-empty", "-m", args.empty_message],
+                ["git", "commit", "--allow-empty", "-m", opts.empty_message],
                 root,
                 dry_run=False,
                 label="git commit --allow-empty",
             )
-        if not args.hard_init:
+        if not opts.hard_init:
             git.run(["git", "add", "."], root, dry_run=False, label="git add")
             git.run(
                 ["git", "commit", "-m", commit_message],
@@ -346,7 +514,7 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
         return 1
 
     p.blank_line()
-    if args.hard_init:
+    if opts.hard_init:
         p.ok(f"Done. Repository history hard-initialized on {branch_name!r}.")
     else:
         p.ok(f"Done. Repository history reinitialized on {branch_name!r}.")
@@ -354,9 +522,37 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class PurgeCacheOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git purge-cache``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_purge_cache` so
+    the flag it reads has a typed read site instead of a bare
+    ``getattr(args, ..., default)`` call.
+    """
+
+    verbose: int
+    dry_run: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> PurgeCacheOptions:
+        """Build a :class:`PurgeCacheOptions` from a parsed ``argparse.Namespace``.
+
+        ``dry_run`` is given a real default by git_sync.py's own
+        register_sync(), so a Namespace produced by argparse always carries
+        it and is read directly. ``verbose`` is set globally by cli.py's
+        parser, but every test in tests/commands/test_git_sync.py that
+        exercises cmd_purge_cache calls it with
+        ``argparse.Namespace(dry_run=...)`` that never sets ``verbose``, so
+        the getattr fallback here absorbs that gap.
+        """
+        return cls(verbose=getattr(args, "verbose", 0) or 0, dry_run=args.dry_run)
+
+
 def cmd_purge_cache(args: argparse.Namespace) -> int:
     """Expire reflogs and run git garbage collection."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = PurgeCacheOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
@@ -364,7 +560,7 @@ def cmd_purge_cache(args: argparse.Namespace) -> int:
         return 1
 
     dirty = not git.working_tree_clean(root)
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Purge cache",
@@ -380,36 +576,92 @@ def cmd_purge_cache(args: argparse.Namespace) -> int:
     git.run(
         ["git", "reflog", "expire", "--expire=now", "--all"],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git reflog expire",
     )
-    git.run(["git", "gc", "--prune=now"], root, dry_run=args.dry_run, label="git gc")
+    git.run(["git", "gc", "--prune=now"], root, dry_run=opts.dry_run, label="git gc")
 
     p.blank_line()
     p.footer("Done. Git cache maintenance complete.")
     return 0
 
 
+@dataclass(frozen=True)
+class PublishSnapshotOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git publish-snapshot``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_publish_snapshot`
+    so all flags it reads have typed read sites instead of
+    ``getattr(args, ..., default)`` / ``args.x`` calls throughout the
+    function body.
+    """
+
+    verbose: int
+    target: str | None
+    remote: str | None
+    branch: str | None
+    message: str | None
+    exclude: tuple[str, ...]
+    yes_i_know_this_overwrites_remote_history: bool
+    dry_run: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> PublishSnapshotOptions:
+        """Build a :class:`PublishSnapshotOptions` from a parsed ``argparse.Namespace``.
+
+        Both `workflow/hooks.py`'s "publish-snapshot" case and git_sync.py's
+        own register_sync() define an identical publish-snapshot flag set
+        (target, --remote, --branch, --message, --exclude,
+        --yes-i-know-this-overwrites-remote-history, --dry-run), verified by
+        diffing the two parsers field-for-field, so ``target``, ``remote``,
+        ``branch``, ``message``, ``yes_i_know_this_overwrites_remote_history``,
+        and ``dry_run`` are read directly with no fallback needed for either
+        caller. ``exclude`` still needs a getattr fallback: real argparse
+        (both hooks.py's and git_sync.py's parsers) defaults it to ``None``
+        via ``action="append", default=None``, and several tests in
+        tests/commands/test_git_sync.py (e.g.
+        test_publish_snapshot_aborts_when_remote_equals_origin) construct a
+        sparse argparse.Namespace that omits ``exclude`` entirely. ``verbose``
+        is set globally by cli.py's parser (and explicitly by hooks.py before
+        calling cmd_publish_snapshot), but every test in
+        tests/commands/test_git_sync.py that exercises cmd_publish_snapshot
+        never sets it, so the getattr fallback here absorbs that gap too.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            target=args.target,
+            remote=args.remote,
+            branch=args.branch,
+            message=args.message,
+            exclude=tuple(getattr(args, "exclude", None) or ()),
+            yes_i_know_this_overwrites_remote_history=bool(
+                args.yes_i_know_this_overwrites_remote_history,
+            ),
+            dry_run=args.dry_run,
+        )
+
+
 def cmd_publish_snapshot(args: argparse.Namespace) -> int:
     """Force-push a single-commit snapshot of tracked content to a secondary remote."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = PublishSnapshotOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
 
-    remote = args.remote
-    branch = args.branch
-    message = args.message
-    exclude_patterns = tuple(getattr(args, "exclude", None) or ())
-    if getattr(args, "target", None):
+    remote = opts.remote
+    branch = opts.branch
+    message = opts.message
+    exclude_patterns = opts.exclude
+    if opts.target:
         config = load_or_autodetect_config(root)
-        target = config.publish_targets.get(args.target)
+        target = config.publish_targets.get(opts.target)
         if target is None:
             p = VerbosePrinter(verbose=verbose)
             p.line(
-                f"No publish target named {args.target!r} in [tool.rrt.publish_targets].",
+                f"No publish target named {opts.target!r} in [tool.rrt.publish_targets].",
                 ok=False,
                 stream=sys.stderr,
             )
@@ -443,8 +695,8 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
         )
         return 1
 
-    confirmed = bool(args.yes_i_know_this_overwrites_remote_history)
-    dry_run = args.dry_run or not confirmed
+    confirmed = opts.yes_i_know_this_overwrites_remote_history
+    dry_run = opts.dry_run or not confirmed
     original_branch = git.current_branch(root) or "main"
     tmp_branch = git.unique_snapshot_branch_name(root)
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._git_shared import (
@@ -73,9 +74,33 @@ def sync_problem(branch_name: str, *, base_ref: str | None, ahead: int, behind: 
     return f"Branch {branch_name!r} is behind {base_ref} by {behind} commit(s). Sync is needed."
 
 
+@dataclass(frozen=True)
+class StatusOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git status``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_status` so the
+    single flag it reads has a typed read site instead of a bare
+    ``getattr(args, ..., default)`` call.
+    """
+
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> StatusOptions:
+        """Build a :class:`StatusOptions` from a parsed ``argparse.Namespace``.
+
+        ``verbose`` is set globally by cli.py's parser, so a Namespace produced
+        by argparse always carries it. The getattr fallback exists only because
+        several tests in tests/commands/test_git_inspect.py call cmd_status with
+        a bare ``argparse.Namespace()`` that never sets ``verbose``.
+        """
+        return cls(verbose=getattr(args, "verbose", 0) or 0)
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """Show a compact repository status view."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = StatusOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
@@ -114,9 +139,36 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class LogOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git log``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_log` so both
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    limit: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> LogOptions:
+        """Build a :class:`LogOptions` from a parsed ``argparse.Namespace``.
+
+        ``limit`` is given a real default (10) by git_inspect.py's own
+        register_inspect(), so a Namespace produced by argparse always
+        carries it and is read directly. ``verbose`` is set globally by
+        cli.py's parser, but tests/commands/test_git_inspect.py calls
+        cmd_log with ``argparse.Namespace(limit=...)`` that never sets
+        ``verbose``, so the getattr fallback here absorbs that gap.
+        """
+        return cls(verbose=getattr(args, "verbose", 0) or 0, limit=args.limit)
+
+
 def cmd_log(args: argparse.Namespace) -> int:
     """Show a compact git log view using rrt glyphs."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = LogOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
@@ -124,14 +176,14 @@ def cmd_log(args: argparse.Namespace) -> int:
         return 1
 
     raw = git.capture(
-        ["git", "log", f"-n{args.limit}", "--pretty=format:%h%x09%s%x09%D"],
+        ["git", "log", f"-n{opts.limit}", "--pretty=format:%h%x09%s%x09%D"],
         root,
     )
     lines = [line for line in raw.splitlines() if line.strip()]
 
     p = VerbosePrinter(verbose=verbose)
     p.blank_line()
-    p.header("Git log", Count=str(len(lines)), Limit=str(args.limit))
+    p.header("Git log", Count=str(len(lines)), Limit=str(opts.limit))
 
     if not lines:
         p.warn("No commits found.")
@@ -146,9 +198,40 @@ def cmd_log(args: argparse.Namespace) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class DoctorOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git doctor``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_doctor` so both
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    changelog_file: str
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> DoctorOptions:
+        """Build a :class:`DoctorOptions` from a parsed ``argparse.Namespace``.
+
+        ``changelog_file`` is given a real default ("CHANGELOG.md") by
+        git_inspect.py's own register_inspect(), so a Namespace produced by
+        argparse always carries it and is read directly. ``verbose`` is set
+        globally by cli.py's parser, but every test in
+        tests/commands/test_git_inspect.py that exercises cmd_doctor calls it
+        with ``argparse.Namespace(changelog_file="CHANGELOG.md")`` that never
+        sets ``verbose``, so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            changelog_file=args.changelog_file,
+        )
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Run a compact repository health report for rrt workflows."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = DoctorOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
@@ -190,9 +273,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             root,
         )
         changed = [line for line in changed_files.splitlines() if line.strip()]
-        if not changelog_is_updated(changed, changelog_file=args.changelog_file, cwd=root):
+        if not changelog_is_updated(changed, changelog_file=opts.changelog_file, cwd=root):
             changelog_problem = (
-                f"Branch {branch_name!r} suggests changelog work, but {args.changelog_file} "
+                f"Branch {branch_name!r} suggests changelog work, but {opts.changelog_file} "
                 "is not part of HEAD."
             )
 
@@ -236,7 +319,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         ),
         (
             changelog_problem is None,
-            f"Changelog state is valid for {args.changelog_file}.",
+            f"Changelog state is valid for {opts.changelog_file}.",
             changelog_problem or "",
         ),
     ]
@@ -272,9 +355,34 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 1
 
 
+@dataclass(frozen=True)
+class CheckDirtyTreeOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git check-dirty-tree``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_check_dirty_tree`
+    so the single flag it reads has a typed read site instead of a bare
+    ``getattr(args, ..., default)`` call.
+    """
+
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> CheckDirtyTreeOptions:
+        """Build a :class:`CheckDirtyTreeOptions` from a parsed ``argparse.Namespace``.
+
+        ``verbose`` is set globally by cli.py's parser, so a Namespace produced
+        by argparse always carries it. The getattr fallback exists only because
+        several tests in tests/commands/test_git_inspect.py call
+        cmd_check_dirty_tree with a bare ``argparse.Namespace()`` that never
+        sets ``verbose``.
+        """
+        return cls(verbose=getattr(args, "verbose", 0) or 0)
+
+
 def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
     """Return non-zero when the working tree is dirty."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = CheckDirtyTreeOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
@@ -310,9 +418,37 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
     return 1
 
 
+@dataclass(frozen=True)
+class SyncStatusOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git sync-status``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_sync_status` so
+    both flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    base_ref: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> SyncStatusOptions:
+        """Build a :class:`SyncStatusOptions` from a parsed ``argparse.Namespace``.
+
+        ``base_ref`` is given a real default (None) by git_inspect.py's own
+        register_inspect(), so a Namespace produced by argparse always
+        carries it and is read directly. ``verbose`` is set globally by
+        cli.py's parser, but every test in tests/commands/test_git_inspect.py
+        that exercises cmd_sync_status calls it with
+        ``argparse.Namespace(base_ref=...)`` that never sets ``verbose``, so
+        the getattr fallback here absorbs that gap.
+        """
+        return cls(verbose=getattr(args, "verbose", 0) or 0, base_ref=args.base_ref)
+
+
 def cmd_sync_status(args: argparse.Namespace) -> int:
     """Analyze merge/rebase blockers and divergence against a sync base."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = SyncStatusOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
@@ -320,7 +456,7 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
         return 1
 
     branch_name = git.current_branch(root) or "<detached>"
-    base_ref = args.base_ref or git.upstream_branch(root)
+    base_ref = opts.base_ref or git.upstream_branch(root)
     if base_ref is not None and not git.ref_exists(root, base_ref):
         p = VerbosePrinter(verbose=verbose)
         p.line(f"Base ref {base_ref!r} does not exist.", ok=False, stream=sys.stderr)
@@ -422,9 +558,42 @@ def _parse_diff_hunk_header(raw: str) -> tuple[int, int] | None:
     return (int(match.group("old")), int(match.group("new")))
 
 
+@dataclass(frozen=True)
+class DiffOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git diff``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_diff` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    staged: bool
+    against: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> DiffOptions:
+        """Build a :class:`DiffOptions` from a parsed ``argparse.Namespace``.
+
+        ``staged`` and ``against`` are given real defaults by git_inspect.py's
+        own register_inspect(), so a Namespace produced by argparse always
+        carries both and they are read directly. ``verbose`` is set globally
+        by cli.py's parser, but every test in
+        tests/commands/test_git_inspect.py that exercises cmd_diff calls it
+        with ``argparse.Namespace(staged=..., against=...)`` that never sets
+        ``verbose``, so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            staged=args.staged,
+            against=args.against,
+        )
+
+
 def cmd_diff(args: argparse.Namespace) -> int:
     """Show a compact git diff using DiffGlyphs."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = DiffOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     if not git.is_git_repository(root):
         p = VerbosePrinter(verbose=verbose)
@@ -432,10 +601,10 @@ def cmd_diff(args: argparse.Namespace) -> int:
         return 1
 
     cmd = ["git", "diff", "--unified=3"]
-    if args.staged:
+    if opts.staged:
         cmd.append("--staged")
-    if args.against:
-        cmd.append(args.against)
+    if opts.against:
+        cmd.append(opts.against)
 
     try:
         raw = git.capture_checked(cmd, root)
