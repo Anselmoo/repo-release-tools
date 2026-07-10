@@ -326,7 +326,46 @@ def test_run_update_unreleased_and_changelog_checks(
         == 0
     )
     assert "add parser" in changelog.read_text(encoding="utf-8")
-    assert git_runs == [["git", "add", "CHANGELOG.md"]]
+    assert git_runs == [["git", "add", "--", "CHANGELOG.md"]]
+
+
+def test_run_update_unreleased_uses_dashdash_separator_for_dash_prefixed_filename(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """SEC-004: a config-controlled changelog filename starting with '-' must not be
+
+    interpreted as a git option; the ``--`` separator forces positional treatment.
+    """
+    changelog_name = "-uploads.md"
+    changelog = tmp_path / changelog_name
+    changelog.write_text("# Changelog\n\n## [Unreleased]\n\n", encoding="utf-8")
+
+    monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "is_changelog_meta_commit", lambda subject: False)
+    monkeypatch.setattr(hooks, "detect_changelog_format", lambda changelog_file: "markdown")
+    monkeypatch.setattr(
+        hooks,
+        "append_to_unreleased",
+        lambda content, subject, fmt: content + "### Added\n- add parser\n",
+    )
+    git_runs: list[list[str]] = []
+    monkeypatch.setattr(
+        hooks.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: git_runs.append(cmd),
+    )
+
+    assert (
+        hooks.run_update_unreleased(
+            tmp_path,
+            subject="feat: add parser",
+            changelog_file=changelog_name,
+        )
+        == 0
+    )
+    assert git_runs == [["git", "add", "--", changelog_name]]
 
 
 def test_run_changelog_check_covers_non_changelog_and_unreleased_failure(
@@ -1053,7 +1092,43 @@ def test_run_post_correct_commits_when_requested(
         == 0
     )
     assert git_runs == [
-        ["git", "add", "CHANGELOG.md"],
+        ["git", "add", "--", "CHANGELOG.md"],
+        ["git", "commit", "-m", "chore: post-correct changelog after squash merge [skip ci]"],
+    ]
+
+
+def test_run_post_correct_uses_dashdash_separator_for_dash_prefixed_filename(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """SEC-004: a config-controlled changelog filename starting with '-' must not be
+
+    interpreted as a git option when staged after squash post-correction.
+    """
+    changelog_name = "-uploads.md"
+    changelog = tmp_path / changelog_name
+    changelog.write_text("# Changelog\n\n- add x\n- add x\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        hooks,
+        "collect_squash_changelog_hunks",
+        lambda cwd, ref="HEAD", changelog_file=hooks.DEFAULT_CHANGELOG: (
+            ["- add x", "- add x"],
+            frozenset({3, 4}),
+        ),
+    )
+    git_runs: list[list[str]] = []
+    monkeypatch.setattr(
+        hooks.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: git_runs.append(cmd),
+    )
+
+    assert (
+        hooks.run_post_correct(tmp_path, ref="HEAD", changelog_file=changelog_name, commit=True)
+        == 0
+    )
+    assert git_runs == [
+        ["git", "add", "--", changelog_name],
         ["git", "commit", "-m", "chore: post-correct changelog after squash merge [skip ci]"],
     ]
 

@@ -150,7 +150,7 @@ def current_branch(cwd: Path) -> str:
 
 def branch_exists(cwd: Path, branch: str) -> bool:
     """Return whether a local branch exists."""
-    return bool(capture(["git", "branch", "--list", branch], cwd))
+    return bool(capture(["git", "branch", "--list", "--", branch], cwd))
 
 
 def working_tree_clean(cwd: Path) -> bool:
@@ -166,7 +166,16 @@ def working_tree_clean(cwd: Path) -> bool:
 
 
 def commits_ahead(cwd: Path, base_ref: str) -> list[str]:
-    """Return short log lines for commits on HEAD not in the base ref."""
+    """Return short log lines for commits on HEAD not in the base ref.
+
+    Raises ``ValueError`` if *base_ref* starts with ``-``: the range expression
+    ``<base_ref>..HEAD`` is a single positional argument to ``git log`` that
+    cannot be guarded with a ``--`` separator (git would then treat the range
+    as a pathspec instead of a revision range), so a leading dash is rejected
+    outright to prevent option-injection (CWE-88).
+    """
+    if base_ref.startswith("-"):
+        raise ValueError(f"base_ref must not start with '-': {base_ref!r}")
     out = capture(["git", "log", f"{base_ref}..HEAD", "--pretty=format:%h %s"], cwd)
     return [line for line in out.splitlines() if line]
 
@@ -221,7 +230,16 @@ def upstream_branch(cwd: Path) -> str | None:
 
 
 def ref_exists(cwd: Path, ref: str) -> bool:
-    """Return whether *ref* resolves to an object in this repository."""
+    """Return whether *ref* resolves to an object in this repository.
+
+    Returns ``False`` (rather than invoking git) if *ref* starts with ``-``:
+    ``git rev-parse --verify`` parses its positional argument as an option
+    when it looks like one even after a ``--`` separator, so a leading dash
+    is rejected outright to prevent option-injection (CWE-88) instead of
+    being passed through to the subprocess.
+    """
+    if ref.startswith("-"):
+        return False
     result = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", ref],
         cwd=cwd,
