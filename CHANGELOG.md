@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.11.2] - 2026-07-10
 ### Added
 - Add exclude glob patterns to publish-snapshot targets and CLI flag
 - Publish rrt-publish-snapshot pre-commit hook (manual stage)
