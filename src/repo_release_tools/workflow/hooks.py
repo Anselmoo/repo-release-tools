@@ -1488,6 +1488,7 @@ def main(argv: list[str] | None = None) -> int:
             parsed.regenerate = False
             return cmd_artifacts(parsed)
         case "update-unreleased":
+            cwd = Path.cwd()
             if parsed.message_file is not None:
                 # Explicit file path — used by lefthook which passes {1} (the commit-msg file).
                 msg_path = Path(parsed.message_file)
@@ -1507,13 +1508,13 @@ def main(argv: list[str] | None = None) -> int:
                 subject = parsed.subject
             else:
                 # Fall back to reading the commit message file that git sets during commit hooks.
-                commit_editmsg = Path.cwd() / ".git" / "COMMIT_EDITMSG"
+                commit_editmsg = cwd / ".git" / "COMMIT_EDITMSG"
                 if commit_editmsg.exists():
                     subject = read_commit_subject(commit_editmsg)
                 else:
                     subject = ""
             return run_update_unreleased(
-                Path.cwd(),
+                cwd,
                 subject=subject,
                 changelog_file=parsed.changelog_file,
                 verbose=verbose,
