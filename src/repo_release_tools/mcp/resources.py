@@ -26,14 +26,14 @@ def register_resources(mcp: FastMCP) -> None:
     from repo_release_tools.mcp.server import _find_repo_root
     from repo_release_tools.state import (
         artifacts_lock_path,
+        drift_lock_path,
         health_lock_path,
         read_lock,
-        rrt_dir,
         tree_lock_path,
     )
 
     _LOCK_RESOLVER = {
-        "drift": lambda root: rrt_dir(root) / "drift.lock.toml",
+        "drift": drift_lock_path,
         "health": health_lock_path,
         "tree": tree_lock_path,
         "artifacts": artifacts_lock_path,

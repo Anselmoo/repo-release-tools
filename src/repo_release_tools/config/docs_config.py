@@ -21,6 +21,8 @@ import warnings
 from pathlib import Path
 from typing import cast
 
+from repo_release_tools.state import DOCS_LOCK_DEFAULT, DOCS_MAP_LOCK_DEFAULT
+
 from .model import (
     VALID_BADGE_STYLES,
     VALID_BADGE_VARIANTS,
@@ -198,7 +200,7 @@ def _load_docs_languages(d: dict[str, object]) -> tuple[str, ...]:
 def _load_docs_lock_file(d: dict[str, object]) -> str:
     raw = d.get("lock_file")
     if raw is None:
-        return ".rrt/docs.lock.toml"
+        return DOCS_LOCK_DEFAULT
     if not isinstance(raw, str) or not raw:
         raise ValueError("tool.rrt.docs.lock_file must be a non-empty string")
     return raw
@@ -488,7 +490,7 @@ def _load_map_config(raw: object) -> MapConfig | None:
         purpose=_load_map_purpose(d),
         include=_load_map_string_tuple(d, "include"),
         exclude=_load_map_string_tuple(d, "exclude"),
-        lock_file=_load_map_string(d, "lock_file", default=".rrt/docs_map.lock.toml"),
+        lock_file=_load_map_string(d, "lock_file", default=DOCS_MAP_LOCK_DEFAULT),
     )
     cfg.validate()
     return cfg

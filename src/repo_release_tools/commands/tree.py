@@ -126,6 +126,8 @@ from repo_release_tools.state import (
     rrt_dir,
     tree_lock_is_current,
     tree_lock_path,
+    tree_manifest_gz_path,
+    tree_manifest_path,
     write_lock,
 )
 from repo_release_tools.tools.inject import (
@@ -705,8 +707,8 @@ def _write_tree_manifest(
 
     target_dir = rrt_dir(root)
     target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / "tree.manifest.json"
-    gz_target = target_dir / "tree.manifest.json.gz"
+    target = tree_manifest_path(root)
+    gz_target = tree_manifest_gz_path(root)
 
     if p.dry_run:
         dest = gz_target if compressed else target
@@ -945,9 +947,8 @@ def cmd_tree(args: argparse.Namespace) -> int:
         # avoids dumping a large JSON blob into logs while giving humans a
         # concise list of added/removed paths and file/dir counts.
         try:
-            manifest_dir = rrt_dir(root)
-            manifest_json = manifest_dir / "tree.manifest.json"
-            manifest_gz = manifest_dir / "tree.manifest.json.gz"
+            manifest_json = tree_manifest_path(root)
+            manifest_gz = tree_manifest_gz_path(root)
 
             manifest_text: str | None = None
             if manifest_json.exists():
