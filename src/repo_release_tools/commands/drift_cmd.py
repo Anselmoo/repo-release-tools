@@ -64,6 +64,7 @@ from pathlib import Path
 from typing import Any
 
 from repo_release_tools.state import (
+    DRIFT_LOCK_NAME,
     build_lock,
     docs_lock_path,
     hash_content,
@@ -73,7 +74,7 @@ from repo_release_tools.state import (
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 DRIFT_LOCK_EXAMPLES = "  $ rrt drift generate --dry-run\n  $ rrt drift check"
-DRIFT_LOCK_FILE = "drift.lock.toml"
+DRIFT_LOCK_FILE = DRIFT_LOCK_NAME
 DRIFT_SURFACE_PATTERNS = (
     ".claude/settings.json",
     ".claude/hooks/*.py",

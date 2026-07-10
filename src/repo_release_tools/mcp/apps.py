@@ -191,9 +191,9 @@ def register_apps(mcp: FastMCP) -> None:
 
         from repo_release_tools.state import (
             artifacts_lock_path,
+            drift_lock_path,
             health_lock_path,
             read_lock,
-            rrt_dir,
             tree_lock_path,
         )
 
@@ -255,7 +255,7 @@ def register_apps(mcp: FastMCP) -> None:
             ac["ok"] += 1
         lock_counts["artifacts"] = ac
 
-        drift = read_lock(rrt_dir(root) / "drift.lock.toml")
+        drift = read_lock(drift_lock_path(root))
         dc: dict[str, int] = {"ok": 0, "warning": 0, "error": 0}
         for source, entry in drift.get("sources", {}).items():
             rows.append(
@@ -634,9 +634,9 @@ def register_apps(mcp: FastMCP) -> None:
 
         from repo_release_tools.state import (
             artifacts_lock_path,
+            drift_lock_path,
             health_lock_path,
             read_lock,
-            rrt_dir,
             tree_lock_path,
         )
 
@@ -734,7 +734,7 @@ def register_apps(mcp: FastMCP) -> None:
             }
         )
 
-        drift = read_lock(rrt_dir(root) / "drift.lock.toml")
+        drift = read_lock(drift_lock_path(root))
         drift_sources = drift.get("sources", {})
         for source, entry in drift_sources.items():
             rows.append(
