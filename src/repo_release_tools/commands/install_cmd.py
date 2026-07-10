@@ -64,6 +64,7 @@ import argparse
 import sys
 from argparse import Namespace
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 
 from repo_release_tools.commands import agents_cmd, hooks_cmd, skill
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
@@ -125,19 +126,55 @@ def _show_available_targets() -> None:
     p.footer("pass --target DEST to install (see targets above)")
 
 
+@dataclass(frozen=True)
+class InstallOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt install``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_install` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    surfaces: list[str] | None
+    targets: list[str] | None
+    dry_run: bool
+    force: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> InstallOptions:
+        """Build an :class:`InstallOptions` from a parsed ``argparse.Namespace``.
+
+        ``surfaces``, ``targets``, ``dry_run``, and ``force`` are given real
+        defaults by install_cmd.py's own register(), and every test in
+        tests/commands/test_install_cmd.py that exercises cmd_install
+        constructs its Namespace with all four set explicitly, so they are
+        read directly. ``verbose`` is set globally by cli.py's parser, but no
+        test Namespace here ever sets it, so the getattr fallback here
+        absorbs that gap.
+        """
+        return cls(
+            surfaces=args.surfaces,
+            targets=args.targets,
+            dry_run=args.dry_run,
+            force=args.force,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     """Install one or more bundled surfaces into one or more targets."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    targets = _dedupe(args.targets or [])
+    opts = InstallOptions.from_args(args)
+    targets = _dedupe(opts.targets or [])
     if not targets:
-        if args.dry_run:
+        if opts.dry_run:
             _show_available_targets()
             return 0
         return _emit_install_error(
             "No --target specified. Pass --target DEST (e.g. --target claude-local).",
         )
 
-    surfaces = _resolve_surfaces(args.surfaces)
+    surfaces = _resolve_surfaces(opts.surfaces)
     registry = _surface_registry()
     for surface in surfaces:
         target_map, _ = registry[surface]
@@ -148,18 +185,18 @@ def cmd_install(args: argparse.Namespace) -> int:
                 f"{surface} does not support target(s): {joined}. Available: {available}.",
             )
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=opts.verbose)
     p.blank_line()
     p.header("Install", Surfaces=str(len(surfaces)), Targets=str(len(targets)))
 
     for surface in surfaces:
         _, handler = registry[surface]
         p.section(f"Surface: {surface}")
-        result = handler(Namespace(targets=targets, dry_run=args.dry_run, force=args.force))
+        result = handler(Namespace(targets=targets, dry_run=opts.dry_run, force=opts.force))
         if result != 0:
             return result
 
-    if args.dry_run:
+    if opts.dry_run:
         p.blank_line()
         p.footer("no files were modified")
     return 0

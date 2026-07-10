@@ -63,6 +63,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.changelog import (
@@ -116,6 +117,50 @@ def _format_gh_release(body: str, contributors: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+@dataclass(frozen=True)
+class ReleaseNotesOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt release notes``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_release_notes`
+    so all flags it reads have typed read sites instead of
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    notes_format: str
+    group: str | None
+    version: str | None
+    latest_released: bool
+    output: str | None
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ReleaseNotesOptions:
+        """Build a :class:`ReleaseNotesOptions` from a parsed ``argparse.Namespace``.
+
+        ``notes_format`` and ``group`` are given real defaults by
+        release_notes.py's own register_subcommand(), and every test that
+        exercises cmd_release_notes across both
+        tests/commands/test_release_notes.py (via the local ``_args()``
+        helper) and tests/commands/test_release_cmd.py (which constructs
+        ``argparse.Namespace(notes_format=..., group=...)`` directly) always
+        sets both, so they are read directly. ``version``, ``latest_released``,
+        and ``output`` are also given real defaults by register_subcommand()
+        (``None``, ``False``, ``None``), but every test in
+        tests/commands/test_release_cmd.py omits all three from its sparse
+        Namespace, so the getattr fallbacks here absorb that gap. ``verbose``
+        is set globally by cli.py's parser, but no test Namespace here ever
+        sets it, so the getattr fallback here absorbs that gap too.
+        """
+        return cls(
+            notes_format=args.notes_format,
+            group=args.group,
+            version=getattr(args, "version", None),
+            latest_released=getattr(args, "latest_released", False),
+            output=getattr(args, "output", None),
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_release_notes(args: argparse.Namespace) -> int:
     """Emit a changelog section as a formatted release body.
 
@@ -124,12 +169,13 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
     or ``--latest-released`` to auto-pick the topmost versioned section. Use
     ``--output PATH`` to write the body to a file instead of stdout.
     """
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = ReleaseNotesOptions.from_args(args)
+    verbose = opts.verbose
     root = find_repo_root(Path.cwd())
-    output_format = getattr(args, "notes_format", "md")
-    requested_version: str | None = getattr(args, "version", None)
-    latest_released: bool = getattr(args, "latest_released", False)
-    output_path: str | None = getattr(args, "output", None)
+    output_format = opts.notes_format
+    requested_version = opts.version
+    latest_released = opts.latest_released
+    output_path = opts.output
 
     if requested_version and latest_released:
         p = VerbosePrinter(verbose=verbose)
@@ -157,7 +203,7 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        group = config.resolve_group(getattr(args, "group", None))
+        group = config.resolve_group(opts.group)
     except ValueError as exc:
         p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)

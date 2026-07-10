@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.tools.inject import (
@@ -62,13 +63,53 @@ TOC_EPILOG = (
 )
 
 
+@dataclass(frozen=True)
+class TocOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt toc``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_toc` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    file: str
+    inject: str | None
+    anchor: str | None
+    min_level: int
+    max_level: int
+    dry_run: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> TocOptions:
+        """Build a :class:`TocOptions` from a parsed ``argparse.Namespace``.
+
+        ``file``, ``inject``, ``anchor``, ``min_level``, ``max_level``, and
+        ``dry_run`` are given real values/defaults by toc.py's own
+        register(), and every test in tests/commands/test_toc.py that
+        exercises cmd_toc goes through the local ``_make_args()`` helper
+        which always sets all six, so they are read directly. ``verbose`` is
+        set globally by cli.py's parser, but ``_make_args()`` never sets it,
+        so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            file=args.file,
+            inject=args.inject,
+            anchor=args.anchor,
+            min_level=args.min_level,
+            max_level=args.max_level,
+            dry_run=args.dry_run,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_toc(args: argparse.Namespace) -> int:
     """Generate a Markdown TOC from FILE, optionally injecting it into TARGET."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    p = DryRunPrinter(getattr(args, "dry_run", False), verbose=verbose)
+    opts = TocOptions.from_args(args)
+    p = DryRunPrinter(opts.dry_run, verbose=opts.verbose)
 
-    inject_file: str | None = getattr(args, "inject", None)
-    anchor_id: str | None = getattr(args, "anchor", None)
+    inject_file = opts.inject
+    anchor_id = opts.anchor
 
     if bool(inject_file) != bool(anchor_id):
         p.line(
@@ -78,14 +119,14 @@ def cmd_toc(args: argparse.Namespace) -> int:
         )
         return 1
 
-    source = Path(args.file)
+    source = Path(opts.file)
     if not source.exists():
         p.line(f"Source file does not exist: {source}", ok=False, stream=sys.stderr)
         return 1
 
     text = source.read_text(encoding="utf-8")
     headings = parse_headings(text)
-    toc = render_toc(headings, min_level=args.min_level, max_level=args.max_level)
+    toc = render_toc(headings, min_level=opts.min_level, max_level=opts.max_level)
 
     if not toc:
         p.line("No headings found in the requested level range.", ok=False, stream=sys.stderr)

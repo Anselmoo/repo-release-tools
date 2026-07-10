@@ -67,6 +67,7 @@ import argparse
 import json as _json
 import sys
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.config import (
@@ -89,11 +90,48 @@ INIT_EPILOG = (
 )
 
 
+@dataclass(frozen=True)
+class InitOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt init``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_init` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` calls throughout the function body.
+    """
+
+    dry_run: bool
+    force: bool
+    target: str
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> InitOptions:
+        """Build an :class:`InitOptions` from a parsed ``argparse.Namespace``.
+
+        ``dry_run`` and ``force`` are given real defaults by init.py's own
+        register(), and every test in tests/commands/test_init.py that
+        exercises cmd_init sets both explicitly, so they are read directly.
+        ``target`` is also given a real default ("rrt-toml") by register(),
+        but several tests (e.g. test_cmd_init_writes_rrt_toml,
+        test_cmd_init_dry_run_does_not_write_file) construct a Namespace
+        that omits ``target`` entirely, so the getattr fallback here
+        absorbs that gap. ``verbose`` is set globally by cli.py's parser,
+        but no test Namespace here ever sets it, so the getattr fallback
+        here absorbs that gap too.
+        """
+        return cls(
+            dry_run=args.dry_run,
+            force=args.force,
+            target=getattr(args, "target", "rrt-toml"),
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     """Write a recommended rrt configuration block."""
-    _: int = getattr(args, "verbose", 0) or 0
+    opts = InitOptions.from_args(args)
     root = Path.cwd()
-    target_fmt = getattr(args, "target", "rrt-toml")
+    target_fmt = opts.target
     match target_fmt:
         case "pyproject":
             return _init_manifest(args, root, manifest="pyproject.toml", section_label="[tool.rrt]")

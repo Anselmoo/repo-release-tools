@@ -49,6 +49,7 @@ import contextlib
 import json
 import sys
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from sysconfig import get_path
 from typing import Any, cast
@@ -509,13 +510,48 @@ def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
     p.footer("pass --target DEST to install (see targets above)")
 
 
+@dataclass(frozen=True)
+class InstallOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt hooks install``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_install` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    targets: list[str] | None
+    dry_run: bool
+    force: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> InstallOptions:
+        """Build an :class:`InstallOptions` from a parsed ``argparse.Namespace``.
+
+        ``targets``, ``dry_run``, and ``force`` are given real defaults by
+        hooks_cmd.py's own register(), and every test in
+        tests/commands/test_hooks_cmd.py that exercises cmd_install
+        constructs its Namespace with all three set explicitly, so they are
+        read directly. ``verbose`` is set globally by cli.py's parser, but
+        no test Namespace here ever sets it, so the getattr fallback here
+        absorbs that gap.
+        """
+        return cls(
+            targets=args.targets,
+            dry_run=args.dry_run,
+            force=args.force,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     """Install bundled hook scripts into one or more hook directories."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = InstallOptions.from_args(args)
+    verbose = opts.verbose
     cwd = Path.cwd()
     home = Path.home()
-    if not args.targets:
-        if args.dry_run:
+    if not opts.targets:
+        if opts.dry_run:
             _show_available_install_targets(cwd=cwd, home=home)
             return 0
         available = ", ".join(sorted(HOOK_TARGET_PATHS))
@@ -523,9 +559,9 @@ def cmd_install(args: argparse.Namespace) -> int:
             f"No --target specified. Pass --target DEST (e.g. --target claude-local). Available: {available}.",
         )
 
-    install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
+    install_plan = _resolve_install_plan(opts.targets, cwd=cwd, home=home)
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     total_files = sum(len(hook_files) for _, _, hook_files in install_plan)
     p.header(
@@ -538,7 +574,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     for target_name, hooks_dir, hook_files in install_plan:
         for filename, _ in hook_files:
             destination = hooks_dir / filename
-            if destination.exists() and not args.force:
+            if destination.exists() and not opts.force:
                 conflicts.append((target_name, filename, destination))
 
     if conflicts:
@@ -548,7 +584,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 f"{target_name} already has {filename} at {location}. Use --force to overwrite it.",
             )
 
-    if args.dry_run:
+    if opts.dry_run:
         for target_name, hooks_dir, hook_files in install_plan:
             for filename, _ in hook_files:
                 destination = hooks_dir / filename

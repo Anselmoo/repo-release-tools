@@ -174,21 +174,58 @@ def _count_status_changes(status_lines: list[str]) -> tuple[int, int]:
     return staged, unstaged
 
 
+@dataclass(frozen=True)
+class NewOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt branch new``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_new` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    type: str
+    description: list[str]
+    scope: str | None
+    dry_run: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> NewOptions:
+        """Build a :class:`NewOptions` from a parsed ``argparse.Namespace``.
+
+        ``type``, ``description``, ``scope``, and ``dry_run`` are all
+        positional/required or given real defaults by branch.py's own
+        add_common_branch_arguments(), and every test in
+        tests/commands/test_branch.py that exercises cmd_new sets all four
+        explicitly, so they are read directly. ``verbose`` is set globally by
+        cli.py's parser, but no test Namespace here ever sets it, so the
+        getattr fallback here absorbs that gap.
+        """
+        return cls(
+            type=args.type,
+            description=args.description,
+            scope=args.scope,
+            dry_run=args.dry_run,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_new(args: argparse.Namespace) -> int:
     """Create a new branch."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = NewOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
-    description = join_description(args.description)
-    branch = BranchName(type=args.type, description=description, scope=args.scope)
+    description = join_description(opts.description)
+    branch = BranchName(type=opts.type, description=description, scope=opts.scope)
     branch_name = branch.slug()
     commit_title = branch.commit_title()
 
-    base = "<current>" if args.dry_run else git.current_branch(root)
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    base = "<current>" if opts.dry_run else git.current_branch(root)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header("New branch", Base=base, Branch=branch_name, Title=commit_title)
 
-    if not args.dry_run and git.branch_exists(root, branch_name):
+    if not opts.dry_run and git.branch_exists(root, branch_name):
         p.line(
             f"Branch '{branch_name}' already exists. Delete it first or choose a different description.",
             ok=False,
@@ -204,14 +241,14 @@ def cmd_new(args: argparse.Namespace) -> int:
     git.run(
         ["git", "checkout", "-b", branch_name],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git checkout -b",
     )
 
     if dirty:
         action_text = (
             "Would move uncommitted changes to the new branch."
-            if args.dry_run
+            if opts.dry_run
             else "Uncommitted changes moved to the new branch."
         )
         p.action(action_text)
@@ -226,7 +263,7 @@ def cmd_new(args: argparse.Namespace) -> int:
             p.action(f"…and {len(status_lines) - STATUS_MAX} more")
     else:
         clean_message = (
-            "No uncommitted changes would be moved." if args.dry_run else "Working tree clean."
+            "No uncommitted changes would be moved." if opts.dry_run else "Working tree clean."
         )
         p.ok(clean_message)
 
@@ -249,14 +286,53 @@ def _parse_current_branch(branch: str) -> tuple[str, str]:
     return commit_type, slug
 
 
+@dataclass(frozen=True)
+class RenameOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt branch rename``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_rename` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    type: str | None
+    scope: str | None
+    no_scope: bool
+    description: list[str]
+    dry_run: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> RenameOptions:
+        """Build a :class:`RenameOptions` from a parsed ``argparse.Namespace``.
+
+        ``type``, ``scope``, ``no_scope``, ``description``, and ``dry_run``
+        are all given real defaults by branch.py's own register() for the
+        rename subparser, and every test in tests/commands/test_branch.py
+        that exercises cmd_rename sets all five explicitly, so they are read
+        directly. ``verbose`` is set globally by cli.py's parser, but no
+        test Namespace here ever sets it, so the getattr fallback here
+        absorbs that gap.
+        """
+        return cls(
+            type=args.type,
+            scope=args.scope,
+            no_scope=args.no_scope,
+            description=args.description,
+            dry_run=args.dry_run,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_rename(args: argparse.Namespace) -> int:
     """Rename the current branch, changing any combination of type / scope / description."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = RenameOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
-    no_scope: bool = getattr(args, "no_scope", False)
-    new_type_arg: str | None = getattr(args, "type", None)
-    scope: str | None = getattr(args, "scope", None)
-    description_words: list[str] = list(getattr(args, "description", None) or [])
+    no_scope = opts.no_scope
+    new_type_arg = opts.type
+    scope = opts.scope
+    description_words = list(opts.description or [])
 
     # Validate: at least one change must be requested
     if not new_type_arg and not scope and not no_scope and not description_words:
@@ -331,7 +407,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
         )
         return 1
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Rename branch",
@@ -342,7 +418,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
         },
     )
 
-    if not args.dry_run:
+    if not opts.dry_run:
         if git.branch_exists(root, new_name):
             p.line(
                 f"Branch '{new_name}' already exists. Delete it first or choose a different name.",
@@ -362,25 +438,64 @@ def cmd_rename(args: argparse.Namespace) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class RescueOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt branch rescue``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_rescue` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    type: str
+    description: list[str]
+    scope: str | None
+    dry_run: bool
+    since: str | None
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> RescueOptions:
+        """Build a :class:`RescueOptions` from a parsed ``argparse.Namespace``.
+
+        ``type``, ``description``, ``scope``, ``dry_run``, and ``since`` are
+        all positional/required or given real defaults by branch.py's own
+        register() for the rescue subparser, and every test in
+        tests/commands/test_branch.py that exercises cmd_rescue sets all
+        five explicitly, so they are read directly. ``verbose`` is set
+        globally by cli.py's parser, but no test Namespace here ever sets
+        it, so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            type=args.type,
+            description=args.description,
+            scope=args.scope,
+            dry_run=args.dry_run,
+            since=args.since,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_rescue(args: argparse.Namespace) -> int:
     """Rescue commits into a new branch."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = RescueOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
-    description = join_description(args.description)
-    branch = BranchName(type=args.type, description=description, scope=args.scope)
+    description = join_description(opts.description)
+    branch = BranchName(type=opts.type, description=description, scope=opts.scope)
     branch_name = branch.slug()
     commit_title = branch.commit_title()
 
-    origin_branch = "main" if args.dry_run else git.current_branch(root)
-    if args.since:
-        log_lines = [] if args.dry_run else git.commits_ahead(root, args.since)
-        reset_target = args.since
+    origin_branch = "main" if opts.dry_run else git.current_branch(root)
+    if opts.since:
+        log_lines = [] if opts.dry_run else git.commits_ahead(root, opts.since)
+        reset_target = opts.since
     else:
         remote_ref = f"origin/{origin_branch}"
-        log_lines = [] if args.dry_run else git.commits_ahead(root, remote_ref)
+        log_lines = [] if opts.dry_run else git.commits_ahead(root, remote_ref)
         reset_target = remote_ref
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Rescue commits",
@@ -389,8 +504,8 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         **{"Reset to": reset_target, "Title": commit_title},
     )
 
-    if not log_lines and not args.dry_run:
-        ref_label = args.since or f"origin/{origin_branch}"
+    if not log_lines and not opts.dry_run:
+        ref_label = opts.since or f"origin/{origin_branch}"
         p.line(
             f"No commits found ahead of '{ref_label}'. Nothing to rescue. Use --since <sha> to override.",
             ok=False,
@@ -403,10 +518,10 @@ def cmd_rescue(args: argparse.Namespace) -> int:
         for line in log_lines:
             p.list_item(line)
     else:
-        ahead = args.since or f"origin/{origin_branch}"
+        ahead = opts.since or f"origin/{origin_branch}"
         p.would_run(f"git log {ahead}..HEAD --oneline")
 
-    if not args.dry_run and git.branch_exists(root, branch_name):
+    if not opts.dry_run and git.branch_exists(root, branch_name):
         p.line(
             f"Branch '{branch_name}' already exists. Delete it first or choose a different description.",
             ok=False,
@@ -419,7 +534,7 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     git.run(
         ["git", "checkout", "-b", branch_name],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git checkout -b rescue",
     )
 
@@ -428,13 +543,13 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     git.run(
         ["git", "checkout", origin_branch],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git checkout origin",
     )
     git.run(
         ["git", "reset", "--hard", reset_target],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git reset --hard",
     )
 
@@ -443,11 +558,11 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     git.run(
         ["git", "checkout", branch_name],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git checkout rescue",
     )
 
-    rescued_count = "Selected" if args.dry_run else str(len(log_lines))
+    rescued_count = "Selected" if opts.dry_run else str(len(log_lines))
     p.blank_line()
     p.footer(
         f"Done. {rescued_count} commit(s) rescued into '{branch_name}'. "

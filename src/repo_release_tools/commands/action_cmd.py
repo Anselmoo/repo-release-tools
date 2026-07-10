@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import __version__
@@ -89,14 +90,47 @@ jobs:
 """
 
 
+@dataclass(frozen=True)
+class InitOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt action init``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_init` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    dry_run: bool
+    force: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> InitOptions:
+        """Build an :class:`InitOptions` from a parsed ``argparse.Namespace``.
+
+        ``dry_run`` and ``force`` are given real defaults by action_cmd.py's
+        own register(), so a Namespace produced by argparse always carries
+        both and they are read directly. ``verbose`` is set globally by
+        cli.py's parser, but every test in tests/commands/test_action_cmd.py
+        that exercises cmd_init calls it with
+        ``Namespace(dry_run=..., force=...)`` that never sets ``verbose``,
+        so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            dry_run=args.dry_run,
+            force=args.force,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     """Write a starter GitHub Actions workflow using repo-release-tools."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = InitOptions.from_args(args)
+    verbose = opts.verbose
     root = Path.cwd()
     workflow_path = root / WORKFLOW_PATH
     workflow_text = _workflow_text()
 
-    if workflow_path.exists() and not args.force and not args.dry_run:
+    if workflow_path.exists() and not opts.force and not opts.dry_run:
         p = VerbosePrinter(verbose=verbose)
         p.line(
             f"{WORKFLOW_PATH} already exists. Use --force to overwrite it.",
@@ -105,11 +139,11 @@ def cmd_init(args: argparse.Namespace) -> int:
         )
         return 1
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header("Action init", File=str(WORKFLOW_PATH))
 
-    if args.dry_run:
+    if opts.dry_run:
         p.would_write(str(WORKFLOW_PATH))
         p.section("Preview")
         p.line(highlight_terminal(workflow_text, "yaml"))

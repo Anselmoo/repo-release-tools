@@ -46,6 +46,7 @@ import argparse
 import contextlib
 import sys
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS, BundledAgent
@@ -127,6 +128,47 @@ def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
     p.footer("pass --target DEST to install (see targets above)")
 
 
+@dataclass(frozen=True)
+class InstallOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt agents install``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_install` so all
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    targets: list[str] | None
+    agents: list[str] | None
+    dry_run: bool
+    force: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> InstallOptions:
+        """Build an :class:`InstallOptions` from a parsed ``argparse.Namespace``.
+
+        ``targets``, ``dry_run``, and ``force`` are given real defaults by
+        agents_cmd.py's own register(), and every test in
+        tests/commands/test_agents_cmd.py that exercises cmd_install
+        constructs its Namespace with all three set explicitly, so they are
+        read directly. ``agents`` is also given a real default (None) by
+        register(), but many tests in tests/commands/test_agents_cmd.py
+        (e.g. test_cmd_install_writes_local_agents,
+        test_cmd_install_no_targets_dry_run_shows_available) build a
+        Namespace that omits ``agents`` entirely, so the getattr fallback
+        here absorbs that gap. ``verbose`` is set globally by cli.py's
+        parser, but no test Namespace here ever sets it, so the getattr
+        fallback here absorbs that gap too.
+        """
+        return cls(
+            targets=args.targets,
+            agents=getattr(args, "agents", None),
+            dry_run=args.dry_run,
+            force=args.force,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     """Install bundled user agents into one or more agent directories.
 
@@ -134,11 +176,12 @@ def cmd_install(args: argparse.Namespace) -> int:
     agent by name. When the requested agent declares a `family:` metadata key,
     the entire family is installed instead.
     """
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = InstallOptions.from_args(args)
+    verbose = opts.verbose
     cwd = Path.cwd()
     home = Path.home()
-    if not args.targets:
-        if args.dry_run:
+    if not opts.targets:
+        if opts.dry_run:
             _show_available_install_targets(cwd=cwd, home=home)
             return 0
         available = ", ".join(sorted(AGENT_TARGET_PATHS))
@@ -146,12 +189,12 @@ def cmd_install(args: argparse.Namespace) -> int:
             f"No --target specified. Pass --target DEST (e.g. --target claude-local). Available: {available}.",
         )
 
-    install_plan = _resolve_install_plan(args.targets, cwd=cwd, home=home)
+    install_plan = _resolve_install_plan(opts.targets, cwd=cwd, home=home)
 
     # Determine selected agents based on optional --agent flags.
     selected_agents = list(BUNDLED_AGENTS)
-    if getattr(args, "agents", None):
-        requested_names = args.agents
+    if opts.agents:
+        requested_names = opts.agents
         # Build an ordered, deduplicated selection preserving the canonical order.
         requested_set: set[str] = set()
         interim: list[BundledAgent] = []
@@ -172,7 +215,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 requested_set.add(a.name)
         selected_agents = ordered
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Agent install",
@@ -184,7 +227,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     for target_name, agents_dir in install_plan:
         for agent in selected_agents:
             destination = agents_dir / f"{agent.name}.agent.md"
-            if destination.exists() and not args.force:
+            if destination.exists() and not opts.force:
                 conflicts.append((target_name, agent.name, destination))
 
     if conflicts:
@@ -194,7 +237,7 @@ def cmd_install(args: argparse.Namespace) -> int:
                 f"{target_name} already has {agent_name} at {location}. Use --force to overwrite it.",
             )
 
-    if args.dry_run:
+    if opts.dry_run:
         for target_name, agents_dir in install_plan:
             for agent in selected_agents:
                 destination = agents_dir / f"{agent.name}.agent.md"

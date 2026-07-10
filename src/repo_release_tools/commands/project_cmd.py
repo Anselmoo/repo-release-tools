@@ -20,6 +20,7 @@ import argparse
 import json
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.config.project_meta import (
@@ -31,13 +32,50 @@ from repo_release_tools.ui import VerbosePrinter
 _VALID_KEYS = ("name", "version", "description", "authors", "license", "urls", "source")
 
 
+@dataclass(frozen=True)
+class InfoOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt project info``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_project_info` so
+    all flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` calls throughout the function body.
+    """
+
+    root: Path
+    project_format: str
+    key: str | None
+    output: str | None
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> InfoOptions:
+        """Build an :class:`InfoOptions` from a parsed ``argparse.Namespace``.
+
+        ``root``, ``project_format``, ``key``, and ``output`` are given real
+        defaults by project_cmd.py's own register(), and every test in
+        tests/commands/test_project_cmd.py that exercises cmd_project_info
+        goes through the local ``_args()`` helper which always sets all four,
+        so they are read directly. ``verbose`` is set globally by cli.py's
+        parser, but ``_args()`` never sets it, so the getattr fallback here
+        absorbs that gap.
+        """
+        return cls(
+            root=Path(args.root).resolve(),
+            project_format=args.project_format,
+            key=args.key,
+            output=args.output,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_project_info(args: argparse.Namespace) -> int:
     """Emit project metadata read from the manifest."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    root = Path(getattr(args, "root", ".")).resolve()
-    fmt: str = getattr(args, "project_format", "text")
-    key: str | None = getattr(args, "key", None)
-    output_path: str | None = getattr(args, "output", None)
+    opts = InfoOptions.from_args(args)
+    verbose = opts.verbose
+    root = opts.root
+    fmt = opts.project_format
+    key = opts.key
+    output_path = opts.output
 
     if not root.is_dir():
         VerbosePrinter(verbose=verbose).line(

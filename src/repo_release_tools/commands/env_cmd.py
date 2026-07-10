@@ -48,15 +48,43 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
 
 from repo_release_tools.ui import VerbosePrinter
 
 ENV_EPILOG = "  $ rrt env\n  $ rrt env --json"
 
 
+@dataclass(frozen=True)
+class EnvOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt env``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_env` so both
+    flags it reads have typed read sites instead of ``getattr(args, ...,
+    default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    json: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> EnvOptions:
+        """Build an :class:`EnvOptions` from a parsed ``argparse.Namespace``.
+
+        ``json`` is given a real default by env_cmd.py's own register(), so a
+        Namespace produced by argparse always carries it and is read
+        directly. ``verbose`` is set globally by cli.py's parser, but every
+        test in tests/commands/test_env_cmd.py that exercises cmd_env calls
+        it with ``argparse.Namespace(json=...)`` that never sets ``verbose``,
+        so the getattr fallback here absorbs that gap.
+        """
+        return cls(json=args.json, verbose=getattr(args, "verbose", 0) or 0)
+
+
 def cmd_env(args: argparse.Namespace) -> int:
     """Render environment details for the current process."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = EnvOptions.from_args(args)
+    verbose = opts.verbose
     values = [
         ("Platform", sys.platform),
         ("Python", sys.version.split()[0]),
@@ -67,7 +95,7 @@ def cmd_env(args: argparse.Namespace) -> int:
         ("RRT_COLOR", os.environ.get("RRT_COLOR", "<unset>")),
     ]
 
-    if args.json:
+    if opts.json:
         sys.stdout.write(json.dumps(dict(values), indent=2) + "\n")
         return 0
 
@@ -93,13 +121,38 @@ def _find_duplicates(path_value: str) -> list[str]:
     return dups
 
 
+@dataclass(frozen=True)
+class EnvCheckOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt env check``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_env_check` so
+    the single flag it reads has a typed read site instead of a bare
+    ``getattr(args, ..., default)`` call.
+    """
+
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> EnvCheckOptions:
+        """Build an :class:`EnvCheckOptions` from a parsed ``argparse.Namespace``.
+
+        ``verbose`` is set globally by cli.py's parser, so a Namespace
+        produced by argparse always carries it. The getattr fallback exists
+        only because every test in tests/commands/test_env_cmd.py that
+        exercises cmd_env_check calls it with
+        ``argparse.Namespace(json=False)`` that never sets ``verbose``.
+        """
+        return cls(verbose=getattr(args, "verbose", 0) or 0)
+
+
 def cmd_env_check(args: argparse.Namespace) -> int:
     """Run a small set of environment sanity checks.
 
     Currently checks for duplicate entries in PATH and PYTHONPATH. Returns
     exit code 0 when no issues are found and 1 when any duplicate is detected.
     """
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = EnvCheckOptions.from_args(args)
+    verbose = opts.verbose
 
     p = VerbosePrinter(verbose=verbose)
 
