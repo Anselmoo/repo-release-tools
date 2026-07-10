@@ -523,7 +523,14 @@ def cmd_bump(args: argparse.Namespace) -> int:
         commit_cmd = ["git", "commit", "-m", commit_msg]
         if getattr(args, "no_verify", False):
             commit_cmd.append("--no-verify")
-        git.run(commit_cmd, root, dry_run=args.dry_run, label="git commit")
+        try:
+            git.run(commit_cmd, root, dry_run=args.dry_run, label="git commit")
+        except RuntimeError:
+            # A pre-commit hook (e.g. rrt-cli-docs) may have auto-regenerated
+            # files during this pass — pre-commit always fails that pass even
+            # though the fix is now correct. Re-stage and retry once.
+            git.run(["git", "add", "-u"], root, dry_run=args.dry_run, label="git add -u")
+            git.run(commit_cmd, root, dry_run=args.dry_run, label="git commit")
         done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
         p.footer(done_msg)
     else:
