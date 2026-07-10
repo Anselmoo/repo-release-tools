@@ -108,6 +108,36 @@ def test_fetch_versions_npm_non_dict_response(monkeypatch: pytest.MonkeyPatch) -
     assert providers.fetch_versions("lodash", "npm") == []
 
 
+def test_fetch_versions_npm_scoped_package_encodes_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SEC-005: a scoped package's '/' separator is percent-encoded as %2F."""
+    payload = {"versions": {"1.0.0": {}}}
+    monkeypatch.setattr(
+        providers.urllib.request,
+        "urlopen",
+        _make_urlopen(payload, assert_url="registry.npmjs.org/@types%2Fnode"),
+    )
+    out = providers.fetch_versions("@types/node", "npm")
+    assert set(out) == {"1.0.0"}
+
+
+def test_fetch_versions_npm_rejects_extra_path_segments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SEC-005: an adversarial package name cannot introduce extra URL path segments."""
+    captured: dict[str, str] = {}
+
+    def fake_urlopen(req: urllib.request.Request, timeout: int = 10) -> _Resp:
+        captured["url"] = req.full_url
+        return _Resp(json.dumps({"versions": {}}).encode())
+
+    monkeypatch.setattr(providers.urllib.request, "urlopen", fake_urlopen)
+    providers.fetch_versions("../../evil", "npm")
+    assert "/../" not in captured["url"]
+    assert captured["url"] == "https://registry.npmjs.org/..%2F..%2Fevil"
+
+
 # ---------------------------------------------------------------------------
 # nuget
 # ---------------------------------------------------------------------------
@@ -166,6 +196,22 @@ def test_fetch_versions_nuget_missing_versions_key(monkeypatch: pytest.MonkeyPat
     assert providers.fetch_versions("Newtonsoft.Json", "nuget") == []
 
 
+def test_fetch_versions_nuget_rejects_extra_path_segments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SEC-005: an adversarial package name cannot introduce extra URL path segments."""
+    captured: dict[str, str] = {}
+
+    def fake_urlopen(req: urllib.request.Request, timeout: int = 10) -> _Resp:
+        captured["url"] = req.full_url
+        return _Resp(json.dumps({"versions": []}).encode())
+
+    monkeypatch.setattr(providers.urllib.request, "urlopen", fake_urlopen)
+    providers.fetch_versions("../../evil", "nuget")
+    assert "/../" not in captured["url"]
+    assert captured["url"] == ("https://api.nuget.org/v3-flatcontainer/..%2F..%2Fevil/index.json")
+
+
 # ---------------------------------------------------------------------------
 # crates
 # ---------------------------------------------------------------------------
@@ -219,6 +265,22 @@ def test_fetch_versions_crates_missing_versions_key(monkeypatch: pytest.MonkeyPa
         _make_urlopen({"crate": {}}),
     )
     assert providers.fetch_versions("serde", "crates") == []
+
+
+def test_fetch_versions_crates_rejects_extra_path_segments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SEC-005: an adversarial package name cannot introduce extra URL path segments."""
+    captured: dict[str, str] = {}
+
+    def fake_urlopen(req: urllib.request.Request, timeout: int = 10) -> _Resp:
+        captured["url"] = req.full_url
+        return _Resp(json.dumps({"versions": []}).encode())
+
+    monkeypatch.setattr(providers.urllib.request, "urlopen", fake_urlopen)
+    providers.fetch_versions("../../evil", "crates")
+    assert "/../" not in captured["url"]
+    assert captured["url"] == ("https://crates.io/api/v1/crates/..%2F..%2Fevil/versions")
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +341,21 @@ def test_fetch_versions_packagist_missing_versions_key(monkeypatch: pytest.Monke
         _make_urlopen({"package": {"name": "symfony/console"}}),
     )
     assert providers.fetch_versions("symfony/console", "packagist") == []
+
+
+def test_fetch_versions_packagist_percent_encodes_each_segment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SEC-005: each vendor/name segment is percent-encoded; the separator stays literal."""
+    captured: dict[str, str] = {}
+
+    def fake_urlopen(req: urllib.request.Request, timeout: int = 10) -> _Resp:
+        captured["url"] = req.full_url
+        return _Resp(json.dumps({"package": {"versions": {}}}).encode())
+
+    monkeypatch.setattr(providers.urllib.request, "urlopen", fake_urlopen)
+    providers.fetch_versions("vendor name/pkg?name", "packagist")
+    assert captured["url"] == "https://packagist.org/packages/vendor%20name/pkg%3Fname.json"
 
 
 # ---------------------------------------------------------------------------
