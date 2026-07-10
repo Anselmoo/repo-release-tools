@@ -231,6 +231,21 @@ def _normalize_repo_path(path: str, *, cwd: Path) -> str:
     return candidate.as_posix()
 
 
+def _contained_changelog_path(changelog_file: str, *, cwd: Path) -> Path | None:
+    """Resolve *changelog_file* against *cwd* and reject paths that escape it.
+
+    SEC-003: ``changelog_file`` is config-controlled; without a containment
+    check a value such as ``"../../evil.md"`` would resolve outside the work
+    tree (CWE-22). Returns the resolved path when it is contained within
+    *cwd*, or ``None`` when it escapes.
+    """
+    resolved_cwd = cwd.resolve()
+    resolved_path = (cwd / changelog_file).resolve()
+    if resolved_path.is_relative_to(resolved_cwd):
+        return resolved_path
+    return None
+
+
 def staged_files(cwd: Path) -> list[str]:
     """Return staged files for the current index."""
     out = git.capture(["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"], cwd)
@@ -753,7 +768,12 @@ def run_update_unreleased(
         p.verbose_line("  skipped (changelog meta-commit)")
         return 0
 
-    changelog_path = cwd / changelog_file
+    changelog_path = _contained_changelog_path(changelog_file, cwd=cwd)
+    if changelog_path is None:
+        return emit_failure(
+            "Changelog update failed.",
+            [f"Changelog file {changelog_file!r} resolves outside the repository root {cwd}."],
+        )
     if not changelog_path.exists():
         return emit_failure(
             "Changelog update failed.",
@@ -885,7 +905,12 @@ def run_post_correct(
     followed by ``"remove X"``), rewrites the file in-place, and optionally
     creates a follow-up commit.
     """
-    changelog_path = cwd / changelog_file
+    changelog_path = _contained_changelog_path(changelog_file, cwd=cwd)
+    if changelog_path is None:
+        return emit_failure(
+            "Changelog post-correction failed.",
+            [f"Changelog file {changelog_file!r} resolves outside the repository root {cwd}."],
+        )
     if not changelog_path.exists():
         return emit_failure(
             "Changelog post-correction failed.",
