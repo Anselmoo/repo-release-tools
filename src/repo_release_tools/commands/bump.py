@@ -92,7 +92,6 @@ from repo_release_tools.preflight import PreflightError, run_preflight
 from repo_release_tools.ui import (
     GLYPHS,
     DryRunPrinter,
-    ProgressLine,
     VerbosePrinter,
     spinner_lines,
 )
@@ -378,37 +377,12 @@ def cmd_bump(args: argparse.Namespace) -> int:
             p = VerbosePrinter(verbose=verbose)
             p.line(msg)
 
-    version_progress = ProgressLine(file=sys.stdout)
     p.section("Updating version strings")
-    total_targets = len(group.version_targets)
-    for i, _target in enumerate(group.version_targets, 1):
-        if total_targets > 1 and i > 1:
-            version_progress.clear()
-        if total_targets > 1:
-            version_progress.update_bar(i / total_targets)
-    if total_targets > 1:
-        version_progress.clear()
 
     all_pins = group.pin_targets + config.global_pin_targets
     no_pin_sync = getattr(args, "no_pin_sync", False)
     if all_pins and not no_pin_sync:
-        pin_progress = ProgressLine(file=sys.stdout)
         p.section("Updating doc pins")
-        seen_pin_count: set[tuple[object, str]] = set()
-        unique_pin_count = 0
-        for pin in all_pins:
-            key = (pin.path, pin.pattern)
-            if key not in seen_pin_count:
-                seen_pin_count.add(key)
-                unique_pin_count += 1
-        total_pins = unique_pin_count
-        for i in range(1, total_pins + 1):
-            if total_pins > 1 and i > 1:
-                pin_progress.clear()
-            if total_pins > 1:
-                pin_progress.update_bar(i / total_pins)
-        if total_pins > 1:
-            pin_progress.clear()
 
     # Build a pin-free view when no_pin_sync is set so apply_version skips pins.
     apply_group = dataclasses.replace(group, pin_targets=[]) if no_pin_sync else group
