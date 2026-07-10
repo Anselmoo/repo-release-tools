@@ -114,7 +114,10 @@ def now_utc() -> str:
 def _short_hash(h: str) -> str:
     """Return an 8-character short prefix from a hash string like 'sha256:...'.
 
-    Returns '?' on error or when the input is falsy.
+    Returns '?' on error or when the input is falsy. *h* ultimately comes
+    from lockfile TOML data, so this guards against a malformed value whose
+    ``__bool__``/``__eq__`` (or similar) raises rather than a plain string
+    operation failing — see test_state_exceptions.py.
     """
     try:
         if not h:
@@ -327,7 +330,11 @@ def tree_lock_is_current(
         new_count = tree_meta.get("entry_count", "?")
 
         # Compare raw counts when available (integers). Fall back to
-        # conservative equality if types differ.
+        # conservative equality if types differ. This is diagnostic-message
+        # formatting, not the drift decision itself (already made above) —
+        # a malformed lock value (e.g. an object with a broken __eq__) must
+        # not prevent the drift from being reported, so the broad guard here
+        # is intentional; see test_state_exceptions.py for the pinned cases.
         counts_equal = False
         try:
             counts_equal = locked_snapshot.get("entry_count") == tree_meta.get("entry_count")
