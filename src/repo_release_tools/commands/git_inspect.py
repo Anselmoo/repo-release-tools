@@ -90,7 +90,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
-    summary = summarize_status(branch_name, status_lines, upstream=upstream)
+    summary = summarize_status(branch_name, status_lines, upstream=upstream, root=root)
 
     p = VerbosePrinter(verbose=verbose)
     p.blank_line()
@@ -196,7 +196,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 "is not part of HEAD."
             )
 
-    summary = summarize_status(branch_name, status_lines, upstream=upstream)
+    summary = summarize_status(branch_name, status_lines, upstream=upstream, root=root)
     p = VerbosePrinter(verbose=verbose)
     p.blank_line()
     p.header(
@@ -285,7 +285,7 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
         branch_name = git.current_branch(root) or "<detached>"
         upstream = git.upstream_branch(root)
         p.ok("Working tree is clean.")
-        p.meta("Status", summarize_status(branch_name, [], upstream=upstream))
+        p.meta("Status", summarize_status(branch_name, [], upstream=upstream, root=root))
         return 0
 
     branch_name = git.current_branch(root) or "<detached>"
@@ -297,7 +297,11 @@ def cmd_check_dirty_tree(args: argparse.Namespace) -> int:
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     p.warn("Working tree has uncommitted changes.", stream=sys.stderr)
-    p.meta("Status", summarize_status(branch_name, changed, upstream=upstream), stream=sys.stderr)
+    p.meta(
+        "Status",
+        summarize_status(branch_name, changed, upstream=upstream, root=root),
+        stream=sys.stderr,
+    )
     shown = changed[:STATUS_MAX]
     for line in shown:
         p.file_entry(*git.classify_status_line(line), stream=sys.stderr)
@@ -341,7 +345,7 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
         Base=base_ref or "<none>",
         Relation=relation,
         Operation=operation or "idle",
-        Status=summarize_status(branch_name, status_lines, upstream=base_ref),
+        Status=summarize_status(branch_name, status_lines, upstream=base_ref, root=root),
     )
 
     p.section("Analysis")
