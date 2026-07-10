@@ -148,12 +148,20 @@ def replace_all_versions_atomic(
         for path, _old, new_content in pending:
             path.write_text(new_content, encoding="utf-8")
             written.append((path, _old))
-    except Exception:
+    except Exception as exc:
+        failed_restores: list[str] = []
         for path, original in written:
             try:
                 path.write_text(original, encoding="utf-8")
-            except OSError:
-                pass
+            except OSError as restore_exc:
+                failed_restores.append(f"{path}: {restore_exc}")
+        if failed_restores:
+            detail = "; ".join(failed_restores)
+            raise RuntimeError(
+                f"Atomic version write failed ({exc}) and rollback could not restore "
+                f"{len(failed_restores)} file(s): {detail}. The working tree is now "
+                "inconsistent and must be fixed manually."
+            ) from exc
         raise
 
     return [

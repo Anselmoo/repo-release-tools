@@ -815,8 +815,8 @@ def test_replace_all_versions_atomic_same_version_raises(tmp_path: Path) -> None
         replace_all_versions_atomic([target], "1.0.0", dry_run=False)
 
 
-def test_replace_all_versions_atomic_rollback_oserror_suppressed(tmp_path: Path) -> None:
-    """Phase-2 write failure triggers rollback; OSError in rollback is silently ignored."""
+def test_replace_all_versions_atomic_rollback_failure_is_surfaced(tmp_path: Path) -> None:
+    """Phase-2 write failure triggers rollback; a failed restore is reported, not swallowed."""
     f1 = tmp_path / "a.py"
     f1.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
     f2 = tmp_path / "b.py"
@@ -843,5 +843,14 @@ def test_replace_all_versions_atomic_rollback_oserror_suppressed(tmp_path: Path)
         _real_write(self, data, encoding=encoding, errors=errors, newline=newline)
 
     with patch.object(Path, "write_text", _write):
-        with pytest.raises(PermissionError, match="disk full"):
+        with pytest.raises(RuntimeError) as exc_info:
             replace_all_versions_atomic([target1, target2], "2.0.0", dry_run=False)
+
+    message = str(exc_info.value)
+    # The original failure and the rollback failure are both surfaced, with the
+    # affected path named, so an operator can find and fix the file by hand.
+    assert "disk full" in message
+    assert "can't restore" in message
+    assert str(f1) in message
+    assert exc_info.value.__cause__ is not None
+    assert isinstance(exc_info.value.__cause__, PermissionError)
