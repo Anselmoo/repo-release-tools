@@ -23,7 +23,7 @@ uvx --with tox-uv tox -e 3.14 -- tests/test_cli.py -xvs
 Three product surfaces share the same codebase:
 
 1. **`rrt` CLI** (`src/repo_release_tools/cli.py` → `commands/`) — developer workflow: `branch new`, `bump`, `git commit`, `init`, `skill install`
-2. **`rrt-hooks`** (`hooks.py`) — git hook runners invoked by pre-commit or lefthook; branch/commit/changelog validators and auto-writers
+2. **`rrt-hooks`** (`workflow/hooks.py`) — git hook runners invoked by pre-commit or lefthook; branch/commit/changelog validators and auto-writers
 3. **GitHub Action** (`action.yml`) — composite action wrapping `rrt-hooks` for CI policy gates
 
 ### Key modules
@@ -32,17 +32,22 @@ Three product surfaces share the same codebase:
 |---|---|
 | `cli.py` | Argparse entrypoint; custom help formatter with ANSI color |
 | `commands/` | One file per subcommand: `branch`, `bump`, `ci_version`, `config_cmd`, `doctor`, `env_cmd`, `git_cmd`, `init`, `skill` |
-| `hooks.py` | All `rrt-hooks` subcommands — runs during git hooks |
+| `commands/_common.py` | Shared `ConfigLoadError` extraction and classification helpers for command error handling. Centralizes config-load error parsing across `bump.py`, `doctor.py`, `release_notes.py`, `tag.py`, and related commands. |
+| `commands/_version_render.py` | Renders `version/targets.py`'s `VersionWriteEvent` records to user output. Ensures `--dry-run` / applied output is consistent across `bump.py`, `workspace.py`, `ci_version.py`, `release_repair.py`, and MCP surface. |
+| `commands/_tree_fix.py` | Interactive resolver for phantom (untrackable) empty directories. Invoked by `rrt tree --fix-empty-dirs`; prompts to add `.gitkeep` or delete each directory, honoring `--dry-run`, `--yes`, and `--auto-resolve`. |
+| `workflow/hooks.py` | All `rrt-hooks` subcommands — runs during git hooks |
 | `changelog.py` | Changelog parsing, `[Unreleased]` management, conventional commit → Keep-a-Changelog bullet. `SECTION_MAP` controls which commit type lands in which section (`chore/ci/build/test/deps` → Maintenance, which does **not** require a changelog entry) |
-| `config.py` | Config loading from `pyproject.toml` / `.rrt.toml` / `Cargo.toml` / `package.json` |
-| `version_targets.py` | Read/write versions across pep621, package.json, go_version, python_version, and custom regex targets |
-| `versioning.py` | Semver bump logic |
-| `git.py` | Low-level git helpers |
+| `config/` | Configuration loading and model management — loads `[tool.rrt]` from `pyproject.toml`, `.rrt.toml`, `Cargo.toml`, or `package.json`. Contains `core.py` (parsing/discovery), `model.py` (type-safe config schema), and `docs_config.py` (docs-specific rules). |
+| `version/targets.py` | Read/write versions across pep621, package.json, go_version, python_version, and custom regex targets |
+| `version/semver.py` | Semantic versioning bump logic (MAJOR.MINOR.PATCH with pre-release/build support per semver 2.0). |
+| `version/calver.py` | Calendar versioning bump logic (YYYY.MM, YYYY.MM.DD, YYYY.M.D schemes; bumps to current date or increments micro if today's version exists). |
+| `workflow/git.py` | Low-level git helpers |
 | `tools/inject.py` | Anchor-based file injection — shared by `rrt tree --inject`, `rrt docs inject`, and `rrt docs map` |
 | `commands/docs_map.py` | Per-directory purpose-doc generator backing `rrt docs map`. Walks `[tool.rrt.docs.map].root`, emits anchor-wrapped Purpose + Tree + optional prompt blocks into `README.md` (configurable). Pure-functional core; no I/O outside `apply_to_file`. |
 | `commands/docs_map_lock.py` | Drift detection for `rrt docs map`. Hashes each generated block and tracks it in `.rrt/docs_map.lock.toml` (separate from `docs.lock.toml`). `rrt docs map --check` exits non-zero on drift. |
 | `state.py` | Sole owner of every `.rrt/*` lock/manifest filename (`docs`, `health`, `tree`, `artifacts`, `drift`, `docs_map`) plus their path helpers and drift comparators. Command modules import filenames from here rather than defining their own. |
 | `ui/` | **Canonical public rendering API** — `color`, `font`, `glyphs`, `layout`, `syntax`, `prompt`, `messaging`, `progress`. Import from `repo_release_tools.ui` in all new code. |
+| `mcp/` | Optional FastMCP 3.x server (install with `repo-release-tools[mcp]`) — exposes version, changelog, config, and git-workflow tools as first-class MCP resources for Claude Desktop, Copilot, Cursor, and compatible hosts. |
 
 See [Internal Contracts](docs/src/content/docs/reference/internal-contracts.mdx) for the `.rrt/` lock schema, the hooks↔CLI parser-spec sharing contract, MCP/CLI surface parity, config source precedence, and the cross-surface exit-code/output convention.
 
