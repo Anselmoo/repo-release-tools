@@ -422,6 +422,36 @@ def _render_rich_tree(entries: list[TreeEntry]) -> str | None:
     return "\n".join(rendered).rstrip("\n")
 
 
+def render_tree_content(
+    fmt: str, entries: list[TreeEntry], *, root: Path, absolute: bool
+) -> tuple[str, str | None]:
+    """Render *entries* in the requested *fmt*.
+
+    Pure: no printing. Returns ``(rendered_text, warning)`` where *warning*
+    is non-``None`` only for the rich-format-unavailable fallback, letting
+    the caller print it through its own :class:`DryRunPrinter`.
+    """
+    match fmt:
+        case "ascii":
+            return _render_ascii_tree(entries), None
+        case "markdown":
+            return _render_markdown_tree(entries), None
+        case "rich":
+            rich_rendered = _render_rich_tree(entries)
+            if rich_rendered is None:
+                return (
+                    GLYPHS.tree.render(entries),
+                    "Rich format requested but Rich is unavailable; falling back to classic.",
+                )
+            return rich_rendered, None
+        case "json":
+            return _render_json_tree(entries, root=root, absolute=absolute), None
+        case "flat":
+            return _render_flat_tree(entries, root=root, absolute=absolute), None
+        case _:
+            return GLYPHS.tree.render(entries), None
+
+
 def _entry_count(entries: list[TreeEntry]) -> int:
     """Count all rendered entries recursively."""
     total = 0
@@ -1047,25 +1077,9 @@ def cmd_tree(args: argparse.Namespace) -> int:
 
     fmt = opts.format
     absolute_paths: bool = opts.absolute
-    rendered: str
-    match fmt:
-        case "ascii":
-            rendered = _render_ascii_tree(entries)
-        case "markdown":
-            rendered = _render_markdown_tree(entries)
-        case "rich":
-            rich_rendered = _render_rich_tree(entries)
-            if rich_rendered is None:
-                p.warn("Rich format requested but Rich is unavailable; falling back to classic.")
-                rendered = GLYPHS.tree.render(entries)
-            else:
-                rendered = rich_rendered
-        case "json":
-            rendered = _render_json_tree(entries, root=root, absolute=absolute_paths)
-        case "flat":
-            rendered = _render_flat_tree(entries, root=root, absolute=absolute_paths)
-        case _:
-            rendered = GLYPHS.tree.render(entries)
+    rendered, render_warning = render_tree_content(fmt, entries, root=root, absolute=absolute_paths)
+    if render_warning:
+        p.warn(render_warning)
 
     entry_count = _entry_count(entries)
     ignored_count = sum(ignore_cache.values())
