@@ -116,6 +116,40 @@ def test_run_prints_stdout_and_stderr_before_raising(
     assert "err line" in captured
 
 
+def test_run_error_detail_surfaces_last_stderr_line_not_first(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A tool's most specific error line is usually its *last* stderr line,
+    not its first (e.g. pre-commit's hook summary starts with a generic
+    "<hook>.......Failed" header and ends with the actionable detail, like
+    "- files were modified by this hook"). Callers that pattern-match on
+    ``str(exc)`` (e.g. bump.py's commit-retry narrowing) need that detail
+    line, not the generic header.
+    """
+
+    def fake_run(
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout="",
+            stderr="rewriter.................................................Failed\n"
+            "- hook id: rewriter\n"
+            "- files were modified by this hook\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="files were modified by this hook"):
+        git.run(["git", "commit", "-m", "x"], tmp_path, dry_run=False, label="git commit")
+
+
 def test_capture_and_capture_checked_strip_output(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

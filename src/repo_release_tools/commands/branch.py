@@ -487,13 +487,12 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     commit_title = branch.commit_title()
 
     origin_branch = "main" if opts.dry_run else git.current_branch(root)
-    if opts.since:
-        log_lines = [] if opts.dry_run else git.commits_ahead(root, opts.since)
-        reset_target = opts.since
-    else:
-        remote_ref = f"origin/{origin_branch}"
-        log_lines = [] if opts.dry_run else git.commits_ahead(root, remote_ref)
-        reset_target = remote_ref
+    reset_target = opts.since or f"origin/{origin_branch}"
+    try:
+        log_lines = [] if opts.dry_run else git.commits_ahead(root, reset_target)
+    except ValueError as exc:
+        VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
+        return 1
 
     p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()

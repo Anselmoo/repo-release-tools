@@ -7,13 +7,11 @@ Re-runnable: point WF_OUTPUT at the workflow task output JSON.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
-WF_OUTPUT = (
-    "/private/tmp/claude-502/-Users-hahn-LocalDocuments-GitHub-Forks-repo-release-tools/"
-    "662db51b-0f5e-45c7-900f-182e4a408df1/tasks/w81pa3418.output"
-)
+WF_OUTPUT = os.environ.get("WF_OUTPUT")
 HERE = Path(__file__).resolve().parent
 
 # Behavior-contract (P0) selection, adjudicated in the main session because the
@@ -70,7 +68,16 @@ def card(rule: dict, idx: str) -> str:
 
 
 def main() -> None:
-    result = json.load(open(WF_OUTPUT))["result"]
+    if not WF_OUTPUT:
+        raise SystemExit(
+            "WF_OUTPUT is not set. Point it at the modernize-extract-rules "
+            "workflow's task output JSON, e.g.:\n"
+            "  WF_OUTPUT=/path/to/task.output python3 analysis/the/render_business_rules.py"
+        )
+    output_path = Path(WF_OUTPUT)
+    if not output_path.is_file():
+        raise SystemExit(f"WF_OUTPUT does not point at a file: {output_path}")
+    result = json.loads(output_path.read_text(encoding="utf-8"))["result"]
     rules = result["confirmedRules"]
     rejected = result["rejectedRules"]
 

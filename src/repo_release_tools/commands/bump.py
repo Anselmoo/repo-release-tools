@@ -109,6 +109,10 @@ PREVIEW_LINES = 8
 
 _BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
 
+# Pre-commit's fixed status line for a hook that auto-regenerated files and
+# thereby failed its own pass even though the fix is now correct on disk.
+_HOOK_MODIFIED_FILES_MARKER = "files were modified by this hook"
+
 
 class BumpResolutionError(Exception):
     """Raised by :func:`resolve_bump_target` when the bump kind or version group is invalid.
@@ -322,12 +326,17 @@ def finalize_bump_git(
             commit_cmd.append("--no-verify")
         try:
             git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
-        except RuntimeError:
+        except RuntimeError as exc:
+            if _HOOK_MODIFIED_FILES_MARKER not in str(exc):
+                raise
             # A pre-commit hook (e.g. rrt-cli-docs) may have auto-regenerated
             # files during this pass — pre-commit always fails that pass even
             # though the fix is now correct. Re-stage and retry once.
             git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
-            git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
+            try:
+                git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
+            except RuntimeError as retry_exc:
+                raise retry_exc from exc
         done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
         p.footer(done_msg)
     else:

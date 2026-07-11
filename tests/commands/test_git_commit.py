@@ -178,6 +178,33 @@ def test_cmd_squash_local_requires_commits_ahead(
     assert "Nothing to squash" in capsys.readouterr().err
 
 
+def test_cmd_squash_local_reports_clean_error_for_dash_prefixed_base_ref(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A --base-ref value starting with '-' must produce a clean CLI error, not a traceback."""
+    monkeypatch.setattr(git_commit.git, "working_tree_clean", lambda cwd: True)
+    monkeypatch.setattr(
+        git_commit,
+        "resolve_commit_subject",
+        lambda args, root: ("feat/add", "feat: add"),
+    )
+
+    result = git_commit.cmd_squash_local(
+        argparse.Namespace(
+            base_ref="--upload-pack=evil",
+            description=["squash"],
+            type="feat",
+            scope=None,
+            breaking=False,
+            dry_run=False,
+        ),
+    )
+
+    assert result == 1
+    assert "must not start with '-'" in capsys.readouterr().err
+
+
 def test_cmd_squash_local_requires_merge_base(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

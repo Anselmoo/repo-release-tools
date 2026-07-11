@@ -765,6 +765,169 @@ kind = "package_json"
     assert ["git", "add", "-u"] in calls[first_commit_index + 1 : last_commit_index + 1]
 
 
+def test_cmd_bump_does_not_retry_unrelated_commit_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A commit failure unrelated to a hook auto-fixing files (e.g. author
+    identity not configured) must NOT be retried - retrying would mask the
+    real problem and waste a second attempt on a failure that can't succeed.
+    """
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
+        lambda *a, **k: [],
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+
+    commit_attempts = 0
+
+    def fake_run(
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
+    ) -> str:
+        nonlocal commit_attempts
+        if cmd[:2] == ["git", "commit"]:
+            commit_attempts += 1
+            raise RuntimeError(
+                "git commit failed (exit 128): Author identity unknown - "
+                "*** Please tell me who you are."
+            )
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    with pytest.raises(RuntimeError, match="Author identity unknown"):
+        cmd_bump(
+            Namespace(
+                bump="minor",
+                dry_run=False,
+                no_commit=False,
+                no_changelog=False,
+                no_update=True,
+                include_maintenance=False,
+                base_branch=None,
+                group=None,
+            ),
+        )
+
+    assert commit_attempts == 1
+
+
+def test_cmd_bump_retry_failure_chains_original_hook_error_as_cause(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """If the retried commit also fails, the original hook-triggered failure
+    must be preserved as the retry failure's __cause__, so both attempts
+    remain visible instead of the first error's context being dropped.
+    """
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
+        lambda *a, **k: [],
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+
+    commit_attempts = 0
+
+    def fake_run(
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
+    ) -> str:
+        nonlocal commit_attempts
+        if cmd[:2] == ["git", "commit"]:
+            commit_attempts += 1
+            if commit_attempts == 1:
+                raise RuntimeError(
+                    "git commit failed (exit 1): rrt cli docs - files were modified by this hook"
+                )
+            raise RuntimeError("git commit failed (exit 1): still broken after retry")
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    with pytest.raises(RuntimeError, match="still broken after retry") as exc_info:
+        cmd_bump(
+            Namespace(
+                bump="minor",
+                dry_run=False,
+                no_commit=False,
+                no_changelog=False,
+                no_update=True,
+                include_maintenance=False,
+                base_branch=None,
+                group=None,
+            ),
+        )
+
+    assert commit_attempts == 2
+    assert exc_info.value.__cause__ is not None
+    assert "files were modified by this hook" in str(exc_info.value.__cause__)
+
+
 def test_cmd_bump_no_verify_appends_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / ".rrt.toml").write_text(
         """\
