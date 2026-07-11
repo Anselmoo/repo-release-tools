@@ -8,6 +8,7 @@
 - **action**: use env-var indirection for `verbose` and `changelog-file` Action inputs instead of interpolating them directly into shell script text (SEC-001)
 - **action**: correct the changelog-status grep so a populated `[Unreleased]` section is classified `dirty` instead of always falling through to `clean` (D8)
 - **action**: build the `health-summary` output with `jq -nc` instead of string interpolation, preventing a `"` in the detected version from corrupting the JSON output (SEC-006)
+- **mcp**: require a bearer token (`--auth-token` / `RRT_MCP_AUTH_TOKEN`) for the MCP server's `--transport http` mode, refusing to start an unauthenticated HTTP listener; `stdio` transport is unaffected (SEC-002)
 
 ## [1.11.2] - 2026-07-10
 ### Added
