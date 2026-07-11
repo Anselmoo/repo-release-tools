@@ -84,6 +84,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
@@ -160,17 +161,56 @@ def _build_docs_lock_sources(entries: list[DocEntry]) -> list[dict[str, object]]
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class GenerateOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt docs generate``.
+
+    Built once via :meth:`from_args` at the top of :func:`_cmd_generate` so
+    every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` / ``args.x`` calls throughout the
+    function body.
+    """
+
+    verbose: int
+    root: str
+    dry_run: bool
+    lang: str | None
+    format: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> GenerateOptions:
+        """Build a :class:`GenerateOptions` from a parsed ``argparse.Namespace``.
+
+        Every flag below is given a real default by ``register()`` (or, for
+        ``--verbose``, by cli.py's global parser), so a Namespace produced by
+        argparse's own ``rrt docs generate`` parser always carries every
+        attribute. The getattr fallbacks here absorb two other real callers:
+        unit tests in tests/commands/test_docs_cmd.py that construct sparse
+        ``argparse.Namespace`` objects by hand, and workflow/hooks.py's
+        ``docs-generate`` dispatch case, which always sets ``root``,
+        ``dry_run``, ``format``, and ``lang`` explicitly but relies on this
+        fallback for ``verbose`` timing.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=getattr(args, "root", "."),
+            dry_run=getattr(args, "dry_run", False),
+            lang=getattr(args, "lang", None),
+            format=getattr(args, "format", None),
+        )
+
+
 def _cmd_generate(args: argparse.Namespace) -> int:
-    verbose: int = getattr(args, "verbose", 0) or 0
-    cwd = Path(args.root)
-    p = DryRunPrinter(dry_run=args.dry_run, verbose=verbose)
+    opts = GenerateOptions.from_args(args)
+    cwd = Path(opts.root)
+    p = DryRunPrinter(dry_run=opts.dry_run, verbose=opts.verbose)
     p.header("rrt docs generate")
 
     config = _config_for_cwd(cwd)
 
     # Override languages / formats from CLI if provided
-    if getattr(args, "lang", None):
-        raw_langs = [l.strip().lower() for l in args.lang.split(",") if l.strip()]  # noqa: E741
+    if opts.lang:
+        raw_langs = [l.strip().lower() for l in opts.lang.split(",") if l.strip()]  # noqa: E741
         from repo_release_tools.config import _VALID_LANGUAGES
 
         if invalid := [ln for ln in raw_langs if ln not in _VALID_LANGUAGES]:
@@ -184,7 +224,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
         config = dc_replace(config, languages=tuple(raw_langs))
 
-    fmt = getattr(args, "format", None) or config.formats[0]
+    fmt = opts.format or config.formats[0]
 
     p.section("Scanning sources")
     entries = extract_docs_from_dir(cwd, config)
@@ -196,7 +236,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
     p.section(f"Rendering ({fmt})")
 
-    if args.dry_run and fmt == "toml":
+    if opts.dry_run and fmt == "toml":
         # In dry-run mode: build lock but don't write
         sources = _build_docs_lock_sources(entries)
         build_lock(sources)  # validate structure; don't write
@@ -227,13 +267,45 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class CheckOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt docs check``.
+
+    Built once via :meth:`from_args` at the top of :func:`_cmd_check` so
+    every flag has a single, typed read site instead of ``getattr(args,
+    ..., default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    lock_file: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> CheckOptions:
+        """Build a :class:`CheckOptions` from a parsed ``argparse.Namespace``.
+
+        ``root`` and ``lock_file`` are given real defaults by ``register()``
+        (or, for ``--verbose``, by cli.py's global parser), so a Namespace
+        produced by argparse's own ``rrt docs check`` parser always carries
+        every attribute. The getattr fallbacks here absorb unit tests in
+        tests/commands/test_docs_cmd.py that construct sparse
+        ``argparse.Namespace`` objects by hand; ``check-docs`` is not
+        currently dispatched from workflow/hooks.py.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=getattr(args, "root", "."),
+            lock_file=getattr(args, "lock_file", None),
+        )
+
+
 def _cmd_check(args: argparse.Namespace) -> int:
-    verbose: int = getattr(args, "verbose", 0) or 0
-    cwd = Path(args.root)
-    p = VerbosePrinter(verbose=verbose)
+    opts = CheckOptions.from_args(args)
+    cwd = Path(opts.root)
+    p = VerbosePrinter(verbose=opts.verbose)
     config = _config_for_cwd(cwd)
 
-    lock_file = getattr(args, "lock_file", None) or config.lock_file
+    lock_file = opts.lock_file or config.lock_file
     lock_path = docs_lock_path(cwd, lock_file)
 
     entries = extract_docs_from_dir(cwd, config)
@@ -261,15 +333,53 @@ def _cmd_check(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class PublishOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt docs publish``.
+
+    Built once via :meth:`from_args` at the top of :func:`_cmd_publish` so
+    every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    check: bool
+    dry_run: bool
+    fail_on_change: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> PublishOptions:
+        """Build a :class:`PublishOptions` from a parsed ``argparse.Namespace``.
+
+        Every flag below is given a real default by ``register()`` (or, for
+        ``--verbose``, by cli.py's global parser), so a Namespace produced by
+        argparse's own ``rrt docs publish`` parser always carries every
+        attribute. The getattr fallbacks here absorb two other real callers:
+        unit tests in tests/commands/test_docs_cmd.py that construct sparse
+        ``argparse.Namespace`` objects by hand, and workflow/hooks.py's
+        ``docs-publish`` dispatch case, which always sets ``root``, ``check``,
+        ``dry_run``, and ``fail_on_change`` explicitly but relies on this
+        fallback for ``verbose`` timing.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=getattr(args, "root", "."),
+            check=getattr(args, "check", False),
+            dry_run=getattr(args, "dry_run", False),
+            fail_on_change=getattr(args, "fail_on_change", False),
+        )
+
+
 def _cmd_publish(args: argparse.Namespace) -> int:
     """Write all generated CLI-reference doc files to disk (or check for staleness)."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = PublishOptions.from_args(args)
     from repo_release_tools.docs import publisher as docs_publisher  # noqa: PLC0415
 
-    check: bool = getattr(args, "check", False)
-    dry_run: bool = getattr(args, "dry_run", False)
-    fail_on_change: bool = getattr(args, "fail_on_change", False)
-    root = Path(getattr(args, "root", ".")).resolve()
+    check: bool = opts.check
+    dry_run: bool = opts.dry_run
+    fail_on_change: bool = opts.fail_on_change
+    root = Path(opts.root).resolve()
 
     cfg = None
     try:
@@ -290,7 +400,7 @@ def _cmd_publish(args: argparse.Namespace) -> int:
         return 1
 
     if dry_run:
-        p = DryRunPrinter(dry_run=True, verbose=verbose)
+        p = DryRunPrinter(dry_run=True, verbose=opts.verbose)
         for target, _rendered in rendered_targets:
             p.would_write(str(target.output_path))
         return 0
@@ -432,15 +542,53 @@ def _expand_platform_vars(content: str, docs: DocsConfig) -> str:
     return content
 
 
+@dataclass(frozen=True)
+class InjectOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt docs inject``.
+
+    Built once via :meth:`from_args` at the top of :func:`_cmd_inject` so
+    every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    check: bool
+    dry_run: bool
+    add_anchors: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> InjectOptions:
+        """Build an :class:`InjectOptions` from a parsed ``argparse.Namespace``.
+
+        Every flag below is given a real default by ``register()`` (or, for
+        ``--verbose``, by cli.py's global parser), so a Namespace produced by
+        argparse's own ``rrt docs inject`` parser always carries every
+        attribute. The getattr fallbacks here absorb two other real callers:
+        unit tests in tests/commands/test_docs_cmd.py that construct sparse
+        ``argparse.Namespace`` objects by hand, and workflow/hooks.py's
+        ``docs-inject`` dispatch case, which always sets ``root``, ``check``,
+        ``dry_run``, and ``add_anchors`` explicitly but relies on this
+        fallback for ``verbose`` timing.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=getattr(args, "root", "."),
+            check=getattr(args, "check", False),
+            dry_run=getattr(args, "dry_run", False),
+            add_anchors=getattr(args, "add_anchors", False),
+        )
+
+
 def _cmd_inject(args: argparse.Namespace) -> int:
     """Inject or verify all shared anchor blocks from [tool.rrt.docs.shared_blocks]."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = InjectOptions.from_args(args)
     from repo_release_tools import __version__ as rrt_version  # noqa: PLC0415
 
-    check: bool = getattr(args, "check", False)
-    dry_run: bool = getattr(args, "dry_run", False)
-    add_anchors: bool = getattr(args, "add_anchors", False)
-    root = Path(getattr(args, "root", ".")).resolve()
+    check: bool = opts.check
+    dry_run: bool = opts.dry_run
+    add_anchors: bool = opts.add_anchors
+    root = Path(opts.root).resolve()
 
     cfg = None
     try:
@@ -452,19 +600,19 @@ def _cmd_inject(args: argparse.Namespace) -> int:
             raise
 
     if cfg is None:
-        p = VerbosePrinter(verbose=verbose)
+        p = VerbosePrinter(verbose=opts.verbose)
         p.action("No rrt config found; skipping shared_blocks injection.")
         return 0
 
     if cfg.docs is not None and cfg.docs.shared_blocks:
         if dry_run:
-            p = DryRunPrinter(dry_run=True, verbose=verbose)
+            p = DryRunPrinter(dry_run=True, verbose=opts.verbose)
             for block in cfg.docs.shared_blocks:
                 p.would_write(", ".join(block.targets), detail=f"anchor: {block.anchor_id!r}")
             return 0
 
         repo_url = (cfg.docs.source_repo_url or "") if cfg.docs else ""
-        p = VerbosePrinter(verbose=verbose)
+        p = VerbosePrinter(verbose=opts.verbose)
 
         exit_code = 0
         for block in cfg.docs.shared_blocks:
@@ -633,18 +781,60 @@ def _prepend_anchor_if_missing(
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class BadgesOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt docs badges``.
+
+    Built once via :meth:`from_args` at the top of :func:`_cmd_badges` so
+    every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    check: bool
+    dry_run: bool
+    output_dir: str | None
+    all_platforms: bool
+    platform: str | None
+    variant: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> BadgesOptions:
+        """Build a :class:`BadgesOptions` from a parsed ``argparse.Namespace``.
+
+        Every flag below is given a real default by ``register()`` (or, for
+        ``--verbose``, by cli.py's global parser), so a Namespace produced by
+        argparse's own ``rrt docs badges`` parser always carries every
+        attribute. The getattr fallbacks here exist only because some unit
+        tests in tests/commands/test_docs_cmd.py / test_docs_api.py construct
+        sparse ``argparse.Namespace`` objects by hand; ``rrt docs badges`` is
+        not currently dispatched from workflow/hooks.py.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=getattr(args, "root", "."),
+            check=getattr(args, "check", False),
+            dry_run=getattr(args, "dry_run", False),
+            output_dir=getattr(args, "output_dir", None),
+            all_platforms=getattr(args, "all_platforms", False),
+            platform=getattr(args, "platform", None),
+            variant=getattr(args, "variant", None),
+        )
+
+
 def _cmd_badges(args: argparse.Namespace) -> int:
     """Generate platform SVG badge files into docs/public/assets/badges/."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = BadgesOptions.from_args(args)
     from repo_release_tools.tools.platform import KNOWN_LABEL_KEYS, get_badge_svg  # noqa: PLC0415
 
-    check: bool = getattr(args, "check", False)
-    dry_run: bool = getattr(args, "dry_run", False)
-    root = Path(getattr(args, "root", ".")).resolve()
-    output_dir_arg: str | None = getattr(args, "output_dir", None)
-    all_platforms: bool = getattr(args, "all_platforms", False)
-    platform_arg: str | None = getattr(args, "platform", None)
-    variant_arg: str | None = getattr(args, "variant", None)
+    check: bool = opts.check
+    dry_run: bool = opts.dry_run
+    root = Path(opts.root).resolve()
+    output_dir_arg: str | None = opts.output_dir
+    all_platforms: bool = opts.all_platforms
+    platform_arg: str | None = opts.platform
+    variant_arg: str | None = opts.variant
 
     cfg = None
     try:
@@ -667,7 +857,7 @@ def _cmd_badges(args: argparse.Namespace) -> int:
         else [variant_arg]
     )
 
-    p = DryRunPrinter(dry_run=dry_run, verbose=verbose)
+    p = DryRunPrinter(dry_run=dry_run, verbose=opts.verbose)
     p.header("rrt docs badges")
 
     exit_code = 0
@@ -701,9 +891,45 @@ def _cmd_badges(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class ApiOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt docs api``.
+
+    Built once via :meth:`from_args` at the top of :func:`_cmd_api` so every
+    flag has a single, typed read site instead of scattered ``getattr(args,
+    ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    format: str
+    output: str | None
+    dry_run: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ApiOptions:
+        """Build an :class:`ApiOptions` from a parsed ``argparse.Namespace``.
+
+        Every flag below is given a real default by ``register()`` (or, for
+        ``--verbose``, by cli.py's global parser), so a Namespace produced by
+        argparse's own ``rrt docs api`` parser always carries every
+        attribute. The getattr fallbacks here exist only because some unit
+        tests in tests/commands/test_docs_api*.py construct sparse
+        ``argparse.Namespace`` objects by hand; ``rrt docs api`` is not
+        currently dispatched from workflow/hooks.py.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=getattr(args, "root", "."),
+            format=getattr(args, "format", None) or "md",
+            output=getattr(args, "output", None),
+            dry_run=getattr(args, "dry_run", False),
+        )
+
+
 def _cmd_api(args: argparse.Namespace) -> int:
     """Emit a structured index of all rrt CLI commands and arguments."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = ApiOptions.from_args(args)
     from repo_release_tools.cli import build_parser  # noqa: PLC0415
     from repo_release_tools.docs.api_index import (  # noqa: PLC0415
         build_api_index,
@@ -713,12 +939,12 @@ def _cmd_api(args: argparse.Namespace) -> int:
         render_api_txt,
     )
 
-    fmt: str = getattr(args, "format", None) or "md"
-    output_arg: str | None = getattr(args, "output", None)
-    dry_run: bool = getattr(args, "dry_run", False)
-    root = Path(getattr(args, "root", ".")).resolve()
+    fmt: str = opts.format
+    output_arg: str | None = opts.output
+    dry_run: bool = opts.dry_run
+    root = Path(opts.root).resolve()
 
-    p = DryRunPrinter(dry_run=dry_run, verbose=verbose)
+    p = DryRunPrinter(dry_run=dry_run, verbose=opts.verbose)
 
     # When the rendered payload goes directly to stdout, suppress the status
     # header/footer so callers can safely pipe output (e.g. to `jq`).
@@ -781,6 +1007,42 @@ def _cmd_suggest(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class MapOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt docs map``.
+
+    Built once via :meth:`from_args` at the top of :func:`_cmd_map` so every
+    flag has a single, typed read site instead of scattered ``getattr(args,
+    ..., default)`` / ``args.x`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    dry_run: bool
+    check: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> MapOptions:
+        """Build a :class:`MapOptions` from a parsed ``argparse.Namespace``.
+
+        Every flag below is given a real default by ``register()`` (or, for
+        ``--verbose``, by cli.py's global parser), so a Namespace produced by
+        argparse's own ``rrt docs map`` parser always carries every
+        attribute. The getattr fallbacks here absorb two other real callers:
+        unit tests in tests/commands/test_docs_map_cli.py that construct
+        sparse ``argparse.Namespace`` objects by hand, and
+        workflow/hooks.py's ``docs-map-update``/``docs-map-check`` dispatch
+        cases, which always set ``root``, ``check``, and ``dry_run``
+        explicitly but rely on this fallback for ``verbose`` timing.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=getattr(args, "root", "."),
+            dry_run=getattr(args, "dry_run", False),
+            check=getattr(args, "check", False),
+        )
+
+
 def _cmd_map(args: argparse.Namespace) -> int:
     """Generate or check per-directory purpose docs via `rrt docs map`."""
     from repo_release_tools.commands.docs_map import generate  # noqa: PLC0415
@@ -789,10 +1051,10 @@ def _cmd_map(args: argparse.Namespace) -> int:
         refresh_lockfile,
     )
 
-    verbose: int = getattr(args, "verbose", 0) or 0
-    cwd = Path(args.root)
+    opts = MapOptions.from_args(args)
+    cwd = Path(opts.root)
     docs_cfg = _config_for_cwd(cwd)
-    p = DryRunPrinter(dry_run=getattr(args, "dry_run", False), verbose=verbose)
+    p = DryRunPrinter(dry_run=opts.dry_run, verbose=opts.verbose)
 
     if docs_cfg.map is None:
         p.line(
@@ -803,7 +1065,7 @@ def _cmd_map(args: argparse.Namespace) -> int:
         return 1
 
     map_cfg = docs_cfg.map
-    check: bool = getattr(args, "check", False)
+    check: bool = opts.check
 
     if check:
         drift = detect_drift(map_cfg, cwd)
@@ -860,10 +1122,39 @@ def _cmd_map(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class DispatchOptions:
+    """Typed view of ``argparse.Namespace`` for the ``rrt docs`` dispatcher.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_docs` so both
+    flags it reads directly have typed read sites instead of
+    ``getattr(args, ..., default)`` calls; each sub-action re-reads the full
+    Namespace via its own Options class.
+    """
+
+    verbose: int
+    docs_action: str
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> DispatchOptions:
+        """Build a :class:`DispatchOptions` from a parsed ``argparse.Namespace``.
+
+        ``docs_action`` is set by every dispatch path (register()'s
+        subparsers default to ``None``, but the top-level ``rrt docs``
+        parser and every workflow/hooks.py case set it explicitly), so the
+        getattr fallback here exists only for unit tests that construct a
+        bare ``argparse.Namespace()`` without it.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            docs_action=getattr(args, "docs_action", "generate"),
+        )
+
+
 def cmd_docs(args: argparse.Namespace) -> int:
     """Dispatch rrt docs sub-actions."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    sub = getattr(args, "docs_action", "generate")
+    opts = DispatchOptions.from_args(args)
+    sub = opts.docs_action
     match sub:
         case "generate":
             return _cmd_generate(args)
@@ -881,7 +1172,7 @@ def cmd_docs(args: argparse.Namespace) -> int:
             return _cmd_api(args)
         case "map":
             return _cmd_map(args)
-    p = VerbosePrinter(verbose=verbose)
+    p = VerbosePrinter(verbose=opts.verbose)
     p.line(f"Unknown docs action: {sub!r}", ok=False, stream=sys.stderr)
     return 1
 
