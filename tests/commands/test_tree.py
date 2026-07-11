@@ -106,6 +106,41 @@ def test_cmd_tree_rich_falls_back_when_unavailable(
     assert "falling back to classic" in out
 
 
+def test_render_tree_content_ascii(tmp_path: Path) -> None:
+    """render_tree_content dispatches to the ascii renderer with no warning."""
+    entries: list[tree.TreeEntry] = [("file.txt", False, None)]
+
+    rendered, warning = tree.render_tree_content("ascii", entries, root=tmp_path, absolute=False)
+
+    assert "file.txt" in rendered
+    assert warning is None
+
+
+def test_render_tree_content_rich_unavailable_falls_back_with_warning(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """render_tree_content returns the rich-unavailable warning as data, not a print."""
+    monkeypatch.setattr(tree, "_render_rich_tree", lambda entries: None)
+    entries: list[tree.TreeEntry] = [("file.txt", False, None)]
+
+    rendered, warning = tree.render_tree_content("rich", entries, root=tmp_path, absolute=False)
+
+    assert "file.txt" in rendered
+    assert warning == "Rich format requested but Rich is unavailable; falling back to classic."
+
+
+def test_render_tree_content_unknown_format_falls_back_to_classic(tmp_path: Path) -> None:
+    """An unrecognized format falls back to the classic glyph renderer, no warning."""
+    entries: list[tree.TreeEntry] = [("file.txt", False, None)]
+
+    rendered, warning = tree.render_tree_content(
+        "bogus-format", entries, root=tmp_path, absolute=False
+    )
+
+    assert "file.txt" in rendered
+    assert warning is None
+
+
 def test_cmd_tree_respects_max_depth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

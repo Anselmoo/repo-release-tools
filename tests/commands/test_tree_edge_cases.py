@@ -9,6 +9,8 @@ from typing import Any, NoReturn
 import pytest
 
 from repo_release_tools.commands.tree import (
+    _append_manifest_diff_summary,
+    _build_entries,
     _compute_sha256,
     _flatten_entries_for_manifest,
     _write_tree_manifest,
@@ -160,6 +162,52 @@ def test_cmd_tree_read_manifest_exceptions(tmp_path: Path) -> None:
 
     rc = cmd_tree(args)
     assert rc == 0
+
+
+def test_append_manifest_diff_summary_reports_added_and_removed(tmp_path: Path) -> None:
+    """_append_manifest_diff_summary appends a summary when a prior manifest exists."""
+    root = tmp_path
+    (root / "new.txt").write_text("1", encoding="utf-8")
+    manifest_dir = root / ".rrt"
+    manifest_dir.mkdir()
+
+    prev = {"files": [{"path": "old.txt", "is_dir": False}]}
+    (manifest_dir / "tree.manifest.json").write_text(json.dumps(prev), encoding="utf-8")
+
+    entries = _build_entries(
+        root,
+        root=root,
+        repo_root=None,
+        depth=1,
+        max_depth=None,
+        dirs_only=False,
+        show_hidden=False,
+        ignore_cache={},
+        warnings=[],
+    )
+
+    drifted: list[str] = []
+    warnings: list[str] = []
+    _append_manifest_diff_summary(drifted, root, entries, warnings)
+
+    assert len(drifted) == 1
+    assert "Detailed manifest diff" in drifted[0]
+    assert "added (1)" in drifted[0]
+    assert "new.txt" in drifted[0]
+    assert "removed (1)" in drifted[0]
+    assert "old.txt" in drifted[0]
+    assert warnings == []
+
+
+def test_append_manifest_diff_summary_no_prior_manifest_is_noop(tmp_path: Path) -> None:
+    """_append_manifest_diff_summary is a no-op when no prior manifest file exists."""
+    drifted: list[str] = []
+    warnings: list[str] = []
+
+    _append_manifest_diff_summary(drifted, tmp_path, [], warnings)
+
+    assert drifted == []
+    assert warnings == []
 
 
 def test_manifest_diff_truncation(tmp_path: Path) -> None:

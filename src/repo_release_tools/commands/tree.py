@@ -422,6 +422,36 @@ def _render_rich_tree(entries: list[TreeEntry]) -> str | None:
     return "\n".join(rendered).rstrip("\n")
 
 
+def render_tree_content(
+    fmt: str, entries: list[TreeEntry], *, root: Path, absolute: bool
+) -> tuple[str, str | None]:
+    """Render *entries* in the requested *fmt*.
+
+    Pure: no printing. Returns ``(rendered_text, warning)`` where *warning*
+    is non-``None`` only for the rich-format-unavailable fallback, letting
+    the caller print it through its own :class:`DryRunPrinter`.
+    """
+    match fmt:
+        case "ascii":
+            return _render_ascii_tree(entries), None
+        case "markdown":
+            return _render_markdown_tree(entries), None
+        case "rich":
+            rich_rendered = _render_rich_tree(entries)
+            if rich_rendered is None:
+                return (
+                    GLYPHS.tree.render(entries),
+                    "Rich format requested but Rich is unavailable; falling back to classic.",
+                )
+            return rich_rendered, None
+        case "json":
+            return _render_json_tree(entries, root=root, absolute=absolute), None
+        case "flat":
+            return _render_flat_tree(entries, root=root, absolute=absolute), None
+        case _:
+            return GLYPHS.tree.render(entries), None
+
+
 def _entry_count(entries: list[TreeEntry]) -> int:
     """Count all rendered entries recursively."""
     total = 0
@@ -681,6 +711,39 @@ def _flatten_entries_for_manifest(
     return sorted(result, key=lambda e: e.path)
 
 
+def _atomic_write(
+    content: bytes | str,
+    target: Path,
+    target_dir: Path,
+    *,
+    warnings: list[str],
+    warning_label: str,
+) -> None:
+    """Write *content* to *target* atomically via a temp file in *target_dir*.
+
+    Collapses the two near-identical (bytes vs. text) temp-file-then-replace
+    blocks that used to live separately in :func:`_write_tree_manifest` for
+    the compressed and plain manifest cases. On failure, appends a message
+    to *warnings* using *warning_label* and re-raises -- callers propagate.
+    """
+    mode = "wb" if isinstance(content, bytes) else "w"
+    encoding = None if isinstance(content, bytes) else "utf-8"
+    try:
+        fd = tempfile.NamedTemporaryFile(
+            mode=mode, encoding=encoding, dir=str(target_dir), delete=False
+        )
+        try:
+            fd.write(content)
+            fd.flush()
+            fd_name = fd.name
+        finally:
+            fd.close()
+        Path(fd_name).replace(target)
+    except Exception as exc:
+        warnings.append(f"Failed to install {warning_label} {target}: {exc}")
+        raise
+
+
 def _write_tree_manifest(
     entries: list[TreeEntry],
     root: Path,
@@ -720,38 +783,96 @@ def _write_tree_manifest(
     # Atomic write into same directory. Write compressed if requested,
     # otherwise write plain JSON.
     if compressed:
-        try:
-            compressed_bytes = gzip.compress(text.encode("utf-8"))
-            fd = tempfile.NamedTemporaryFile(mode="wb", dir=str(target_dir), delete=False)
-            try:
-                fd.write(compressed_bytes)
-                fd.flush()
-                fd_name = fd.name
-            finally:
-                fd.close()
-            Path(fd_name).replace(gz_target)
-        except Exception as exc:
-            warnings.append(f"Failed to install compressed manifest {gz_target}: {exc}")
-            raise
+        compressed_bytes = gzip.compress(text.encode("utf-8"))
+        _atomic_write(
+            compressed_bytes,
+            gz_target,
+            target_dir,
+            warnings=warnings,
+            warning_label="compressed manifest",
+        )
         p.ok(
             f"Tree manifest written to .rrt/tree.manifest.json.gz ({len(manifest_entries)} entries)"
         )
     else:
-        try:
-            fd = tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", dir=str(target_dir), delete=False
-            )
-            try:
-                fd.write(text)
-                fd.flush()
-                fd_name = fd.name
-            finally:
-                fd.close()
-            Path(fd_name).replace(target)
-        except Exception as exc:
-            warnings.append(f"Failed to install manifest {target}: {exc}")
-            raise
+        _atomic_write(text, target, target_dir, warnings=warnings, warning_label="manifest")
         p.ok(f"Tree manifest written to .rrt/tree.manifest.json ({len(manifest_entries)} entries)")
+
+
+def _append_manifest_diff_summary(
+    drifted: list[str],
+    root: Path,
+    entries: list[TreeEntry],
+    warnings: list[str],
+) -> None:
+    """Append a compact manifest-diff summary to *drifted*, if a prior manifest exists.
+
+    Best-effort diagnostic enrichment for ``rrt tree --check``: any failure
+    reading/parsing the previous manifest or computing the diff is recorded
+    in *warnings* and swallowed rather than failing the check, matching the
+    original inline behavior in :func:`cmd_tree`.
+    """
+    try:
+        manifest_json = tree_manifest_path(root)
+        manifest_gz = tree_manifest_gz_path(root)
+
+        manifest_text: str | None = None
+        if manifest_json.exists():
+            try:
+                manifest_text = manifest_json.read_text(encoding="utf-8")
+            except Exception as exc:
+                warnings.append(f"Failed to read manifest {manifest_json}: {exc}")
+        elif manifest_gz.exists():
+            try:
+                with gzip.open(str(manifest_gz), "rb") as gf:
+                    manifest_text = gf.read().decode("utf-8")
+            except Exception as exc:
+                warnings.append(f"Failed to read compressed manifest {manifest_gz}: {exc}")
+
+        if manifest_text:
+            prev_manifest = json.loads(manifest_text)
+            prev_files = list(prev_manifest.get("files", []))
+            prev_paths = {str(e.get("path", "")) for e in prev_files}
+
+            current_files = _flatten_entries_for_manifest(
+                entries, root, hash_files=False, warnings=warnings
+            )
+            curr_paths = {str(e.path) for e in current_files}
+
+            added = sorted(curr_paths - prev_paths)
+            removed = sorted(prev_paths - curr_paths)
+
+            prev_file_count = sum(not e.get("is_dir") for e in prev_files)
+            prev_dir_count = sum(e.get("is_dir") for e in prev_files)
+            curr_file_count = sum(not e.is_dir for e in current_files)
+            curr_dir_count = sum(e.is_dir for e in current_files)
+
+            # Build a compact multi-line manifest summary to append to the
+            # drift diagnostic. Limit listed paths to a reasonable N.
+            n = 10
+            manifest_lines = [
+                "Detailed manifest diff (from .rrt/tree.manifest.json):",
+                f"  - files: was {prev_file_count} → now {curr_file_count} (Δ {curr_file_count - prev_file_count:+d})",
+                f"  - directories: was {prev_dir_count} → now {curr_dir_count} (Δ {curr_dir_count - prev_dir_count:+d})",
+            ]
+
+            if added:
+                manifest_lines.append(f"  - added ({len(added)}):")
+                for pth in added[:n]:
+                    manifest_lines.append(f"    - {pth}")
+                if len(added) > n:
+                    manifest_lines.append(f"    ... ({len(added) - n} more)")
+
+            if removed:
+                manifest_lines.append(f"  - removed ({len(removed)}):")
+                for pth in removed[:n]:
+                    manifest_lines.append(f"    - {pth}")
+                if len(removed) > n:
+                    manifest_lines.append(f"    ... ({len(removed) - n} more)")
+
+            drifted.append("\n".join(manifest_lines))
+    except Exception as exc:  # pragma: no cover - best-effort diagnostics
+        warnings.append(f"Failed to compute manifest diff: {exc}")
 
 
 def _report_tree_check_result(
@@ -956,25 +1077,9 @@ def cmd_tree(args: argparse.Namespace) -> int:
 
     fmt = opts.format
     absolute_paths: bool = opts.absolute
-    rendered: str
-    match fmt:
-        case "ascii":
-            rendered = _render_ascii_tree(entries)
-        case "markdown":
-            rendered = _render_markdown_tree(entries)
-        case "rich":
-            rich_rendered = _render_rich_tree(entries)
-            if rich_rendered is None:
-                p.warn("Rich format requested but Rich is unavailable; falling back to classic.")
-                rendered = GLYPHS.tree.render(entries)
-            else:
-                rendered = rich_rendered
-        case "json":
-            rendered = _render_json_tree(entries, root=root, absolute=absolute_paths)
-        case "flat":
-            rendered = _render_flat_tree(entries, root=root, absolute=absolute_paths)
-        case _:
-            rendered = GLYPHS.tree.render(entries)
+    rendered, render_warning = render_tree_content(fmt, entries, root=root, absolute=absolute_paths)
+    if render_warning:
+        p.warn(render_warning)
 
     entry_count = _entry_count(entries)
     ignored_count = sum(ignore_cache.values())
@@ -1028,71 +1133,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
             p.ok("No tree structure drift detected.")
             return 0
 
-        # When structural drift is detected, try to provide a compact,
-        # machine-assisted manifest diff if a previous manifest exists. This
-        # avoids dumping a large JSON blob into logs while giving humans a
-        # concise list of added/removed paths and file/dir counts.
-        try:
-            manifest_json = tree_manifest_path(root)
-            manifest_gz = tree_manifest_gz_path(root)
-
-            manifest_text: str | None = None
-            if manifest_json.exists():
-                try:
-                    manifest_text = manifest_json.read_text(encoding="utf-8")
-                except Exception as exc:
-                    warnings.append(f"Failed to read manifest {manifest_json}: {exc}")
-            elif manifest_gz.exists():
-                try:
-                    with gzip.open(str(manifest_gz), "rb") as gf:
-                        manifest_text = gf.read().decode("utf-8")
-                except Exception as exc:
-                    warnings.append(f"Failed to read compressed manifest {manifest_gz}: {exc}")
-
-            if manifest_text:
-                prev_manifest = json.loads(manifest_text)
-                prev_files = list(prev_manifest.get("files", []))
-                prev_paths = {str(e.get("path", "")) for e in prev_files}
-
-                current_files = _flatten_entries_for_manifest(
-                    entries, root, hash_files=False, warnings=warnings
-                )
-                curr_paths = {str(e.path) for e in current_files}
-
-                added = sorted(curr_paths - prev_paths)
-                removed = sorted(prev_paths - curr_paths)
-
-                prev_file_count = sum(not e.get("is_dir") for e in prev_files)
-                prev_dir_count = sum(e.get("is_dir") for e in prev_files)
-                curr_file_count = sum(not e.is_dir for e in current_files)
-                curr_dir_count = sum(e.is_dir for e in current_files)
-
-                # Build a compact multi-line manifest summary to append to the
-                # drift diagnostic. Limit listed paths to a reasonable N.
-                N = 10
-                manifest_lines = [
-                    "Detailed manifest diff (from .rrt/tree.manifest.json):",
-                    f"  - files: was {prev_file_count} → now {curr_file_count} (Δ {curr_file_count - prev_file_count:+d})",
-                    f"  - directories: was {prev_dir_count} → now {curr_dir_count} (Δ {curr_dir_count - prev_dir_count:+d})",
-                ]
-
-                if added:
-                    manifest_lines.append(f"  - added ({len(added)}):")
-                    for pth in added[:N]:
-                        manifest_lines.append(f"    - {pth}")
-                    if len(added) > N:
-                        manifest_lines.append(f"    ... ({len(added) - N} more)")
-
-                if removed:
-                    manifest_lines.append(f"  - removed ({len(removed)}):")
-                    for pth in removed[:N]:
-                        manifest_lines.append(f"    - {pth}")
-                    if len(removed) > N:
-                        manifest_lines.append(f"    ... ({len(removed) - N} more)")
-
-                drifted.append("\n".join(manifest_lines))
-        except Exception as exc:  # pragma: no cover - best-effort diagnostics
-            warnings.append(f"Failed to compute manifest diff: {exc}")
+        _append_manifest_diff_summary(drifted, root, entries, warnings)
 
         return _report_tree_check_result(p, drifted=drifted, strict=strict)
 
