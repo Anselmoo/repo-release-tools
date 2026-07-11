@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -1334,25 +1333,6 @@ def test_workflow_hooks_module_main_block_executes(monkeypatch: pytest.MonkeyPat
 
     with pytest.raises(SystemExit) as excinfo:
         runpy.run_module("repo_release_tools.workflow.hooks", run_name="__main__")
-
-    assert excinfo.value.code == 0
-
-
-def test_legacy_top_level_hooks_module_reexports_workflow_api() -> None:
-    legacy_hooks = importlib.import_module("repo_release_tools.hooks")
-
-    assert legacy_hooks.main is hooks.main
-    assert getattr(legacy_hooks, "validate_branch_name") is hooks.validate_branch_name
-    assert getattr(legacy_hooks, "Version") is hooks.Version
-
-
-def test_legacy_top_level_hooks_module_main_block_executes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(hooks, "main", lambda argv=None: 0)
-
-    import runpy
-
-    with pytest.raises(SystemExit) as excinfo:
-        runpy.run_module("repo_release_tools.hooks", run_name="__main__")
 
     assert excinfo.value.code == 0
 
