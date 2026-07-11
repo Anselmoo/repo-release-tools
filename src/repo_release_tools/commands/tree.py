@@ -681,6 +681,39 @@ def _flatten_entries_for_manifest(
     return sorted(result, key=lambda e: e.path)
 
 
+def _atomic_write(
+    content: bytes | str,
+    target: Path,
+    target_dir: Path,
+    *,
+    warnings: list[str],
+    warning_label: str,
+) -> None:
+    """Write *content* to *target* atomically via a temp file in *target_dir*.
+
+    Collapses the two near-identical (bytes vs. text) temp-file-then-replace
+    blocks that used to live separately in :func:`_write_tree_manifest` for
+    the compressed and plain manifest cases. On failure, appends a message
+    to *warnings* using *warning_label* and re-raises -- callers propagate.
+    """
+    mode = "wb" if isinstance(content, bytes) else "w"
+    encoding = None if isinstance(content, bytes) else "utf-8"
+    try:
+        fd = tempfile.NamedTemporaryFile(
+            mode=mode, encoding=encoding, dir=str(target_dir), delete=False
+        )
+        try:
+            fd.write(content)
+            fd.flush()
+            fd_name = fd.name
+        finally:
+            fd.close()
+        Path(fd_name).replace(target)
+    except Exception as exc:
+        warnings.append(f"Failed to install {warning_label} {target}: {exc}")
+        raise
+
+
 def _write_tree_manifest(
     entries: list[TreeEntry],
     root: Path,
@@ -720,37 +753,19 @@ def _write_tree_manifest(
     # Atomic write into same directory. Write compressed if requested,
     # otherwise write plain JSON.
     if compressed:
-        try:
-            compressed_bytes = gzip.compress(text.encode("utf-8"))
-            fd = tempfile.NamedTemporaryFile(mode="wb", dir=str(target_dir), delete=False)
-            try:
-                fd.write(compressed_bytes)
-                fd.flush()
-                fd_name = fd.name
-            finally:
-                fd.close()
-            Path(fd_name).replace(gz_target)
-        except Exception as exc:
-            warnings.append(f"Failed to install compressed manifest {gz_target}: {exc}")
-            raise
+        compressed_bytes = gzip.compress(text.encode("utf-8"))
+        _atomic_write(
+            compressed_bytes,
+            gz_target,
+            target_dir,
+            warnings=warnings,
+            warning_label="compressed manifest",
+        )
         p.ok(
             f"Tree manifest written to .rrt/tree.manifest.json.gz ({len(manifest_entries)} entries)"
         )
     else:
-        try:
-            fd = tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", dir=str(target_dir), delete=False
-            )
-            try:
-                fd.write(text)
-                fd.flush()
-                fd_name = fd.name
-            finally:
-                fd.close()
-            Path(fd_name).replace(target)
-        except Exception as exc:
-            warnings.append(f"Failed to install manifest {target}: {exc}")
-            raise
+        _atomic_write(text, target, target_dir, warnings=warnings, warning_label="manifest")
         p.ok(f"Tree manifest written to .rrt/tree.manifest.json ({len(manifest_entries)} entries)")
 
 
