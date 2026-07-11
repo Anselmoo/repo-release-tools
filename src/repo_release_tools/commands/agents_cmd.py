@@ -111,6 +111,59 @@ def _resolve_install_plan(targets: list[str], *, cwd: Path, home: Path) -> list[
     return [(target, AGENT_TARGET_PATHS[target](cwd, home)) for target in _dedupe_targets(targets)]
 
 
+def _select_install_agents(
+    agents: list[str] | None,
+) -> tuple[list[BundledAgent] | None, str | None]:
+    """Resolve the ``--agent``/``--agents`` filter into a concrete agent list.
+
+    Returns ``(selected_agents, error_message)``. When *agents* is falsy, no
+    filtering is requested and ``(None, None)`` is returned so the caller
+    keeps its full-catalog default. When a requested name is unknown,
+    ``(None, error_message)`` is returned. A matched agent with a ``family``
+    expands to every agent sharing that family; the result preserves
+    :data:`BUNDLED_AGENTS` canonical order and drops duplicates.
+    """
+    if not agents:
+        return None, None
+    requested_set: set[str] = set()
+    interim: list[BundledAgent] = []
+    for name in agents:
+        match = next((a for a in BUNDLED_AGENTS if a.name == name), None)
+        if match is None:
+            return (
+                None,
+                f"Unknown agent: {name}. Available: {', '.join(a.name for a in BUNDLED_AGENTS)}",
+            )
+        if match.family:
+            interim.extend([a for a in BUNDLED_AGENTS if a.family == match.family])
+        else:
+            interim.append(match)
+    ordered: list[BundledAgent] = []
+    for a in BUNDLED_AGENTS:
+        if a in interim and a.name not in requested_set:
+            ordered.append(a)
+            requested_set.add(a.name)
+    return ordered, None
+
+
+def _find_install_conflicts(
+    install_plan: list[tuple[str, Path]],
+    selected_agents: list[BundledAgent],
+    *,
+    force: bool,
+) -> list[tuple[str, str, Path]]:
+    """Return every (target, agent, destination) that already exists and isn't forced."""
+    if force:
+        return []
+    conflicts: list[tuple[str, str, Path]] = []
+    for target_name, agents_dir in install_plan:
+        for agent in selected_agents:
+            destination = agents_dir / f"{agent.name}.agent.md"
+            if destination.exists():
+                conflicts.append((target_name, agent.name, destination))
+    return conflicts
+
+
 def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
     p = DryRunPrinter(True)
     p.blank_line()
@@ -192,28 +245,11 @@ def cmd_install(args: argparse.Namespace) -> int:
     install_plan = _resolve_install_plan(opts.targets, cwd=cwd, home=home)
 
     # Determine selected agents based on optional --agent flags.
-    selected_agents = list(BUNDLED_AGENTS)
-    if opts.agents:
-        requested_names = opts.agents
-        # Build an ordered, deduplicated selection preserving the canonical order.
-        requested_set: set[str] = set()
-        interim: list[BundledAgent] = []
-        for name in requested_names:
-            match = next((a for a in BUNDLED_AGENTS if a.name == name), None)
-            if match is None:
-                return _emit_install_error(
-                    f"Unknown agent: {name}. Available: {', '.join(a.name for a in BUNDLED_AGENTS)}"
-                )
-            if match.family:
-                interim.extend([a for a in BUNDLED_AGENTS if a.family == match.family])
-            else:
-                interim.append(match)
-        ordered: list[BundledAgent] = []
-        for a in BUNDLED_AGENTS:
-            if a in interim and a.name not in requested_set:
-                ordered.append(a)
-                requested_set.add(a.name)
-        selected_agents = ordered
+    selected_agents, agent_error = _select_install_agents(opts.agents)
+    if agent_error is not None:
+        return _emit_install_error(agent_error)
+    if selected_agents is None:
+        selected_agents = list(BUNDLED_AGENTS)
 
     p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
@@ -223,12 +259,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         Targets=str(len(install_plan)),
     )
 
-    conflicts: list[tuple[str, str, Path]] = []
-    for target_name, agents_dir in install_plan:
-        for agent in selected_agents:
-            destination = agents_dir / f"{agent.name}.agent.md"
-            if destination.exists() and not opts.force:
-                conflicts.append((target_name, agent.name, destination))
+    conflicts = _find_install_conflicts(install_plan, selected_agents, force=opts.force)
 
     if conflicts:
         for target_name, agent_name, destination in conflicts:

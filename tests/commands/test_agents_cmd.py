@@ -9,12 +9,14 @@ import pytest
 from repo_release_tools.commands.agents_cmd import (
     _dedupe_targets,
     _display_path,
+    _find_install_conflicts,
     _resolve_install_plan,
+    _select_install_agents,
     cmd_install,
     main,
     register,
 )
-from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS, _parse_family
+from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS, BundledAgent, _parse_family
 
 EXPECTED_AGENT_NAMES = {
     "rrt-user-bootstrap",
@@ -283,6 +285,89 @@ def test_parse_family_closed_frontmatter_without_family_key_returns_none() -> No
     # The body contains "family:" to verify the early-return prevents a false match.
     md = "---\ntitle: My Agent\n---\nfamily: body-prose"
     assert _parse_family(md) is None
+
+
+# ---------------------------------------------------------------------------
+# _select_install_agents (extracted from cmd_install)
+# ---------------------------------------------------------------------------
+
+
+def test_select_install_agents_no_filter_returns_none() -> None:
+    selected, error = _select_install_agents(None)
+    assert selected is None
+    assert error is None
+
+
+def test_select_install_agents_empty_list_returns_none() -> None:
+    selected, error = _select_install_agents([])
+    assert selected is None
+    assert error is None
+
+
+def test_select_install_agents_unknown_name_returns_error() -> None:
+    selected, error = _select_install_agents(["no-such-agent"])
+    assert selected is None
+    assert error is not None
+    assert "Unknown agent: no-such-agent" in error
+
+
+def test_select_install_agents_single_no_family(monkeypatch: pytest.MonkeyPatch) -> None:
+    import repo_release_tools.commands.agents_cmd as agents_cmd_mod
+
+    solo = BundledAgent(name="solo-agent", markdown="# Solo\n", family=None)
+    monkeypatch.setattr(agents_cmd_mod, "BUNDLED_AGENTS", [solo])
+
+    selected, error = _select_install_agents(["solo-agent"])
+
+    assert error is None
+    assert selected == [solo]
+
+
+def test_select_install_agents_family_expands_and_dedupes() -> None:
+    family_agent = next((a for a in BUNDLED_AGENTS if a.family is not None), None)
+    if family_agent is None:
+        pytest.skip("no bundled agents with a family")
+    selected, error = _select_install_agents([family_agent.name])
+    assert error is None
+    assert selected is not None
+    assert family_agent in selected
+    names = [a.name for a in selected]
+    assert len(names) == len(set(names))
+
+
+# ---------------------------------------------------------------------------
+# _find_install_conflicts (extracted from cmd_install)
+# ---------------------------------------------------------------------------
+
+
+def test_find_install_conflicts_force_returns_empty(tmp_path: Path) -> None:
+    plan = [("claude-local", tmp_path)]
+    agent = BUNDLED_AGENTS[0]
+    (tmp_path / f"{agent.name}.agent.md").write_text("existing", encoding="utf-8")
+
+    conflicts = _find_install_conflicts(plan, [agent], force=True)
+
+    assert conflicts == []
+
+
+def test_find_install_conflicts_detects_existing_file(tmp_path: Path) -> None:
+    plan = [("claude-local", tmp_path)]
+    agent = BUNDLED_AGENTS[0]
+    destination = tmp_path / f"{agent.name}.agent.md"
+    destination.write_text("existing", encoding="utf-8")
+
+    conflicts = _find_install_conflicts(plan, [agent], force=False)
+
+    assert conflicts == [("claude-local", agent.name, destination)]
+
+
+def test_find_install_conflicts_no_existing_file_returns_empty(tmp_path: Path) -> None:
+    plan = [("claude-local", tmp_path)]
+    agent = BUNDLED_AGENTS[0]
+
+    conflicts = _find_install_conflicts(plan, [agent], force=False)
+
+    assert conflicts == []
 
 
 # ---------------------------------------------------------------------------
