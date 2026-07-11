@@ -399,38 +399,85 @@ class RebootstrapOptions:
         )
 
 
+def _rebootstrap_preflight_error(
+    args: argparse.Namespace,
+    opts: RebootstrapOptions,
+    *,
+    git_dir_exists: bool,
+    root: Path,
+) -> str | None:
+    """Return the first failing precondition's error message, or ``None`` if clear.
+
+    Checked in order: repo-looking git dir, explicit destructive confirmation,
+    mutually exclusive ``--hard-init``/``--empty-first``, and the configured-remote
+    guard. Order is contract -- tests assert on the specific message each guard
+    produces, so the first violated check (not all of them) is reported.
+    """
+    if not git_dir_exists:
+        return f"{root} does not look like a Git repository."
+    if not require_explicit_confirmation(args):
+        return "Refusing to destroy repository history without --yes-i-know-this-destroys-history."
+    if opts.hard_init and opts.empty_first:
+        return "Use either --hard-init or --empty-first, not both."
+    remotes = git.remote_names(root)
+    if remotes and not opts.allow_remote:
+        return (
+            "Refusing to rebootstrap a repository with configured remotes. "
+            "Use --allow-remote if that is intentional."
+        )
+    return None
+
+
+def _run_rebootstrap_commands(
+    root: Path,
+    branch_name: str,
+    commit_message: str,
+    opts: RebootstrapOptions,
+    *,
+    dry_run: bool,
+) -> None:
+    """Run the init/commit sequence for rebootstrap, shared by preview and real paths.
+
+    ``git.run(..., dry_run=True)`` only previews and never raises, so this single
+    sequence serves both the ``--dry-run`` preview and the real execution -- the
+    caller decides whether to wrap it in the backup/try-except needed only for
+    the real path.
+    """
+    git.run(["git", "init", "-b", branch_name], root, dry_run=dry_run, label="git init")
+    if opts.hard_init:
+        git.run(
+            ["git", "commit", "--allow-empty", "-m", commit_message],
+            root,
+            dry_run=dry_run,
+            label="git commit --allow-empty",
+        )
+    elif opts.empty_first:
+        git.run(
+            ["git", "commit", "--allow-empty", "-m", opts.empty_message],
+            root,
+            dry_run=dry_run,
+            label="git commit --allow-empty",
+        )
+    if not opts.hard_init:
+        git.run(["git", "add", "."], root, dry_run=dry_run, label="git add")
+        git.run(["git", "commit", "-m", commit_message], root, dry_run=dry_run, label="git commit")
+
+
 def cmd_rebootstrap(args: argparse.Namespace) -> int:
     """Remove repository history and create a fresh initial history."""
     opts = RebootstrapOptions.from_args(args)
     verbose = opts.verbose
     root = Path.cwd()
     git_dir = git.git_dir(root) or (root / ".git")
-    if not git_dir.exists():
+    preflight_error = _rebootstrap_preflight_error(
+        args,
+        opts,
+        git_dir_exists=git_dir.exists(),
+        root=root,
+    )
+    if preflight_error is not None:
         p = VerbosePrinter(verbose=verbose)
-        p.line(f"{root} does not look like a Git repository.", ok=False, stream=sys.stderr)
-        return 1
-    if not require_explicit_confirmation(args):
-        p = VerbosePrinter(verbose=verbose)
-        p.line(
-            "Refusing to destroy repository history without --yes-i-know-this-destroys-history.",
-            ok=False,
-            stream=sys.stderr,
-        )
-        return 1
-
-    if opts.hard_init and opts.empty_first:
-        p = VerbosePrinter(verbose=verbose)
-        p.line("Use either --hard-init or --empty-first, not both.", ok=False, stream=sys.stderr)
-        return 1
-
-    remotes = git.remote_names(root)
-    if remotes and not opts.allow_remote:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(
-            "Refusing to rebootstrap a repository with configured remotes. Use --allow-remote if that is intentional.",
-            ok=False,
-            stream=sys.stderr,
-        )
+        p.line(preflight_error, ok=False, stream=sys.stderr)
         return 1
 
     branch_name = opts.branch or git.current_branch(root) or "main"
@@ -455,24 +502,7 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
     p.section("Reinitializing")
     if opts.dry_run:
         p.would_run(f"mv {git_dir} {backup_path}")
-        git.run(["git", "init", "-b", branch_name], root, dry_run=True, label="git init")
-        if opts.hard_init:
-            git.run(
-                ["git", "commit", "--allow-empty", "-m", commit_message],
-                root,
-                dry_run=True,
-                label="git commit --allow-empty",
-            )
-        elif opts.empty_first:
-            git.run(
-                ["git", "commit", "--allow-empty", "-m", opts.empty_message],
-                root,
-                dry_run=True,
-                label="git commit --allow-empty",
-            )
-        if not opts.hard_init:
-            git.run(["git", "add", "."], root, dry_run=True, label="git add")
-            git.run(["git", "commit", "-m", commit_message], root, dry_run=True, label="git commit")
+        _run_rebootstrap_commands(root, branch_name, commit_message, opts, dry_run=True)
         p.footer("Done. Reinit preview complete.")
         return 0
 
@@ -480,29 +510,7 @@ def cmd_rebootstrap(args: argparse.Namespace) -> int:
     p.action(f"Moved original git data to {backup_path}")
 
     try:
-        git.run(["git", "init", "-b", branch_name], root, dry_run=False, label="git init")
-        if opts.hard_init:
-            git.run(
-                ["git", "commit", "--allow-empty", "-m", commit_message],
-                root,
-                dry_run=False,
-                label="git commit --allow-empty",
-            )
-        elif opts.empty_first:
-            git.run(
-                ["git", "commit", "--allow-empty", "-m", opts.empty_message],
-                root,
-                dry_run=False,
-                label="git commit --allow-empty",
-            )
-        if not opts.hard_init:
-            git.run(["git", "add", "."], root, dry_run=False, label="git add")
-            git.run(
-                ["git", "commit", "-m", commit_message],
-                root,
-                dry_run=False,
-                label="git commit",
-            )
+        _run_rebootstrap_commands(root, branch_name, commit_message, opts, dry_run=False)
     except RuntimeError as exc:
         p = VerbosePrinter(verbose=verbose)
         p.line(
