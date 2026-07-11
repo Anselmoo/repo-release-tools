@@ -72,6 +72,7 @@ rrt eol --warn-days 90 --error-days 30
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -316,11 +317,59 @@ def run_eol_checks(
     return all_ok, check_entries
 
 
+@dataclass(frozen=True)
+class Options:
+    """Typed view of ``argparse.Namespace`` for ``rrt eol``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_eol` so every
+    flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    language: str | None
+    fetch_live: bool
+    warn_days: int | None
+    error_days: int | None
+    allow_eol: bool
+    host_only: bool
+    project_only: bool
+    snapshot: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> Options:
+        """Build an :class:`Options` from a parsed ``argparse.Namespace``.
+
+        Every flag below is given a real default by ``_attach_eol_args`` /
+        ``register()`` (or, for ``--verbose``, by cli.py's global parser), so
+        a Namespace produced by argparse's own ``rrt eol`` parser always
+        carries every attribute. The getattr fallbacks here absorb two other
+        real callers: unit tests in tests/commands/test_eol_check.py that
+        construct sparse ``argparse.Namespace`` objects by hand, and
+        workflow/hooks.py's ``check-eol`` dispatch case, which registers a
+        bare ``subparsers.add_parser("check-eol")`` with none of these flags
+        and only sets ``parsed.verbose`` before calling ``cmd_eol_check`` —
+        every other field must default exactly as it does today (``None`` /
+        ``False``) for that hook invocation to behave unchanged.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            language=getattr(args, "language", None),
+            fetch_live=getattr(args, "fetch_live", False),
+            warn_days=getattr(args, "warn_days", None),
+            error_days=getattr(args, "error_days", None),
+            allow_eol=getattr(args, "allow_eol", False),
+            host_only=getattr(args, "host_only", False),
+            project_only=getattr(args, "project_only", False),
+            snapshot=getattr(args, "snapshot", False),
+        )
+
+
 def cmd_eol(args: argparse.Namespace) -> int:
     """Check host runtimes and project minimums against EOL dates."""
+    opts = Options.from_args(args)
     root = find_repo_root(Path.cwd())
-    verbose: int = getattr(args, "verbose", 0) or 0
-    p = VerbosePrinter(verbose=verbose)
+    p = VerbosePrinter(verbose=opts.verbose)
 
     # Determine effective config: CLI flags override config-file values
     eol_cfg: EolConfig | None = None
@@ -332,21 +381,19 @@ def cmd_eol(args: argparse.Namespace) -> int:
 
     if eol_cfg is not None:
         # Merge: CLI flags take priority over config-file values
-        warn_days = _int_override(getattr(args, "warn_days", None), eol_cfg.warn_days)
-        error_days = _int_override(getattr(args, "error_days", None), eol_cfg.error_days)
-        fetch_live: bool = getattr(args, "fetch_live", False) or eol_cfg.fetch_live
-        allow_eol: bool = getattr(args, "allow_eol", False) or eol_cfg.allow_eol
+        warn_days = _int_override(opts.warn_days, eol_cfg.warn_days)
+        error_days = _int_override(opts.error_days, eol_cfg.error_days)
+        fetch_live: bool = opts.fetch_live or eol_cfg.fetch_live
+        allow_eol: bool = opts.allow_eol or eol_cfg.allow_eol
         overrides = eol_cfg.overrides
-        lang_arg: str | None = getattr(args, "language", None)
-        languages: tuple[str, ...] = (lang_arg,) if lang_arg else eol_cfg.languages
+        languages: tuple[str, ...] = (opts.language,) if opts.language else eol_cfg.languages
     else:
-        warn_days = _int_override(getattr(args, "warn_days", None), 180)
-        error_days = _int_override(getattr(args, "error_days", None), 0)
-        fetch_live = getattr(args, "fetch_live", False)
-        allow_eol = getattr(args, "allow_eol", False)
+        warn_days = _int_override(opts.warn_days, 180)
+        error_days = _int_override(opts.error_days, 0)
+        fetch_live = opts.fetch_live
+        allow_eol = opts.allow_eol
         overrides = ()
-        lang_arg = getattr(args, "language", None)
-        languages = (lang_arg,) if lang_arg else ("python",)
+        languages = (opts.language,) if opts.language else ("python",)
 
     p.ok("rrt eol")
     p.action(f"Languages: {', '.join(languages)}")
@@ -358,9 +405,6 @@ def cmd_eol(args: argparse.Namespace) -> int:
     p.verbose_line(f"  warn_days={warn_days} error_days={error_days}", level=2)
     p.blank_line()
 
-    host_only = getattr(args, "host_only", False)
-    project_only = getattr(args, "project_only", False)
-
     all_ok, check_entries = run_eol_checks(
         languages=languages,
         root=root,
@@ -370,11 +414,11 @@ def cmd_eol(args: argparse.Namespace) -> int:
         allow_eol=allow_eol,
         overrides=overrides,
         p=p,
-        host_only=host_only,
-        project_only=project_only,
+        host_only=opts.host_only,
+        project_only=opts.project_only,
     )
 
-    if getattr(args, "snapshot", False):
+    if opts.snapshot:
         upsert_health_lock_checks(health_lock_path(root), check_entries)
         p.ok(f"EOL results merged into .rrt/health.lock.toml ({len(check_entries)} checks)")
 
