@@ -445,6 +445,53 @@ class SyncStatusOptions:
         return cls(verbose=getattr(args, "verbose", 0) or 0, base_ref=args.base_ref)
 
 
+def _render_sync_analysis(
+    p: VerbosePrinter,
+    *,
+    branch_name: str,
+    base_ref: str | None,
+    operation: str | None,
+    conflicts: list[str],
+    ahead: int,
+    behind: int,
+) -> int:
+    """Render the "Analysis" section for `rrt git sync-status` and return failure count.
+
+    Checks, in order: in-progress merge/rebase, unresolved conflicts, and
+    ahead/behind drift against *base_ref*. Matches the original inline body
+    of :func:`cmd_sync_status` exactly, including message wording.
+    """
+    p.section("Analysis")
+    failures = 0
+
+    if operation is None:
+        p.ok("No merge or rebase is in progress.")
+    else:
+        failures += 1
+        p.warn(f"{operation.capitalize()} is in progress. Resolve or abort it first.")
+
+    if not conflicts:
+        p.ok("No unresolved conflicts detected.")
+    else:
+        failures += 1
+        p.warn(f"Found {len(conflicts)} conflicted path(s).")
+
+    if base_ref is None:
+        failures += 1
+        p.warn("No upstream branch is configured. Use --base-ref to analyze sync drift.")
+    elif ahead == 0 and behind == 0:
+        p.ok(f"{branch_name} matches {base_ref}.")
+    elif ahead > 0 and behind == 0:
+        p.ok(f"{branch_name} is ahead of {base_ref} by {ahead} commit(s).")
+    else:
+        failures += 1
+        problem = sync_problem(branch_name, base_ref=base_ref, ahead=ahead, behind=behind)
+        if problem is not None:
+            p.warn(problem)
+
+    return failures
+
+
 def cmd_sync_status(args: argparse.Namespace) -> int:
     """Analyze merge/rebase blockers and divergence against a sync base."""
     opts = SyncStatusOptions.from_args(args)
@@ -484,33 +531,15 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
         Status=summarize_status(branch_name, status_lines, upstream=base_ref, root=root),
     )
 
-    p.section("Analysis")
-    failures = 0
-
-    if operation is None:
-        p.ok("No merge or rebase is in progress.")
-    else:
-        failures += 1
-        p.warn(f"{operation.capitalize()} is in progress. Resolve or abort it first.")
-
-    if not conflicts:
-        p.ok("No unresolved conflicts detected.")
-    else:
-        failures += 1
-        p.warn(f"Found {len(conflicts)} conflicted path(s).")
-
-    if base_ref is None:
-        failures += 1
-        p.warn("No upstream branch is configured. Use --base-ref to analyze sync drift.")
-    elif ahead == 0 and behind == 0:
-        p.ok(f"{branch_name} matches {base_ref}.")
-    elif ahead > 0 and behind == 0:
-        p.ok(f"{branch_name} is ahead of {base_ref} by {ahead} commit(s).")
-    else:
-        failures += 1
-        problem = sync_problem(branch_name, base_ref=base_ref, ahead=ahead, behind=behind)
-        if problem is not None:
-            p.warn(problem)
+    failures = _render_sync_analysis(
+        p,
+        branch_name=branch_name,
+        base_ref=base_ref,
+        operation=operation,
+        conflicts=conflicts,
+        ahead=ahead,
+        behind=behind,
+    )
 
     if conflicts:
         p.blank_line()

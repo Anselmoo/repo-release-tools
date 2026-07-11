@@ -295,6 +295,48 @@ def test_cmd_sync_status_rejects_missing_base_ref(
     assert "does not exist" in captured.err
 
 
+def test_render_sync_analysis_reports_all_clear(capsys: pytest.CaptureFixture[str]) -> None:
+    """No operation, no conflicts, and a matching base ref yields zero failures."""
+    p = git_inspect.VerbosePrinter(verbose=0)
+
+    failures = git_inspect._render_sync_analysis(
+        p,
+        branch_name="main",
+        base_ref="origin/main",
+        operation=None,
+        conflicts=[],
+        ahead=0,
+        behind=0,
+    )
+
+    out = capsys.readouterr().out
+    assert failures == 0
+    assert "No merge or rebase is in progress." in out
+    assert "No unresolved conflicts detected." in out
+    assert "main matches origin/main." in out
+
+
+def test_render_sync_analysis_counts_each_failure(capsys: pytest.CaptureFixture[str]) -> None:
+    """An in-progress rebase, conflicts, and divergence each count as a failure."""
+    p = git_inspect.VerbosePrinter(verbose=0)
+
+    failures = git_inspect._render_sync_analysis(
+        p,
+        branch_name="feat/x",
+        base_ref="origin/feat/x",
+        operation="rebase",
+        conflicts=["UU src/conflicted.py"],
+        ahead=2,
+        behind=3,
+    )
+
+    out = capsys.readouterr().out
+    assert failures == 3
+    assert "Rebase is in progress" in out
+    assert "Found 1 conflicted path(s)." in out
+    assert "diverged" in out.lower() or "Rebase or merge is needed" in out
+
+
 def test_cmd_check_dirty_tree_reports_status_lines(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
