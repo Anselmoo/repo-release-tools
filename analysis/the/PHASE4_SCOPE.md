@@ -3,6 +3,25 @@
 *Scoped 2026-07-11 against `refactor/config-options-p3` (PR #154, pending merge). All line
 numbers/CCN below are current-state, post Phase 1–3, not the original assessment snapshot.*
 
+## Status (updated 2026-07-11)
+
+- **P1a (`bump.py`) — done.** `cmd_bump` CCN 48 → 25 (at the exit threshold). All four stages
+  extracted with direct unit tests: `resolve_bump_target`, `apply_bump_files`,
+  `refresh_bump_lockfile`, `refresh_bump_generated_assets`, `finalize_bump_git`.
+- **P1b (`tree.py`) — done, reasonable stopping point.** `cmd_tree` CCN 53 → 29 (above
+  threshold but ~45% reduction). Extracted: `_atomic_write` (collapses the two duplicate
+  temp-file blocks), `_append_manifest_diff_summary` (the check-mode diagnostic), and
+  `render_tree_content` (the format-dispatch `match`). Remaining CCN is genuine 7-way mode
+  dispatch (fix-empty-dirs / strict-empty / manifest / snapshot / check / inject / default),
+  not further-extractable logic — see the commit for the full rationale.
+- **P2 (`doctor.py`, `git_inspect.py`, `release_cmd.py`) — not started.**
+- **Folded-in Phase 3 remainder — not started** (`docs_cmd.py`, `eol_check.py`, `ci_version.py`,
+  `sync_cmd.py`, `config_cmd.py`, `artifacts_cmd.py`, `folder.py`, `git_sync.py`, and the
+  `doctor.py`/`git_inspect.py` overlap with P2 above).
+
+7 commits on `refactor/command-core-p4` (branched from `main` post-#154), all gated (unit
+100% cov, e2e 71/71, pre-commit clean), not yet pushed.
+
 ## Entry gate
 
 Blocked on **PR #154 merging into `main`** (Phase 3 — `Options` dataclasses are the typed
