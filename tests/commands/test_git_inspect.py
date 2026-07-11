@@ -215,6 +215,84 @@ def test_cmd_doctor_reports_conflicts_and_sync_need(
     assert "src/conflicted.py" in captured.out
 
 
+def test_compute_changelog_problem_skips_non_changelog_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No changelog problem is computed (and no diff-tree call made) for chore commits."""
+
+    def fake_capture(cmd: list[str], cwd: pathlib.Path) -> str:
+        raise AssertionError("diff-tree should not be queried for chore commits")
+
+    monkeypatch.setattr(git_inspect.git, "capture", fake_capture)
+
+    result = git_inspect._compute_changelog_problem(
+        latest_subject="chore: update docs tooling",
+        branch_name="chore/update-docs",
+        changelog_file="CHANGELOG.md",
+        root=pathlib.Path("/repo"),
+    )
+
+    assert result is None
+
+
+def test_compute_changelog_problem_flags_missing_changelog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A feat commit whose HEAD diff doesn't touch the changelog file is flagged."""
+    monkeypatch.setattr(
+        git_inspect.git,
+        "capture",
+        lambda cmd, cwd: "src/repo_release_tools/cli.py",
+    )
+
+    result = git_inspect._compute_changelog_problem(
+        latest_subject="feat: add parser",
+        branch_name="feat/add-parser",
+        changelog_file="CHANGELOG.md",
+        root=pathlib.Path("/repo"),
+    )
+
+    assert result is not None
+    assert "feat/add-parser" in result
+    assert "CHANGELOG.md" in result
+
+
+def test_build_doctor_checks_appends_relation_check_only_with_upstream() -> None:
+    """The sync-relation check is appended only when an upstream branch is configured."""
+    without_upstream = git_inspect._build_doctor_checks(
+        branch_problem=None,
+        upstream=None,
+        dirty_problem=None,
+        operation_problem=None,
+        conflict_problem=None,
+        subject_problem=None,
+        changelog_problem=None,
+        changelog_file="CHANGELOG.md",
+        branch_name="main",
+        relation_problem=None,
+    )
+    with_upstream = git_inspect._build_doctor_checks(
+        branch_problem=None,
+        upstream="origin/main",
+        dirty_problem=None,
+        operation_problem=None,
+        conflict_problem=None,
+        subject_problem=None,
+        changelog_problem=None,
+        changelog_file="CHANGELOG.md",
+        branch_name="main",
+        relation_problem="Branch 'main' is behind origin/main by 1 commit(s). Sync is needed.",
+    )
+
+    assert len(without_upstream) == 7
+    assert len(with_upstream) == 8
+    assert with_upstream[-1] == (
+        False,
+        "main does not need sync from origin/main.",
+        "Branch 'main' is behind origin/main by 1 commit(s). Sync is needed.",
+    )
+
+
 def test_cmd_sync_status_reports_diverged_rebase_conflicts(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
