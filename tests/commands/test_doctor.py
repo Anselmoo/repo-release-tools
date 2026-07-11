@@ -15,6 +15,7 @@ from repo_release_tools.config import (
     VersionGroup,
     VersionTarget,
 )
+from repo_release_tools.ui import VerbosePrinter
 
 _ARGS = argparse.Namespace()
 
@@ -842,3 +843,86 @@ def test_doctor_verbose_emits_level1_output(
     err = capsys.readouterr().err
     assert "doctor:" in err
     assert "pre_commit:" in err
+
+
+# ---------------------------------------------------------------------------
+# Direct extraction tests: Options.from_args / _render_doctor_report
+# ---------------------------------------------------------------------------
+
+
+def test_options_from_args_sparse_namespace_uses_defaults() -> None:
+    """A Namespace missing every attribute falls back to Options' documented defaults."""
+    opts = doctor.Options.from_args(argparse.Namespace())
+
+    assert opts == doctor.Options(
+        fix=False,
+        fix_dry_run=False,
+        snapshot=False,
+        check=False,
+        strict=False,
+        verbose=0,
+    )
+
+
+def test_options_from_args_reads_explicit_values() -> None:
+    """Every flag on a fully-populated Namespace is read through, unchanged."""
+    args = argparse.Namespace(
+        fix=True,
+        fix_dry_run=True,
+        snapshot=True,
+        check=True,
+        strict=True,
+        verbose=2,
+    )
+
+    opts = doctor.Options.from_args(args)
+
+    assert opts == doctor.Options(
+        fix=True,
+        fix_dry_run=True,
+        snapshot=True,
+        check=True,
+        strict=True,
+        verbose=2,
+    )
+
+
+def test_render_doctor_report_all_ok_returns_true(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """All-ok checks render as passed and the helper returns True."""
+    p = VerbosePrinter()
+    conf = _make_config(tmp_path)
+    named_checks = [
+        ("pre_commit", (".pre-commit-config.yaml includes repo-release-tools hooks", True, "ok")),
+        ("lefthook", ("lefthook.yml not configured", True, "warning")),
+    ]
+
+    all_ok = doctor._render_doctor_report(p, named_checks, conf)
+
+    assert all_ok is True
+    out = capsys.readouterr().out
+    assert "Core automation checks passed." in out
+    assert "rrt release check" in out
+
+
+def test_render_doctor_report_failure_returns_false_and_gates_feature_hints(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A non-ok/obsolete/warning severity flips all_ok False; docs/eol hints follow config."""
+    p = VerbosePrinter()
+    conf = _make_config(tmp_path, docs=None, eol=None)
+    named_checks = [
+        ("workflows", ("workflow.yml unreadable: boom", False, "error")),
+        ("husky", (".husky includes repo-release-tools hooks (pre-commit)", True, "obsolete")),
+    ]
+
+    all_ok = doctor._render_doctor_report(p, named_checks, conf)
+
+    assert all_ok is False
+    out = capsys.readouterr().out
+    assert "One or more core automation checks failed." in out
+    assert "rrt docs check" not in out
+    assert "rrt eol" not in out

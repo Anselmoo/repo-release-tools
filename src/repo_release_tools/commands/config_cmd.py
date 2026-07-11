@@ -86,6 +86,7 @@ import difflib
 import importlib.resources
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import config as cfg
@@ -271,12 +272,58 @@ def _cmd_reference(*, check: bool, dry_run: bool) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class Options:
+    """Typed view of ``argparse.Namespace`` for ``rrt config``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_config` so
+    every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    schema: bool
+    reference: bool
+    check: bool
+    dry_run: bool
+    validate: bool
+    raw: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> Options:
+        """Build an :class:`Options` from a parsed ``argparse.Namespace``.
+
+        Every flag other than ``verbose`` is given a real default by
+        config_cmd.py's own register(), and workflow/hooks.py's
+        "config-validate" and "config-reference-check" dispatch cases
+        (workflow/hooks.py:1379-1401) each build a fully populated
+        ``argparse.Namespace`` with every one of these fields set
+        explicitly, so a Namespace from either caller always carries them.
+        The getattr fallbacks here exist only because some unit tests in
+        tests/commands/test_config_cmd.py construct sparse
+        ``argparse.Namespace`` objects by hand instead of going through
+        register(). ``verbose`` is set globally by cli.py's parser (and
+        explicitly by hooks.py's dispatch cases), but tests may omit it, so
+        the fallback here absorbs that gap too.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            schema=getattr(args, "schema", False),
+            reference=getattr(args, "reference", False),
+            check=getattr(args, "check", False),
+            dry_run=getattr(args, "dry_run", False),
+            validate=getattr(args, "validate", False),
+            raw=getattr(args, "raw", False),
+        )
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     """Print the resolved rrt config as a tree."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = Options.from_args(args)
+    verbose: int = opts.verbose
     root = cfg.find_repo_root(Path.cwd())
 
-    if getattr(args, "schema", False):
+    if opts.schema:
         schema = _load_schema()
         if not schema:
             p = VerbosePrinter(verbose=verbose)
@@ -289,13 +336,13 @@ def cmd_config(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(schema, indent=2) + "\n")
         return 0
 
-    if getattr(args, "reference", False):
+    if opts.reference:
         return _cmd_reference(
-            check=getattr(args, "check", False),
-            dry_run=getattr(args, "dry_run", False),
+            check=opts.check,
+            dry_run=opts.dry_run,
         )
 
-    if getattr(args, "validate", False):
+    if opts.validate:
         return _cmd_validate(root)
 
     try:
@@ -311,7 +358,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         return 1
 
     # --raw: syntax-highlighted view of the raw config file
-    if getattr(args, "raw", False):
+    if opts.raw:
         config_path = conf.config_file
         try:
             raw_text = config_path.read_text(encoding="utf-8")

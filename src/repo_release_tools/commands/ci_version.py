@@ -152,25 +152,111 @@ def compute_published_version(base_version: str, context: GitHubContext) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Typed options
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ComputeOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt ci-version compute``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_ci_version_compute`
+    (and reused by :func:`cmd_ci_version_sync`, which shares the same flag
+    surface) so every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function bodies.
+    """
+
+    verbose: int
+    base: str | None
+    group: str | None
+    ref: str | None
+    ref_name: str | None
+    run_id: str | None
+    run_attempt: str | None
+    dry_run: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ComputeOptions:
+        """Build a :class:`ComputeOptions` from a parsed ``argparse.Namespace``.
+
+        Every flag below is given a real default by ``_add_compute_args``
+        (or, for ``--verbose``, by cli.py's global parser), so a Namespace
+        produced by argparse always carries every attribute. The getattr
+        fallbacks here exist only because some unit tests in
+        tests/commands/test_ci_version.py construct sparse
+        ``argparse.Namespace`` objects by hand instead of going through
+        ``register()``; this is the single translation point that absorbs
+        that, so the rest of the command can read ``opts.x`` unconditionally.
+        ``dry_run`` is absent on ``compute`` (no ``--dry-run`` flag there) so
+        it defaults to ``False``; ``sync`` always sets it via argparse.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            base=getattr(args, "base", None),
+            group=getattr(args, "group", None),
+            ref=getattr(args, "ref", None),
+            ref_name=getattr(args, "ref_name", None),
+            run_id=getattr(args, "run_id", None),
+            run_attempt=getattr(args, "run_attempt", None),
+            dry_run=getattr(args, "dry_run", False),
+        )
+
+
+@dataclass(frozen=True)
+class ApplyOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt ci-version apply``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_ci_version_apply`
+    so every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` / ``args.x`` calls throughout the
+    function body.
+    """
+
+    verbose: int
+    version: str
+    dry_run: bool
+    group: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ApplyOptions:
+        """Build an :class:`ApplyOptions` from a parsed ``argparse.Namespace``.
+
+        ``version`` and ``dry_run`` are given real defaults by ``register()``
+        (``version`` is a required positional, ``dry_run`` defaults to
+        ``False`` via ``store_true``), so a Namespace produced by argparse
+        always carries both. The getattr fallbacks here exist only because
+        some unit tests construct sparse ``argparse.Namespace`` objects by
+        hand (e.g. without ``group`` or ``verbose``); this is the single
+        translation point that absorbs that.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            version=getattr(args, "version", ""),
+            dry_run=getattr(args, "dry_run", False),
+            group=getattr(args, "group", None),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
 
-def _context_from_args(args: argparse.Namespace) -> GitHubContext:
+def _context_from_opts(opts: ComputeOptions) -> GitHubContext:
     """Build a :class:`GitHubContext` merging CLI flags over env variables."""
     env = GitHubContext.from_env()
     return GitHubContext(
-        ref=getattr(args, "ref", None) or env.ref,
-        ref_name=getattr(args, "ref_name", None) or env.ref_name,
-        run_id=getattr(args, "run_id", None) or env.run_id,
-        run_attempt=getattr(args, "run_attempt", None) or env.run_attempt,
+        ref=opts.ref or env.ref,
+        ref_name=opts.ref_name or env.ref_name,
+        run_id=opts.run_id or env.run_id,
+        run_attempt=opts.run_attempt or env.run_attempt,
     )
 
 
-def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
+def _resolve_base(opts: ComputeOptions, root: Path) -> str | None:
     """Return the base version string from ``--base`` or the first version target."""
-    if args.base:
-        return args.base
+    if opts.base:
+        return opts.base
     try:
         config = load_or_autodetect_config(root)
         if config.autodetected:
@@ -179,7 +265,7 @@ def _resolve_base(args: argparse.Namespace, root: Path) -> str | None:
             if mismatch := check_autodetected_version_consistency(config):
                 p.line(mismatch, ok=False, stream=sys.stderr)
                 return None
-        group = config.resolve_group(getattr(args, "group", None))
+        group = config.resolve_group(opts.group)
         return str(read_group_current_version(group))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         err = describe_config_load_error(exc, root)
@@ -208,18 +294,18 @@ def cmd_ci_version_compute(args: argparse.Namespace) -> int:
 
         VERSION=$(rrt ci-version compute)
     """
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = ComputeOptions.from_args(args)
 
     root = find_repo_root(Path.cwd())
-    base = _resolve_base(args, root)
+    base = _resolve_base(opts, root)
     if base is None:
         return 1
 
-    context = _context_from_args(args)
+    context = _context_from_opts(opts)
     try:
         version = compute_published_version(base, context)
     except ValueError as exc:
-        p = VerbosePrinter(verbose=verbose)
+        p = VerbosePrinter(verbose=opts.verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
     # Machine-readable output: keep raw version on stdout
@@ -234,18 +320,18 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     Cargo / TOML targets (``ci_format = "semver_pre"``) receive the version
     after conversion via :func:`to_semver`.
     """
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = ApplyOptions.from_args(args)
     root = find_repo_root(Path.cwd())
 
     try:
         config = load_or_autodetect_config(root)
         if config.autodetected:
-            p = VerbosePrinter(verbose=verbose)
+            p = VerbosePrinter(verbose=opts.verbose)
             p.line(format_autodetected_config_notice(config), ok=False, stream=sys.stderr)
-        group = config.resolve_group(getattr(args, "group", None))
+        group = config.resolve_group(opts.group)
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         err = describe_config_load_error(exc, root)
-        p = VerbosePrinter(verbose=verbose)
+        p = VerbosePrinter(verbose=opts.verbose)
         if err.kind == "no_config_file":
             p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
             p.action(err.text, stream=sys.stderr)
@@ -258,7 +344,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
 
     ci_targets = [t for t in group.version_targets if t.ci_format in VALID_CI_FORMATS]
     if not ci_targets:
-        p = VerbosePrinter(verbose=verbose)
+        p = VerbosePrinter(verbose=opts.verbose)
         p.line(
             "No version targets with ci_format configured. "
             'Add ci_format = "pep440" or ci_format = "semver_pre" to the selected version group.',
@@ -267,10 +353,10 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
         )
         return 1
 
-    version: str = args.version
+    version: str = opts.version
 
     progress = ProgressLine(file=sys.stdout)
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=opts.verbose)
     p.line(rule("Applying CI versions", width=terminal_width()))
     total = len(ci_targets)
     for i, target in enumerate(ci_targets, 1):
@@ -281,7 +367,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
             # rather than writing an invalid Cargo SemVer string.
             if version_str == version and ".dev" in version:
                 progress.clear()
-                p_err = VerbosePrinter(verbose=verbose)
+                p_err = VerbosePrinter(verbose=opts.verbose)
                 p_err.line(
                     f"Cannot convert {version!r} to a Cargo-compatible SemVer prerelease. "
                     "Only versions ending in '.dev<digits>' are supported (e.g. 0.2.0.dev42).",
@@ -294,11 +380,11 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
         if total > 1 and i > 1:
             progress.clear()
         try:
-            event = replace_version_in_file(target, version_str, dry_run=args.dry_run)
+            event = replace_version_in_file(target, version_str, dry_run=opts.dry_run)
             render_version_write_events([event])
         except (FileNotFoundError, RuntimeError) as exc:
             progress.clear()
-            p = VerbosePrinter(verbose=verbose)
+            p = VerbosePrinter(verbose=opts.verbose)
             p.line(str(exc), ok=False, stream=sys.stderr)
             return 1
         if total > 1:
@@ -306,7 +392,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
 
     progress.clear()
     p.blank_line()
-    if args.dry_run:
+    if opts.dry_run:
         p.line(
             subtle(
                 f"{GLYPHS.bullet.skip} [dry-run] complete {GLYPHS.typography.mdash} no files were modified",
@@ -322,27 +408,27 @@ def cmd_ci_version_sync(args: argparse.Namespace) -> int:
 
     Equivalent to running ``compute`` followed by ``apply`` with the result.
     """
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = ComputeOptions.from_args(args)
 
     root = find_repo_root(Path.cwd())
-    base = _resolve_base(args, root)
+    base = _resolve_base(opts, root)
     if base is None:
         return 1
 
-    context = _context_from_args(args)
+    context = _context_from_opts(opts)
     try:
         version = compute_published_version(base, context)
     except ValueError as exc:
-        p = VerbosePrinter(verbose=verbose)
+        p = VerbosePrinter(verbose=opts.verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
-    p = VerbosePrinter(verbose=verbose)
+    p = VerbosePrinter(verbose=opts.verbose)
     p.action(f"Applying published version: {version}")
 
     apply_args = argparse.Namespace(
         version=version,
-        dry_run=args.dry_run,
-        group=getattr(args, "group", None),
+        dry_run=opts.dry_run,
+        group=opts.group,
     )
     return cmd_ci_version_apply(apply_args)
 

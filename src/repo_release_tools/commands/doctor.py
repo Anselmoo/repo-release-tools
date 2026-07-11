@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.changelog import (
@@ -82,6 +83,7 @@ from repo_release_tools.changelog import (
 )
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.config import (
+    RrtConfig,
     find_repo_root,
     format_autodetected_config_notice,
     iter_config_files,
@@ -282,15 +284,95 @@ def _fix_missing_unreleased(root: Path, config: object, *, dry_run: bool) -> lis
     return changes
 
 
+@dataclass(frozen=True)
+class Options:
+    """Typed view of ``argparse.Namespace`` for ``rrt doctor``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_doctor` so every
+    flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    fix: bool
+    fix_dry_run: bool
+    snapshot: bool
+    check: bool
+    strict: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> Options:
+        """Build an :class:`Options` from a parsed ``argparse.Namespace``."""
+        # NOTE: every flag below is given a real default by doctor.py's own
+        # register() (or, for --verbose, by cli.py's global parser), so a
+        # Namespace produced by argparse always carries every attribute.
+        # The getattr fallbacks here exist only because some unit tests in
+        # tests/commands/test_doctor.py construct sparse argparse.Namespace
+        # objects by hand instead of going through register(); this is the
+        # single translation point that absorbs that, so the rest of
+        # cmd_doctor can read opts.x unconditionally.
+        return cls(
+            fix=getattr(args, "fix", False),
+            fix_dry_run=getattr(args, "fix_dry_run", False),
+            snapshot=getattr(args, "snapshot", False),
+            check=getattr(args, "check", False),
+            strict=getattr(args, "strict", False),
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
+def _render_doctor_report(
+    p: VerbosePrinter,
+    named_checks: list[tuple[str, tuple[str, bool, str]]],
+    config: RrtConfig,
+) -> bool:
+    """Render the core automation report and feature-specific-checks guidance.
+
+    Returns ``True`` when every check in ``named_checks`` passed (``all_ok``).
+    """
+    all_ok = True
+    p.section("Core automation checks")
+    for _name, (message, ok, severity) in named_checks:
+        p.verbose_line(f"  {_name}: {severity}", level=1)
+        match severity:
+            case "ok":
+                p.line(f"  {message}", ok=True)
+            case "obsolete":
+                p.obsolete(f"  {message}")
+            case "warning":
+                p.warn(f"  {message}")
+            case _:
+                p.line(f"  {message}", ok=False)
+        if not ok:
+            all_ok = False
+
+    p.blank_line()
+    if all_ok:
+        p.ok("Core automation checks passed.")
+    else:
+        p.line("One or more core automation checks failed.", ok=False)
+
+    p.blank_line()
+    p.warn(
+        "Compatibility note: release-target validation lives in 'rrt release check'. "
+        "Use both checks for historical doctor coverage.",
+    )
+    p.blank_line()
+    p.section("Feature-specific checks")
+    p.action("Run 'rrt release check' for version targets, pin targets, and changelog files.")
+    if config.docs is not None:
+        p.action("Run 'rrt docs check' for source-owned docs lockfile and marker health.")
+    if config.eol is not None:
+        p.action("Run 'rrt eol' for runtime support and end-of-life policy checks.")
+
+    return all_ok
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Check the health of the rrt configuration."""
+    opts = Options.from_args(args)
     root = find_repo_root(Path.cwd())
-    fix: bool = getattr(args, "fix", False)
-    fix_dry_run: bool = getattr(args, "fix_dry_run", False)
-    do_snapshot: bool = getattr(args, "snapshot", False)
-    do_check: bool = getattr(args, "check", False)
-    strict: bool = getattr(args, "strict", False)
-    verbose: int = getattr(args, "verbose", 0) or 0
+    verbose = opts.verbose
 
     try:
         config = load_or_autodetect_config(root)
@@ -337,20 +419,20 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         for name, (message, _ok, severity) in named_checks
     ]
 
-    if do_snapshot:
+    if opts.snapshot:
         lock_data = build_health_lock(check_results)
         write_lock(health_lock_path(root), lock_data)
         p.ok("Health snapshot written to .rrt/health.lock.toml")
         return 0
 
-    if do_check:
+    if opts.check:
         current, regressions = health_lock_is_current(health_lock_path(root), check_results)
         if current:
             p.ok("No health regressions detected.")
             return 0
         for msg in regressions:
             p.warn(f"  {msg}")
-        if strict:
+        if opts.strict:
             p.line("Health regressions detected (--strict mode).", ok=False, stream=sys.stderr)
             p.line(
                 "Run `rrt doctor --snapshot` to update the health snapshot.",
@@ -361,43 +443,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         p.warn("Health regressions detected (advisory). Use --strict to block.")
         return 0
 
-    all_ok = True
-    p.section("Core automation checks")
-    for _name, (message, ok, severity) in named_checks:
-        p.verbose_line(f"  {_name}: {severity}", level=1)
-        match severity:
-            case "ok":
-                p.line(f"  {message}", ok=True)
-            case "obsolete":
-                p.obsolete(f"  {message}")
-            case "warning":
-                p.warn(f"  {message}")
-            case _:
-                p.line(f"  {message}", ok=False)
-        if not ok:
-            all_ok = False
+    all_ok = _render_doctor_report(p, named_checks, config)
 
-    p.blank_line()
-    if all_ok:
-        p.ok("Core automation checks passed.")
-    else:
-        p.line("One or more core automation checks failed.", ok=False)
-
-    p.blank_line()
-    p.warn(
-        "Compatibility note: release-target validation lives in 'rrt release check'. "
-        "Use both checks for historical doctor coverage.",
-    )
-    p.blank_line()
-    p.section("Feature-specific checks")
-    p.action("Run 'rrt release check' for version targets, pin targets, and changelog files.")
-    if config.docs is not None:
-        p.action("Run 'rrt docs check' for source-owned docs lockfile and marker health.")
-    if config.eol is not None:
-        p.action("Run 'rrt eol' for runtime support and end-of-life policy checks.")
-
-    if fix or fix_dry_run:
-        fixes = _fix_missing_unreleased(root, config, dry_run=fix_dry_run)
+    if opts.fix or opts.fix_dry_run:
+        fixes = _fix_missing_unreleased(root, config, dry_run=opts.fix_dry_run)
         if fixes:
             p.blank_line()
             p.section("Auto-fix results")

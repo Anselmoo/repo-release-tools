@@ -14,6 +14,7 @@ from repo_release_tools.commands.release_notes import (
     cmd_release_notes,
 )
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.ui import VerbosePrinter
 
 _ARGS = argparse.Namespace()
 
@@ -362,6 +363,45 @@ def test_release_check_pin_target_obsolete_status(
     out = capsys.readouterr().out
     assert rc == 0
     assert "obsolete: deprecated" in out
+
+
+# ---------------------------------------------------------------------------
+# _check_release_group (extracted per-group check/render block)
+# ---------------------------------------------------------------------------
+
+
+def test_check_release_group_all_healthy_returns_true(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A group with a readable version target and an existing changelog passes."""
+    conf = _make_config(tmp_path)
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    p = VerbosePrinter(verbose=0)
+
+    group_ok = release_cmd._check_release_group(conf.version_groups[0], conf, tmp_path, p)
+
+    out = capsys.readouterr().out
+    assert group_ok is True
+    assert "[default]" in out
+    assert "1.2.3" in out
+
+
+def test_check_release_group_missing_changelog_returns_false(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A missing changelog file fails the group even when the version target is fine."""
+    conf = _make_config(tmp_path)
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    p = VerbosePrinter(verbose=0)
+
+    group_ok = release_cmd._check_release_group(conf.version_groups[0], conf, tmp_path, p)
+
+    out = capsys.readouterr().out
+    assert group_ok is False
+    assert "CHANGELOG.md not found" in out
 
 
 # ---------------------------------------------------------------------------

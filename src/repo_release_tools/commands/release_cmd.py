@@ -65,6 +65,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._common import describe_config_load_error
@@ -72,6 +73,8 @@ from repo_release_tools.commands.release_notes import register_subcommand as _re
 from repo_release_tools.commands.release_repair import register_subcommand as _register_repair
 from repo_release_tools.config import (
     PinTarget,
+    RrtConfig,
+    VersionGroup,
     VersionTarget,
     _describe_version_target,
     find_repo_root,
@@ -169,9 +172,98 @@ def _check_pin_target(pin: PinTarget, root: Path) -> tuple[str, bool, str]:
     return f"{relative} match", True, "ok"
 
 
-def cmd_release_check(args: argparse.Namespace) -> int:  # noqa: ARG001
+@dataclass(frozen=True)
+class ReleaseCheckOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt release check``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_release_check`
+    so the single flag it reads has a typed read site instead of a bare
+    ``getattr(args, ..., default)`` call.
+    """
+
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ReleaseCheckOptions:
+        """Build a :class:`ReleaseCheckOptions` from a parsed ``argparse.Namespace``.
+
+        ``verbose`` is set globally by cli.py's parser, so a Namespace produced
+        by argparse always carries it. The getattr fallback exists only because
+        several tests in tests/commands/test_release_cmd.py call
+        cmd_release_check with a bare ``argparse.Namespace()`` that never sets
+        ``verbose``.
+        """
+        return cls(verbose=getattr(args, "verbose", 0) or 0)
+
+
+def _check_release_group(
+    group: VersionGroup,
+    config: RrtConfig,
+    root: Path,
+    p: VerbosePrinter,
+) -> bool:
+    """Check one version group's targets, render its report, and return overall status.
+
+    Aggregates version-target, pin-target, and changelog-file checks for
+    *group* into a single `[group.name]` report block, matching the original
+    inline loop body of :func:`cmd_release_check`. Returns ``True`` when every
+    check in the group passed.
+    """
+    group_ok = True
+    statuses: list[tuple[str, str]] = []
+
+    for target in group.version_targets:
+        message, ok, severity = _check_version_target(target, root)
+        statuses.append((message, severity))
+        if not ok:
+            group_ok = False
+
+    all_pins = group.pin_targets + config.global_pin_targets
+    if all_pins:
+        seen: set[tuple[object, str]] = set()
+        unique_pins = []
+        for pin in all_pins:
+            key = (pin.path, pin.pattern)
+            if key not in seen:
+                seen.add(key)
+                unique_pins.append(pin)
+
+        for pin in unique_pins:
+            message, ok, severity = _check_pin_target(pin, root)
+            statuses.append((message, severity))
+            if not ok:
+                group_ok = False
+
+    changelog = group.changelog_file
+    if changelog.exists():
+        statuses.append((f"{changelog.relative_to(root)} exists", "ok"))
+    else:
+        statuses.append((f"{changelog.relative_to(root)} not found", "error"))
+        group_ok = False
+
+    if group_ok:
+        p.ok(f"[{group.name}]")
+    else:
+        p.line(f"[{group.name}]", ok=False)
+    for msg, severity in statuses:
+        match severity:
+            case "ok":
+                p.line(f"  {msg}", ok=True)
+            case "obsolete":
+                p.obsolete(f"  {msg}")
+            case "warning":
+                p.warn(f"  {msg}")
+            case _:
+                p.line(f"  {msg}", ok=False)
+    p.blank_line()
+
+    return group_ok
+
+
+def cmd_release_check(args: argparse.Namespace) -> int:
     """Check release-oriented version, pin, and changelog targets."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = ReleaseCheckOptions.from_args(args)
+    verbose = opts.verbose
     root = find_repo_root(Path.cwd())
 
     try:
@@ -206,55 +298,7 @@ def cmd_release_check(args: argparse.Namespace) -> int:  # noqa: ARG001
     p.section("Release checks")
 
     for group in config.version_groups:
-        group_ok = True
-        statuses: list[tuple[str, str]] = []
-
-        for target in group.version_targets:
-            message, ok, severity = _check_version_target(target, root)
-            statuses.append((message, severity))
-            if not ok:
-                group_ok = False
-
-        all_pins = group.pin_targets + config.global_pin_targets
-        if all_pins:
-            seen: set[tuple[object, str]] = set()
-            unique_pins = []
-            for pin in all_pins:
-                key = (pin.path, pin.pattern)
-                if key not in seen:
-                    seen.add(key)
-                    unique_pins.append(pin)
-
-            for pin in unique_pins:
-                message, ok, severity = _check_pin_target(pin, root)
-                statuses.append((message, severity))
-                if not ok:
-                    group_ok = False
-
-        changelog = group.changelog_file
-        if changelog.exists():
-            statuses.append((f"{changelog.relative_to(root)} exists", "ok"))
-        else:
-            statuses.append((f"{changelog.relative_to(root)} not found", "error"))
-            group_ok = False
-
-        if group_ok:
-            p.ok(f"[{group.name}]")
-        else:
-            p.line(f"[{group.name}]", ok=False)
-        for msg, severity in statuses:
-            match severity:
-                case "ok":
-                    p.line(f"  {msg}", ok=True)
-                case "obsolete":
-                    p.obsolete(f"  {msg}")
-                case "warning":
-                    p.warn(f"  {msg}")
-                case _:
-                    p.line(f"  {msg}", ok=False)
-        p.blank_line()
-
-        if not group_ok:
+        if not _check_release_group(group, config, root, p):
             all_ok = False
 
     if all_ok:

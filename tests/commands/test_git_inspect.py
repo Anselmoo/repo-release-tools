@@ -215,6 +215,84 @@ def test_cmd_doctor_reports_conflicts_and_sync_need(
     assert "src/conflicted.py" in captured.out
 
 
+def test_compute_changelog_problem_skips_non_changelog_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No changelog problem is computed (and no diff-tree call made) for chore commits."""
+
+    def fake_capture(cmd: list[str], cwd: pathlib.Path) -> str:
+        raise AssertionError("diff-tree should not be queried for chore commits")
+
+    monkeypatch.setattr(git_inspect.git, "capture", fake_capture)
+
+    result = git_inspect._compute_changelog_problem(
+        latest_subject="chore: update docs tooling",
+        branch_name="chore/update-docs",
+        changelog_file="CHANGELOG.md",
+        root=pathlib.Path("/repo"),
+    )
+
+    assert result is None
+
+
+def test_compute_changelog_problem_flags_missing_changelog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A feat commit whose HEAD diff doesn't touch the changelog file is flagged."""
+    monkeypatch.setattr(
+        git_inspect.git,
+        "capture",
+        lambda cmd, cwd: "src/repo_release_tools/cli.py",
+    )
+
+    result = git_inspect._compute_changelog_problem(
+        latest_subject="feat: add parser",
+        branch_name="feat/add-parser",
+        changelog_file="CHANGELOG.md",
+        root=pathlib.Path("/repo"),
+    )
+
+    assert result is not None
+    assert "feat/add-parser" in result
+    assert "CHANGELOG.md" in result
+
+
+def test_build_doctor_checks_appends_relation_check_only_with_upstream() -> None:
+    """The sync-relation check is appended only when an upstream branch is configured."""
+    without_upstream = git_inspect._build_doctor_checks(
+        branch_problem=None,
+        upstream=None,
+        dirty_problem=None,
+        operation_problem=None,
+        conflict_problem=None,
+        subject_problem=None,
+        changelog_problem=None,
+        changelog_file="CHANGELOG.md",
+        branch_name="main",
+        relation_problem=None,
+    )
+    with_upstream = git_inspect._build_doctor_checks(
+        branch_problem=None,
+        upstream="origin/main",
+        dirty_problem=None,
+        operation_problem=None,
+        conflict_problem=None,
+        subject_problem=None,
+        changelog_problem=None,
+        changelog_file="CHANGELOG.md",
+        branch_name="main",
+        relation_problem="Branch 'main' is behind origin/main by 1 commit(s). Sync is needed.",
+    )
+
+    assert len(without_upstream) == 7
+    assert len(with_upstream) == 8
+    assert with_upstream[-1] == (
+        False,
+        "main does not need sync from origin/main.",
+        "Branch 'main' is behind origin/main by 1 commit(s). Sync is needed.",
+    )
+
+
 def test_cmd_sync_status_reports_diverged_rebase_conflicts(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -293,6 +371,48 @@ def test_cmd_sync_status_rejects_missing_base_ref(
 
     captured = capsys.readouterr()
     assert "does not exist" in captured.err
+
+
+def test_render_sync_analysis_reports_all_clear(capsys: pytest.CaptureFixture[str]) -> None:
+    """No operation, no conflicts, and a matching base ref yields zero failures."""
+    p = git_inspect.VerbosePrinter(verbose=0)
+
+    failures = git_inspect._render_sync_analysis(
+        p,
+        branch_name="main",
+        base_ref="origin/main",
+        operation=None,
+        conflicts=[],
+        ahead=0,
+        behind=0,
+    )
+
+    out = capsys.readouterr().out
+    assert failures == 0
+    assert "No merge or rebase is in progress." in out
+    assert "No unresolved conflicts detected." in out
+    assert "main matches origin/main." in out
+
+
+def test_render_sync_analysis_counts_each_failure(capsys: pytest.CaptureFixture[str]) -> None:
+    """An in-progress rebase, conflicts, and divergence each count as a failure."""
+    p = git_inspect.VerbosePrinter(verbose=0)
+
+    failures = git_inspect._render_sync_analysis(
+        p,
+        branch_name="feat/x",
+        base_ref="origin/feat/x",
+        operation="rebase",
+        conflicts=["UU src/conflicted.py"],
+        ahead=2,
+        behind=3,
+    )
+
+    out = capsys.readouterr().out
+    assert failures == 3
+    assert "Rebase is in progress" in out
+    assert "Found 1 conflicted path(s)." in out
+    assert "diverged" in out.lower() or "Rebase or merge is needed" in out
 
 
 def test_cmd_check_dirty_tree_reports_status_lines(
@@ -422,6 +542,49 @@ def test_cmd_diff_renders_added_and_removed(
 
     assert rc == 0
     assert "foo.py" in captured
+
+
+def test_render_diff_body_renders_added_and_removed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Direct call renders the file section and added/removed/unchanged lines."""
+    diff_output = (
+        "diff --git a/foo.py b/foo.py\n"
+        "index abc..def 100644\n"
+        "--- a/foo.py\n"
+        "+++ b/foo.py\n"
+        "@@ -1,2 +1,3 @@\n"
+        " unchanged\n"
+        "-removed line\n"
+        "+added line\n"
+    )
+
+    git_inspect._render_diff_body(diff_output, verbose=0)
+
+    out = capsys.readouterr().out
+    assert "foo.py" in out
+    assert "removed line" in out
+    assert "added line" in out
+    assert "unchanged" in out
+
+
+def test_render_diff_body_handles_deleted_file(capsys: pytest.CaptureFixture[str]) -> None:
+    """A deleted file (``+++ /dev/null``) still gets a section header from the old path."""
+    diff_output = (
+        "diff --git a/gone.py b/gone.py\n"
+        "deleted file mode 100644\n"
+        "index abc..000 100644\n"
+        "--- a/gone.py\n"
+        "+++ /dev/null\n"
+        "@@ -1 +0,0 @@\n"
+        "-old content\n"
+    )
+
+    git_inspect._render_diff_body(diff_output, verbose=0)
+
+    out = capsys.readouterr().out
+    assert "gone.py" in out
+    assert "old content" in out
 
 
 def test_cmd_diff_staged_flag(monkeypatch: pytest.MonkeyPatch) -> None:

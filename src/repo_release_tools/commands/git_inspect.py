@@ -228,6 +228,91 @@ class DoctorOptions:
         )
 
 
+def _compute_changelog_problem(
+    *,
+    latest_subject: str,
+    branch_name: str,
+    changelog_file: str,
+    root: Path,
+) -> str | None:
+    """Return a changelog problem message, or ``None`` when no changelog work is required.
+
+    Mirrors the original inline body of :func:`cmd_doctor`: only inspects
+    HEAD's changed files (via ``git diff-tree``) when *latest_subject*
+    indicates changelog work is expected for this commit type.
+    """
+    if not latest_subject or not commit_subject_requires_changelog(latest_subject):
+        return None
+    changed_files = git.capture(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", "HEAD"],
+        root,
+    )
+    changed = [line for line in changed_files.splitlines() if line.strip()]
+    if changelog_is_updated(changed, changelog_file=changelog_file, cwd=root):
+        return None
+    return (
+        f"Branch {branch_name!r} suggests changelog work, but {changelog_file} is not part of HEAD."
+    )
+
+
+def _build_doctor_checks(
+    *,
+    branch_problem: str | None,
+    upstream: str | None,
+    dirty_problem: str | None,
+    operation_problem: str | None,
+    conflict_problem: str | None,
+    subject_problem: str | None,
+    changelog_problem: str | None,
+    changelog_file: str,
+    branch_name: str,
+    relation_problem: str | None,
+) -> list[tuple[bool, str, str]]:
+    """Build the ordered (ok, ok_message, problem_message) tuples for `rrt git doctor`.
+
+    One tuple per health check; the sync-relation check is appended only when
+    an upstream branch is configured, matching the original inline logic.
+    """
+    checks: list[tuple[bool, str, str]] = [
+        (branch_problem is None, "Branch naming matches rrt policy.", branch_problem or ""),
+        (
+            upstream is not None,
+            "Upstream branch is configured.",
+            "No upstream branch configured." if upstream is None else "",
+        ),
+        (dirty_problem is None, "Working tree is clean.", dirty_problem or ""),
+        (
+            operation_problem is None,
+            "No merge or rebase is in progress.",
+            operation_problem or "",
+        ),
+        (
+            conflict_problem is None,
+            "No unresolved conflicts detected.",
+            conflict_problem or "",
+        ),
+        (
+            subject_problem is None,
+            "Latest commit subject is conventional.",
+            subject_problem or "",
+        ),
+        (
+            changelog_problem is None,
+            f"Changelog state is valid for {changelog_file}.",
+            changelog_problem or "",
+        ),
+    ]
+    if upstream is not None:
+        checks.append(
+            (
+                relation_problem is None,
+                f"{branch_name} does not need sync from {upstream}.",
+                relation_problem or "",
+            ),
+        )
+    return checks
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Run a compact repository health report for rrt workflows."""
     opts = DoctorOptions.from_args(args)
@@ -265,19 +350,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         f"Found {len(conflicts)} conflicted path(s). Resolve them first." if conflicts else None
     )
     relation_problem = sync_problem(branch_name, base_ref=upstream, ahead=ahead, behind=behind)
-
-    changelog_problem: str | None = None
-    if latest_subject and commit_subject_requires_changelog(latest_subject):
-        changed_files = git.capture(
-            ["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", "HEAD"],
-            root,
-        )
-        changed = [line for line in changed_files.splitlines() if line.strip()]
-        if not changelog_is_updated(changed, changelog_file=opts.changelog_file, cwd=root):
-            changelog_problem = (
-                f"Branch {branch_name!r} suggests changelog work, but {opts.changelog_file} "
-                "is not part of HEAD."
-            )
+    changelog_problem = _compute_changelog_problem(
+        latest_subject=latest_subject,
+        branch_name=branch_name,
+        changelog_file=opts.changelog_file,
+        root=root,
+    )
 
     summary = summarize_status(branch_name, status_lines, upstream=upstream, root=root)
     p = VerbosePrinter(verbose=verbose)
@@ -294,43 +372,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     p.section("Checks")
     failures = 0
 
-    checks: list[tuple[bool, str, str]] = [
-        (branch_problem is None, "Branch naming matches rrt policy.", branch_problem or ""),
-        (
-            upstream is not None,
-            "Upstream branch is configured.",
-            "No upstream branch configured." if upstream is None else "",
-        ),
-        (dirty_problem is None, "Working tree is clean.", dirty_problem or ""),
-        (
-            operation_problem is None,
-            "No merge or rebase is in progress.",
-            operation_problem or "",
-        ),
-        (
-            conflict_problem is None,
-            "No unresolved conflicts detected.",
-            conflict_problem or "",
-        ),
-        (
-            subject_problem is None,
-            "Latest commit subject is conventional.",
-            subject_problem or "",
-        ),
-        (
-            changelog_problem is None,
-            f"Changelog state is valid for {opts.changelog_file}.",
-            changelog_problem or "",
-        ),
-    ]
-    if upstream is not None:
-        checks.append(
-            (
-                relation_problem is None,
-                f"{branch_name} does not need sync from {upstream}.",
-                relation_problem or "",
-            ),
-        )
+    checks = _build_doctor_checks(
+        branch_problem=branch_problem,
+        upstream=upstream,
+        dirty_problem=dirty_problem,
+        operation_problem=operation_problem,
+        conflict_problem=conflict_problem,
+        subject_problem=subject_problem,
+        changelog_problem=changelog_problem,
+        changelog_file=opts.changelog_file,
+        branch_name=branch_name,
+        relation_problem=relation_problem,
+    )
 
     for ok, ok_msg, problem in checks:
         if ok:
@@ -445,6 +498,53 @@ class SyncStatusOptions:
         return cls(verbose=getattr(args, "verbose", 0) or 0, base_ref=args.base_ref)
 
 
+def _render_sync_analysis(
+    p: VerbosePrinter,
+    *,
+    branch_name: str,
+    base_ref: str | None,
+    operation: str | None,
+    conflicts: list[str],
+    ahead: int,
+    behind: int,
+) -> int:
+    """Render the "Analysis" section for `rrt git sync-status` and return failure count.
+
+    Checks, in order: in-progress merge/rebase, unresolved conflicts, and
+    ahead/behind drift against *base_ref*. Matches the original inline body
+    of :func:`cmd_sync_status` exactly, including message wording.
+    """
+    p.section("Analysis")
+    failures = 0
+
+    if operation is None:
+        p.ok("No merge or rebase is in progress.")
+    else:
+        failures += 1
+        p.warn(f"{operation.capitalize()} is in progress. Resolve or abort it first.")
+
+    if not conflicts:
+        p.ok("No unresolved conflicts detected.")
+    else:
+        failures += 1
+        p.warn(f"Found {len(conflicts)} conflicted path(s).")
+
+    if base_ref is None:
+        failures += 1
+        p.warn("No upstream branch is configured. Use --base-ref to analyze sync drift.")
+    elif ahead == 0 and behind == 0:
+        p.ok(f"{branch_name} matches {base_ref}.")
+    elif ahead > 0 and behind == 0:
+        p.ok(f"{branch_name} is ahead of {base_ref} by {ahead} commit(s).")
+    else:
+        failures += 1
+        problem = sync_problem(branch_name, base_ref=base_ref, ahead=ahead, behind=behind)
+        if problem is not None:
+            p.warn(problem)
+
+    return failures
+
+
 def cmd_sync_status(args: argparse.Namespace) -> int:
     """Analyze merge/rebase blockers and divergence against a sync base."""
     opts = SyncStatusOptions.from_args(args)
@@ -484,33 +584,15 @@ def cmd_sync_status(args: argparse.Namespace) -> int:
         Status=summarize_status(branch_name, status_lines, upstream=base_ref, root=root),
     )
 
-    p.section("Analysis")
-    failures = 0
-
-    if operation is None:
-        p.ok("No merge or rebase is in progress.")
-    else:
-        failures += 1
-        p.warn(f"{operation.capitalize()} is in progress. Resolve or abort it first.")
-
-    if not conflicts:
-        p.ok("No unresolved conflicts detected.")
-    else:
-        failures += 1
-        p.warn(f"Found {len(conflicts)} conflicted path(s).")
-
-    if base_ref is None:
-        failures += 1
-        p.warn("No upstream branch is configured. Use --base-ref to analyze sync drift.")
-    elif ahead == 0 and behind == 0:
-        p.ok(f"{branch_name} matches {base_ref}.")
-    elif ahead > 0 and behind == 0:
-        p.ok(f"{branch_name} is ahead of {base_ref} by {ahead} commit(s).")
-    else:
-        failures += 1
-        problem = sync_problem(branch_name, base_ref=base_ref, ahead=ahead, behind=behind)
-        if problem is not None:
-            p.warn(problem)
+    failures = _render_sync_analysis(
+        p,
+        branch_name=branch_name,
+        base_ref=base_ref,
+        operation=operation,
+        conflicts=conflicts,
+        ahead=ahead,
+        behind=behind,
+    )
 
     if conflicts:
         p.blank_line()
@@ -590,33 +672,15 @@ class DiffOptions:
         )
 
 
-def cmd_diff(args: argparse.Namespace) -> int:
-    """Show a compact git diff using DiffGlyphs."""
-    opts = DiffOptions.from_args(args)
-    verbose = opts.verbose
-    root = Path.cwd()
-    if not git.is_git_repository(root):
-        p = VerbosePrinter(verbose=verbose)
-        p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
-        return 1
+def _render_diff_body(raw: str, *, verbose: int) -> None:
+    """Render the file/hunk/line body of a unified diff using rrt glyphs.
 
-    cmd = ["git", "diff", "--unified=3"]
-    if opts.staged:
-        cmd.append("--staged")
-    if opts.against:
-        cmd.append(opts.against)
-
-    try:
-        raw = git.capture_checked(cmd, root)
-    except RuntimeError as exc:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-    if not raw.strip():
-        p = VerbosePrinter(verbose=verbose)
-        p.ok("No diff to show.")
-        return 0
-
+    Single stateful pass over *raw*'s lines: tracks the current file name and
+    old/new line counters as hunks and +/-/context lines are consumed.
+    Matches the original inline loop body of :func:`cmd_diff` exactly,
+    including its practice of constructing a fresh :class:`VerbosePrinter`
+    per emitted line/section.
+    """
     current_file: str = ""
     old_lineno: int | None = None
     new_lineno: int | None = None
@@ -694,6 +758,36 @@ def cmd_diff(args: argparse.Namespace) -> int:
         p.line(f"  {rendered}")
 
     p.blank_line()
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """Show a compact git diff using DiffGlyphs."""
+    opts = DiffOptions.from_args(args)
+    verbose = opts.verbose
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        p = VerbosePrinter(verbose=verbose)
+        p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
+        return 1
+
+    cmd = ["git", "diff", "--unified=3"]
+    if opts.staged:
+        cmd.append("--staged")
+    if opts.against:
+        cmd.append(opts.against)
+
+    try:
+        raw = git.capture_checked(cmd, root)
+    except RuntimeError as exc:
+        p = VerbosePrinter(verbose=verbose)
+        p.line(str(exc), ok=False, stream=sys.stderr)
+        return 1
+    if not raw.strip():
+        p = VerbosePrinter(verbose=verbose)
+        p.ok("No diff to show.")
+        return 0
+
+    _render_diff_body(raw, verbose=verbose)
     return 0
 
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands.bump import apply_version
@@ -87,19 +88,68 @@ def _stage_and_commit(
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class Options:
+    """Typed view of ``argparse.Namespace`` for ``rrt sync``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_sync` so every
+    flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    dry_run: bool
+    verbose: int
+    group: str | None
+    json: bool
+    bump: bool
+    commit: bool
+    tag: bool
+    commit_message: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> Options:
+        """Build an :class:`Options` from a parsed ``argparse.Namespace``.
+
+        ``dry_run``, ``group``, and ``json`` are given real defaults by both
+        sync_cmd.py's own register() and workflow/hooks.py's "sync" dispatch
+        case's subparser, so a Namespace produced by either always carries
+        them. ``bump``, ``commit``, ``tag``, and ``commit_message`` are only
+        registered by sync_cmd.py's own register() -- hooks.py's "sync"
+        subparser (workflow/hooks.py:1160-1178) only exposes --group, --json,
+        and --dry-run for the read-only listing use case -- so a Namespace
+        built by hooks.py's dispatch lacks all four and needs the getattr
+        fallback. ``verbose`` is set globally by cli.py's parser (and
+        explicitly by hooks.py before calling cmd_sync), but several tests in
+        tests/commands/test_sync_cmd.py construct sparse
+        ``argparse.Namespace`` objects that omit it, so the fallback here
+        absorbs that gap too.
+        """
+        return cls(
+            dry_run=getattr(args, "dry_run", False),
+            verbose=getattr(args, "verbose", 0),
+            group=getattr(args, "group", None),
+            json=getattr(args, "json", False),
+            bump=getattr(args, "bump", False),
+            commit=getattr(args, "commit", False),
+            tag=getattr(args, "tag", False),
+            commit_message=getattr(args, "commit_message", None),
+        )
+
+
 def cmd_sync(args: argparse.Namespace) -> int:
     """Print upstream versions newer than the current project version.
 
     With ``--bump``: apply each newer version to the configured targets in
     ascending order, then optionally commit and tag.
     """
-    dry_run: bool = getattr(args, "dry_run", False)
-    p = DryRunPrinter(dry_run, verbose=getattr(args, "verbose", 0))
+    opts = Options.from_args(args)
+    dry_run: bool = opts.dry_run
+    p = DryRunPrinter(dry_run, verbose=opts.verbose)
     cfg = load_or_autodetect_config(Path.cwd())
     try:
-        group = cfg.resolve_group(getattr(args, "group", None))
+        group = cfg.resolve_group(opts.group)
     except ValueError as exc:
-        p = VerbosePrinter(verbose=getattr(args, "verbose", 0))
+        p = VerbosePrinter(verbose=opts.verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
@@ -119,14 +169,14 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
     fresh = newer_versions(current, parsed)
 
-    do_bump: bool = getattr(args, "bump", False)
-    do_commit: bool = getattr(args, "commit", False)
-    do_tag: bool = getattr(args, "tag", False)
-    commit_message_tmpl: str | None = getattr(args, "commit_message", None)
+    do_bump: bool = opts.bump
+    do_commit: bool = opts.commit
+    do_tag: bool = opts.tag
+    commit_message_tmpl: str | None = opts.commit_message
 
     # ── List-only mode (no --bump) ──────────────────────────────────────────
     if not do_bump:
-        if getattr(args, "json", False):
+        if opts.json:
             sys.stdout.write(json.dumps([str(v) for v in fresh]) + "\n")
         else:
             for v in fresh:
@@ -190,8 +240,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
                 prefix="v",
                 message=None,
                 force=False,
-                group=getattr(args, "group", None),
-                verbose=getattr(args, "verbose", 0),
+                group=opts.group,
+                verbose=opts.verbose,
             )
             rc = cmd_tag_create(tag_ns)
             if rc != 0:
