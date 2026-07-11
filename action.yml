@@ -104,8 +104,10 @@ runs:
 
     - name: Build verbosity flag
       shell: bash
+      env:
+        INPUT_VERBOSE: ${{ inputs.verbose }}
       run: |
-        case "${{ inputs.verbose }}" in
+        case "$INPUT_VERBOSE" in
           1) echo "_rrt_verbose_flag=-v" >> "$GITHUB_ENV" ;;
           2) echo "_rrt_verbose_flag=-vv" >> "$GITHUB_ENV" ;;
           3) echo "_rrt_verbose_flag=-vvv" >> "$GITHUB_ENV" ;;
@@ -116,6 +118,8 @@ runs:
       id: detect-version
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_CHANGELOG_FILE: ${{ inputs.changelog-file }}
       run: |
         set -euo pipefail
         detected_version=""
@@ -125,11 +129,11 @@ runs:
           detected_version="${detected_version//[$'\n\r']}"
         fi
 
-        changelog_file="${{ inputs.changelog-file }}"
+        changelog_file="$INPUT_CHANGELOG_FILE"
         if [[ -f "$changelog_file" ]]; then
-          if grep -q '^\[Unreleased\]' "$changelog_file" 2>/dev/null; then
+          if grep -q '^## \[Unreleased\]' "$changelog_file" 2>/dev/null; then
             # Count non-empty lines under [Unreleased]
-            entries=$(awk '/^\[Unreleased\]/{p=1;next} /^\[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
+            entries=$(awk '/^## \[Unreleased\]/{p=1;next} /^## \[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
             if [[ "$entries" -gt 0 ]]; then
               changelog_status="dirty"
             else
@@ -140,7 +144,8 @@ runs:
           fi
         fi
 
-        health_summary="{\"version\":\"${detected_version}\",\"changelog_status\":\"${changelog_status}\"}"
+        health_summary=$(jq -nc --arg version "$detected_version" --arg changelog_status "$changelog_status" \
+          '{version: $version, changelog_status: $changelog_status}')
 
         echo "detected_version=${detected_version}" >> "$GITHUB_OUTPUT"
         echo "changelog_status=${changelog_status}" >> "$GITHUB_OUTPUT"

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from repo_release_tools.commands.docs_map import build_full_block, iter_target_directories
+from repo_release_tools.state import docs_map_lock_path
 
 if TYPE_CHECKING:
     from repo_release_tools.config import MapConfig
@@ -90,7 +91,7 @@ def compute_desired_hashes(config: MapConfig, repo_root: Path) -> dict[str, str]
 
 def detect_drift(config: MapConfig, repo_root: Path) -> list[DriftItem]:
     """Compare desired hashes against the lockfile; return drift items."""
-    lockfile_path = repo_root / config.lock_file
+    lockfile_path = docs_map_lock_path(repo_root, config.lock_file)
     recorded = read_lockfile(lockfile_path)
     desired = compute_desired_hashes(config, repo_root)
 

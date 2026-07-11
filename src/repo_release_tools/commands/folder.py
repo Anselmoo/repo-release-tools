@@ -52,10 +52,10 @@ FOLDER_EPILOG = (
 )
 
 
-def _load_folder_policy_config() -> RrtConfig | None:
+def _load_folder_policy_config(root: Path) -> RrtConfig | None:
     """Return loaded config when available, otherwise ``None`` for template-only flows."""
     try:
-        return load_or_autodetect_config(Path.cwd())
+        return load_or_autodetect_config(root)
     except FileNotFoundError:
         return None
     except ValueError as exc:
@@ -68,7 +68,7 @@ def cmd_folder_check(args: argparse.Namespace) -> int:
     """Run folder supervision checks."""
     verbose: int = getattr(args, "verbose", 0) or 0
     root = Path(args.root).resolve()
-    config = _load_folder_policy_config()
+    config = _load_folder_policy_config(root)
     report = check_folders(
         root=root,
         policy=None if config is None else config.folders,
@@ -122,7 +122,7 @@ def cmd_folder_scaffold(args: argparse.Namespace) -> int:
     """Scaffold folder structure from templates or config."""
     verbose: int = getattr(args, "verbose", 0) or 0
     root = Path(args.root).resolve()
-    config = _load_folder_policy_config()
+    config = _load_folder_policy_config(root)
     report = scaffold_folders(
         root=root,
         policy=None if config is None else config.folders,

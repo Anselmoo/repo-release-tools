@@ -72,6 +72,7 @@ from __future__ import annotations
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -149,7 +150,7 @@ class EolRecord:
 def fetch_live_data(language: str) -> list[dict[str, object]]:
     """Fetch EOL data from endoflife.date API."""
     slug = _canonical_slug(language)
-    url = f"https://endoflife.date/api/v1/products/{slug}/"
+    url = f"https://endoflife.date/api/v1/products/{urllib.parse.quote(slug, safe='')}/"
     try:
         with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310
             raw = json.loads(response.read().decode("utf-8"))

@@ -373,6 +373,24 @@ def test_rrt_init_run_dry_run(tmp_path: Path) -> None:
     assert mock_run.call_args.kwargs["timeout"] == 20.0
 
 
+def test_rrt_init_run_rejects_unknown_target_without_invoking_subprocess(
+    tmp_path: Path,
+) -> None:
+    """SEC-007: an unallowlisted `target` must never reach subprocess argv."""
+    tools = _registered(tmp_path)
+    ctx = _ctx(tmp_path)
+    mock_run = MagicMock()
+
+    async def _run() -> str:
+        with patch("subprocess.run", mock_run):
+            return await tools["rrt_init_run"](ctx, target="rrt-toml; rm -rf /")
+
+    result = asyncio.run(_run())
+    assert "[error]" in result
+    assert "Invalid target" in result
+    mock_run.assert_not_called()
+
+
 def test_rrt_init_run_apply(tmp_path: Path) -> None:
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)

@@ -80,14 +80,10 @@ def register(mcp: FastMCP) -> None:
                 )
                 applied = False
                 if not dry_run:
-                    import contextlib
-                    import io
-
                     from repo_release_tools.version.targets import replace_version_in_file
 
                     for target in group.version_targets:
-                        with contextlib.redirect_stdout(io.StringIO()):
-                            replace_version_in_file(target, new_ver, dry_run=False)
+                        replace_version_in_file(target, new_ver, dry_run=False)
                         await ctx.info(f"Updated {target.path}")
                     applied = True
                 results.append(

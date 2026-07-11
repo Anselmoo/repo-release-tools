@@ -161,7 +161,7 @@ def test_current_branch_branch_exists_and_commits_ahead_delegate(
     def fake_capture(cmd: list[str], cwd: Path) -> str:
         if cmd == ["git", "branch", "--show-current"]:
             return "feature/current"
-        if cmd == ["git", "branch", "--list", "release/v1.2.3"]:
+        if cmd == ["git", "branch", "--list", "--", "release/v1.2.3"]:
             return "  release/v1.2.3"
         if cmd == ["git", "log", "origin/main..HEAD", "--pretty=format:%h %s"]:
             return "abc123 feat: add parser\n\nxyz789 fix: typo\n"
@@ -175,6 +175,33 @@ def test_current_branch_branch_exists_and_commits_ahead_delegate(
         "abc123 feat: add parser",
         "xyz789 fix: typo",
     ]
+
+
+def test_branch_exists_uses_dashdash_separator(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """SEC-004: a dash-prefixed branch name must not be parsed as a git option."""
+    captured: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], cwd: Path) -> str:
+        captured.append(cmd)
+        return ""
+
+    monkeypatch.setattr(git, "capture", fake_capture)
+
+    assert git.branch_exists(tmp_path, "--force") is False
+    assert captured == [["git", "branch", "--list", "--", "--force"]]
+
+
+def test_commits_ahead_rejects_dash_prefixed_base_ref(tmp_path: Path) -> None:
+    """SEC-004: ``<base_ref>..HEAD`` is a single positional revision-range argument
+
+    that ``--`` cannot safely guard (it would be reinterpreted as a pathspec), so a
+    leading dash is rejected outright instead of reaching the subprocess.
+    """
+    with pytest.raises(ValueError, match=r"base_ref must not start with '-'"):
+        git.commits_ahead(tmp_path, "--output=/tmp/evil")
 
 
 def test_working_tree_clean_and_ahead_behind_handle_multiple_outcomes(
@@ -332,6 +359,23 @@ def test_ref_exists_checks_rev_parse(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     assert git.ref_exists(tmp_path, "HEAD~1") is True
+
+
+def test_ref_exists_rejects_dash_prefixed_ref_without_invoking_git(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """SEC-004: a dash-prefixed ref must not reach ``git rev-parse --verify``.
+
+    Unlike a plain positional path, ``--`` does not reliably stop option parsing
+    for ``rev-parse``, so a leading dash is rejected before the subprocess call.
+    """
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("git must not run")),
+    )
+
+    assert git.ref_exists(tmp_path, "--output=/tmp/evil") is False
 
 
 def test_in_progress_operation_detects_rebase_and_merge(

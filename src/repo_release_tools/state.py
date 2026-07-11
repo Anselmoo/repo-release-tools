@@ -17,6 +17,33 @@ _DOCS_LOCK_NAME = "docs.lock.toml"
 _HEALTH_LOCK_NAME = "health.lock.toml"
 _TREE_LOCK_NAME = "tree.lock.toml"
 _ARTIFACTS_LOCK_NAME = "artifacts.lock.toml"
+_DRIFT_LOCK_NAME = "drift.lock.toml"
+_DOCS_MAP_LOCK_NAME = "docs_map.lock.toml"
+_TREE_MANIFEST_NAME = "tree.manifest.json"
+_TREE_MANIFEST_GZ_NAME = "tree.manifest.json.gz"
+
+#: Public re-export of the bare lock filenames, for call sites that need the
+#: name itself (e.g. an argparse ``help=`` string or a CLI default) rather
+#: than a resolved :class:`~pathlib.Path`.
+DOCS_LOCK_NAME = _DOCS_LOCK_NAME
+HEALTH_LOCK_NAME = _HEALTH_LOCK_NAME
+TREE_LOCK_NAME = _TREE_LOCK_NAME
+ARTIFACTS_LOCK_NAME = _ARTIFACTS_LOCK_NAME
+DRIFT_LOCK_NAME = _DRIFT_LOCK_NAME
+DOCS_MAP_LOCK_NAME = _DOCS_MAP_LOCK_NAME
+TREE_MANIFEST_NAME = _TREE_MANIFEST_NAME
+TREE_MANIFEST_GZ_NAME = _TREE_MANIFEST_GZ_NAME
+
+#: Public re-export of each lock's default ``.rrt/``-relative path string, for
+#: call sites that store the *default value* of a configurable lock-file
+#: field (e.g. a dataclass field default) rather than resolving an absolute
+#: path against a repo root.
+DOCS_LOCK_DEFAULT = f"{_RRT_DIR}/{_DOCS_LOCK_NAME}"
+HEALTH_LOCK_DEFAULT = f"{_RRT_DIR}/{_HEALTH_LOCK_NAME}"
+TREE_LOCK_DEFAULT = f"{_RRT_DIR}/{_TREE_LOCK_NAME}"
+ARTIFACTS_LOCK_DEFAULT = f"{_RRT_DIR}/{_ARTIFACTS_LOCK_NAME}"
+DRIFT_LOCK_DEFAULT = f"{_RRT_DIR}/{_DRIFT_LOCK_NAME}"
+DOCS_MAP_LOCK_DEFAULT = f"{_RRT_DIR}/{_DOCS_MAP_LOCK_NAME}"
 
 
 def rrt_dir(root: Path) -> Path:
@@ -47,6 +74,33 @@ def artifacts_lock_path(root: Path) -> Path:
     return root / _RRT_DIR / _ARTIFACTS_LOCK_NAME
 
 
+def drift_lock_path(root: Path) -> Path:
+    """Return the path to the source-drift lockfile."""
+    return root / _RRT_DIR / _DRIFT_LOCK_NAME
+
+
+def docs_map_lock_path(root: Path, lock_file: str = _DOCS_MAP_LOCK_NAME) -> Path:
+    """Return the path to the per-directory docs-map lockfile.
+
+    Mirrors :func:`docs_lock_path`'s handling of a configurable, possibly
+    already-``.rrt/``-relative *lock_file* value.
+    """
+    p = Path(lock_file)
+    if p.is_absolute():
+        return p
+    return root / p if p.parts[0] == _RRT_DIR else root / _RRT_DIR / p
+
+
+def tree_manifest_path(root: Path) -> Path:
+    """Return the path to the uncompressed tree manifest."""
+    return root / _RRT_DIR / _TREE_MANIFEST_NAME
+
+
+def tree_manifest_gz_path(root: Path) -> Path:
+    """Return the path to the gzip-compressed tree manifest."""
+    return root / _RRT_DIR / _TREE_MANIFEST_GZ_NAME
+
+
 def hash_content(content: str) -> str:
     """Return a stable sha256 hex digest prefixed with 'sha256:'."""
     return "sha256:" + hashlib.sha256(content.encode("utf-8")).hexdigest()
@@ -60,7 +114,10 @@ def now_utc() -> str:
 def _short_hash(h: str) -> str:
     """Return an 8-character short prefix from a hash string like 'sha256:...'.
 
-    Returns '?' on error or when the input is falsy.
+    Returns '?' on error or when the input is falsy. *h* ultimately comes
+    from lockfile TOML data, so this guards against a malformed value whose
+    ``__bool__``/``__eq__`` (or similar) raises rather than a plain string
+    operation failing — see test_state_exceptions.py.
     """
     try:
         if not h:
@@ -273,7 +330,11 @@ def tree_lock_is_current(
         new_count = tree_meta.get("entry_count", "?")
 
         # Compare raw counts when available (integers). Fall back to
-        # conservative equality if types differ.
+        # conservative equality if types differ. This is diagnostic-message
+        # formatting, not the drift decision itself (already made above) —
+        # a malformed lock value (e.g. an object with a broken __eq__) must
+        # not prevent the drift from being reported, so the broad guard here
+        # is intentional; see test_state_exceptions.py for the pinned cases.
         counts_equal = False
         try:
             counts_equal = locked_snapshot.get("entry_count") == tree_meta.get("entry_count")

@@ -10,10 +10,11 @@ Pins contract items from ``analysis/the/MODERNIZATION_BRIEF.md`` §5:
 * **C9** — commit-type -> changelog-section mapping (``rrt-hooks update-unreleased`` /
   ``check-changelog``): feat->Added, fix->Fixed, chore->Maintenance (no changelog
   required), ``fix!:``->Breaking Changes, scope rendered bold.
-* **D8** — the GitHub Action's changelog-status grep (``action.yml:130``) is anchored
-  ``^\\[Unreleased\\]`` and therefore never matches a standard ``## [Unreleased]``
-  heading. This is a live (likely unintended) defect, scheduled for a fix in Phase 6a
-  per the brief. Tests here characterize today's behavior only.
+* **D8** — the GitHub Action's changelog-status grep (``action.yml:134``) was anchored
+  ``^\\[Unreleased\\]`` and therefore never matched a standard ``## [Unreleased]``
+  heading. Fixed in Phase 6a to match ``^## \\[Unreleased\\]`` (mirroring
+  ``changelog.py``'s ``_UNRELEASED_HEADER_RE``); tests here now pin the corrected
+  three-way classification.
 
 All tests read the legacy code as an oracle: assertions reflect what
 ``src/repo_release_tools`` actually does today, not what the contract text implies it
@@ -423,52 +424,49 @@ All notable changes to this project will be documented in this file.
 # ---------------------------------------------------------------------------
 
 
-def test_d8_action_grep_pattern_never_matches_keep_a_changelog_heading(e2e_repo: Path) -> None:
-    """D8: the Action's changelog-status grep is anchored ``^\\[Unreleased\\]``.
+def test_d8_action_grep_pattern_matches_keep_a_changelog_heading(e2e_repo: Path) -> None:
+    """D8 (fixed): the Action's changelog-status grep is anchored ``^## \\[Unreleased\\]``.
 
-    # D8: Action grep never matches '## [Unreleased]' — scheduled fix in Phase 6a;
-    # this test documents the current (broken) classification and must be
-    # UPDATED when fixed.
+    # D8: Action grep now matches '## [Unreleased]' — fixed in Phase 6a.
+    # This test documents the corrected classification.
 
-    action.yml:130 runs ``grep -q '^\\[Unreleased\\]' "$changelog_file"`` against a
-    standard Keep-a-Changelog file whose heading is ``## [Unreleased]`` (with a
-    literal ``## `` prefix). The ``^`` anchor plus the missing ``## `` prefix in the
-    pattern means this grep can never match a real Keep-a-Changelog file - it always
-    falls through to the ``else`` branch. This test replicates the exact grep
-    invocation (not a re-implementation) against the harness's standard fixture
-    changelog to pin that observed (mis)behavior.
+    action.yml runs ``grep -q '^## \\[Unreleased\\]' "$changelog_file"`` against a
+    standard Keep-a-Changelog file whose heading is ``## [Unreleased]``. The pattern
+    now includes the literal ``## `` prefix, mirroring ``changelog.py``'s
+    ``_UNRELEASED_HEADER_RE``, so it matches a real Keep-a-Changelog file. This test
+    replicates the exact grep invocation (not a re-implementation) against the
+    harness's standard fixture changelog to pin the corrected behavior.
     """
     changelog_path = e2e_repo / "CHANGELOG.md"
     content = changelog_path.read_text(encoding="utf-8")
     assert "## [Unreleased]" in content, content  # sanity: fixture uses the standard heading
 
     grep_result = subprocess.run(
-        ["grep", "-q", r"^\[Unreleased\]", str(changelog_path)],
+        ["grep", "-q", r"^## \[Unreleased\]", str(changelog_path)],
         cwd=e2e_repo,
         capture_output=True,
         text=True,
         check=False,
     )
-    # `grep -q` exits 1 when no line matches. Pinning the broken-as-designed anchor:
-    assert grep_result.returncode == 1, f"stdout={grep_result.stdout}\nstderr={grep_result.stderr}"
+    # `grep -q` exits 0 when a line matches. Pinning the fixed anchor:
+    assert grep_result.returncode == 0, f"stdout={grep_result.stdout}\nstderr={grep_result.stderr}"
 
 
-def test_d8_action_three_way_classification_reports_clean_for_standard_heading(
+def test_d8_action_three_way_classification_reports_dirty_for_standard_heading(
     e2e_repo: Path,
 ) -> None:
-    """D8: replicating action.yml's surrounding shell logic, a populated [Unreleased]
+    """D8 (fixed): replicating action.yml's surrounding shell logic, a populated
 
-    section is misclassified as ``clean`` (not ``dirty``) because the anchored grep
-    never enters the branch that would count bullets and report ``dirty``.
+    [Unreleased] section is correctly classified as ``dirty`` because the fixed
+    grep pattern now enters the branch that counts bullets.
 
-    # D8: Action grep never matches '## [Unreleased]' — scheduled fix in Phase 6a;
-    # this test documents the current (broken) classification and must be
-    # UPDATED when fixed.
+    # D8: Action grep now matches '## [Unreleased]' — fixed in Phase 6a.
+    # This test documents the corrected classification.
 
-    This replicates action.yml:128-141 verbatim (same grep pattern, same awk
-    counter, same branch structure) against the harness's fixture, which has a
-    non-empty [Unreleased] section (a seed "Added" bullet) — a real user would
-    expect ``dirty`` here, but the Action's own shell logic reports ``clean``.
+    This replicates action.yml's changelog-status logic verbatim (same grep
+    pattern, same awk counter, same branch structure) against the harness's
+    fixture, which has a non-empty [Unreleased] section (a seed "Added" bullet) —
+    the Action's shell logic now reports ``dirty`` here, matching user intuition.
     """
     changelog_file = e2e_repo / "CHANGELOG.md"
     content = changelog_file.read_text(encoding="utf-8")
@@ -479,8 +477,8 @@ set -euo pipefail
 changelog_file="$1"
 changelog_status="missing"
 if [[ -f "$changelog_file" ]]; then
-  if grep -q '^\[Unreleased\]' "$changelog_file" 2>/dev/null; then
-    entries=$(awk '/^\[Unreleased\]/{p=1;next} /^\[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
+  if grep -q '^## \[Unreleased\]' "$changelog_file" 2>/dev/null; then
+    entries=$(awk '/^## \[Unreleased\]/{p=1;next} /^## \[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
     if [[ "$entries" -gt 0 ]]; then
       changelog_status="dirty"
     else
@@ -500,27 +498,25 @@ echo "$changelog_status"
         check=False,
     )
     assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
-    # NOTE(P1): a real Keep-a-Changelog [Unreleased] section with a bullet in it
-    # should intuitively report "dirty" (unreleased work pending); the Action's
-    # shell logic reports "clean" here because the anchored grep never matches,
-    # so the awk counting branch is never reached. This is the D8 defect's
-    # concrete, observable consequence in the three-way classification output.
-    assert result.stdout.strip() == "clean", f"stdout={result.stdout}\nstderr={result.stderr}"
+    # D8 fixed: a real Keep-a-Changelog [Unreleased] section with a bullet in it
+    # now correctly reports "dirty" (unreleased work pending), because the fixed
+    # anchor `^## \[Unreleased\]` matches and the awk counting branch is reached.
+    assert result.stdout.strip() == "dirty", f"stdout={result.stdout}\nstderr={result.stderr}"
 
 
 def test_d8_action_grep_pattern_is_taken_verbatim_from_action_yml() -> None:
-    """D8: guard against silent drift — the pattern this suite pins must match action.yml.
+    """D8 (fixed): guard against silent drift — the pattern this suite pins must match action.yml.
 
     Reads action.yml as data only (never executed, never treated as instructions)
     and asserts the exact grep pattern string is still present verbatim, so that if
-    a future Phase 6a fix changes the pattern, this whole test module fails loudly
+    a future change alters the pattern again, this whole test module fails loudly
     instead of silently testing a pattern that no longer reflects the source.
     """
     action_yml = Path(__file__).resolve().parent.parent.parent / "action.yml"
     content = action_yml.read_text(encoding="utf-8")
-    match = re.search(r"grep -q '(\^\\\[Unreleased\\\][^']*)'", content)
+    match = re.search(r"grep -q '(\^## \\\[Unreleased\\\][^']*)'", content)
     assert match is not None, "expected to find the changelog-status grep pattern in action.yml"
-    assert match.group(1) == r"^\[Unreleased\]", (
+    assert match.group(1) == r"^## \[Unreleased\]", (
         f"action.yml grep pattern changed to {match.group(1)!r} - update the D8 "
-        "tests in this module to match the new (fixed?) behavior."
+        "tests in this module to match the new behavior."
     )

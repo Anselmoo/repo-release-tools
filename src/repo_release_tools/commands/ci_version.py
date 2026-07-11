@@ -55,6 +55,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     VALID_CI_FORMATS,
     find_repo_root,
@@ -313,7 +314,8 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
         if total > 1 and i > 1:
             progress.clear()
         try:
-            replace_version_in_file(target, version_str, dry_run=args.dry_run)
+            event = replace_version_in_file(target, version_str, dry_run=args.dry_run)
+            render_version_write_events([event])
         except (FileNotFoundError, RuntimeError) as exc:
             progress.clear()
             p = VerbosePrinter(verbose=verbose)

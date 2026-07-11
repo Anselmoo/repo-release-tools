@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent
 
+from repo_release_tools.state import DOCS_LOCK_DEFAULT, DOCS_MAP_LOCK_DEFAULT
 from repo_release_tools.sync.providers import PROVIDERS as VALID_UPSTREAM_PROVIDERS  # noqa: F401
 
 DEFAULT_RELEASE_BRANCH = "release/v{version}"
@@ -490,7 +491,7 @@ class MapConfig:
     purpose: dict[str, str] = field(default_factory=dict)
     include: tuple[str, ...] = ()
     exclude: tuple[str, ...] = ()
-    lock_file: str = ".rrt/docs_map.lock.toml"
+    lock_file: str = DOCS_MAP_LOCK_DEFAULT
 
     def validate(self) -> None:
         """Validate enumerated fields."""
@@ -524,7 +525,7 @@ class DocsConfig:
     # Multi-language doc extraction settings
     extraction_mode: str = "explicit"  # "explicit" | "implicit" | "both"
     languages: tuple[str, ...] = ("python",)
-    lock_file: str = ".rrt/docs.lock.toml"
+    lock_file: str = DOCS_LOCK_DEFAULT
     formats: tuple[str, ...] = ("md",)
     source_repo_url: str | None = None
     source_ref: str | None = None

@@ -92,24 +92,24 @@ INIT_EPILOG = (
 def cmd_init(args: argparse.Namespace) -> int:
     """Write a recommended rrt configuration block."""
     _: int = getattr(args, "verbose", 0) or 0
+    root = Path.cwd()
     target_fmt = getattr(args, "target", "rrt-toml")
     match target_fmt:
         case "pyproject":
-            return _init_manifest(args, manifest="pyproject.toml", section_label="[tool.rrt]")
+            return _init_manifest(args, root, manifest="pyproject.toml", section_label="[tool.rrt]")
         case "cargo":
             return _init_manifest(
-                args, manifest="Cargo.toml", section_label="[package.metadata.rrt]"
+                args, root, manifest="Cargo.toml", section_label="[package.metadata.rrt]"
             )
         case "node":
-            return _init_package_json(args)
+            return _init_package_json(args, root)
         case "go":
-            return _init_rrt_toml(args, go=True)
-    return _init_rrt_toml(args)
+            return _init_rrt_toml(args, root, go=True)
+    return _init_rrt_toml(args, root)
 
 
-def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
+def _init_rrt_toml(args: argparse.Namespace, root: Path, *, go: bool = False) -> int:
     """Write a recommended local .rrt.toml file."""
-    root = Path.cwd()
     target = root / DEFAULT_INIT_CONFIG
 
     try:
@@ -181,12 +181,12 @@ def _init_rrt_toml(args: argparse.Namespace, *, go: bool = False) -> int:
 
 def _init_manifest(
     args: argparse.Namespace,
+    root: Path,
     *,
     manifest: str,
     section_label: str,
 ) -> int:
     """Append an rrt configuration section to an existing manifest file."""
-    root = Path.cwd()
     manifest_path = root / manifest
 
     if not manifest_path.exists():
@@ -244,9 +244,8 @@ def _init_manifest(
     return 0
 
 
-def _init_package_json(args: argparse.Namespace) -> int:
+def _init_package_json(args: argparse.Namespace, root: Path) -> int:
     """Merge the rrt config block into an existing package.json."""
-    root = Path.cwd()
     manifest_path = root / "package.json"
 
     if not manifest_path.exists():

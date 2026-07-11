@@ -39,7 +39,7 @@ class DummyAction:
 
 
 def test_cmd_folder_check_json_ok_and_not_ok(monkeypatch: Any, capsys: Any) -> None:
-    monkeypatch.setattr(folder_mod, "_load_folder_policy_config", lambda: None)
+    monkeypatch.setattr(folder_mod, "_load_folder_policy_config", lambda root: None)
 
     # report.ok == True -> return 0
     monkeypatch.setattr(
@@ -65,7 +65,7 @@ def test_cmd_folder_check_json_ok_and_not_ok(monkeypatch: Any, capsys: Any) -> N
 
 
 def test_cmd_folder_scaffold_json_and_dry_run(monkeypatch: Any, capsys: Any) -> None:
-    monkeypatch.setattr(folder_mod, "_load_folder_policy_config", lambda: None)
+    monkeypatch.setattr(folder_mod, "_load_folder_policy_config", lambda root: None)
     actions = [DummyAction("create", "a.txt", "detail")]
     monkeypatch.setattr(
         folder_mod,
@@ -98,7 +98,7 @@ def test_cmd_folder_design_nonexistent_root(capsys: Any, tmp_path: Any) -> None:
 
 
 def test_cmd_folder_check_human_readable(monkeypatch: Any, capsys: Any) -> None:
-    monkeypatch.setattr(folder_mod, "_load_folder_policy_config", lambda: None)
+    monkeypatch.setattr(folder_mod, "_load_folder_policy_config", lambda root: None)
 
     class V:
         def __init__(self, severity: str, path: str, message: str) -> None:
@@ -134,28 +134,30 @@ def test_cmd_folder_check_human_readable(monkeypatch: Any, capsys: Any) -> None:
     assert "p2: m2" in captured.err
 
 
-def test__load_folder_policy_config_handles_missing_tool(monkeypatch: Any) -> None:
+def test__load_folder_policy_config_handles_missing_tool(monkeypatch: Any, tmp_path: Any) -> None:
     # Simulate load_or_autodetect_config raising ValueError and the helper
     # recognizing it as the "missing rrt tool" case so the loader returns None.
     monkeypatch.setattr(
         folder_mod,
         "load_or_autodetect_config",
-        lambda cwd: (_ for _ in ()).throw(ValueError("no rrt")),
+        lambda root: (_ for _ in ()).throw(ValueError("no rrt")),
     )
     monkeypatch.setattr(folder_mod, "is_missing_tool_rrt_error", lambda exc: True)
-    result = folder_mod._load_folder_policy_config()
+    result = folder_mod._load_folder_policy_config(tmp_path)
     assert result is None
 
 
-def test__load_folder_policy_config_raises_on_other_valueerror(monkeypatch: Any) -> None:
+def test__load_folder_policy_config_raises_on_other_valueerror(
+    monkeypatch: Any, tmp_path: Any
+) -> None:
     monkeypatch.setattr(
         folder_mod,
         "load_or_autodetect_config",
-        lambda cwd: (_ for _ in ()).throw(ValueError("other")),
+        lambda root: (_ for _ in ()).throw(ValueError("other")),
     )
     monkeypatch.setattr(folder_mod, "is_missing_tool_rrt_error", lambda exc: False)
     with pytest.raises(ValueError):
-        folder_mod._load_folder_policy_config()
+        folder_mod._load_folder_policy_config(tmp_path)
 
 
 def test_scaffold_sets_executable(tmp_path: Any) -> None:
