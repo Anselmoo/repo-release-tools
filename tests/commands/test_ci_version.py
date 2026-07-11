@@ -10,8 +10,9 @@ from typing import cast
 import pytest
 
 from repo_release_tools.commands.ci_version import (
+    ComputeOptions,
     GitHubContext,
-    _context_from_args,
+    _context_from_opts,
     cmd_ci_version_apply,
     cmd_ci_version_compute,
     cmd_ci_version_sync,
@@ -88,7 +89,10 @@ def test_context_from_args_prefers_cli_values_over_env(monkeypatch: pytest.Monke
     monkeypatch.setenv("GITHUB_RUN_ID", "99")
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "3")
 
-    ctx = _context_from_args(_ns(ref="refs/heads/cli", ref_name="", run_id=None, run_attempt="7"))
+    opts = ComputeOptions.from_args(
+        _ns(ref="refs/heads/cli", ref_name="", run_id=None, run_attempt="7"),
+    )
+    ctx = _context_from_opts(opts)
 
     assert ctx == GitHubContext(
         ref="refs/heads/cli",
