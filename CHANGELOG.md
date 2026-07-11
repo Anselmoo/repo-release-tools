@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Breaking Changes
+- remove hooks.py legacy compat shim
+- remove docs/markdown.py legacy compat shim
+
 ### Fixed
 - **action**: use env-var indirection for `verbose` and `changelog-file` Action inputs instead of interpolating them directly into shell script text (SEC-001)
 - **action**: correct the changelog-status grep so a populated `[Unreleased]` section is classified `dirty` instead of always falling through to `clean` (D8)
