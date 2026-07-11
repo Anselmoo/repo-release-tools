@@ -3,7 +3,9 @@
 *Scoped 2026-07-11 against `refactor/config-options-p3` (PR #154, pending merge). All line
 numbers/CCN below are current-state, post Phase 1–3, not the original assessment snapshot.*
 
-## Status (updated 2026-07-11)
+## Status — Phase 4 complete (closed out 2026-07-11)
+
+All originally-scoped Phase 4 work has landed on `main` across two PRs (#155, #157).
 
 - **P1a (`bump.py`) — done.** `cmd_bump` CCN 48 → 25 (at the exit threshold). All four stages
   extracted with direct unit tests: `resolve_bump_target`, `apply_bump_files`,
@@ -13,14 +15,26 @@ numbers/CCN below are current-state, post Phase 1–3, not the original assessme
   temp-file blocks), `_append_manifest_diff_summary` (the check-mode diagnostic), and
   `render_tree_content` (the format-dispatch `match`). Remaining CCN is genuine 7-way mode
   dispatch (fix-empty-dirs / strict-empty / manifest / snapshot / check / inject / default),
-  not further-extractable logic — see the commit for the full rationale.
-- **P2 (`doctor.py`, `git_inspect.py`, `release_cmd.py`) — not started.**
-- **Folded-in Phase 3 remainder — not started** (`docs_cmd.py`, `eol_check.py`, `ci_version.py`,
-  `sync_cmd.py`, `config_cmd.py`, `artifacts_cmd.py`, `folder.py`, `git_sync.py`, and the
-  `doctor.py`/`git_inspect.py` overlap with P2 above).
+  not further-extractable logic.
+- **P2 (`doctor.py`, `git_inspect.py`, `release_cmd.py`) — done.** All three brief-named
+  "next-worst" functions now well under the CCN-25 threshold: `doctor.cmd_doctor` 28→18,
+  `git_inspect.cmd_doctor` 31→17, `git_inspect.cmd_sync_status` 22→14, `git_inspect.cmd_diff`
+  28→6, `release_cmd.cmd_release_check` 25→10.
+- **Folded-in Phase 3 remainder — done.** `docs_cmd.py` (8 command classes), `eol_check.py`,
+  `ci_version.py`, `sync_cmd.py`, `config_cmd.py`, `artifacts_cmd.py`, `folder.py` all
+  converted to typed `Options` dataclasses. `git_inspect.py` and `git_sync.py` were confirmed
+  already fully converted before this pass (a naive `grep -c getattr` overstates debt —
+  docstring prose describing the pattern inflates the count; always verify real code hits).
 
-7 commits on `refactor/command-core-p4` (branched from `main` post-#154), all gated (unit
-100% cov, e2e 71/71, pre-commit clean), not yet pushed.
+### New hotspots visible post-Phase-4 (out of scope, flagged for later)
+
+Not part of the original Phase 4 brief and **not addressed here** — a fresh `lizard` sweep
+after all the above landed surfaces CCN hotspots that weren't previously the "next-worst"
+(the brief's snapshot predates this phase's own refactoring shuffling which functions rank
+highest): `agents_cmd.cmd_install` (26), `git_sync.cmd_rebootstrap` (23), `sync_cmd.cmd_sync`
+(21), `artifacts_cmd.cmd_artifacts` (20). Candidates for a Phase 4c or folding into Phase 5
+scope — needs a fresh scoping pass, not assumed to be a straightforward repeat of this
+phase's pattern.
 
 ## Entry gate
 
