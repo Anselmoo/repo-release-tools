@@ -62,7 +62,7 @@
           },
           {
             "type": "command",
-            "command": "python3 .claude/hooks/coverage_non_regression.py",
+            "command": "TARGET_COVERAGE_PCT=90 MAX_ABSOLUTE_DROP_PCT=10 MAX_RELATIVE_DROP_PCT=10 python3 .claude/hooks/coverage_non_regression.py",
             "timeout": 60
           }
         ]

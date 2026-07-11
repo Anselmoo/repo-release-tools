@@ -5,11 +5,22 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import re
 import sys
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
+
+# Refuse to silently ratchet the recorded baseline down by more than this many
+# percentage points in one refresh. A narrow/partial `pytest` invocation (e.g.
+# a single test file, or a mid-refactor run) can "succeed" while covering far
+# less of the codebase than a full run; without this guard, that partial
+# result would otherwise become the new baseline and permanently lower the
+# bar for the coverage_non_regression Stop hook. Mirrors the allowance band
+# `.claude/settings.json` grants that hook, so the two stay consistent. Large
+# drops still require an explicit/manual baseline update.
+MAX_AUTO_REFRESH_DROP_PCT = 10.0
 
 
 def _read_payload() -> dict[str, Any]:
@@ -81,6 +92,27 @@ def _read_coverage_pct(coverage_xml: Path) -> float:
     return float(match.group(1)) * 100.0
 
 
+def _read_existing_baseline_pct(baseline_file: Path) -> float | None:
+    if not baseline_file.exists():
+        return None
+    try:
+        data = json.loads(baseline_file.read_text(encoding="utf-8"))
+        baseline = data.get("baseline_pct")
+        return float(baseline) if baseline is not None else None
+    except Exception:
+        return None
+
+
+def _max_auto_refresh_drop_pct() -> float:
+    raw = os.getenv("MAX_AUTO_REFRESH_DROP_PCT")
+    if raw is None:
+        return MAX_AUTO_REFRESH_DROP_PCT
+    try:
+        return float(raw)
+    except ValueError:
+        return MAX_AUTO_REFRESH_DROP_PCT
+
+
 def _write_baseline(baseline_file: Path, coverage_pct: float) -> None:
     baseline_file.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -107,9 +139,20 @@ def main() -> int:
     if not coverage_xml.exists():
         return 0
 
+    baseline_file = repo_root / ".claude" / "coverage-baseline.json"
+
     try:
         coverage_pct = _read_coverage_pct(coverage_xml)
-        _write_baseline(repo_root / ".claude" / "coverage-baseline.json", coverage_pct)
+
+        existing_pct = _read_existing_baseline_pct(baseline_file)
+        if existing_pct is not None:
+            drop_pct = existing_pct - coverage_pct
+            if drop_pct > _max_auto_refresh_drop_pct():
+                # Likely a narrow/partial test run, not a real regression sign-off.
+                # Leave the baseline untouched; a real drop needs an explicit update.
+                return 0
+
+        _write_baseline(baseline_file, coverage_pct)
     except Exception:
         # Never block the parent tool execution for refresh helper issues.
         return 0
