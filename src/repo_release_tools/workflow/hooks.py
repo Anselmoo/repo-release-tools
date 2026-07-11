@@ -28,6 +28,7 @@ from repo_release_tools.commands.config_cmd import cmd_config
 from repo_release_tools.commands.docs_cmd import cmd_docs
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.commands.doctor import cmd_doctor
+from repo_release_tools.commands.drift_cmd import _add_drift_lock_arguments
 from repo_release_tools.commands.drift_cmd import cmd_check as cmd_drift_check
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.folder import cmd_folder_check
@@ -1156,10 +1157,17 @@ def main(argv: list[str] | None = None) -> int:
         "tree-check",
         help="Validate project tree structure against .rrt/tree.lock.toml (strict).",
     )
-    subparsers.add_parser(
+    drift_check_parser = subparsers.add_parser(
         "drift-check",
         help="Verify agent-surface drift lockfile is current (rrt drift check).",
     )
+    # Flags are the single source of truth in commands/drift_cmd.py, shared
+    # with `rrt drift check`'s own register(). hooks.py previously hand-built
+    # a partial argparse.Namespace(root=".", lock_file="drift.lock.toml",
+    # verbose=verbose) here instead of parsing real flags — this now parses a
+    # real, complete Namespace so --root/--lock-file overrides are possible
+    # from the hooks surface too (previously silently ignored/unsupported).
+    _add_drift_lock_arguments(drift_check_parser)
 
     sync_parser = subparsers.add_parser(
         "sync",
@@ -1339,12 +1347,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             return cmd_tree(tree_args)
         case "drift-check":
-            drift_args = argparse.Namespace(
-                root=".",
-                lock_file="drift.lock.toml",
-                verbose=verbose,
-            )
-            return cmd_drift_check(drift_args)
+            parsed.verbose = verbose
+            return cmd_drift_check(parsed)
         case "sync":
             parsed.verbose = verbose
             return cmd_sync(parsed)
