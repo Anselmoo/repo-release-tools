@@ -31,7 +31,10 @@ from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.commands.drift_cmd import cmd_check as cmd_drift_check
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
 from repo_release_tools.commands.folder import cmd_folder_check
-from repo_release_tools.commands.git_sync import cmd_publish_snapshot
+from repo_release_tools.commands.git_sync import (
+    _add_publish_snapshot_arguments,
+    cmd_publish_snapshot,
+)
 from repo_release_tools.commands.release_cmd import cmd_release_check
 from repo_release_tools.commands.sync_cmd import cmd_sync
 from repo_release_tools.commands.tag import cmd_tag_check
@@ -1183,39 +1186,11 @@ def main(argv: list[str] | None = None) -> int:
         "publish-snapshot",
         help="Force-push a single-commit snapshot of tracked content to a secondary remote.",
     )
-    publish_snapshot_parser.add_argument(
-        "target",
-        nargs="?",
-        default=None,
-        help="Named [tool.rrt.publish_targets.<name>] entry to resolve remote/branch/message from.",
-    )
-    publish_snapshot_parser.add_argument(
-        "--remote", default=None, help="Remote name or URL to force-push to."
-    )
-    publish_snapshot_parser.add_argument(
-        "--branch", default=None, help="Remote branch to force-push to. Defaults to main."
-    )
-    publish_snapshot_parser.add_argument(
-        "--message", default=None, help="Commit message for the snapshot commit."
-    )
-    publish_snapshot_parser.add_argument(
-        "--exclude",
-        action="append",
-        default=None,
-        metavar="PATTERN",
-        help="Glob (fnmatch, repo-relative) to exclude from the snapshot. Repeatable; extends "
-        "the resolved target's [tool.rrt.publish_targets.<name>].exclude list.",
-    )
-    publish_snapshot_parser.add_argument(
-        "--yes-i-know-this-overwrites-remote-history",
-        action="store_true",
-        help="Required confirmation to actually force-push. Without it, behaves as --dry-run.",
-    )
-    publish_snapshot_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview without changing git.",
-    )
+    # Flags are the single source of truth in commands/git_sync.py, shared with
+    # `rrt git publish-snapshot`'s own register_sync() — see
+    # _add_publish_snapshot_arguments's docstring for why this used to be a
+    # copy-pasted block here (pylint R0801) that could silently drift.
+    _add_publish_snapshot_arguments(publish_snapshot_parser)
 
     subparsers.add_parser(
         "config-validate",
