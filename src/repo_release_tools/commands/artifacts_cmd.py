@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -89,15 +90,59 @@ def _target_dicts(config: RrtConfig) -> list[dict[str, Any]]:
     ]
 
 
+@dataclass(frozen=True)
+class Options:
+    """Typed view of ``argparse.Namespace`` for ``rrt artifacts``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_artifacts` so
+    every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    snapshot: bool
+    check: bool
+    list: bool
+    regenerate: bool
+    dry_run: bool
+    strict: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> Options:
+        """Build an :class:`Options` from a parsed ``argparse.Namespace``.
+
+        Every flag is given a real default by artifacts_cmd.py's own
+        register(), so a Namespace produced by artifacts_cmd.py's own
+        argparse subparser always carries all of them. But
+        workflow/hooks.py's three "artifacts-*" dispatch cases
+        (workflow/hooks.py:1467-1487) each build a partial Namespace by
+        hand: "artifacts-check" never sets ``regenerate`` or ``dry_run``,
+        and "artifacts-snapshot" never sets ``dry_run``, so the getattr
+        fallback here absorbs those gaps as well as the sparse
+        ``argparse.Namespace`` objects several unit tests in
+        tests/commands/test_artifacts_cmd.py construct by hand.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            snapshot=getattr(args, "snapshot", False),
+            check=getattr(args, "check", False),
+            list=getattr(args, "list", False),
+            regenerate=getattr(args, "regenerate", False),
+            dry_run=getattr(args, "dry_run", False),
+            strict=getattr(args, "strict", False),
+        )
+
+
 def cmd_artifacts(args: argparse.Namespace) -> int:
     """Run artifact integrity check, snapshot, or list."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    do_snapshot: bool = getattr(args, "snapshot", False)
-    do_check: bool = getattr(args, "check", False)
-    do_list: bool = getattr(args, "list", False)
-    do_regenerate: bool = getattr(args, "regenerate", False)
-    dry_run: bool = getattr(args, "dry_run", False)
-    strict: bool = getattr(args, "strict", False)
+    opts = Options.from_args(args)
+    verbose: int = opts.verbose
+    do_snapshot: bool = opts.snapshot
+    do_check: bool = opts.check
+    do_list: bool = opts.list
+    do_regenerate: bool = opts.regenerate
+    dry_run: bool = opts.dry_run
+    strict: bool = opts.strict
 
     p = VerbosePrinter(verbose=verbose)
 
