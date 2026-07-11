@@ -544,6 +544,49 @@ def test_cmd_diff_renders_added_and_removed(
     assert "foo.py" in captured
 
 
+def test_render_diff_body_renders_added_and_removed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Direct call renders the file section and added/removed/unchanged lines."""
+    diff_output = (
+        "diff --git a/foo.py b/foo.py\n"
+        "index abc..def 100644\n"
+        "--- a/foo.py\n"
+        "+++ b/foo.py\n"
+        "@@ -1,2 +1,3 @@\n"
+        " unchanged\n"
+        "-removed line\n"
+        "+added line\n"
+    )
+
+    git_inspect._render_diff_body(diff_output, verbose=0)
+
+    out = capsys.readouterr().out
+    assert "foo.py" in out
+    assert "removed line" in out
+    assert "added line" in out
+    assert "unchanged" in out
+
+
+def test_render_diff_body_handles_deleted_file(capsys: pytest.CaptureFixture[str]) -> None:
+    """A deleted file (``+++ /dev/null``) still gets a section header from the old path."""
+    diff_output = (
+        "diff --git a/gone.py b/gone.py\n"
+        "deleted file mode 100644\n"
+        "index abc..000 100644\n"
+        "--- a/gone.py\n"
+        "+++ /dev/null\n"
+        "@@ -1 +0,0 @@\n"
+        "-old content\n"
+    )
+
+    git_inspect._render_diff_body(diff_output, verbose=0)
+
+    out = capsys.readouterr().out
+    assert "gone.py" in out
+    assert "old content" in out
+
+
 def test_cmd_diff_staged_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_cmd = {}
     monkeypatch.setattr(git_inspect.git, "is_git_repository", lambda _: True)

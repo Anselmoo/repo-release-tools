@@ -672,33 +672,15 @@ class DiffOptions:
         )
 
 
-def cmd_diff(args: argparse.Namespace) -> int:
-    """Show a compact git diff using DiffGlyphs."""
-    opts = DiffOptions.from_args(args)
-    verbose = opts.verbose
-    root = Path.cwd()
-    if not git.is_git_repository(root):
-        p = VerbosePrinter(verbose=verbose)
-        p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
-        return 1
+def _render_diff_body(raw: str, *, verbose: int) -> None:
+    """Render the file/hunk/line body of a unified diff using rrt glyphs.
 
-    cmd = ["git", "diff", "--unified=3"]
-    if opts.staged:
-        cmd.append("--staged")
-    if opts.against:
-        cmd.append(opts.against)
-
-    try:
-        raw = git.capture_checked(cmd, root)
-    except RuntimeError as exc:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-    if not raw.strip():
-        p = VerbosePrinter(verbose=verbose)
-        p.ok("No diff to show.")
-        return 0
-
+    Single stateful pass over *raw*'s lines: tracks the current file name and
+    old/new line counters as hunks and +/-/context lines are consumed.
+    Matches the original inline loop body of :func:`cmd_diff` exactly,
+    including its practice of constructing a fresh :class:`VerbosePrinter`
+    per emitted line/section.
+    """
     current_file: str = ""
     old_lineno: int | None = None
     new_lineno: int | None = None
@@ -776,6 +758,36 @@ def cmd_diff(args: argparse.Namespace) -> int:
         p.line(f"  {rendered}")
 
     p.blank_line()
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """Show a compact git diff using DiffGlyphs."""
+    opts = DiffOptions.from_args(args)
+    verbose = opts.verbose
+    root = Path.cwd()
+    if not git.is_git_repository(root):
+        p = VerbosePrinter(verbose=verbose)
+        p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
+        return 1
+
+    cmd = ["git", "diff", "--unified=3"]
+    if opts.staged:
+        cmd.append("--staged")
+    if opts.against:
+        cmd.append(opts.against)
+
+    try:
+        raw = git.capture_checked(cmd, root)
+    except RuntimeError as exc:
+        p = VerbosePrinter(verbose=verbose)
+        p.line(str(exc), ok=False, stream=sys.stderr)
+        return 1
+    if not raw.strip():
+        p = VerbosePrinter(verbose=verbose)
+        p.ok("No diff to show.")
+        return 0
+
+    _render_diff_body(raw, verbose=verbose)
     return 0
 
 
