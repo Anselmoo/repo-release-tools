@@ -25,7 +25,13 @@ from repo_release_tools.commands.branch import (
 )
 from repo_release_tools.commands.changelog_lint import cmd_changelog_lint
 from repo_release_tools.commands.config_cmd import cmd_config
-from repo_release_tools.commands.docs_cmd import cmd_docs
+from repo_release_tools.commands.docs_cmd import (
+    _add_docs_generate_arguments,
+    _add_docs_inject_arguments,
+    _add_docs_map_arguments,
+    _add_docs_publish_arguments,
+    cmd_docs,
+)
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.commands.drift_cmd import _add_drift_lock_arguments
@@ -1129,26 +1135,45 @@ def main(argv: list[str] | None = None) -> int:
         "check-eol",
         help="Check host runtimes and project minimums against EOL dates.",
     )
-    subparsers.add_parser(
+    # Flags for each docs-* subcommand below are the single source of truth in
+    # commands/docs_cmd.py (_add_docs_*_arguments), shared with the
+    # corresponding `rrt docs <action>` subparser built in its own register().
+    # Each hooks.py subcommand maps to exactly one fixed `docs <action>` (not
+    # the full `docs` command with all its actions), so the parser here still
+    # only exposes that one action's flags -- no new user-facing flags versus
+    # before, just no more hand-copied field lists.
+    docs_generate_parser = subparsers.add_parser(
         "docs-generate",
         help="Regenerate the source-owned docs lockfile.",
     )
-    subparsers.add_parser(
+    _add_docs_generate_arguments(docs_generate_parser)
+    docs_generate_parser.set_defaults(format="toml")
+
+    docs_publish_parser = subparsers.add_parser(
         "docs-publish",
         help="Regenerate CLI reference documentation.",
     )
-    subparsers.add_parser(
+    _add_docs_publish_arguments(docs_publish_parser)
+
+    docs_inject_parser = subparsers.add_parser(
         "docs-inject",
         help="Synchronize shared anchor blocks across documentation.",
     )
-    subparsers.add_parser(
+    _add_docs_inject_arguments(docs_inject_parser)
+    docs_inject_parser.set_defaults(add_anchors=True)
+
+    docs_map_update_parser = subparsers.add_parser(
         "docs-map-update",
         help="Regenerate per-directory purpose docs (rrt docs map).",
     )
-    subparsers.add_parser(
+    _add_docs_map_arguments(docs_map_update_parser)
+
+    docs_map_check_parser = subparsers.add_parser(
         "docs-map-check",
         help="Fail if any per-directory purpose doc is stale.",
     )
+    _add_docs_map_arguments(docs_map_check_parser)
+    docs_map_check_parser.set_defaults(check=True)
     subparsers.add_parser(
         "docstring-suggest",
         help="Apply scaffolded docstrings to missing or thin module docstrings.",
@@ -1373,46 +1398,37 @@ def main(argv: list[str] | None = None) -> int:
             parsed.verbose = verbose
             return cmd_eol_check(parsed)
         case "docs-generate":
+            # format/lang/root/dry-run are real argparse-parsed state now (see
+            # _add_docs_generate_arguments in register()); only docs_action is
+            # synthesized, since this flat subcommand has no nested `docs
+            # <action>` subparser to produce it naturally.
             parsed.verbose = verbose
             parsed.docs_action = "generate"
-            parsed.format = "toml"
-            parsed.lang = None
-            parsed.root = "."
-            parsed.dry_run = False
             return cmd_docs(parsed)
         case "docs-publish":
+            # check/dry-run/fail-on-change are real argparse-parsed state now
+            # (see _add_docs_publish_arguments in register()).
             parsed.verbose = verbose
             parsed.docs_action = "publish"
-            parsed.format = None
-            parsed.lang = None
-            parsed.root = "."
-            parsed.check = False
-            parsed.dry_run = False
-            parsed.fail_on_change = False
             return cmd_docs(parsed)
         case "docs-inject":
+            # check/root/dry-run/add-anchors are real argparse-parsed state
+            # now (see _add_docs_inject_arguments in register()).
             parsed.verbose = verbose
             parsed.docs_action = "inject"
-            parsed.format = None
-            parsed.lang = None
-            parsed.root = "."
-            parsed.check = False
-            parsed.dry_run = False
-            parsed.add_anchors = True
             return cmd_docs(parsed)
         case "docs-map-update":
+            # check/root/dry-run are real argparse-parsed state now (see
+            # _add_docs_map_arguments in register()).
             parsed.verbose = verbose
             parsed.docs_action = "map"
-            parsed.root = "."
-            parsed.check = False
-            parsed.dry_run = False
             return cmd_docs(parsed)
         case "docs-map-check":
+            # Same shared spec as docs-map-update; register() overrides this
+            # subparser's --check default to True via set_defaults so it
+            # fails closed without exposing a second flag.
             parsed.verbose = verbose
             parsed.docs_action = "map"
-            parsed.root = "."
-            parsed.check = True
-            parsed.dry_run = False
             return cmd_docs(parsed)
         case "docstring-suggest":
             parsed.verbose = verbose

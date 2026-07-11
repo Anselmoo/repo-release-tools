@@ -795,16 +795,11 @@ def test_main_docs_hook_commands_set_explicit_defaults(monkeypatch: pytest.Monke
     assert generate_args.dry_run is False
 
     assert publish_args.docs_action == "publish"
-    assert publish_args.format is None
-    assert publish_args.lang is None
-    assert publish_args.root == "."
     assert publish_args.check is False
     assert publish_args.dry_run is False
     assert publish_args.fail_on_change is False
 
     assert inject_args.docs_action == "inject"
-    assert inject_args.format is None
-    assert inject_args.lang is None
     assert inject_args.root == "."
     assert inject_args.check is False
     assert inject_args.dry_run is False
