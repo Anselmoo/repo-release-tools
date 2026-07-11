@@ -13,15 +13,150 @@ from pathlib import Path
 import pytest
 
 from repo_release_tools.commands.bump import (
+    BumpResolutionError,
+    Options,
+    apply_bump_files,
     cmd_bump,
     git_log_since_latest_tag,
     register,
+    resolve_bump_target,
     resolve_changelog_mode,
     update_changelog,
 )
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import Version
 from repo_release_tools.version.targets import VersionWriteEvent
+
+
+def _options(**overrides: object) -> Options:
+    """Build an Options with sensible defaults for resolve/apply tests."""
+    defaults: dict[str, object] = {
+        "bump": "patch",
+        "group": None,
+        "dry_run": False,
+        "force": False,
+        "no_commit": False,
+        "no_verify": False,
+        "no_changelog": False,
+        "no_pin_sync": False,
+        "no_update": False,
+        "include_maintenance": False,
+        "changelog_mode": None,
+        "base_branch": None,
+        "calver_scheme": "YYYY.MM.DD",
+        "verbose": 0,
+    }
+    defaults.update(overrides)
+    return Options(**defaults)  # type: ignore[arg-type]
+
+
+def _default_group_config(tmp_path: Path) -> tuple[VersionGroup, RrtConfig]:
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="incremental",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+    return group, config
+
+
+def test_resolve_bump_target_unknown_group_raises(tmp_path: Path) -> None:
+    """resolve_bump_target raises BumpResolutionError for an unknown group name."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text('version = "1.0.0"\n', encoding="utf-8")
+    opts = _options(bump="patch", group="does-not-exist")
+
+    with pytest.raises(BumpResolutionError):
+        resolve_bump_target(config, opts)
+
+
+def test_resolve_bump_target_computes_patch_bump(tmp_path: Path) -> None:
+    """resolve_bump_target computes the new version for a plain semver kind."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    opts = _options(bump="patch")
+
+    target = resolve_bump_target(config, opts)
+
+    assert isinstance(target.current, Version)
+    assert str(target.new) == "1.2.4"
+    assert target.group.name == "default"
+
+
+def test_resolve_bump_target_accepts_explicit_version_string(tmp_path: Path) -> None:
+    """resolve_bump_target accepts an explicit semver string as the bump kind."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    opts = _options(bump="9.9.9")
+
+    target = resolve_bump_target(config, opts)
+
+    assert str(target.new) == "9.9.9"
+
+
+def test_resolve_bump_target_calver_kind_bumps_to_today(tmp_path: Path) -> None:
+    """resolve_bump_target's calver branch produces a CalVersion for today."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    opts = _options(bump="calver", calver_scheme="YYYY.MM.DD")
+
+    target = resolve_bump_target(config, opts)
+
+    # Non-calver current is treated as a fresh start (matches original inline behavior).
+    assert CalVersion.parse(str(target.new)) == CalVersion.today("YYYY.MM.DD")
+
+
+def test_resolve_bump_target_invalid_bump_value_raises(tmp_path: Path) -> None:
+    """resolve_bump_target raises BumpResolutionError for an unparseable bump value."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    opts = _options(bump="not-a-version")
+
+    with pytest.raises(BumpResolutionError, match="Invalid bump value"):
+        resolve_bump_target(config, opts)
+
+
+def test_apply_bump_files_writes_new_version(tmp_path: Path) -> None:
+    """apply_bump_files writes the new version into the group's version target."""
+    group, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+
+    changed = apply_bump_files(group, Version.parse("1.2.4"), config, dry_run=False)
+
+    assert (tmp_path / "pyproject.toml") in changed
+    assert '"1.2.4"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_apply_bump_files_dry_run_does_not_write(tmp_path: Path) -> None:
+    """apply_bump_files in dry-run mode reports the target without writing it."""
+    group, config = _default_group_config(tmp_path)
+    original = '[project]\nname = "x"\nversion = "1.2.3"\n'
+    (tmp_path / "pyproject.toml").write_text(original, encoding="utf-8")
+
+    apply_bump_files(group, Version.parse("1.2.4"), config, dry_run=True)
+
+    assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == original
 
 
 def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:

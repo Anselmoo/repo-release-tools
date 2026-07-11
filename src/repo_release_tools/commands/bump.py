@@ -107,6 +107,81 @@ from repo_release_tools.workflow import git
 
 PREVIEW_LINES = 8
 
+_BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
+
+
+class BumpResolutionError(Exception):
+    """Raised by :func:`resolve_bump_target` when the bump kind or version group is invalid.
+
+    ``str(exc)`` is the exact text ``cmd_bump`` already prints to stderr; this
+    only relocates the *computation*, not the *wording*, of these checks.
+    """
+
+
+@dataclass(frozen=True)
+class BumpTarget:
+    """A resolved version group and the version to bump it to."""
+
+    group: VersionGroup
+    current: Version | CalVersion
+    new: Version | CalVersion | str
+
+
+def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
+    """Resolve the release group and compute the new version.
+
+    Pure w.r.t. the filesystem and git -- no printing, no side effects. This
+    step happens entirely before ``cmd_bump`` prints its "Version bump"
+    header, so extracting it cannot reorder any observable output (unlike
+    preflight/branch-existence, which interleave with that header print and
+    stay inline in ``cmd_bump`` for that reason).
+    """
+    try:
+        group = config.resolve_group(opts.group)
+    except ValueError as exc:
+        raise BumpResolutionError(str(exc)) from exc
+
+    current = read_group_current_version(group)
+    new: Version | CalVersion | str
+    if opts.bump == "calver":
+        calver_scheme = opts.calver_scheme
+        try:
+            current_calver = CalVersion.parse(str(current))
+        except ValueError:
+            current_calver = CalVersion.today(calver_scheme)
+            new = str(current_calver)
+        else:
+            new = str(current_calver.bump())
+    elif opts.bump in _BUMP_KINDS:
+        new = current.bump(opts.bump)  # type: ignore[assignment]
+    else:
+        try:
+            new = Version.parse(opts.bump)
+        except ValueError:
+            try:
+                new = CalVersion.parse(opts.bump)
+            except ValueError:
+                raise BumpResolutionError(f"Invalid bump value: {opts.bump!r}") from None
+
+    return BumpTarget(group=group, current=current, new=new)
+
+
+def apply_bump_files(
+    group: VersionGroup,
+    new: Version | CalVersion | str,
+    config: RrtConfig,
+    *,
+    dry_run: bool = False,
+) -> list[Path]:
+    """Write the new version to every target/pin file for *group*.
+
+    Thin, named wrapper over :func:`apply_version` -- kept as a distinct
+    function so the ``resolve -> apply -> assets -> git-finalize`` stages of
+    :func:`cmd_bump` each have a directly testable, directly named
+    counterpart.
+    """
+    return apply_version(group, str(new), config, dry_run=dry_run)
+
 
 def apply_version(
     group: VersionGroup,
@@ -352,37 +427,12 @@ def cmd_bump(args: argparse.Namespace) -> int:
             return 1
 
     try:
-        group = config.resolve_group(opts.group)
-    except ValueError as exc:
+        target = resolve_bump_target(config, opts)
+    except BumpResolutionError as exc:
         p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
-
-    current = read_group_current_version(group)
-    _BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
-    if opts.bump == "calver":
-        calver_scheme = opts.calver_scheme
-        try:
-            current_calver = CalVersion.parse(str(current))
-        except ValueError:
-            current_calver = CalVersion.today(calver_scheme)
-            # treat any non-calver current as a fresh start
-            new_str = str(current_calver)
-        else:
-            new_str = str(current_calver.bump())
-        new = new_str  # type: ignore[assignment]
-    elif opts.bump in _BUMP_KINDS:
-        new = current.bump(opts.bump)  # type: ignore[assignment]
-    else:
-        try:
-            new = Version.parse(opts.bump)  # type: ignore[assignment]
-        except ValueError:
-            try:
-                new = CalVersion.parse(opts.bump)  # type: ignore[assignment]
-            except ValueError:
-                p = VerbosePrinter(verbose=verbose)
-                p.line(f"Invalid bump value: {opts.bump!r}", ok=False, stream=sys.stderr)
-                return 1
+    group, current, new = target.group, target.current, target.new
 
     branch_name = group.release_branch.format(version=new)
     current_branch = "<current>" if opts.dry_run else git.current_branch(root)
@@ -432,7 +482,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
     # Build a pin-free view when no_pin_sync is set so apply_version skips pins.
     apply_group = dataclasses.replace(group, pin_targets=[]) if no_pin_sync else group
     apply_config = dataclasses.replace(config, global_pin_targets=[]) if no_pin_sync else config
-    changed_paths = apply_version(apply_group, str(new), apply_config, dry_run=opts.dry_run)
+    changed_paths = apply_bump_files(apply_group, new, apply_config, dry_run=opts.dry_run)
 
     if not opts.no_changelog:
         p.section("Updating changelog")
