@@ -41,7 +41,10 @@ Three product surfaces share the same codebase:
 | `tools/inject.py` | Anchor-based file injection — shared by `rrt tree --inject`, `rrt docs inject`, and `rrt docs map` |
 | `commands/docs_map.py` | Per-directory purpose-doc generator backing `rrt docs map`. Walks `[tool.rrt.docs.map].root`, emits anchor-wrapped Purpose + Tree + optional prompt blocks into `README.md` (configurable). Pure-functional core; no I/O outside `apply_to_file`. |
 | `commands/docs_map_lock.py` | Drift detection for `rrt docs map`. Hashes each generated block and tracks it in `.rrt/docs_map.lock.toml` (separate from `docs.lock.toml`). `rrt docs map --check` exits non-zero on drift. |
+| `state.py` | Sole owner of every `.rrt/*` lock/manifest filename (`docs`, `health`, `tree`, `artifacts`, `drift`, `docs_map`) plus their path helpers and drift comparators. Command modules import filenames from here rather than defining their own. |
 | `ui/` | **Canonical public rendering API** — `color`, `font`, `glyphs`, `layout`, `syntax`, `prompt`, `messaging`, `progress`. Import from `repo_release_tools.ui` in all new code. |
+
+See [Internal Contracts](docs/src/content/docs/reference/internal-contracts.mdx) for the `.rrt/` lock schema, the hooks↔CLI parser-spec sharing contract, MCP/CLI surface parity, config source precedence, and the cross-surface exit-code/output convention.
 
 ### UI layer
 

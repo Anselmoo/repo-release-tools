@@ -84,6 +84,10 @@ export default defineConfig({
           label: "Design System",
           link: "design-system",
         },
+        {
+          label: "Internal Contracts",
+          link: "reference/internal-contracts",
+        },
       ],
 
       // Component overrides: Header/Sidebar use the native Task 2 `.astro`
