@@ -21,6 +21,7 @@ from pathlib import Path
 from repo_release_tools.commands.bump import apply_version
 from repo_release_tools.commands.tag import cmd_tag_create
 from repo_release_tools.config import load_or_autodetect_config
+from repo_release_tools.config.model import RrtConfig, VersionGroup
 from repo_release_tools.sync.providers import fetch_versions
 from repo_release_tools.ui import (
     DryRunPrinter,
@@ -81,6 +82,92 @@ def _stage_and_commit(
         dry_run=dry_run,
         label="git commit",
     )
+
+
+def _render_sync_bump_plan(
+    group: VersionGroup,
+    current: Version,
+    fresh: list[Version],
+    cfg: RrtConfig,
+    tmpl: str,
+    *,
+    do_commit: bool,
+    do_tag: bool,
+) -> None:
+    """Print the ``--bump --dry-run`` plan: header, current version, per-version preview.
+
+    Writes nothing to disk and runs no git commands -- ``apply_version(...,
+    dry_run=True)`` only computes which paths *would* change so the plan can
+    list file names.
+    """
+    sys.stdout.write(
+        success(f"✓ [DRY RUN] Mirror upstream {group.upstream_package} ({group.upstream_provider})")
+        + "\n"
+    )
+    sys.stdout.write(info(f"→ Current: {current}") + "\n")
+    sys.stdout.write("\n")
+    sys.stdout.write(rule("Plan", width=terminal_width()) + "\n")
+
+    if not fresh:
+        sys.stdout.write(subtle("⊙ [dry-run] No newer versions — nothing to do.") + "\n")
+    else:
+        for v in fresh:
+            # Compute changed paths without writing (dry_run=True)
+            changed = apply_version(group, str(v), cfg, dry_run=True)
+            file_names = ", ".join(p.name for p in dict.fromkeys(changed))
+            sys.stdout.write(subtle(f"⊙ [dry-run] Would bump → {v} (files: {file_names})") + "\n")
+            if do_commit:
+                msg = _render_commit_message(tmpl, str(v))
+                sys.stdout.write(subtle(f'⊙ [dry-run] Would commit: "{msg}"') + "\n")
+            if do_tag:
+                sys.stdout.write(subtle(f"⊙ [dry-run] Would tag: v{v}") + "\n")
+
+    sys.stdout.write("\n")
+    sys.stdout.write(subtle("⊙ [dry-run] complete – no changes made") + "\n")
+
+
+def _apply_sync_bump_live(
+    fresh: list[Version],
+    group: VersionGroup,
+    cfg: RrtConfig,
+    root: Path,
+    tmpl: str,
+    opts: Options,
+    *,
+    do_commit: bool,
+    do_tag: bool,
+) -> int:
+    """Apply each newer version in ascending order; optionally commit and tag.
+
+    Returns 0 on success, or the first non-zero exit code from
+    :func:`cmd_tag_create` if tagging fails (ordering is contract: commit
+    lands before tag so the tag references the right SHA).
+    """
+    for v in fresh:
+        # 1. Apply version targets + pin targets.
+        changed = apply_version(group, str(v), cfg, dry_run=False)
+
+        # 2. Optional commit.
+        if do_commit:
+            msg = _render_commit_message(tmpl, str(v))
+            _stage_and_commit(root, changed, msg, dry_run=False)
+
+        # 3. Optional tag (after commit so it lands on the right SHA).
+        if do_tag:
+            tag_ns = argparse.Namespace(
+                dry_run=False,
+                push=False,
+                prefix="v",
+                message=None,
+                force=False,
+                group=opts.group,
+                verbose=opts.verbose,
+            )
+            rc = cmd_tag_create(tag_ns)
+            if rc != 0:
+                return rc
+
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -189,65 +276,16 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
     if dry_run:
         # ── Dry-run: print plan, write/commit/tag nothing ──────────────────
-        sys.stdout.write(
-            success(
-                f"✓ [DRY RUN] Mirror upstream {group.upstream_package} ({group.upstream_provider})"
-            )
-            + "\n"
-        )
-        sys.stdout.write(info(f"→ Current: {current}") + "\n")
-        sys.stdout.write("\n")
-        sys.stdout.write(rule("Plan", width=terminal_width()) + "\n")
-
-        if not fresh:
-            sys.stdout.write(subtle("⊙ [dry-run] No newer versions — nothing to do.") + "\n")
-        else:
-            for v in fresh:
-                # Compute changed paths without writing (dry_run=True)
-                changed = apply_version(group, str(v), cfg, dry_run=True)
-                file_names = ", ".join(p.name for p in dict.fromkeys(changed))
-                sys.stdout.write(
-                    subtle(f"⊙ [dry-run] Would bump → {v} (files: {file_names})") + "\n"
-                )
-                if do_commit:
-                    msg = _render_commit_message(tmpl, str(v))
-                    sys.stdout.write(subtle(f'⊙ [dry-run] Would commit: "{msg}"') + "\n")
-                if do_tag:
-                    sys.stdout.write(subtle(f"⊙ [dry-run] Would tag: v{v}") + "\n")
-
-        sys.stdout.write("\n")
-        sys.stdout.write(subtle("⊙ [dry-run] complete – no changes made") + "\n")
+        _render_sync_bump_plan(group, current, fresh, cfg, tmpl, do_commit=do_commit, do_tag=do_tag)
         return 0
 
     # ── Live mode: apply each version in ascending order ───────────────────
     if not fresh:
         return 0  # no-op — exit 0 as specified
 
-    for v in fresh:
-        # 1. Apply version targets + pin targets.
-        changed = apply_version(group, str(v), cfg, dry_run=False)
-
-        # 2. Optional commit.
-        if do_commit:
-            msg = _render_commit_message(tmpl, str(v))
-            _stage_and_commit(root, changed, msg, dry_run=False)
-
-        # 3. Optional tag (after commit so it lands on the right SHA).
-        if do_tag:
-            tag_ns = argparse.Namespace(
-                dry_run=False,
-                push=False,
-                prefix="v",
-                message=None,
-                force=False,
-                group=opts.group,
-                verbose=opts.verbose,
-            )
-            rc = cmd_tag_create(tag_ns)
-            if rc != 0:
-                return rc
-
-    return 0
+    return _apply_sync_bump_live(
+        fresh, group, cfg, root, tmpl, opts, do_commit=do_commit, do_tag=do_tag
+    )
 
 
 # ---------------------------------------------------------------------------
