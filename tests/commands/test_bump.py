@@ -17,13 +17,22 @@ from repo_release_tools.commands.bump import (
     Options,
     apply_bump_files,
     cmd_bump,
+    finalize_bump_git,
     git_log_since_latest_tag,
+    refresh_bump_generated_assets,
+    refresh_bump_lockfile,
     register,
     resolve_bump_target,
     resolve_changelog_mode,
     update_changelog,
 )
-from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.config import (
+    GeneratedAsset,
+    PinTarget,
+    RrtConfig,
+    VersionGroup,
+    VersionTarget,
+)
 from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import Version
 from repo_release_tools.version.targets import VersionWriteEvent
@@ -157,6 +166,189 @@ def test_apply_bump_files_dry_run_does_not_write(tmp_path: Path) -> None:
     apply_bump_files(group, Version.parse("1.2.4"), config, dry_run=True)
 
     assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == original
+
+
+def test_refresh_bump_lockfile_runs_the_configured_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """refresh_bump_lockfile runs group.lock_command via git.run."""
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=["echo", "lock"],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="incremental",
+    )
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, **kwargs: calls.append(cmd),
+    )
+
+    refresh_bump_lockfile(group, tmp_path, dry_run=False)
+
+    assert calls == [["echo", "lock"]]
+
+
+def test_refresh_bump_generated_assets_runs_each_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """refresh_bump_generated_assets runs every asset's command and returns True on success."""
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    asset = GeneratedAsset(path=tmp_path / "docs/banner.png", command=["generate", "banner"])
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        generated_assets=[asset],
+        changelog_workflow="incremental",
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], root: Path, **kwargs: object) -> str:
+        calls.append(cmd)
+        out = tmp_path / "docs" / "banner.png"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("generated", encoding="utf-8")
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    ok = refresh_bump_generated_assets(group, tmp_path, dry_run=False)
+
+    assert ok is True
+    assert calls == [["generate", "banner"]]
+
+
+def test_refresh_bump_generated_assets_real_failure_returns_false(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A non-dry-run command failure returns False (caller should exit 1)."""
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    asset = GeneratedAsset(path=tmp_path / "docs/banner.png", command=["generate", "banner"])
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        generated_assets=[asset],
+        changelog_workflow="incremental",
+    )
+
+    def failing_run(cmd: list[str], root: Path, **kwargs: object) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", failing_run)
+
+    assert refresh_bump_generated_assets(group, tmp_path, dry_run=False) is False
+
+
+def test_refresh_bump_generated_assets_dry_run_failure_warns_and_continues(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A dry-run command failure only warns; the stage still reports success."""
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    asset = GeneratedAsset(path=tmp_path / "docs/banner.png", command=["generate", "banner"])
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        generated_assets=[asset],
+        changelog_workflow="incremental",
+    )
+
+    def failing_run(cmd: list[str], root: Path, **kwargs: object) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", failing_run)
+
+    assert refresh_bump_generated_assets(group, tmp_path, dry_run=True) is True
+
+
+def test_finalize_bump_git_checks_out_stages_and_commits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """finalize_bump_git checks out the branch, stages files, and commits in order."""
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="incremental",
+    )
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, **kwargs: calls.append(cmd),
+    )
+    opts = _options(bump="patch", no_commit=False)
+
+    finalize_bump_git(
+        group,
+        Version.parse("1.2.4"),
+        [tmp_path / "pyproject.toml"],
+        tmp_path,
+        branch_name="release/v1.2.4",
+        base="main",
+        force=False,
+        opts=opts,
+    )
+
+    checkout_calls = [c for c in calls if c[:2] == ["git", "checkout"]]
+    commit_calls = [c for c in calls if c[:2] == ["git", "commit"]]
+    assert checkout_calls[0] == ["git", "checkout", "-b", "release/v1.2.4"]
+    assert commit_calls
+    # Ordering is contract: checkout happens before commit.
+    assert calls.index(checkout_calls[0]) < calls.index(commit_calls[0])
+
+
+def test_finalize_bump_git_no_commit_stages_without_committing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """finalize_bump_git with --no-commit stages files but never commits."""
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="incremental",
+    )
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, **kwargs: calls.append(cmd),
+    )
+    opts = _options(bump="patch", no_commit=True)
+
+    finalize_bump_git(
+        group,
+        Version.parse("1.2.4"),
+        [tmp_path / "pyproject.toml"],
+        tmp_path,
+        branch_name="release/v1.2.4",
+        base="main",
+        force=False,
+        opts=opts,
+    )
+
+    assert not [c for c in calls if c[:2] == ["git", "commit"]]
 
 
 def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:

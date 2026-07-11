@@ -183,6 +183,162 @@ def apply_bump_files(
     return apply_version(group, str(new), config, dry_run=dry_run)
 
 
+def refresh_bump_lockfile(
+    group: VersionGroup, root: Path, *, dry_run: bool, verbose: int = 0
+) -> None:
+    """Run *group*'s lock command, if configured.
+
+    Callers guard this with ``group.lock_command and not opts.no_update``
+    before calling (matches cmd_bump's original inline guard) -- this
+    function does not check that itself. Prints its own progress, matching
+    this file's established convention (see :func:`update_changelog`) of
+    helper functions owning their own output rather than threading a printer
+    in from the caller.
+    """
+    p = DryRunPrinter(dry_run, verbose=verbose)
+    p.section("Refreshing lockfiles")
+    spinner = (
+        contextlib.nullcontext()
+        if dry_run
+        else spinner_lines(
+            "Running lock command…",
+            detail=f"$ {' '.join(group.lock_command)}",
+            file=sys.stdout,
+        )
+    )
+    with spinner:
+        git.run(
+            group.lock_command,
+            root,
+            dry_run=dry_run,
+            label="lock command",
+            suppress_announce=True,
+        )
+
+
+def refresh_bump_generated_assets(
+    group: VersionGroup, root: Path, *, dry_run: bool, verbose: int = 0
+) -> bool:
+    """Run each of *group*'s generated-asset refresh commands.
+
+    Callers guard this with ``group.generated_assets and not opts.no_update``
+    before calling. Returns ``False`` when a *real* (non-dry-run) command
+    failure or missing-output-file occurs -- callers should exit 1 in that
+    case. In dry-run mode the same conditions only warn and continue,
+    matching cmd_bump's original inline behavior exactly.
+    """
+    p = DryRunPrinter(dry_run, verbose=verbose)
+    p.section("Refreshing generated assets")
+    for asset in group.generated_assets:
+        command_preview = " ".join(asset.command)
+        spinner = (
+            contextlib.nullcontext()
+            if dry_run
+            else spinner_lines(
+                "Running generated asset command…",
+                detail=f"$ {command_preview}",
+                file=sys.stdout,
+            )
+        )
+        try:
+            with spinner:
+                git.run(
+                    asset.command,
+                    root,
+                    dry_run=dry_run,
+                    label=f"generated asset command ({asset.path.relative_to(root)})",
+                    suppress_announce=True,
+                )
+        except RuntimeError as exc:
+            if dry_run:
+                p.warn(
+                    f"Generated asset command for {asset.path.relative_to(root)} failed in dry-run: {exc}",
+                )
+                continue
+            p.line(str(exc), ok=False, stream=sys.stderr)
+            return False
+
+        if not asset.path.exists():
+            message = (
+                f"Generated asset {asset.path.relative_to(root)} not found after refresh command"
+            )
+            if dry_run:
+                p.warn(message)
+            else:
+                p.line(message, ok=False, stream=sys.stderr)
+                return False
+    return True
+
+
+def finalize_bump_git(
+    group: VersionGroup,
+    new: Version | CalVersion | str,
+    changed_paths: list[Path],
+    root: Path,
+    *,
+    branch_name: str,
+    base: str,
+    force: bool,
+    opts: Options,
+) -> None:
+    """Checkout the release branch, stage changed files, and commit.
+
+    Ordering is contract: checkout -> stage -> commit. Retries the commit
+    once if a pre-commit hook auto-regenerated files during the first
+    attempt (matches cmd_bump's original inline retry).
+    """
+    p = DryRunPrinter(opts.dry_run, verbose=opts.verbose)
+    p.section("Git")
+    create_flag = "-B" if force else "-b"
+    git.run(
+        ["git", "checkout", create_flag, branch_name],
+        root,
+        dry_run=opts.dry_run,
+        label=f"git checkout {create_flag}",
+    )
+
+    # changed_paths contains version-target paths followed by pin paths (already deduplicated).
+    files_to_stage = [str(path.relative_to(root)) for path in changed_paths]
+    for path in group.generated_files:
+        if path.exists():
+            files_to_stage.append(str(path.relative_to(root)))
+    for asset in group.generated_assets:
+        if asset.path.exists():
+            files_to_stage.append(str(asset.path.relative_to(root)))
+    if group.changelog_file.exists() and not opts.no_changelog:
+        files_to_stage.append(str(group.changelog_file.relative_to(root)))
+    git.run(
+        ["git", "add", *dict.fromkeys(files_to_stage)],
+        root,
+        dry_run=opts.dry_run,
+        label="git add",
+    )
+
+    if not opts.no_commit:
+        git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
+        commit_msg = f"chore: bump version to v{new}"
+        commit_cmd = ["git", "commit", "-m", commit_msg]
+        if opts.no_verify:
+            commit_cmd.append("--no-verify")
+        try:
+            git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
+        except RuntimeError:
+            # A pre-commit hook (e.g. rrt-cli-docs) may have auto-regenerated
+            # files during this pass — pre-commit always fails that pass even
+            # though the fix is now correct. Re-stage and retry once.
+            git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
+            git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
+        done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
+        p.footer(done_msg)
+    else:
+        done_msg = f"Done. Branch '{branch_name}' created and files staged."
+        p.meta("Base branch", base)
+        p.footer(done_msg)
+    if opts.dry_run:
+        # Provide an explicit dry-run completion line expected by some tests
+        p.line("no files were modified")
+
+
 def apply_version(
     group: VersionGroup,
     version: str,
@@ -504,113 +660,22 @@ def cmd_bump(args: argparse.Namespace) -> int:
         )
 
     if group.lock_command and not opts.no_update:
-        p.section("Refreshing lockfiles")
-        spinner = (
-            contextlib.nullcontext()
-            if opts.dry_run
-            else spinner_lines(
-                "Running lock command…",
-                detail=f"$ {' '.join(group.lock_command)}",
-                file=sys.stdout,
-            )
-        )
-        with spinner:
-            git.run(
-                group.lock_command,
-                root,
-                dry_run=opts.dry_run,
-                label="lock command",
-                suppress_announce=True,
-            )
+        refresh_bump_lockfile(group, root, dry_run=opts.dry_run, verbose=verbose)
 
     if group.generated_assets and not opts.no_update:
-        p.section("Refreshing generated assets")
-        for asset in group.generated_assets:
-            command_preview = " ".join(asset.command)
-            spinner = (
-                contextlib.nullcontext()
-                if opts.dry_run
-                else spinner_lines(
-                    "Running generated asset command…",
-                    detail=f"$ {command_preview}",
-                    file=sys.stdout,
-                )
-            )
-            try:
-                with spinner:
-                    git.run(
-                        asset.command,
-                        root,
-                        dry_run=opts.dry_run,
-                        label=f"generated asset command ({asset.path.relative_to(root)})",
-                        suppress_announce=True,
-                    )
-            except RuntimeError as exc:
-                if opts.dry_run:
-                    p.warn(
-                        f"Generated asset command for {asset.path.relative_to(root)} failed in dry-run: {exc}",
-                    )
-                    continue
-                p.line(str(exc), ok=False, stream=sys.stderr)
-                return 1
+        if not refresh_bump_generated_assets(group, root, dry_run=opts.dry_run, verbose=verbose):
+            return 1
 
-            if not asset.path.exists():
-                message = f"Generated asset {asset.path.relative_to(root)} not found after refresh command"
-                if opts.dry_run:
-                    p.warn(message)
-                else:
-                    p.line(message, ok=False, stream=sys.stderr)
-                    return 1
-
-    p.section("Git")
-    create_flag = "-B" if force else "-b"
-    git.run(
-        ["git", "checkout", create_flag, branch_name],
+    finalize_bump_git(
+        group,
+        new,
+        changed_paths,
         root,
-        dry_run=opts.dry_run,
-        label=f"git checkout {create_flag}",
+        branch_name=branch_name,
+        base=base,
+        force=force,
+        opts=opts,
     )
-
-    # changed_paths contains version-target paths followed by pin paths (already deduplicated).
-    files_to_stage = [str(p.relative_to(root)) for p in changed_paths]
-    for path in group.generated_files:
-        if path.exists():
-            files_to_stage.append(str(path.relative_to(root)))
-    for asset in group.generated_assets:
-        if asset.path.exists():
-            files_to_stage.append(str(asset.path.relative_to(root)))
-    if group.changelog_file.exists() and not opts.no_changelog:
-        files_to_stage.append(str(group.changelog_file.relative_to(root)))
-    git.run(
-        ["git", "add", *dict.fromkeys(files_to_stage)],
-        root,
-        dry_run=opts.dry_run,
-        label="git add",
-    )
-
-    if not opts.no_commit:
-        git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
-        commit_msg = f"chore: bump version to v{new}"
-        commit_cmd = ["git", "commit", "-m", commit_msg]
-        if opts.no_verify:
-            commit_cmd.append("--no-verify")
-        try:
-            git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
-        except RuntimeError:
-            # A pre-commit hook (e.g. rrt-cli-docs) may have auto-regenerated
-            # files during this pass — pre-commit always fails that pass even
-            # though the fix is now correct. Re-stage and retry once.
-            git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
-            git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
-        done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
-        p.footer(done_msg)
-    else:
-        done_msg = f"Done. Branch '{branch_name}' created and files staged."
-        p.meta("Base branch", base)
-        p.footer(done_msg)
-    if opts.dry_run:
-        # Provide an explicit dry-run completion line expected by some tests
-        p.line("no files were modified")
     return 0
 
 
