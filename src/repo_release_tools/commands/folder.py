@@ -295,6 +295,38 @@ def cmd_folder_design(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_folder_check_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the ``folder check`` flag set on ``parser``.
+
+    Single source of truth for this command's flags. Consumed by both the
+    real ``rrt folder check`` subparser built in :func:`register` and by
+    ``workflow/hooks.py``'s ``folder-check`` subparser, so the two surfaces
+    can no longer drift out of sync.
+    """
+    parser.add_argument("--root", default=".", metavar="PATH", help="Root to validate.")
+    parser.add_argument(
+        "--template",
+        action="append",
+        default=[],
+        help=(
+            "Built-in or custom template name to apply at the root. "
+            f"Available built-ins: {', '.join(sorted(resolve_template_catalog()))}."
+        ),
+    )
+    parser.add_argument(
+        "--report-only",
+        action="store_true",
+        default=False,
+        help="Downgrade violations to warnings for this invocation.",
+    )
+    parser.add_argument(
+        "--snapshot",
+        action="store_true",
+        default=False,
+        help="Merge folder check results into .rrt/health.lock.toml after running.",
+    )
+
+
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the folder command family."""
     parser = subparsers.add_parser(
@@ -312,28 +344,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "check",
         help="Validate folder structure against templates or configured rules.",
     )
-    check_parser.add_argument("--root", default=".", metavar="PATH", help="Root to validate.")
-    check_parser.add_argument(
-        "--template",
-        action="append",
-        default=[],
-        help=(
-            "Built-in or custom template name to apply at the root. "
-            f"Available built-ins: {', '.join(sorted(resolve_template_catalog()))}."
-        ),
-    )
-    check_parser.add_argument(
-        "--report-only",
-        action="store_true",
-        default=False,
-        help="Downgrade violations to warnings for this invocation.",
-    )
-    check_parser.add_argument(
-        "--snapshot",
-        action="store_true",
-        default=False,
-        help="Merge folder check results into .rrt/health.lock.toml after running.",
-    )
+    _add_folder_check_arguments(check_parser)
     check_parser.set_defaults(handler=cmd_folder_check)
 
     scaffold_parser = folder_sub.add_parser(

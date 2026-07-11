@@ -31,7 +31,7 @@ from repo_release_tools.commands.doctor import cmd_doctor
 from repo_release_tools.commands.drift_cmd import _add_drift_lock_arguments
 from repo_release_tools.commands.drift_cmd import cmd_check as cmd_drift_check
 from repo_release_tools.commands.eol_check import cmd_eol as cmd_eol_check
-from repo_release_tools.commands.folder import cmd_folder_check
+from repo_release_tools.commands.folder import _add_folder_check_arguments, cmd_folder_check
 from repo_release_tools.commands.git_sync import (
     _add_publish_snapshot_arguments,
     cmd_publish_snapshot,
@@ -1221,27 +1221,10 @@ def main(argv: list[str] | None = None) -> int:
         "folder-check",
         help="Validate repository folder structure against configured rules or templates.",
     )
-    folder_check_parser.add_argument(
-        "--root", default=".", metavar="PATH", help="Root to validate."
-    )
-    folder_check_parser.add_argument(
-        "--template",
-        action="append",
-        default=[],
-        help="Built-in or custom template name to apply at the root.",
-    )
-    folder_check_parser.add_argument(
-        "--report-only",
-        action="store_true",
-        default=False,
-        help="Downgrade violations to warnings.",
-    )
-    folder_check_parser.add_argument(
-        "--snapshot",
-        action="store_true",
-        default=False,
-        help="Merge results into .rrt/health.lock.toml.",
-    )
+    # Flags are the single source of truth in commands/folder.py, shared with
+    # `rrt folder check`'s own register(). This also unifies previously
+    # slightly-different help text between the two copy-pasted specs.
+    _add_folder_check_arguments(folder_check_parser)
 
     artifacts_check_parser = subparsers.add_parser(
         "artifacts-check",
