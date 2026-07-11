@@ -1196,6 +1196,129 @@ Examples:
 """
 
 
+def _add_docs_generate_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the ``docs generate`` flag set on ``parser``.
+
+    Single source of truth for this sub-action's flags. Consumed by both the
+    real ``rrt docs generate`` subparser built in :func:`register` and by
+    ``workflow/hooks.py``'s ``docs-generate`` subparser, so the two surfaces
+    can no longer drift out of sync.
+    """
+    parser.add_argument(
+        "--format",
+        choices=_FORMATS,
+        default=None,
+        help="Output format (default: first format in config, usually md).",
+    )
+    parser.add_argument(
+        "--lang",
+        default=None,
+        metavar="LANGS",
+        help="Comma-separated language filter, e.g. python,go (overrides config).",
+    )
+    parser.add_argument(
+        "--root",
+        default=".",
+        metavar="PATH",
+        help="Project root directory (default: current directory).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print what would be done without writing files.",
+    )
+
+
+def _add_docs_publish_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the ``docs publish`` flag set on ``parser``.
+
+    Single source of truth for this sub-action's flags. Consumed by both the
+    real ``rrt docs publish`` subparser built in :func:`register` and by
+    ``workflow/hooks.py``'s ``docs-publish`` subparser.
+    """
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Fail if any generated file is stale; do not write.",
+    )
+    parser.add_argument(
+        "--fail-on-change",
+        action="store_true",
+        default=False,
+        help="Exit 1 after writing (for pre-commit hook workflows).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print which files would be written without doing so.",
+    )
+
+
+def _add_docs_inject_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the ``docs inject`` flag set on ``parser``.
+
+    Single source of truth for this sub-action's flags. Consumed by both the
+    real ``rrt docs inject`` subparser built in :func:`register` and by
+    ``workflow/hooks.py``'s ``docs-inject`` subparser.
+    """
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Fail if any anchor block is stale; do not write.",
+    )
+    parser.add_argument(
+        "--root",
+        default=".",
+        metavar="PATH",
+        help="Project root directory (default: current directory).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print which files would be updated without writing.",
+    )
+    parser.add_argument(
+        "--add-anchors",
+        action="store_true",
+        default=False,
+        help="Prepend missing anchor stubs to target files (first-time setup).",
+    )
+
+
+def _add_docs_map_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the ``docs map`` flag set on ``parser``.
+
+    Single source of truth for this sub-action's flags. Consumed by both the
+    real ``rrt docs map`` subparser built in :func:`register` and by
+    ``workflow/hooks.py``'s ``docs-map-update``/``docs-map-check`` subparsers
+    (the latter overrides ``--check``'s default to ``True`` via
+    ``set_defaults`` so it fails closed without exposing an extra flag).
+    """
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Fail if any directory's purpose doc disagrees with the lockfile.",
+    )
+    parser.add_argument(
+        "--root",
+        default=".",
+        metavar="PATH",
+        help="Project root directory (default: current directory).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Preview changes without writing files or the lockfile.",
+    )
+
+
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the docs command."""
     parser = subparsers.add_parser(
@@ -1228,30 +1351,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "generate",
         help="Extract docs and emit in the selected format.",
     )
-    gen_p.add_argument(
-        "--format",
-        choices=_FORMATS,
-        default=None,
-        help="Output format (default: first format in config, usually md).",
-    )
-    gen_p.add_argument(
-        "--lang",
-        default=None,
-        metavar="LANGS",
-        help="Comma-separated language filter, e.g. python,go (overrides config).",
-    )
-    gen_p.add_argument(
-        "--root",
-        default=".",
-        metavar="PATH",
-        help="Project root directory (default: current directory).",
-    )
-    gen_p.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print what would be done without writing files.",
-    )
+    _add_docs_generate_arguments(gen_p)
 
     # ── check ─────────────────────────────────────────────────────────────
     chk_p = sub.add_parser(
@@ -1280,24 +1380,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "publish",
         help="Write CLI-reference docs from the live rrt parser.",
     )
-    pub_p.add_argument(
-        "--check",
-        action="store_true",
-        default=False,
-        help="Fail if any generated file is stale; do not write.",
-    )
-    pub_p.add_argument(
-        "--fail-on-change",
-        action="store_true",
-        default=False,
-        help="Exit 1 after writing (for pre-commit hook workflows).",
-    )
-    pub_p.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print which files would be written without doing so.",
-    )
+    _add_docs_publish_arguments(pub_p)
     pub_p.set_defaults(handler=cmd_docs)
 
     # ── inject ────────────────────────────────────────────────────────────
@@ -1305,30 +1388,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "inject",
         help="Inject shared anchor blocks defined in [tool.rrt.docs.shared_blocks].",
     )
-    inj_p.add_argument(
-        "--check",
-        action="store_true",
-        default=False,
-        help="Fail if any anchor block is stale; do not write.",
-    )
-    inj_p.add_argument(
-        "--root",
-        default=".",
-        metavar="PATH",
-        help="Project root directory (default: current directory).",
-    )
-    inj_p.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print which files would be updated without writing.",
-    )
-    inj_p.add_argument(
-        "--add-anchors",
-        action="store_true",
-        default=False,
-        help="Prepend missing anchor stubs to target files (first-time setup).",
-    )
+    _add_docs_inject_arguments(inj_p)
     inj_p.set_defaults(handler=cmd_docs)
 
     # ── suggest ───────────────────────────────────────────────────────────
@@ -1448,22 +1508,5 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "map",
         help="Generate per-directory purpose docs from [tool.rrt.docs.map].",
     )
-    map_p.add_argument(
-        "--check",
-        action="store_true",
-        default=False,
-        help="Fail if any directory's purpose doc disagrees with the lockfile.",
-    )
-    map_p.add_argument(
-        "--root",
-        default=".",
-        metavar="PATH",
-        help="Project root directory (default: current directory).",
-    )
-    map_p.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Preview changes without writing files or the lockfile.",
-    )
+    _add_docs_map_arguments(map_p)
     map_p.set_defaults(handler=cmd_docs)

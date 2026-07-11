@@ -9,6 +9,7 @@ import pytest
 
 from repo_release_tools.commands.artifacts_cmd import (
     SOURCE_OWNED_TOPIC_DOCS,
+    _add_artifacts_strict_argument,
     _print_artifact_list,
     _target_dicts,
     cmd_artifacts,
@@ -126,6 +127,31 @@ def test_register_check_and_strict_flags() -> None:
     args = parser.parse_args(["artifacts", "--check", "--strict"])
     assert args.check is True
     assert args.strict is True
+
+
+# ---------------------------------------------------------------------------
+# _add_artifacts_strict_argument (shared spec, opposite polarity per caller)
+# ---------------------------------------------------------------------------
+
+
+def test_add_artifacts_strict_argument_default_false_uses_strict_flag() -> None:
+    parser = argparse.ArgumentParser()
+    _add_artifacts_strict_argument(parser, default=False)
+
+    assert parser.parse_args([]).strict is False
+    assert parser.parse_args(["--strict"]).strict is True
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--no-strict"])
+
+
+def test_add_artifacts_strict_argument_default_true_uses_no_strict_flag() -> None:
+    parser = argparse.ArgumentParser()
+    _add_artifacts_strict_argument(parser, default=True)
+
+    assert parser.parse_args([]).strict is True
+    assert parser.parse_args(["--no-strict"]).strict is False
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--strict"])
 
 
 def test_register_list_flag() -> None:

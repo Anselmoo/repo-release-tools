@@ -107,6 +107,185 @@ def test_cmd_move_dry_run_stashes_before_checkout(
     assert "git stash pop" in captured.out
 
 
+# ---------------------------------------------------------------------------
+# _rebootstrap_preflight_error / _run_rebootstrap_commands (extracted from
+# cmd_rebootstrap)
+# ---------------------------------------------------------------------------
+
+
+def test_rebootstrap_preflight_error_missing_git_dir(tmp_path: pathlib.Path) -> None:
+    args = argparse.Namespace(yes_i_know_this_destroys_history=True)
+    opts = git_sync.RebootstrapOptions.from_args(args)
+
+    error = git_sync._rebootstrap_preflight_error(args, opts, git_dir_exists=False, root=tmp_path)
+
+    assert error == f"{tmp_path} does not look like a Git repository."
+
+
+def test_rebootstrap_preflight_error_missing_confirmation(tmp_path: pathlib.Path) -> None:
+    args = argparse.Namespace(yes_i_know_this_destroys_history=False)
+    opts = git_sync.RebootstrapOptions.from_args(args)
+
+    error = git_sync._rebootstrap_preflight_error(args, opts, git_dir_exists=True, root=tmp_path)
+
+    assert error == (
+        "Refusing to destroy repository history without --yes-i-know-this-destroys-history."
+    )
+
+
+def test_rebootstrap_preflight_error_hard_init_and_empty_first(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(git_sync.git, "remote_names", lambda cwd: [])
+    args = argparse.Namespace(
+        yes_i_know_this_destroys_history=True,
+        allow_remote=False,
+        hard_init=True,
+        empty_first=True,
+        branch=None,
+        message=None,
+        empty_message=git_sync.DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+        dry_run=True,
+    )
+    opts = git_sync.RebootstrapOptions.from_args(args)
+
+    error = git_sync._rebootstrap_preflight_error(args, opts, git_dir_exists=True, root=tmp_path)
+
+    assert error == "Use either --hard-init or --empty-first, not both."
+
+
+def test_rebootstrap_preflight_error_remote_guard(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(git_sync.git, "remote_names", lambda cwd: ["origin"])
+    args = argparse.Namespace(
+        yes_i_know_this_destroys_history=True,
+        allow_remote=False,
+        hard_init=False,
+        empty_first=False,
+        branch=None,
+        message=None,
+        empty_message=git_sync.DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+        dry_run=True,
+    )
+    opts = git_sync.RebootstrapOptions.from_args(args)
+
+    error = git_sync._rebootstrap_preflight_error(args, opts, git_dir_exists=True, root=tmp_path)
+
+    assert error == (
+        "Refusing to rebootstrap a repository with configured remotes. "
+        "Use --allow-remote if that is intentional."
+    )
+
+
+def test_rebootstrap_preflight_error_clear_returns_none(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(git_sync.git, "remote_names", lambda cwd: [])
+    args = argparse.Namespace(
+        yes_i_know_this_destroys_history=True,
+        allow_remote=False,
+        hard_init=False,
+        empty_first=False,
+        branch=None,
+        message=None,
+        empty_message=git_sync.DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+        dry_run=True,
+    )
+    opts = git_sync.RebootstrapOptions.from_args(args)
+
+    error = git_sync._rebootstrap_preflight_error(args, opts, git_dir_exists=True, root=tmp_path)
+
+    assert error is None
+
+
+def test_run_rebootstrap_commands_hard_init_skips_snapshot(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_sync.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+    opts = git_sync.RebootstrapOptions.from_args(
+        argparse.Namespace(
+            yes_i_know_this_destroys_history=True,
+            hard_init=True,
+            empty_first=False,
+            empty_message=git_sync.DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+        )
+    )
+
+    git_sync._run_rebootstrap_commands(tmp_path, "main", "chore: bootstrap", opts, dry_run=True)
+
+    assert commands == [
+        ["git", "init", "-b", "main"],
+        ["git", "commit", "--allow-empty", "-m", "chore: bootstrap"],
+    ]
+
+
+def test_run_rebootstrap_commands_empty_first_then_snapshot(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_sync.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+    opts = git_sync.RebootstrapOptions.from_args(
+        argparse.Namespace(
+            yes_i_know_this_destroys_history=True,
+            hard_init=False,
+            empty_first=True,
+            empty_message="chore: empty first",
+        )
+    )
+
+    git_sync._run_rebootstrap_commands(tmp_path, "main", "chore: snapshot", opts, dry_run=True)
+
+    assert commands == [
+        ["git", "init", "-b", "main"],
+        ["git", "commit", "--allow-empty", "-m", "chore: empty first"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "chore: snapshot"],
+    ]
+
+
+def test_run_rebootstrap_commands_default_snapshot_only(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        git_sync.git,
+        "run",
+        lambda cmd, cwd, *, dry_run, label: commands.append(cmd) or "",
+    )
+    opts = git_sync.RebootstrapOptions.from_args(
+        argparse.Namespace(
+            yes_i_know_this_destroys_history=True,
+            hard_init=False,
+            empty_first=False,
+            empty_message=git_sync.DEFAULT_REBOOTSTRAP_EMPTY_MESSAGE,
+        )
+    )
+
+    git_sync._run_rebootstrap_commands(tmp_path, "main", "chore: snapshot", opts, dry_run=True)
+
+    assert commands == [
+        ["git", "init", "-b", "main"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "chore: snapshot"],
+    ]
+
+
 def test_cmd_rebootstrap_requires_confirmation(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -133,6 +133,92 @@ class Options:
         )
 
 
+def _run_artifacts_check(
+    p: VerbosePrinter,
+    lock_path: Path,
+    targets: list[dict[str, Any]],
+    root: Path,
+    *,
+    strict: bool,
+) -> int:
+    """Verify artifact hashes against the lockfile and report drift.
+
+    Advisory by default (exits 0 on mismatch, warns); ``--strict`` makes any
+    drift an error (exit 1), for CI gates.
+    """
+    is_current, drift_msgs = artifacts_lock_is_current(lock_path, targets, root)
+    if is_current:
+        p.line("All artifact hashes verified — no drift detected.", ok=True)
+        return 0
+    for msg in drift_msgs:
+        if strict:
+            p.line(msg, ok=False, stream=sys.stderr)
+        else:
+            p.warn(msg)
+    if strict:
+        p.line(
+            f"{len(drift_msgs)} artifact integrity issue(s) found. Run --snapshot to update.",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+    p.blank_line()
+    p.warn("⊙ [advisory] Artifact drift detected — run rrt artifacts --snapshot to update.")
+    return 0
+
+
+def _run_artifacts_regenerate(
+    p: VerbosePrinter,
+    config: RrtConfig,
+    targets: list[dict[str, Any]],
+    root: Path,
+    lock_path: Path,
+    *,
+    dry_run: bool,
+) -> int:
+    """Run every artifact target's regeneration command, then refresh the snapshot.
+
+    Targets without a configured ``command`` are skipped. A failing command
+    aborts immediately (its ``RuntimeError`` message is reported); the
+    snapshot is only rewritten on a real (non-dry-run) run.
+    """
+    rp = DryRunPrinter(dry_run=dry_run)
+    rp.header("Regenerate artifact targets")
+    regenerated = 0
+    for target in config.artifact_targets:
+        if not target.command:
+            continue
+        label = f"regenerate {target.path}"
+        try:
+            git.run(
+                target.command,
+                root,
+                dry_run=dry_run,
+                label=label,
+                suppress_announce=False,
+            )
+        except RuntimeError as exc:
+            p.line(str(exc), ok=False, stream=sys.stderr)
+            return 1
+        regenerated += 1
+
+    if regenerated == 0:
+        rp.line("No artifact targets have a command configured — nothing to regenerate.", ok=True)
+        return 0
+
+    if not dry_run:
+        data = build_artifacts_lock(targets, root)
+        write_lock(lock_path, data)
+        file_count = len(data.get("files", {}))
+        rp.footer(
+            f"Regenerated {regenerated} target(s); snapshot updated"
+            f" ({file_count} file(s) → {lock_path.relative_to(root)})"
+        )
+    else:
+        rp.footer(f"Would regenerate {regenerated} target(s) and update snapshot.")
+    return 0
+
+
 def cmd_artifacts(args: argparse.Namespace) -> int:
     """Run artifact integrity check, snapshot, or list."""
     opts = Options.from_args(args)
@@ -180,68 +266,14 @@ def cmd_artifacts(args: argparse.Namespace) -> int:
         return 0
 
     if do_check:
-        is_current, drift_msgs = artifacts_lock_is_current(lock_path, targets, root)
-        if is_current:
-            p.line("All artifact hashes verified — no drift detected.", ok=True)
-            return 0
-        for msg in drift_msgs:
-            if strict:
-                p.line(msg, ok=False, stream=sys.stderr)
-            else:
-                p.warn(msg)
-        if strict:
-            p.line(
-                f"{len(drift_msgs)} artifact integrity issue(s) found. Run --snapshot to update.",
-                ok=False,
-                stream=sys.stderr,
-            )
-            return 1
-        p.blank_line()
-        p.warn("⊙ [advisory] Artifact drift detected — run rrt artifacts --snapshot to update.")
-        return 0
+        return _run_artifacts_check(p, lock_path, targets, root, strict=strict)
 
     if do_list:
         _print_artifact_list(targets, root, lock_path)
         return 0
 
     if do_regenerate:
-        rp = DryRunPrinter(dry_run=dry_run)
-        rp.header("Regenerate artifact targets")
-        regenerated = 0
-        for target in config.artifact_targets:
-            if not target.command:
-                continue
-            label = f"regenerate {target.path}"
-            try:
-                git.run(
-                    target.command,
-                    root,
-                    dry_run=dry_run,
-                    label=label,
-                    suppress_announce=False,
-                )
-            except RuntimeError as exc:
-                p.line(str(exc), ok=False, stream=sys.stderr)
-                return 1
-            regenerated += 1
-
-        if regenerated == 0:
-            rp.line(
-                "No artifact targets have a command configured — nothing to regenerate.", ok=True
-            )
-            return 0
-
-        if not dry_run:
-            data = build_artifacts_lock(targets, root)
-            write_lock(lock_path, data)
-            file_count = len(data.get("files", {}))
-            rp.footer(
-                f"Regenerated {regenerated} target(s); snapshot updated"
-                f" ({file_count} file(s) → {lock_path.relative_to(root)})"
-            )
-        else:
-            rp.footer(f"Would regenerate {regenerated} target(s) and update snapshot.")
-        return 0
+        return _run_artifacts_regenerate(p, config, targets, root, lock_path, dry_run=dry_run)
 
     # Default: show a brief status summary
     is_current, drift_msgs = artifacts_lock_is_current(lock_path, targets, root)
@@ -295,6 +327,41 @@ def _print_artifact_list(
                 p.line(f"{rel:<60}  MISMATCH", ok=False)
 
 
+def _add_artifacts_strict_argument(parser: argparse.ArgumentParser, *, default: bool) -> None:
+    """Register the ``strict`` flag on ``parser`` with the caller's chosen default/polarity.
+
+    Single source of truth for the ``strict`` dest consumed by :func:`cmd_artifacts`
+    (via ``Options.strict``). The two callers want opposite defaults and therefore
+    opposite flag polarity:
+
+    - ``rrt artifacts``'s own :func:`register` wants ``--strict`` opt-in
+      (``default=False``, ``store_true``) -- a human running the CLI expects
+      ``--check`` to be advisory unless they ask for a hard gate.
+    - ``workflow/hooks.py``'s ``artifacts-check`` subcommand wants strict
+      opt-*out* (``default=True``, ``store_false`` as ``--no-strict``) -- a CI
+      policy gate should fail closed by default.
+
+    Both flags write the same ``dest="strict"``, so :func:`cmd_artifacts` reads
+    a single typed field regardless of which surface parsed the arguments.
+    """
+    if default:
+        parser.add_argument(
+            "--no-strict",
+            dest="strict",
+            action="store_false",
+            default=True,
+            help="Downgrade failures to warnings instead of exiting 1.",
+        )
+    else:
+        parser.add_argument(
+            "--strict",
+            dest="strict",
+            action="store_true",
+            default=False,
+            help="With --check: exit 1 on any hash mismatch (for CI gates).",
+        )
+
+
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """Register the artifacts subcommand."""
     parser = subparsers.add_parser(
@@ -337,10 +404,5 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
         default=False,
         help="Show what --regenerate would do without running commands or writing the lock.",
     )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        default=False,
-        help="With --check: exit 1 on any hash mismatch (for CI gates).",
-    )
+    _add_artifacts_strict_argument(parser, default=False)
     parser.set_defaults(handler=cmd_artifacts)

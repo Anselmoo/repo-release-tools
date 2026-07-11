@@ -18,6 +18,73 @@ from repo_release_tools.ui.prompt import ask
 AUTO_RESOLVE_CHOICES: tuple[str, ...] = ("gitkeep", "delete", "hard", "git-rm")
 
 
+def _apply_gitkeep(rel: str, target: Path, printer: DryRunPrinter, *, dry_run: bool) -> str | None:
+    """Create ``rel/.gitkeep`` (or preview it). Returns the error message, or None on success."""
+    if dry_run:
+        printer.action(f"[dry-run] Would create {rel}/.gitkeep")
+        return None
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        (target / ".gitkeep").write_text("", encoding="utf-8")
+        printer.ok(f"Created {rel}/.gitkeep")
+        return None
+    except OSError as exc:
+        printer.line(f"Failed to create {rel}/.gitkeep: {exc}", ok=False)
+        return str(exc)
+
+
+def _apply_delete(rel: str, target: Path, printer: DryRunPrinter, *, dry_run: bool) -> str | None:
+    """Remove the (empty) directory at *target* (or preview it). Returns the error, or None."""
+    if dry_run:
+        printer.action(f"[dry-run] Would remove {rel}/")
+        return None
+    try:
+        target.rmdir()
+        printer.ok(f"Removed {rel}/")
+        return None
+    except OSError as exc:
+        printer.line(f"Failed to remove {rel}/: {exc}", ok=False)
+        return str(exc)
+
+
+def _apply_hard_delete(
+    rel: str, target: Path, printer: DryRunPrinter, *, dry_run: bool
+) -> str | None:
+    """Recursively remove *target* (or preview it). Returns the error message, or None."""
+    if dry_run:
+        printer.action(f"[dry-run] Would hard-remove {rel}/")
+        return None
+    try:
+        shutil.rmtree(target)
+        printer.ok(f"Removed {rel}/")
+        return None
+    except OSError as exc:
+        printer.line(f"Failed to remove {rel}/: {exc}", ok=False)
+        return str(exc)
+
+
+def _apply_git_rm(rel: str, root: Path, printer: DryRunPrinter, *, dry_run: bool) -> str | None:
+    """Stage *rel* for removal via ``git rm -rf`` (or preview it). Returns the error, or None."""
+    if dry_run:
+        printer.action(f"[dry-run] Would git-rm {rel}/")
+        return None
+    result = subprocess.run(
+        ["git", "rm", "-rf", "--", rel],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        printer.ok(f"git-removed {rel}/ (staged for next commit)")
+        return None
+    message = (result.stderr or result.stdout or "").strip() or (
+        f"git rm exited with {result.returncode}"
+    )
+    printer.line(f"Failed to git-rm {rel}/: {message}", ok=False)
+    return message
+
+
 def fix_empty_dirs(
     root: Path,
     phantom_dirs: list[str],
@@ -74,66 +141,26 @@ def fix_empty_dirs(
 
         match choice:
             case "gitkeep":
-                if dry_run:
-                    printer.action(f"[dry-run] Would create {rel}/.gitkeep")
-                    added.append(rel)
-                else:
-                    try:
-                        target.mkdir(parents=True, exist_ok=True)
-                        (target / ".gitkeep").write_text("", encoding="utf-8")
-                        printer.ok(f"Created {rel}/.gitkeep")
-                        added.append(rel)
-                    except OSError as exc:
-                        printer.line(f"Failed to create {rel}/.gitkeep: {exc}", ok=False)
-                        failed.append((rel, str(exc)))
+                error = _apply_gitkeep(rel, target, printer, dry_run=dry_run)
+                bucket = added
             case "delete":
-                if dry_run:
-                    printer.action(f"[dry-run] Would remove {rel}/")
-                    removed.append(rel)
-                else:
-                    try:
-                        target.rmdir()
-                        printer.ok(f"Removed {rel}/")
-                        removed.append(rel)
-                    except OSError as exc:
-                        printer.line(f"Failed to remove {rel}/: {exc}", ok=False)
-                        failed.append((rel, str(exc)))
+                error = _apply_delete(rel, target, printer, dry_run=dry_run)
+                bucket = removed
             case "hard-delete":
-                if dry_run:
-                    printer.action(f"[dry-run] Would hard-remove {rel}/")
-                    removed.append(rel)
-                else:
-                    try:
-                        shutil.rmtree(target)
-                        printer.ok(f"Removed {rel}/")
-                        removed.append(rel)
-                    except OSError as exc:
-                        printer.line(f"Failed to remove {rel}/: {exc}", ok=False)
-                        failed.append((rel, str(exc)))
+                error = _apply_hard_delete(rel, target, printer, dry_run=dry_run)
+                bucket = removed
             case "git-rm":
-                if dry_run:
-                    printer.action(f"[dry-run] Would git-rm {rel}/")
-                    removed.append(rel)
-                else:
-                    result = subprocess.run(
-                        ["git", "rm", "-rf", "--", rel],
-                        cwd=root,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    if result.returncode == 0:
-                        printer.ok(f"git-removed {rel}/ (staged for next commit)")
-                        removed.append(rel)
-                    else:
-                        message = (result.stderr or result.stdout or "").strip() or (
-                            f"git rm exited with {result.returncode}"
-                        )
-                        printer.line(f"Failed to git-rm {rel}/: {message}", ok=False)
-                        failed.append((rel, message))
+                error = _apply_git_rm(rel, root, printer, dry_run=dry_run)
+                bucket = removed
             case _:
                 printer.action(f"Skipped {rel}/")
                 skipped.append(rel)
+                continue
+
+        if error is None:
+            bucket.append(rel)
+        else:
+            failed.append((rel, error))
 
     printer.blank_line()
     printer.meta("Added .gitkeep", str(len(added)))

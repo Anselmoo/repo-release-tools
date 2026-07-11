@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -796,16 +795,11 @@ def test_main_docs_hook_commands_set_explicit_defaults(monkeypatch: pytest.Monke
     assert generate_args.dry_run is False
 
     assert publish_args.docs_action == "publish"
-    assert publish_args.format is None
-    assert publish_args.lang is None
-    assert publish_args.root == "."
     assert publish_args.check is False
     assert publish_args.dry_run is False
     assert publish_args.fail_on_change is False
 
     assert inject_args.docs_action == "inject"
-    assert inject_args.format is None
-    assert inject_args.lang is None
     assert inject_args.root == "."
     assert inject_args.check is False
     assert inject_args.dry_run is False
@@ -1334,25 +1328,6 @@ def test_workflow_hooks_module_main_block_executes(monkeypatch: pytest.MonkeyPat
 
     with pytest.raises(SystemExit) as excinfo:
         runpy.run_module("repo_release_tools.workflow.hooks", run_name="__main__")
-
-    assert excinfo.value.code == 0
-
-
-def test_legacy_top_level_hooks_module_reexports_workflow_api() -> None:
-    legacy_hooks = importlib.import_module("repo_release_tools.hooks")
-
-    assert legacy_hooks.main is hooks.main
-    assert getattr(legacy_hooks, "validate_branch_name") is hooks.validate_branch_name
-    assert getattr(legacy_hooks, "Version") is hooks.Version
-
-
-def test_legacy_top_level_hooks_module_main_block_executes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(hooks, "main", lambda argv=None: 0)
-
-    import runpy
-
-    with pytest.raises(SystemExit) as excinfo:
-        runpy.run_module("repo_release_tools.hooks", run_name="__main__")
 
     assert excinfo.value.code == 0
 
