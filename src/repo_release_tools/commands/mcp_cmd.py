@@ -23,6 +23,7 @@ import argparse
 import re
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.ui import DryRunPrinter
@@ -70,11 +71,54 @@ def register(mcp: FastMCP) -> None:
 '''
 
 
+@dataclass(frozen=True)
+class ToolNewOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt mcp tool new``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_mcp_tool_new`
+    so all flags it reads have typed read sites instead of
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    name: str
+    title: str | None
+    description: str | None
+    into: str | None
+    dry_run: bool
+    force: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ToolNewOptions:
+        """Build a :class:`ToolNewOptions` from a parsed ``argparse.Namespace``.
+
+        ``name`` is positional/required and ``title``, ``description``,
+        ``into``, ``dry_run``, and ``force`` are all given real defaults by
+        mcp_cmd.py's own register(). No cmd_* dispatch in
+        `workflow/hooks.py` calls cmd_mcp_tool_new (this file has no
+        hooks.py entry at all), and the only test file exercising this
+        command, tests/commands/test_mcp_scaffold.py, goes through the
+        local ``_args()`` helper which always sets all six fields
+        explicitly (the two bare ``argparse.Namespace()`` calls in that
+        file target the unrelated ``_default_help`` handlers, not
+        cmd_mcp_tool_new). This command does not read ``verbose`` at all.
+        So no getattr fallback is needed for any field.
+        """
+        return cls(
+            name=args.name,
+            title=args.title,
+            description=args.description,
+            into=args.into,
+            dry_run=args.dry_run,
+            force=args.force,
+        )
+
+
 def cmd_mcp_tool_new(args: argparse.Namespace) -> int:
     """Scaffold a new MCP tool module from a name + optional title/description."""
-    p = DryRunPrinter(getattr(args, "dry_run", False))
+    opts = ToolNewOptions.from_args(args)
+    p = DryRunPrinter(opts.dry_run)
 
-    name: str = args.name
+    name = opts.name
     if not _NAME_RE.match(name):
         p.line(
             f"Invalid tool name: {name!r}. "
@@ -84,16 +128,16 @@ def cmd_mcp_tool_new(args: argparse.Namespace) -> int:
         )
         return 1
 
-    title: str = getattr(args, "title", None) or _humanize(name)
-    description: str = getattr(args, "description", None) or f"MCP tool stub for {name}."
+    title = opts.title or _humanize(name)
+    description = opts.description or f"MCP tool stub for {name}."
 
-    into = getattr(args, "into", None)
+    into = opts.into
     if into:
         target = Path(into).resolve()
     else:
         target = Path.cwd() / "src" / "repo_release_tools" / "mcp" / "tools" / f"{name}_tools.py"
 
-    if target.exists() and not getattr(args, "force", False):
+    if target.exists() and not opts.force:
         p.line(
             f"Refusing to overwrite existing file: {target}. Use --force to override.",
             ok=False,

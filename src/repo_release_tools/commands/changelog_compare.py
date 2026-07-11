@@ -61,6 +61,7 @@ import argparse
 import json
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.changelog import ChangelogFormat, detect_changelog_format
@@ -163,8 +164,41 @@ def _print_comparison(
             write(f"  + (only in {to_ver}) {entry}\n")
 
 
+@dataclass(frozen=True)
+class CompareOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt changelog compare``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_changelog_compare`
+    so all flags it reads have typed read sites instead of
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    from_version: str
+    to_version: str
+    compare_format: str
+    group: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> CompareOptions:
+        """Build a :class:`CompareOptions` from a parsed ``argparse.Namespace``.
+
+        Every field here is a positional argument or is given a real default
+        by changelog_compare.py's own register_subcommand(), so a Namespace
+        produced by argparse always carries all four. The local ``_args()``
+        helper in tests/commands/test_changelog_compare.py also always sets
+        all four, so no getattr fallback is needed for any field.
+        """
+        return cls(
+            from_version=args.from_version,
+            to_version=args.to_version,
+            compare_format=args.compare_format,
+            group=args.group,
+        )
+
+
 def cmd_changelog_compare(args: argparse.Namespace) -> int:
     """Compare two changelog release sections."""
+    opts = CompareOptions.from_args(args)
     root = find_repo_root(Path.cwd())
     try:
         config: RrtConfig = load_or_autodetect_config(root)
@@ -172,9 +206,8 @@ def cmd_changelog_compare(args: argparse.Namespace) -> int:
         sys.stderr.write(error(f"Could not load rrt config: {exc}") + "\n")
         return 1
 
-    group_name: str | None = getattr(args, "group", None)
     try:
-        group: VersionGroup = config.resolve_group(group_name)
+        group: VersionGroup = config.resolve_group(opts.group)
     except Exception as exc:
         sys.stderr.write(error(str(exc)) + "\n")
         return 1
@@ -187,8 +220,8 @@ def cmd_changelog_compare(args: argparse.Namespace) -> int:
     content = changelog_path.read_text(encoding="utf-8")
     fmt = detect_changelog_format(changelog_path)
 
-    from_ver: str = args.from_version
-    to_ver: str = args.to_version
+    from_ver = opts.from_version
+    to_ver = opts.to_version
 
     from_text = _extract_section_text(content, from_ver, fmt)
     to_text = _extract_section_text(content, to_ver, fmt)
@@ -204,7 +237,7 @@ def cmd_changelog_compare(args: argparse.Namespace) -> int:
 
     diff = _compare_sections(from_sections, to_sections)
 
-    output_format: str = getattr(args, "compare_format", "text")
+    output_format = opts.compare_format
 
     if output_format == "json":
         sys.stdout.write(

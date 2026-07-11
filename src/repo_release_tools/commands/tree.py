@@ -808,13 +808,99 @@ def _inject_rendered_tree(
     return 0
 
 
+@dataclass(frozen=True)
+class Options:
+    """Typed view of ``argparse.Namespace`` for ``rrt tree``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_tree` so every
+    flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` / ``args.x`` calls throughout the
+    function body.
+    """
+
+    verbose: int
+    dry_run: bool
+    inject: str | None
+    anchor: str | None
+    path: str | None
+    root: str
+    max_depth: int | None
+    dirs_only: bool
+    show_hidden: bool
+    fix_empty_dirs: bool
+    yes: bool
+    auto_resolve: str | None
+    format: str
+    absolute: bool
+    strict_empty_dirs: bool
+    snapshot: bool
+    check: bool
+    strict: bool
+    manifest: bool
+    compressed: bool
+    output: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> Options:
+        """Build an :class:`Options` from a parsed ``argparse.Namespace``.
+
+        Every flag is given a real default by tree.py's own register() (or,
+        for --verbose, by cli.py's global parser), so a Namespace produced by
+        argparse always carries every attribute. ``getattr`` fallbacks here
+        are still required for two independent reasons:
+
+        1. `workflow/hooks.py`'s "tree-check" case hand-builds a sparse
+           Namespace(path=None, root=..., max_depth=..., dirs_only=...,
+           show_hidden=..., inject=None, anchor=None, fix_empty_dirs=False,
+           dry_run=False, strict_empty_dirs=False, snapshot=False,
+           check=True, strict=True, verbose=verbose, format="classic") that
+           omits ``manifest``, ``compressed``, ``yes``, ``auto_resolve``,
+           ``absolute``, and ``output`` entirely. Plain attribute access for
+           those six would raise AttributeError on the `rrt-hooks tree-check`
+           path used by CI/pre-commit.
+        2. Several unit tests in tests/commands/test_tree*.py construct their
+           own sparse argparse.Namespace by hand (helpers like ``_args()``
+           and ``_f2_args()``, plus ad-hoc Namespace(...) calls), routinely
+           omitting ``path``, ``verbose``, ``strict_empty_dirs``,
+           ``fix_empty_dirs``, ``yes``, and ``auto_resolve`` in addition to
+           the six hooks.py never sets.
+
+        This is the single translation point that absorbs both gaps, so the
+        rest of cmd_tree can read opts.x unconditionally.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            dry_run=getattr(args, "dry_run", False),
+            inject=getattr(args, "inject", None),
+            anchor=getattr(args, "anchor", None),
+            path=getattr(args, "path", None),
+            root=args.root,
+            max_depth=args.max_depth,
+            dirs_only=args.dirs_only,
+            show_hidden=args.show_hidden,
+            fix_empty_dirs=getattr(args, "fix_empty_dirs", False),
+            yes=getattr(args, "yes", False),
+            auto_resolve=getattr(args, "auto_resolve", None),
+            format=args.format,
+            absolute=getattr(args, "absolute", False),
+            strict_empty_dirs=getattr(args, "strict_empty_dirs", False),
+            snapshot=getattr(args, "snapshot", False),
+            check=getattr(args, "check", False),
+            strict=getattr(args, "strict", False),
+            manifest=getattr(args, "manifest", False),
+            compressed=getattr(args, "compressed", False),
+            output=getattr(args, "output", None),
+        )
+
+
 def cmd_tree(args: argparse.Namespace) -> int:
     """Render a project tree from the selected root."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    p = DryRunPrinter(getattr(args, "dry_run", False), verbose=verbose)
+    opts = Options.from_args(args)
+    verbose: int = opts.verbose
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
 
-    inject_file: str | None = getattr(args, "inject", None)
-    anchor_id: str | None = getattr(args, "anchor", None)
+    inject_file: str | None = opts.inject
+    anchor_id: str | None = opts.anchor
 
     if bool(inject_file) != bool(anchor_id):
         p.line(
@@ -825,8 +911,8 @@ def cmd_tree(args: argparse.Namespace) -> int:
         return 1
 
     # The positional `path` argument, when given, takes precedence over `--root`.
-    positional_path: str | None = getattr(args, "path", None)
-    root_input = positional_path if positional_path else args.root
+    positional_path: str | None = opts.path
+    root_input = positional_path if positional_path else opts.root
     root = Path(root_input).resolve()
     if not root.exists():
         p.line(f"Root path does not exist: {root}", ok=False, stream=sys.stderr)
@@ -845,9 +931,9 @@ def cmd_tree(args: argparse.Namespace) -> int:
         root=root,
         repo_root=repo_root,
         depth=1,
-        max_depth=args.max_depth,
-        dirs_only=args.dirs_only,
-        show_hidden=args.show_hidden,
+        max_depth=opts.max_depth,
+        dirs_only=opts.dirs_only,
+        show_hidden=opts.show_hidden,
         ignore_cache=ignore_cache,
         warnings=warnings,
     )
@@ -855,7 +941,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
     if repo_root is not None:
         phantom_empty_dirs = _warn_for_empty_directories(entries, warnings, root=root)
 
-    do_fix_empty_dirs: bool = getattr(args, "fix_empty_dirs", False)
+    do_fix_empty_dirs: bool = opts.fix_empty_dirs
     if do_fix_empty_dirs:
         from repo_release_tools.commands._tree_fix import fix_empty_dirs
 
@@ -863,13 +949,13 @@ def cmd_tree(args: argparse.Namespace) -> int:
             root,
             phantom_empty_dirs,
             printer=p,
-            dry_run=getattr(args, "dry_run", False),
-            assume_yes=getattr(args, "yes", False),
-            auto_resolve=getattr(args, "auto_resolve", None),
+            dry_run=opts.dry_run,
+            assume_yes=opts.yes,
+            auto_resolve=opts.auto_resolve,
         )
 
-    fmt = args.format
-    absolute_paths: bool = getattr(args, "absolute", False)
+    fmt = opts.format
+    absolute_paths: bool = opts.absolute
     rendered: str
     match fmt:
         case "ascii":
@@ -899,7 +985,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
         "phantom_empty_dirs": [str(d) for d in phantom_empty_dirs],
     }
 
-    strict_empty: bool = getattr(args, "strict_empty_dirs", False)
+    strict_empty: bool = opts.strict_empty_dirs
     if strict_empty and phantom_empty_dirs:
         for path in phantom_empty_dirs:
             p.line(f"Phantom empty directory (untrackable by git): {path}/", ok=False)
@@ -910,11 +996,11 @@ def cmd_tree(args: argparse.Namespace) -> int:
         )
         return 1
 
-    do_snapshot: bool = getattr(args, "snapshot", False)
-    do_check: bool = getattr(args, "check", False)
-    strict: bool = getattr(args, "strict", False)
-    do_manifest: bool = getattr(args, "manifest", False)
-    do_compressed: bool = getattr(args, "compressed", False)
+    do_snapshot: bool = opts.snapshot
+    do_check: bool = opts.check
+    strict: bool = opts.strict
+    do_manifest: bool = opts.manifest
+    do_compressed: bool = opts.compressed
     # --compressed implies --manifest
     if do_compressed:
         do_manifest = True
@@ -1017,7 +1103,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
         )
 
     # --- default mode: print tree to stdout or write to --output ---
-    output_path: str | None = getattr(args, "output", None)
+    output_path: str | None = opts.output
     if output_path:
         body = (rendered + "\n") if rendered else ""
         Path(output_path).write_text(body, encoding="utf-8")
@@ -1033,8 +1119,8 @@ def cmd_tree(args: argparse.Namespace) -> int:
         p.meta("Git ignore", "enabled")
     else:
         p.meta("Git ignore", "unavailable (non-git directory fallback)")
-    if args.max_depth is not None:
-        p.meta("Max depth", str(args.max_depth))
+    if opts.max_depth is not None:
+        p.meta("Max depth", str(opts.max_depth))
     p.blank_line()
 
     p.section("Tree")

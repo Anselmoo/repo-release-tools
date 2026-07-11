@@ -63,12 +63,12 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.config import (
     find_repo_root,
-    format_missing_tool_rrt_guidance,
-    is_missing_tool_rrt_error,
     iter_config_files,
     load_or_autodetect_config,
 )
@@ -88,25 +88,17 @@ def _load_config_and_version(root: Path, group_name: str | None) -> tuple[object
     """Load config and return (config, version_str), printing errors on failure."""
     try:
         config = load_or_autodetect_config(root)
-    except FileNotFoundError:
-        p = VerbosePrinter()
-        p.line(
-            format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-            ok=False,
-            stream=sys.stderr,
-        )
+    except FileNotFoundError as exc:
+        err = describe_config_load_error(exc, root, no_config_file_checked=iter_config_files(root))
+        VerbosePrinter().line(err.text, ok=False, stream=sys.stderr)
         return None
-    except ValueError as exc:
-        if is_missing_tool_rrt_error(exc):
-            p = VerbosePrinter()
+    except (ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        p = VerbosePrinter()
+        if err.kind == "missing_tool_rrt":
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
-            return None
-        p = VerbosePrinter()
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return None
-    except RuntimeError as exc:
-        p = VerbosePrinter()
-        p.line(str(exc), ok=False, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
         return None
 
     try:
@@ -129,29 +121,66 @@ def _existing_tags(root: Path) -> list[str]:
         return []
 
 
+@dataclass(frozen=True)
+class TagCreateOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt tag create``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_tag_create` so
+    every flag it reads has a typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    dry_run: bool
+    push: bool
+    prefix: str
+    message: str | None
+    group: str | None
+    force: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> TagCreateOptions:
+        """Build a :class:`TagCreateOptions` from a parsed ``argparse.Namespace``.
+
+        Every field here is given a real default by tag.py's own
+        ``register()`` (used by ``rrt tag create``); hooks.py never dispatches
+        to ``cmd_tag_create`` (only ``cmd_tag_check`` has a "tag-check" case),
+        so there is no hooks.py Namespace gap to absorb. The getattr fallbacks
+        remain because several tests in tests/commands/test_tag.py construct
+        sparse ``argparse.Namespace`` objects by hand (via ``_args_create``)
+        that omit some of these attributes.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            dry_run=getattr(args, "dry_run", False),
+            push=getattr(args, "push", False),
+            prefix=getattr(args, "prefix", "v"),
+            message=getattr(args, "message", None),
+            group=getattr(args, "group", None),
+            force=getattr(args, "force", False),
+        )
+
+
 def cmd_tag_create(args: argparse.Namespace) -> int:
     """Create an annotated git tag matching the current configured version."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = TagCreateOptions.from_args(args)
+    verbose = opts.verbose
     root = find_repo_root(Path.cwd())
-    dry_run: bool = getattr(args, "dry_run", False)
-    push: bool = getattr(args, "push", False)
-    prefix: str = getattr(args, "prefix", "v")
-    message: str | None = getattr(args, "message", None)
 
-    result = _load_config_and_version(root, getattr(args, "group", None))
+    result = _load_config_and_version(root, opts.group)
     if result is None:
         return 1
     _config, version = result
 
-    tag = _tag_name(version, prefix)
-    msg = message or f"Release {tag}"
+    tag = _tag_name(version, opts.prefix)
+    msg = opts.message or f"Release {tag}"
 
-    p = DryRunPrinter(dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header("Tag create", Tag=tag, Message=msg)
 
     existing = _existing_tags(root)
-    if tag in existing and not getattr(args, "force", False):
+    if tag in existing and not opts.force:
         p2 = VerbosePrinter(verbose=verbose)
         p2.line(
             f"Tag '{tag}' already exists. Use --force to overwrite.",
@@ -160,13 +189,13 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
         )
         return 1
 
-    if dry_run:
+    if opts.dry_run:
         p.line(f"would run: git tag -a {tag} -m {msg!r}")
         p.line("no changes were made")
         return 0
 
     try:
-        if tag in existing and getattr(args, "force", False):
+        if tag in existing and opts.force:
             _git(["git", "tag", "-d", tag], root)
         _git(["git", "tag", "-a", tag, "-m", msg], root)
     except subprocess.CalledProcessError as exc:
@@ -176,7 +205,7 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
 
     p.ok(f"Created tag {tag!r}")
 
-    if push:
+    if opts.push:
         try:
             _git(["git", "push", "origin", tag], root)
             p.ok(f"Pushed {tag!r} to origin")
@@ -188,19 +217,52 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class TagCheckOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt tag check``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_tag_check` so
+    every flag it reads has a typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    strict: bool
+    prefix: str
+    group: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> TagCheckOptions:
+        """Build a :class:`TagCheckOptions` from a parsed ``argparse.Namespace``.
+
+        workflow/hooks.py's "tag-check" case hand-builds
+        ``argparse.Namespace(strict=False, prefix="v", group=None,
+        verbose=verbose)`` — exactly these four fields, so no field is
+        missing from that dispatch arm. The getattr fallbacks remain because
+        several tests in tests/commands/test_tag.py construct sparse
+        ``argparse.Namespace`` objects by hand (via ``_args_check``) that
+        never set ``verbose``.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            strict=getattr(args, "strict", False),
+            prefix=getattr(args, "prefix", "v"),
+            group=getattr(args, "group", None),
+        )
+
+
 def cmd_tag_check(args: argparse.Namespace) -> int:
     """Validate existing tags match the configured naming convention."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = TagCheckOptions.from_args(args)
+    verbose = opts.verbose
     root = find_repo_root(Path.cwd())
-    strict: bool = getattr(args, "strict", False)
-    prefix: str = getattr(args, "prefix", "v")
 
-    result = _load_config_and_version(root, getattr(args, "group", None))
+    result = _load_config_and_version(root, opts.group)
     if result is None:
         return 1
     _config, version = result
 
-    expected_tag = _tag_name(version, prefix)
+    expected_tag = _tag_name(version, opts.prefix)
     existing_tags = _existing_tags(root)
 
     p = VerbosePrinter(verbose=verbose)
@@ -210,11 +272,11 @@ def cmd_tag_check(args: argparse.Namespace) -> int:
     errors: list[str] = []
 
     for tag in existing_tags:
-        if not tag.startswith(prefix):
-            errors.append(f"Tag '{tag}' does not match prefix '{prefix}'")
+        if not tag.startswith(opts.prefix):
+            errors.append(f"Tag '{tag}' does not match prefix '{opts.prefix}'")
 
     if expected_tag not in existing_tags:
-        if strict:
+        if opts.strict:
             errors.append(f"Expected tag '{expected_tag}' not found (run `rrt tag create`)")
         else:
             p.line(f"  Expected tag '{expected_tag}' not found (run `rrt tag create`)", ok=False)

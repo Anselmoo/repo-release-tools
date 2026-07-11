@@ -54,6 +54,7 @@ from repo_release_tools.changelog import (
     get_unreleased_entries,
     insert_generated_section,
 )
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     PinTarget,
@@ -61,8 +62,6 @@ from repo_release_tools.config import (
     VersionGroup,
     VersionTarget,
     find_repo_root,
-    format_missing_tool_rrt_guidance,
-    is_missing_tool_rrt_error,
     iter_config_files,
     load_or_autodetect_config,
 )
@@ -99,9 +98,52 @@ class Drift:
     actual: str
 
 
+@dataclass(frozen=True)
+class ReleaseRepairOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt release repair``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_release_repair`
+    so the top-level flags it reads directly have typed read sites instead
+    of ``getattr(args, ..., default)`` calls. Note that ``cmd_release_repair``
+    still passes the raw ``args`` Namespace through to its helper functions
+    (``_load_config_and_group``, ``_resolve_version_body``, ``_recreate``,
+    ``_verify_and_fix``, ``_commit_message``); those helpers are not
+    ``cmd_*`` entrypoints, and several tests in
+    tests/commands/test_release_repair.py (e.g. test_commit_message_variants,
+    test_resolve_version_body_empty_changelog_returns_none) call them
+    directly with hand-built sparse Namespaces, so their own internal
+    ``getattr`` fallbacks are left untouched by this refactor.
+    """
+
+    verbose: int
+    from_ref: str | None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ReleaseRepairOptions:
+        """Build a :class:`ReleaseRepairOptions` from a parsed ``argparse.Namespace``.
+
+        ``from_ref`` is given a real default (None) by release_repair.py's
+        own register_subcommand(), and ``verbose`` is set globally by
+        cli.py's parser. Every test in tests/commands/test_release_repair.py
+        that calls cmd_release_repair goes through the local ``_args()``
+        helper, which always sets both explicitly, so plain ``args.x`` would
+        also be safe here today. The getattr fallbacks are kept regardless,
+        matching the defensive style already used throughout this file's
+        many other ``args`` readers (e.g. ``_resolve_version_body``,
+        ``_load_config_and_group``), since cmd_release_repair is the public
+        entrypoint most likely to be called by future callers with a
+        hand-built Namespace that omits fields.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            from_ref=getattr(args, "from_ref", None),
+        )
+
+
 def cmd_release_repair(args: argparse.Namespace) -> int:
     """Verify or recreate the release state for the current branch."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = ReleaseRepairOptions.from_args(args)
+    verbose = opts.verbose
     root = find_repo_root(Path.cwd())
 
     config, group, exit_code = _load_config_and_group(args, root, verbose)
@@ -124,7 +166,7 @@ def cmd_release_repair(args: argparse.Namespace) -> int:
     )
     version_body = _resolve_version_body(args, declared_version, existing_changelog, fmt)
 
-    base_ref: str | None = getattr(args, "from_ref", None)
+    base_ref = opts.from_ref
     if base_ref:
         return _recreate(
             args=args,
@@ -642,26 +684,17 @@ def _load_config_and_group(
     p = VerbosePrinter(verbose=verbose)
     try:
         config = load_or_autodetect_config(root)
-    except FileNotFoundError:
-        p.line(
-            format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-            ok=False,
-            stream=sys.stderr,
-        )
+    except FileNotFoundError as exc:
+        err = describe_config_load_error(exc, root, no_config_file_checked=iter_config_files(root))
+        p.line(err.text, ok=False, stream=sys.stderr)
         return None, None, 1
-    except ValueError as exc:
-        if is_missing_tool_rrt_error(exc):
+    except (ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        if err.kind == "missing_tool_rrt":
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
-            p.line(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-                ok=False,
-                stream=sys.stderr,
-            )
-            return None, None, 1
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return None, None, 1
-    except RuntimeError as exc:
-        p.line(str(exc), ok=False, stream=sys.stderr)
+            p.line(err.text, ok=False, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
         return None, None, 1
 
     requested_group = getattr(args, "group", None)

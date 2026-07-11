@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.changelog import (
@@ -48,11 +49,10 @@ from repo_release_tools.changelog import (
     has_unreleased_section,
     promote_unreleased,
 )
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     RrtConfig,
-    format_missing_tool_rrt_guidance,
-    is_missing_tool_rrt_error,
     iter_config_files,
     load_or_autodetect_config,
 )
@@ -124,14 +124,51 @@ def _update_changelog_for_package(
         p.ok(f"{path} updated (promoted [Unreleased] to [{new}])")
 
 
+@dataclass(frozen=True)
+class WorkspaceBumpOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt workspace bump``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_workspace_bump`
+    so all flags it reads have typed read sites instead of
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    bump: str
+    packages: str
+    dry_run: bool
+    no_changelog: bool
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> WorkspaceBumpOptions:
+        """Build a :class:`WorkspaceBumpOptions` from a parsed ``argparse.Namespace``.
+
+        ``bump``, ``packages``, ``dry_run``, and ``no_changelog`` are all
+        positional/required or given real defaults by workspace.py's own
+        register(), and every test in tests/commands/test_workspace.py that
+        exercises cmd_workspace_bump goes through the local ``_args()``
+        helper which always sets all four, so they are read directly.
+        ``verbose`` is set globally by cli.py's parser, but ``_args()``
+        never sets it, so the getattr fallback here absorbs that gap.
+        """
+        return cls(
+            bump=args.bump,
+            packages=args.packages or "",
+            dry_run=args.dry_run,
+            no_changelog=args.no_changelog,
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_workspace_bump(args: argparse.Namespace) -> int:
     """Apply a unified version bump to all listed packages."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = WorkspaceBumpOptions.from_args(args)
+    verbose = opts.verbose
     cwd = Path.cwd()
-    dry_run: bool = getattr(args, "dry_run", False)
-    packages_str: str = getattr(args, "packages", "") or ""
-    bump_kind: str = args.bump
-    no_changelog: bool = getattr(args, "no_changelog", False)
+    dry_run = opts.dry_run
+    packages_str = opts.packages
+    bump_kind = opts.bump
+    no_changelog = opts.no_changelog
 
     if not packages_str:
         p = VerbosePrinter(verbose=verbose)
@@ -154,26 +191,21 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
 
         try:
             config = load_or_autodetect_config(pkg_path)
-        except FileNotFoundError:
+        except FileNotFoundError as exc:
+            err = describe_config_load_error(
+                exc, pkg_path, no_config_file_checked=iter_config_files(pkg_path)
+            )
             p = VerbosePrinter(verbose=verbose)
             p.line(f"No rrt config found in {pkg_path}.", ok=False, stream=sys.stderr)
-            p.line(
-                format_missing_tool_rrt_guidance(pkg_path, iter_config_files(pkg_path)),
-                ok=False,
-                stream=sys.stderr,
-            )
+            p.line(err.text, ok=False, stream=sys.stderr)
             return 1
-        except ValueError as exc:
-            if is_missing_tool_rrt_error(exc):
-                p = VerbosePrinter(verbose=verbose)
+        except (ValueError, RuntimeError) as exc:
+            err = describe_config_load_error(exc, pkg_path)
+            p = VerbosePrinter(verbose=verbose)
+            if err.kind == "missing_tool_rrt":
                 p.line(f"No [tool.rrt] config in {pkg_path}.", ok=False, stream=sys.stderr)
-                return 1
-            p = VerbosePrinter(verbose=verbose)
-            p.line(str(exc), ok=False, stream=sys.stderr)
-            return 1
-        except RuntimeError as exc:
-            p = VerbosePrinter(verbose=verbose)
-            p.line(str(exc), ok=False, stream=sys.stderr)
+            else:
+                p.line(err.text, ok=False, stream=sys.stderr)
             return 1
 
         group = config.resolve_group(None)

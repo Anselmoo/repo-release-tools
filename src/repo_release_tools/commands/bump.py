@@ -67,6 +67,7 @@ import argparse
 import contextlib
 import dataclasses
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.changelog import (
@@ -77,15 +78,14 @@ from repo_release_tools.changelog import (
     insert_generated_section,
     promote_unreleased,
 )
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     RrtConfig,
     VersionGroup,
     find_repo_root,
     format_autodetected_config_notice,
-    format_missing_tool_rrt_guidance,
-    is_missing_tool_rrt_error,
-    iter_config_files,
+    iter_config_files,  # noqa: F401 -- re-exported for test monkeypatch compatibility
     load_or_autodetect_config,
 )
 from repo_release_tools.preflight import PreflightError, run_preflight
@@ -269,34 +269,79 @@ def update_changelog(
     p.ok(f"{path} updated")
 
 
+@dataclass(frozen=True)
+class Options:
+    """Typed view of ``argparse.Namespace`` for ``rrt bump``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_bump` so every
+    flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    bump: str
+    group: str | None
+    dry_run: bool
+    force: bool
+    no_commit: bool
+    no_verify: bool
+    no_changelog: bool
+    no_pin_sync: bool
+    no_update: bool
+    include_maintenance: bool
+    changelog_mode: str | None
+    base_branch: str | None
+    calver_scheme: str
+    verbose: int
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> Options:
+        """Build an :class:`Options` from a parsed ``argparse.Namespace``."""
+        # NOTE: every flag below is given a real default by bump.py's own
+        # register() (or, for --verbose, by cli.py's global parser), so a
+        # Namespace produced by argparse always carries every attribute.
+        # The getattr fallbacks here exist only because some unit tests in
+        # tests/commands/test_bump.py construct sparse argparse.Namespace
+        # objects by hand (e.g. Namespace(bump="minor", dry_run=False, ...))
+        # instead of going through register(); this is the single
+        # translation point that absorbs that, so the rest of cmd_bump can
+        # read opts.x unconditionally.
+        return cls(
+            bump=getattr(args, "bump", ""),
+            group=getattr(args, "group", None),
+            dry_run=getattr(args, "dry_run", False),
+            force=getattr(args, "force", False),
+            no_commit=getattr(args, "no_commit", False),
+            no_verify=getattr(args, "no_verify", False),
+            no_changelog=getattr(args, "no_changelog", False),
+            no_pin_sync=getattr(args, "no_pin_sync", False),
+            no_update=getattr(args, "no_update", False),
+            include_maintenance=getattr(args, "include_maintenance", False),
+            changelog_mode=getattr(args, "changelog_mode", None),
+            base_branch=getattr(args, "base_branch", None),
+            calver_scheme=getattr(args, "calver_scheme", "YYYY.MM.DD"),
+            verbose=getattr(args, "verbose", 0) or 0,
+        )
+
+
 def cmd_bump(args: argparse.Namespace) -> int:
     """Bump project version using [tool.rrt]."""
-    verbose: int = getattr(args, "verbose", 0) or 0
+    opts = Options.from_args(args)
+    verbose: int = opts.verbose
     root = find_repo_root(Path.cwd())
-    force = getattr(args, "force", False)
+    force = opts.force
     try:
         config = load_or_autodetect_config(root)
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
         p = VerbosePrinter(verbose=verbose)
-        p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
-        p.line(format_missing_tool_rrt_guidance(root, []), ok=False, stream=sys.stderr)
-        return 1
-    except ValueError as exc:
-        if is_missing_tool_rrt_error(exc):
-            p = VerbosePrinter(verbose=verbose)
+        if err.kind == "no_config_file":
+            p.line("No supported rrt config file found.", ok=False, stream=sys.stderr)
+            p.line(err.text, ok=False, stream=sys.stderr)
+        elif err.kind == "missing_tool_rrt":
             p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
-            p.line(
-                format_missing_tool_rrt_guidance(root, iter_config_files(root)),
-                ok=False,
-                stream=sys.stderr,
-            )
-            return 1
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-    except RuntimeError as exc:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
+            p.line(err.text, ok=False, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
         return 1
 
     if config.autodetected:
@@ -307,7 +352,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
             return 1
 
     try:
-        group = config.resolve_group(args.group)
+        group = config.resolve_group(opts.group)
     except ValueError as exc:
         p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
@@ -315,8 +360,8 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     current = read_group_current_version(group)
     _BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
-    if args.bump == "calver":
-        calver_scheme = getattr(args, "calver_scheme", "YYYY.MM.DD")
+    if opts.bump == "calver":
+        calver_scheme = opts.calver_scheme
         try:
             current_calver = CalVersion.parse(str(current))
         except ValueError:
@@ -326,24 +371,24 @@ def cmd_bump(args: argparse.Namespace) -> int:
         else:
             new_str = str(current_calver.bump())
         new = new_str  # type: ignore[assignment]
-    elif args.bump in _BUMP_KINDS:
-        new = current.bump(args.bump)  # type: ignore[assignment]
+    elif opts.bump in _BUMP_KINDS:
+        new = current.bump(opts.bump)  # type: ignore[assignment]
     else:
         try:
-            new = Version.parse(args.bump)  # type: ignore[assignment]
+            new = Version.parse(opts.bump)  # type: ignore[assignment]
         except ValueError:
             try:
-                new = CalVersion.parse(args.bump)  # type: ignore[assignment]
+                new = CalVersion.parse(opts.bump)  # type: ignore[assignment]
             except ValueError:
                 p = VerbosePrinter(verbose=verbose)
-                p.line(f"Invalid bump value: {args.bump!r}", ok=False, stream=sys.stderr)
+                p.line(f"Invalid bump value: {opts.bump!r}", ok=False, stream=sys.stderr)
                 return 1
 
     branch_name = group.release_branch.format(version=new)
-    current_branch = "<current>" if args.dry_run else git.current_branch(root)
-    base = args.base_branch or current_branch
+    current_branch = "<current>" if opts.dry_run else git.current_branch(root)
+    base = opts.base_branch or current_branch
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header(
         "Version bump",
@@ -354,13 +399,13 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
     branch_exists = False
     try:
-        run_preflight(config, dry_run=args.dry_run, group=group)
+        run_preflight(config, dry_run=opts.dry_run, group=group)
     except PreflightError as exc:
         p = VerbosePrinter(verbose=verbose)
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
-    if not args.dry_run:
+    if not opts.dry_run:
         branch_exists = git.branch_exists(root, branch_name)
         if branch_exists and not force:
             p = VerbosePrinter(verbose=verbose)
@@ -380,20 +425,20 @@ def cmd_bump(args: argparse.Namespace) -> int:
     p.section("Updating version strings")
 
     all_pins = group.pin_targets + config.global_pin_targets
-    no_pin_sync = getattr(args, "no_pin_sync", False)
+    no_pin_sync = opts.no_pin_sync
     if all_pins and not no_pin_sync:
         p.section("Updating doc pins")
 
     # Build a pin-free view when no_pin_sync is set so apply_version skips pins.
     apply_group = dataclasses.replace(group, pin_targets=[]) if no_pin_sync else group
     apply_config = dataclasses.replace(config, global_pin_targets=[]) if no_pin_sync else config
-    changed_paths = apply_version(apply_group, str(new), apply_config, dry_run=args.dry_run)
+    changed_paths = apply_version(apply_group, str(new), apply_config, dry_run=opts.dry_run)
 
-    if not args.no_changelog:
+    if not opts.no_changelog:
         p.section("Updating changelog")
         effective_changelog_mode = resolve_changelog_mode(
             config,
-            getattr(args, "changelog_mode", None),
+            opts.changelog_mode,
         )
         update_changelog(
             RrtConfig(
@@ -403,16 +448,16 @@ def cmd_bump(args: argparse.Namespace) -> int:
                 default_group_name=group.name,
             ),
             str(new),
-            include_maintenance=args.include_maintenance,
-            dry_run=args.dry_run,
+            include_maintenance=opts.include_maintenance,
+            dry_run=opts.dry_run,
             changelog_mode=effective_changelog_mode,
         )
 
-    if group.lock_command and not args.no_update:
+    if group.lock_command and not opts.no_update:
         p.section("Refreshing lockfiles")
         spinner = (
             contextlib.nullcontext()
-            if args.dry_run
+            if opts.dry_run
             else spinner_lines(
                 "Running lock command…",
                 detail=f"$ {' '.join(group.lock_command)}",
@@ -423,18 +468,18 @@ def cmd_bump(args: argparse.Namespace) -> int:
             git.run(
                 group.lock_command,
                 root,
-                dry_run=args.dry_run,
+                dry_run=opts.dry_run,
                 label="lock command",
                 suppress_announce=True,
             )
 
-    if group.generated_assets and not args.no_update:
+    if group.generated_assets and not opts.no_update:
         p.section("Refreshing generated assets")
         for asset in group.generated_assets:
             command_preview = " ".join(asset.command)
             spinner = (
                 contextlib.nullcontext()
-                if args.dry_run
+                if opts.dry_run
                 else spinner_lines(
                     "Running generated asset command…",
                     detail=f"$ {command_preview}",
@@ -446,12 +491,12 @@ def cmd_bump(args: argparse.Namespace) -> int:
                     git.run(
                         asset.command,
                         root,
-                        dry_run=args.dry_run,
+                        dry_run=opts.dry_run,
                         label=f"generated asset command ({asset.path.relative_to(root)})",
                         suppress_announce=True,
                     )
             except RuntimeError as exc:
-                if args.dry_run:
+                if opts.dry_run:
                     p.warn(
                         f"Generated asset command for {asset.path.relative_to(root)} failed in dry-run: {exc}",
                     )
@@ -461,7 +506,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
 
             if not asset.path.exists():
                 message = f"Generated asset {asset.path.relative_to(root)} not found after refresh command"
-                if args.dry_run:
+                if opts.dry_run:
                     p.warn(message)
                 else:
                     p.line(message, ok=False, stream=sys.stderr)
@@ -472,7 +517,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
     git.run(
         ["git", "checkout", create_flag, branch_name],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label=f"git checkout {create_flag}",
     )
 
@@ -484,36 +529,36 @@ def cmd_bump(args: argparse.Namespace) -> int:
     for asset in group.generated_assets:
         if asset.path.exists():
             files_to_stage.append(str(asset.path.relative_to(root)))
-    if group.changelog_file.exists() and not args.no_changelog:
+    if group.changelog_file.exists() and not opts.no_changelog:
         files_to_stage.append(str(group.changelog_file.relative_to(root)))
     git.run(
         ["git", "add", *dict.fromkeys(files_to_stage)],
         root,
-        dry_run=args.dry_run,
+        dry_run=opts.dry_run,
         label="git add",
     )
 
-    if not args.no_commit:
-        git.run(["git", "add", "-u"], root, dry_run=args.dry_run, label="git add -u")
+    if not opts.no_commit:
+        git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
         commit_msg = f"chore: bump version to v{new}"
         commit_cmd = ["git", "commit", "-m", commit_msg]
-        if getattr(args, "no_verify", False):
+        if opts.no_verify:
             commit_cmd.append("--no-verify")
         try:
-            git.run(commit_cmd, root, dry_run=args.dry_run, label="git commit")
+            git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
         except RuntimeError:
             # A pre-commit hook (e.g. rrt-cli-docs) may have auto-regenerated
             # files during this pass — pre-commit always fails that pass even
             # though the fix is now correct. Re-stage and retry once.
-            git.run(["git", "add", "-u"], root, dry_run=args.dry_run, label="git add -u")
-            git.run(commit_cmd, root, dry_run=args.dry_run, label="git commit")
+            git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
+            git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
         done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
         p.footer(done_msg)
     else:
         done_msg = f"Done. Branch '{branch_name}' created and files staged."
         p.meta("Base branch", base)
         p.footer(done_msg)
-    if args.dry_run:
+    if opts.dry_run:
         # Provide an explicit dry-run completion line expected by some tests
         p.line("no files were modified")
     return 0
