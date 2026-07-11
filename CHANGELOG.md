@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.12.0] - 2026-07-11
 ### Breaking Changes
 - remove hooks.py legacy compat shim
 - remove docs/markdown.py legacy compat shim
