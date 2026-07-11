@@ -63,6 +63,7 @@ New CLI output uses `DryRunPrinter` from `ui/messaging.py` (re-exported via `ui/
 - **Dry-run**: all mutating commands accept `--dry-run`; prototype with it first
 - **No new runtime dependencies** for CLI/UI work
 - **Coverage floor**: 85.71% — treat drops as a blocker; add tests before opening a PR. Low-coverage files: `ui/syntax.py`, `ui/color.py`, `ui/layout.py`, `ui/font.py`, `cli.py`
+  - The local Stop hook (`coverage_non_regression.py`) allows a small margin during iteration so it doesn't false-block on stale/partial coverage state; `git push` (`check_push_coverage.py`) and CI always re-verify fresh at a hard 100%. See `.claude/hooks/README.md` for details.
 - **Per-directory purpose docs**: when `[tool.rrt.docs.map]` is configured, `rrt docs map` generates an anchor-wrapped README.md per source directory and writes `.rrt/docs_map.lock.toml`. CI runs `rrt docs map --check` (via the `rrt-docs-map-check` hook) to fail on drift; the `rrt-docs-map-update` hook keeps files fresh on commit. Prose outside the `rrt-docs-map` anchors is preserved verbatim.
 
 ## Config
