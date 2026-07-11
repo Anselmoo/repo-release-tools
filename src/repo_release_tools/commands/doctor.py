@@ -83,6 +83,7 @@ from repo_release_tools.changelog import (
 )
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.config import (
+    RrtConfig,
     find_repo_root,
     format_autodetected_config_notice,
     iter_config_files,
@@ -320,6 +321,53 @@ class Options:
         )
 
 
+def _render_doctor_report(
+    p: VerbosePrinter,
+    named_checks: list[tuple[str, tuple[str, bool, str]]],
+    config: RrtConfig,
+) -> bool:
+    """Render the core automation report and feature-specific-checks guidance.
+
+    Returns ``True`` when every check in ``named_checks`` passed (``all_ok``).
+    """
+    all_ok = True
+    p.section("Core automation checks")
+    for _name, (message, ok, severity) in named_checks:
+        p.verbose_line(f"  {_name}: {severity}", level=1)
+        match severity:
+            case "ok":
+                p.line(f"  {message}", ok=True)
+            case "obsolete":
+                p.obsolete(f"  {message}")
+            case "warning":
+                p.warn(f"  {message}")
+            case _:
+                p.line(f"  {message}", ok=False)
+        if not ok:
+            all_ok = False
+
+    p.blank_line()
+    if all_ok:
+        p.ok("Core automation checks passed.")
+    else:
+        p.line("One or more core automation checks failed.", ok=False)
+
+    p.blank_line()
+    p.warn(
+        "Compatibility note: release-target validation lives in 'rrt release check'. "
+        "Use both checks for historical doctor coverage.",
+    )
+    p.blank_line()
+    p.section("Feature-specific checks")
+    p.action("Run 'rrt release check' for version targets, pin targets, and changelog files.")
+    if config.docs is not None:
+        p.action("Run 'rrt docs check' for source-owned docs lockfile and marker health.")
+    if config.eol is not None:
+        p.action("Run 'rrt eol' for runtime support and end-of-life policy checks.")
+
+    return all_ok
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Check the health of the rrt configuration."""
     opts = Options.from_args(args)
@@ -395,40 +443,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         p.warn("Health regressions detected (advisory). Use --strict to block.")
         return 0
 
-    all_ok = True
-    p.section("Core automation checks")
-    for _name, (message, ok, severity) in named_checks:
-        p.verbose_line(f"  {_name}: {severity}", level=1)
-        match severity:
-            case "ok":
-                p.line(f"  {message}", ok=True)
-            case "obsolete":
-                p.obsolete(f"  {message}")
-            case "warning":
-                p.warn(f"  {message}")
-            case _:
-                p.line(f"  {message}", ok=False)
-        if not ok:
-            all_ok = False
-
-    p.blank_line()
-    if all_ok:
-        p.ok("Core automation checks passed.")
-    else:
-        p.line("One or more core automation checks failed.", ok=False)
-
-    p.blank_line()
-    p.warn(
-        "Compatibility note: release-target validation lives in 'rrt release check'. "
-        "Use both checks for historical doctor coverage.",
-    )
-    p.blank_line()
-    p.section("Feature-specific checks")
-    p.action("Run 'rrt release check' for version targets, pin targets, and changelog files.")
-    if config.docs is not None:
-        p.action("Run 'rrt docs check' for source-owned docs lockfile and marker health.")
-    if config.eol is not None:
-        p.action("Run 'rrt eol' for runtime support and end-of-life policy checks.")
+    all_ok = _render_doctor_report(p, named_checks, config)
 
     if opts.fix or opts.fix_dry_run:
         fixes = _fix_missing_unreleased(root, config, dry_run=opts.fix_dry_run)
