@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.config import (
@@ -64,19 +65,69 @@ def _load_folder_policy_config(root: Path) -> RrtConfig | None:
         raise
 
 
+@dataclass(frozen=True)
+class CheckOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt folder check``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_folder_check`
+    so every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    template: tuple[str, ...]
+    report_only: bool
+    snapshot: bool
+    format: str
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> CheckOptions:
+        """Build a :class:`CheckOptions` from a parsed ``argparse.Namespace``.
+
+        ``root``, ``template``, and ``report_only`` are given real
+        defaults by folder.py's own register() and by
+        workflow/hooks.py's "folder-check" subparser
+        (workflow/hooks.py:1237-1260), so a Namespace from either caller
+        always carries them and they are read directly. ``snapshot`` is
+        only registered by folder.py's own register() -- hooks.py's
+        "folder-check" subparser also defines its own ``--snapshot``
+        (line 1256), so both callers carry it, but several unit tests in
+        tests/commands/test_folder.py construct sparse
+        ``argparse.Namespace`` objects that omit it, so the getattr
+        fallback absorbs that gap. ``format`` is never set by
+        folder.py's own register() (there is no ``--format`` flag on
+        this subcommand); hooks.py's "folder-check" dispatch case sets
+        ``parsed.format = "text"`` explicitly, so the fallback here
+        covers direct callers/tests that never set it. ``verbose`` is
+        set globally by cli.py's parser (and explicitly by hooks.py's
+        dispatch case), but tests may omit it, so the fallback absorbs
+        that too.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=args.root,
+            template=tuple(args.template or ()),
+            report_only=args.report_only,
+            snapshot=getattr(args, "snapshot", False),
+            format=getattr(args, "format", "text"),
+        )
+
+
 def cmd_folder_check(args: argparse.Namespace) -> int:
     """Run folder supervision checks."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    root = Path(args.root).resolve()
+    opts = CheckOptions.from_args(args)
+    verbose = opts.verbose
+    root = Path(opts.root).resolve()
     config = _load_folder_policy_config(root)
     report = check_folders(
         root=root,
         policy=None if config is None else config.folders,
-        template_names=tuple(args.template or ()),
-        mode_override="warn" if args.report_only else None,
+        template_names=opts.template,
+        mode_override="warn" if opts.report_only else None,
     )
 
-    if getattr(args, "snapshot", False):
+    if opts.snapshot:
         check_entries = [
             {
                 "name": f"folder.{target.rule_name}",
@@ -94,9 +145,9 @@ def cmd_folder_check(args: argparse.Namespace) -> int:
         p_snap = VerbosePrinter(verbose=verbose)
         p_snap.ok(f"Folder results merged into .rrt/health.lock.toml ({len(check_entries)} checks)")
 
-    if getattr(args, "format", "text") == "json":
+    if opts.format == "json":
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
-        return 0 if report.ok or args.report_only else 1
+        return 0 if report.ok or opts.report_only else 1
 
     p = VerbosePrinter(verbose=verbose)
     p.blank_line()
@@ -115,27 +166,70 @@ def cmd_folder_check(args: argparse.Namespace) -> int:
                 case _:
                     p.line(f"{violation.path}: {violation.message}", ok=False, stream=sys.stderr)
 
-    return 0 if report.ok or args.report_only else 1
+    return 0 if report.ok or opts.report_only else 1
+
+
+@dataclass(frozen=True)
+class ScaffoldOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt folder scaffold``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_folder_scaffold`
+    so every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    template: tuple[str, ...]
+    force: bool
+    dry_run: bool
+    format: str
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> ScaffoldOptions:
+        """Build a :class:`ScaffoldOptions` from a parsed ``argparse.Namespace``.
+
+        ``root``, ``template``, ``force``, and ``dry_run`` are all given
+        real defaults by folder.py's own register(), the only caller of
+        ``cmd_folder_scaffold`` (workflow/hooks.py has no
+        "folder-scaffold" dispatch case), so a Namespace produced by
+        argparse always carries them and they are read directly.
+        ``format`` has no corresponding ``--format`` flag on this
+        subcommand at all, so the getattr fallback is the only source of
+        its default. ``verbose`` is set globally by cli.py's parser, but
+        several unit tests in tests/commands/test_folder.py construct
+        sparse ``argparse.Namespace`` objects that omit it, so the
+        fallback absorbs that gap.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=args.root,
+            template=tuple(args.template or ()),
+            force=args.force,
+            dry_run=args.dry_run,
+            format=getattr(args, "format", "text"),
+        )
 
 
 def cmd_folder_scaffold(args: argparse.Namespace) -> int:
     """Scaffold folder structure from templates or config."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    root = Path(args.root).resolve()
+    opts = ScaffoldOptions.from_args(args)
+    verbose = opts.verbose
+    root = Path(opts.root).resolve()
     config = _load_folder_policy_config(root)
     report = scaffold_folders(
         root=root,
         policy=None if config is None else config.folders,
-        template_names=tuple(args.template or ()),
-        force=args.force,
-        dry_run=args.dry_run,
+        template_names=opts.template,
+        force=opts.force,
+        dry_run=opts.dry_run,
     )
 
-    if getattr(args, "format", "text") == "json":
+    if opts.format == "json":
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
         return 0
 
-    p = DryRunPrinter(args.dry_run, verbose=verbose)
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
     p.header("Folder scaffold", Root=str(root))
     for action in report.actions:
@@ -147,17 +241,56 @@ def cmd_folder_scaffold(args: argparse.Namespace) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class DesignOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt folder design``.
+
+    Built once via :meth:`from_args` at the top of :func:`cmd_folder_design`
+    so every flag has a single, typed read site instead of scattered
+    ``getattr(args, ..., default)`` calls throughout the function body.
+    """
+
+    verbose: int
+    root: str
+    name: str
+    loose: bool
+    selector: str
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> DesignOptions:
+        """Build a :class:`DesignOptions` from a parsed ``argparse.Namespace``.
+
+        ``root``, ``name``, ``loose``, and ``selector`` are all given real
+        defaults by folder.py's own register(), the only caller of
+        ``cmd_folder_design`` (workflow/hooks.py has no "folder-design"
+        dispatch case), so a Namespace produced by argparse always
+        carries them and they are read directly. ``verbose`` is set
+        globally by cli.py's parser, but several unit tests in
+        tests/commands/test_folder.py construct sparse
+        ``argparse.Namespace`` objects that omit it, so the getattr
+        fallback absorbs that gap.
+        """
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            root=args.root,
+            name=args.name,
+            loose=args.loose,
+            selector=args.selector,
+        )
+
+
 def cmd_folder_design(args: argparse.Namespace) -> int:
     """Infer a folder template from an existing directory tree."""
-    verbose: int = getattr(args, "verbose", 0) or 0
-    root = Path(args.root).resolve()
+    opts = DesignOptions.from_args(args)
+    verbose = opts.verbose
+    root = Path(opts.root).resolve()
     if not root.exists() or not root.is_dir():
         p = VerbosePrinter(verbose=verbose)
         p.line(f"Design root must be an existing directory: {root}", ok=False, stream=sys.stderr)
         return 1
 
-    template = capture_template(name=args.name, root=root, loose=args.loose)
-    snippet = render_captured_template_toml(template, selector=args.selector)
+    template = capture_template(name=opts.name, root=root, loose=opts.loose)
+    snippet = render_captured_template_toml(template, selector=opts.selector)
     sys.stdout.write(snippet)
     return 0
 
