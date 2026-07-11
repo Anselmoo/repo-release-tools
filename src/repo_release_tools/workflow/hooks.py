@@ -16,7 +16,7 @@ from repo_release_tools.changelog import (
     get_unreleased_entries,
     parse_conventional_commit,
 )
-from repo_release_tools.commands.artifacts_cmd import cmd_artifacts
+from repo_release_tools.commands.artifacts_cmd import _add_artifacts_strict_argument, cmd_artifacts
 from repo_release_tools.commands.branch import (
     BRANCH_SLUG_RE,
     CONVENTIONAL_TYPES,
@@ -1230,13 +1230,12 @@ def main(argv: list[str] | None = None) -> int:
         "artifacts-check",
         help="Verify artifact hashes match the committed lock (strict by default).",
     )
-    artifacts_check_parser.add_argument(
-        "--no-strict",
-        dest="strict",
-        action="store_false",
-        default=True,
-        help="Downgrade failures to warnings instead of exiting 1.",
-    )
+    # The `strict` dest is the single source of truth in commands/artifacts_cmd.py
+    # (_add_artifacts_strict_argument), shared with `rrt artifacts`'s own
+    # register() -- this surface just wants the opposite default/polarity
+    # (fail-closed CI gate vs. opt-in --strict for humans), which the helper
+    # takes as a parameter instead of hand-declaring a second --no-strict here.
+    _add_artifacts_strict_argument(artifacts_check_parser, default=True)
 
     subparsers.add_parser(
         "artifacts-generate",
@@ -1427,6 +1426,9 @@ def main(argv: list[str] | None = None) -> int:
             parsed.format = "text"
             return cmd_folder_check(parsed)
         case "artifacts-check":
+            # `strict` is real argparse-parsed state (see _add_artifacts_strict_argument
+            # in register()); only the fixed check-mode selection is synthesized here,
+            # since this subcommand never exposes --snapshot/--list/--regenerate.
             parsed.verbose = verbose
             parsed.snapshot = False
             parsed.check = True

@@ -327,6 +327,41 @@ def _print_artifact_list(
                 p.line(f"{rel:<60}  MISMATCH", ok=False)
 
 
+def _add_artifacts_strict_argument(parser: argparse.ArgumentParser, *, default: bool) -> None:
+    """Register the ``strict`` flag on ``parser`` with the caller's chosen default/polarity.
+
+    Single source of truth for the ``strict`` dest consumed by :func:`cmd_artifacts`
+    (via ``Options.strict``). The two callers want opposite defaults and therefore
+    opposite flag polarity:
+
+    - ``rrt artifacts``'s own :func:`register` wants ``--strict`` opt-in
+      (``default=False``, ``store_true``) -- a human running the CLI expects
+      ``--check`` to be advisory unless they ask for a hard gate.
+    - ``workflow/hooks.py``'s ``artifacts-check`` subcommand wants strict
+      opt-*out* (``default=True``, ``store_false`` as ``--no-strict``) -- a CI
+      policy gate should fail closed by default.
+
+    Both flags write the same ``dest="strict"``, so :func:`cmd_artifacts` reads
+    a single typed field regardless of which surface parsed the arguments.
+    """
+    if default:
+        parser.add_argument(
+            "--no-strict",
+            dest="strict",
+            action="store_false",
+            default=True,
+            help="Downgrade failures to warnings instead of exiting 1.",
+        )
+    else:
+        parser.add_argument(
+            "--strict",
+            dest="strict",
+            action="store_true",
+            default=False,
+            help="With --check: exit 1 on any hash mismatch (for CI gates).",
+        )
+
+
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """Register the artifacts subcommand."""
     parser = subparsers.add_parser(
@@ -369,10 +404,5 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
         default=False,
         help="Show what --regenerate would do without running commands or writing the lock.",
     )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        default=False,
-        help="With --check: exit 1 on any hash mismatch (for CI gates).",
-    )
+    _add_artifacts_strict_argument(parser, default=False)
     parser.set_defaults(handler=cmd_artifacts)
