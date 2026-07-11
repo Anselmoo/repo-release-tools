@@ -12,6 +12,7 @@ import pytest
 
 pytest.importorskip("fastmcp", reason="[mcp] extra not installed")
 
+from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.mcp.models import (
     BranchResult,
     BranchValidationResult,
@@ -346,45 +347,258 @@ def test_rrt_bump_empty_groups_skips_progress(tmp_path: Path) -> None:
     ctx.report_progress.assert_not_called()
 
 
+def _real_group_config(tmp_path: Path, *, name: str = "default") -> tuple[VersionGroup, RrtConfig]:
+    """Build a real (non-mock) VersionGroup + RrtConfig backed by a pyproject.toml on disk.
+
+    Used by the rrt_bump tests below to exercise the actual Phase-5 pipeline
+    (resolve_bump_target -> apply_bump_files -> update_changelog -> ... ->
+    finalize_bump_git) end-to-end, matching how tests/commands/test_bump.py fixtures
+    the same functions for the CLI side.
+    """
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "fixture"\nversion = "1.0.0"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n### Added\n- something\n",
+        encoding="utf-8",
+    )
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name=name,
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="incremental",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name=name,
+    )
+    return group, config
+
+
 def test_rrt_bump_dry_run(tmp_path: Path) -> None:
     tools = _ver_tools(tmp_path)
-    mock_group = MagicMock()
-    mock_group.name = "main"
-    mock_group.primary_target.return_value = MagicMock()
-    mock_config = MagicMock()
-    mock_config.version_groups = [mock_group]
-    ctx = _ctx(tmp_path, config=mock_config)
+    _, config = _real_group_config(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
 
     async def _run() -> Any:
-        with patch("repo_release_tools.version.targets.read_version_string", return_value="1.0.0"):
-            return await tools["rrt_bump"](ctx, level="patch", dry_run=True)
+        return await tools["rrt_bump"](ctx, level="patch", dry_run=True)
 
     result = asyncio.run(_run())
     assert isinstance(result, list)
+    assert result[0].current == "1.0.0"
+    assert result[0].new == "1.0.1"
     assert result[0].dry_run is True
     assert result[0].applied is False
     assert ctx.report_progress.await_count >= 1
 
+    # dry-run must not touch disk at all (D9 fix: preflight + apply_bump_files both
+    # honour dry_run just like the CLI).
+    assert "1.0.0" in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert "[Unreleased]" in (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+
 
 def test_rrt_bump_applied(tmp_path: Path) -> None:
+    """D9 fix: a non-dry-run MCP bump runs the SAME pipeline as the CLI's cmd_bump.
+
+    Version target, changelog promotion, and git branch/commit all happen -- unlike
+    the pre-Phase-5 MCP tool, which only wrote version targets.
+    """
     tools = _ver_tools(tmp_path)
-    mock_group = MagicMock()
-    mock_group.name = "main"
-    mock_group.primary_target.return_value = MagicMock()
-    mock_group.version_targets = [MagicMock()]
-    mock_config = MagicMock()
-    mock_config.version_groups = [mock_group]
-    ctx = _ctx(tmp_path, config=mock_config)
+    _, config = _real_group_config(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+
+    monkeypatch_calls: list[list[str]] = []
+
+    def fake_run(
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
+    ) -> str:
+        monkeypatch_calls.append(cmd)
+        return ""
 
     async def _run() -> Any:
         with (
-            patch("repo_release_tools.version.targets.read_version_string", return_value="1.0.0"),
-            patch("repo_release_tools.version.targets.replace_version_in_file"),
+            patch("repo_release_tools.commands.bump.git.working_tree_clean", return_value=True),
+            patch("repo_release_tools.commands.bump.git.branch_exists", return_value=False),
+            patch("repo_release_tools.commands.bump.git.current_branch", return_value="main"),
+            patch("repo_release_tools.commands.bump.git.run", side_effect=fake_run),
         ):
             return await tools["rrt_bump"](ctx, level="patch", dry_run=False)
 
     result = asyncio.run(_run())
+    assert result[0].error is None, result[0]
     assert result[0].applied is True
+    assert result[0].new == "1.0.1"
+
+    # Version target updated on disk.
+    assert "1.0.1" in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    # Changelog promoted -- the D9 fix: this file was never touched by the old tool.
+    changelog_text = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "[1.0.1]" in changelog_text
+
+    # Git branch + commit stage happened via finalize_bump_git -- the D9 fix.
+    assert ["git", "checkout", "-b", "release/v1.0.1"] in monkeypatch_calls
+    assert any(cmd[:2] == ["git", "commit"] for cmd in monkeypatch_calls)
+
+
+def test_rrt_bump_existing_release_branch_returns_error(tmp_path: Path) -> None:
+    """A non-dry-run bump refuses to proceed when the release branch already exists."""
+    tools = _ver_tools(tmp_path)
+    _, config = _real_group_config(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+
+    async def _run() -> Any:
+        with (
+            patch("repo_release_tools.commands.bump.git.working_tree_clean", return_value=True),
+            patch("repo_release_tools.commands.bump.git.branch_exists", return_value=True),
+            patch("repo_release_tools.commands.bump.git.current_branch", return_value="main"),
+        ):
+            return await tools["rrt_bump"](ctx, level="patch", dry_run=False)
+
+    result = asyncio.run(_run())
+    assert result[0].error is not None
+    assert "already exists" in result[0].error
+    # No files should have been touched -- the error is raised before apply_bump_files.
+    assert "1.0.0" in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_rrt_bump_runs_lock_command_when_configured(tmp_path: Path) -> None:
+    """When a group configures ``lock_command``, the MCP bump refreshes it like the CLI."""
+    tools = _ver_tools(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "fixture"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n", encoding="utf-8")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=["echo", "locking"],
+        generated_files=[],
+        version_targets=[VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")],
+        changelog_workflow="incremental",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+    ctx = _ctx(tmp_path, config=config)
+
+    async def _run() -> Any:
+        with patch("repo_release_tools.commands.bump.refresh_bump_lockfile") as mock_refresh:
+            return await tools["rrt_bump"](ctx, level="patch", dry_run=True), mock_refresh
+
+    result, mock_refresh = asyncio.run(_run())
+    assert result[0].error is None, result[0]
+    mock_refresh.assert_called_once()
+    assert mock_refresh.call_args.kwargs["dry_run"] is True
+
+
+def test_rrt_bump_generated_asset_failure_returns_error(tmp_path: Path) -> None:
+    """A generated-asset refresh failure surfaces as a per-group error, not a crash."""
+    from repo_release_tools.config import GeneratedAsset
+
+    tools = _ver_tools(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "fixture"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n", encoding="utf-8")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")],
+        generated_assets=[GeneratedAsset(path=Path("out.txt"), command=["true"])],
+        changelog_workflow="incremental",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+    ctx = _ctx(tmp_path, config=config)
+
+    async def _run() -> Any:
+        with patch(
+            "repo_release_tools.commands.bump.refresh_bump_generated_assets", return_value=False
+        ):
+            return await tools["rrt_bump"](ctx, level="patch", dry_run=True)
+
+    result = asyncio.run(_run())
+    assert result[0].error is not None
+    assert "Generated asset refresh failed" in result[0].error
+
+
+def test_rrt_bump_group_filter_selects_one_group(tmp_path: Path) -> None:
+    """The new ``group`` parameter restricts the bump to a single named version group."""
+    tools = _ver_tools(tmp_path)
+    target_a = VersionTarget(path=tmp_path / "a.json", kind="package_json")
+    target_b = VersionTarget(path=tmp_path / "b.json", kind="package_json")
+    (tmp_path / "a.json").write_text('{"name": "a", "version": "1.0.0"}\n', encoding="utf-8")
+    (tmp_path / "b.json").write_text('{"name": "b", "version": "2.0.0"}\n', encoding="utf-8")
+    group_a = VersionGroup(
+        name="a",
+        release_branch="release/a-v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target_a],
+        changelog_workflow="incremental",
+    )
+    group_b = VersionGroup(
+        name="b",
+        release_branch="release/b-v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target_b],
+        changelog_workflow="incremental",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group_a, group_b],
+        default_group_name="a",
+    )
+    ctx = _ctx(tmp_path, config=config)
+
+    async def _run() -> Any:
+        return await tools["rrt_bump"](ctx, level="patch", dry_run=True, group="b")
+
+    result = asyncio.run(_run())
+    assert len(result) == 1
+    assert result[0].group == "b"
+    assert result[0].current == "2.0.0"
+    assert result[0].new == "2.0.1"
+
+
+def test_rrt_bump_unknown_group_returns_error(tmp_path: Path) -> None:
+    tools = _ver_tools(tmp_path)
+    _, config = _real_group_config(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+
+    async def _run() -> Any:
+        return await tools["rrt_bump"](ctx, level="patch", group="does-not-exist")
+
+    result = asyncio.run(_run())
+    assert "error" in result
+    assert "does-not-exist" in result["error"]
 
 
 def test_rrt_bump_version_error(tmp_path: Path) -> None:
@@ -864,6 +1078,120 @@ def test_rrt_publish_snapshot_in_progress_operation(
     assert "rebase" in result.error
 
 
+# ── D4/D6 fix: confirm parameter gates the destructive push ──────────────────
+
+
+def test_rrt_publish_snapshot_dry_run_false_without_confirm_fails_safe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D6 fix: dry_run=False alone (confirm omitted/False) must NOT force-push.
+
+    Mirrors the CLI's two-signal requirement (not-dry-run AND
+    --yes-i-know-this-overwrites-remote-history). No git mutation calls should even
+    be attempted -- the tool should short-circuit to the dry-run preview branch.
+    """
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    run_calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        run_calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr(publish_tools.git, "run", _fake_run)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        # confirm intentionally omitted (defaults to False).
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=False
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is False
+    assert result.dry_run is True
+    assert result.error is None
+    assert run_calls == [], f"no git mutation commands should run without confirm; got {run_calls}"
+
+
+def test_rrt_publish_snapshot_confirm_true_without_dry_run_false_still_previews(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D4/D6 fix: confirm=True alone (dry_run defaults to True) must NOT force-push either.
+
+    Both signals are required; confirm=True is not sufficient on its own.
+    """
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    run_calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        run_calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr(publish_tools.git, "run", _fake_run)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        # dry_run intentionally omitted (defaults to True); confirm=True alone.
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", confirm=True
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is False
+    assert result.dry_run is True
+    assert run_calls == [], f"confirm=True alone must not push; got {run_calls}"
+
+
+def test_rrt_publish_snapshot_dry_run_false_and_confirm_true_publishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D4/D6 fix: both dry_run=False AND confirm=True together force-push."""
+    monkeypatch.setattr(publish_tools.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        publish_tools.git,
+        "remote_url",
+        lambda root, name: {"origin": "https://x/a.git", "mirror": "https://x/b.git"}.get(name),
+    )
+    monkeypatch.setattr(publish_tools.git, "in_progress_operation", lambda root: None)
+    monkeypatch.setattr(publish_tools.git, "current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        publish_tools.git, "unique_snapshot_branch_name", lambda root: "snapshot-tmp"
+    )
+    run_calls: list[list[str]] = []
+
+    def _fake_run(cmd: list[str], root: Path, *, dry_run: bool, label: str) -> str:
+        run_calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr(publish_tools.git, "run", _fake_run)
+    tools = _publish_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run() -> PublishSnapshotResult:
+        return await tools["rrt_publish_snapshot"](
+            ctx, remote="mirror", branch="main", dry_run=False, confirm=True
+        )
+
+    result = asyncio.run(_run())
+    assert result.published is True
+    assert result.dry_run is False
+    assert any(cmd[:2] == ["git", "push"] for cmd in run_calls)
+
+
 def test_rrt_publish_snapshot_apply_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -890,7 +1218,7 @@ def test_rrt_publish_snapshot_apply_success(
 
     async def _run() -> PublishSnapshotResult:
         return await tools["rrt_publish_snapshot"](
-            ctx, remote="mirror", branch="main", message="snap", dry_run=False
+            ctx, remote="mirror", branch="main", message="snap", dry_run=False, confirm=True
         )
 
     result = asyncio.run(_run())
@@ -937,6 +1265,7 @@ def test_rrt_publish_snapshot_excludes_matching_paths(
             message="snap",
             exclude=["docs/superpowers/*"],
             dry_run=False,
+            confirm=True,
         )
 
     result = asyncio.run(_run())
@@ -973,7 +1302,7 @@ def test_rrt_publish_snapshot_apply_push_fails(
 
     async def _run() -> PublishSnapshotResult:
         return await tools["rrt_publish_snapshot"](
-            ctx, remote="mirror", branch="main", dry_run=False
+            ctx, remote="mirror", branch="main", dry_run=False, confirm=True
         )
 
     result = asyncio.run(_run())
@@ -1016,7 +1345,7 @@ def test_rrt_publish_snapshot_cleanup_failure_does_not_mask_push_failure(
 
     async def _run() -> PublishSnapshotResult:
         return await tools["rrt_publish_snapshot"](
-            ctx, remote="mirror", branch="main", dry_run=False
+            ctx, remote="mirror", branch="main", dry_run=False, confirm=True
         )
 
     result = asyncio.run(_run())
@@ -1057,7 +1386,7 @@ def test_rrt_publish_snapshot_cleanup_failure_after_success_still_published(
 
     async def _run() -> PublishSnapshotResult:
         return await tools["rrt_publish_snapshot"](
-            ctx, remote="mirror", branch="main", dry_run=False
+            ctx, remote="mirror", branch="main", dry_run=False, confirm=True
         )
 
     result = asyncio.run(_run())
