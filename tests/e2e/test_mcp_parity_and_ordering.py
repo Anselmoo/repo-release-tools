@@ -7,15 +7,20 @@ Pins the behavior contract from ``analysis/the/MODERNIZATION_BRIEF.md`` §5:
   4th/5th sort-key elements order pre-release labels *lexically*, which is not SemVer 2.0
   precedence (``rc.10`` sorts before ``rc.2``) — pinned as-is per the brief's SME
   recommendation to pin D1 initially (§7-Q2).
-- **D9** (``mcp/tools/version_tools.py:68-105`` vs. ``commands/bump.py``'s full pipeline):
-  the MCP ``rrt_bump`` tool only rewrites ``group.version_targets`` — it never touches pin
-  targets, never promotes ``[Unreleased]``, and performs no git branch/commit. This is a
-  known, non-atomic partial pipeline; Phase 5 unifies it onto ``perform_bump`` and MUST flip
-  these assertions (brief §5, defect D9; Phase 5 exit criteria).
-- **D4/D6** (``mcp/tools/publish_tools.py:27-142``): ``rrt_publish_snapshot`` defaults
-  ``dry_run=True`` and treats ``dry_run=False`` alone as the destructive confirmation — there
-  is no separate ``confirm`` flag on this surface, unlike the CLI's explicit
-  ``publish-snapshot`` confirmation flag (C3). Pinned as-is; Phase 5 adds parity.
+- **D9 (FIXED in Phase 5)** (``mcp/tools/version_tools.py`` vs. ``commands/bump.py``'s full
+  pipeline): the MCP ``rrt_bump`` tool now calls the SAME stage functions the CLI's
+  ``cmd_bump`` uses (``resolve_bump_target`` → ``apply_bump_files`` → ``update_changelog`` →
+  ``refresh_bump_lockfile``/``refresh_bump_generated_assets`` → ``finalize_bump_git``), so an
+  MCP bump and a CLI bump of the same repo produce identical results: pin targets are
+  updated, ``[Unreleased]`` is promoted, and a release branch + commit are created. The
+  assertions below were flipped from "pinned as-is partial pipeline" to "matches the CLI's
+  full pipeline" per brief §5 defect D9 / Phase 5 exit criteria.
+- **D4/D6 (FIXED in Phase 5)** (``mcp/tools/publish_tools.py``): ``rrt_publish_snapshot`` now
+  requires a separate ``confirm: bool = False`` parameter in addition to ``dry_run=False``
+  before it will force-push — mirroring the CLI's explicit
+  ``--yes-i-know-this-overwrites-remote-history`` confirmation flag (C3). ``dry_run=False``
+  alone (without ``confirm=True``) is downgraded to a safe dry-run preview, matching the
+  CLI's two-signal requirement.
 - **MCP/CLI parity seed**: today's overlap/divergence of reported target files between
   ``rrt bump --dry-run`` (CLI) and the MCP dry-run ``rrt_bump`` tool on the same fixture repo,
   which becomes the Phase 5 parity gate.
@@ -161,7 +166,7 @@ def test_d1_newer_versions_lexical_ordering_propagates() -> None:
 
 
 # ---------------------------------------------------------------------------
-# D9 — MCP partial bump divergence (in-process MCP tool call, non-dry-run)
+# D9 (fixed) — MCP bump now runs the full CLI pipeline (in-process, non-dry-run)
 # ---------------------------------------------------------------------------
 
 _PIN_PYPROJECT = """\
@@ -197,13 +202,15 @@ def _make_pin_repo(factory: RepoFactory) -> Path:
 
 
 @pytest.mark.mcp
-def test_d9_mcp_bump_updates_version_targets_only(
+def test_d9_mcp_bump_updates_version_targets_and_pins_and_changelog(
     e2e_repo_factory: RepoFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """MCP ``rrt_bump`` (non-dry-run) writes version targets but leaves pins/changelog/git alone.
+    """MCP ``rrt_bump`` (non-dry-run) now updates version targets, pins, AND the changelog.
 
-    # D9: MCP bump is a partial pipeline — pinned as-is; Phase 5 unifies it onto
-    # perform_bump and MUST flip these assertions.
+    # D9 (fixed): MCP bump now shares commands/bump.py's stage functions
+    # (resolve_bump_target -> apply_bump_files -> update_changelog -> ... ->
+    # finalize_bump_git), matching the CLI's full pipeline. Phase 5 flipped this
+    # assertion from "partial pipeline, pinned as-is" to "full parity with the CLI".
     """
     pytest.importorskip("fastmcp")
     from fastmcp import Client
@@ -214,9 +221,6 @@ def test_d9_mcp_bump_updates_version_targets_only(
     pin_doc = repo / "docs" / "action.md"
     changelog = repo / "CHANGELOG.md"
     pyproject = repo / "pyproject.toml"
-
-    original_changelog = changelog.read_text(encoding="utf-8")
-    original_pin_doc = pin_doc.read_text(encoding="utf-8")
 
     monkeypatch.chdir(repo)
 
@@ -235,45 +239,43 @@ def test_d9_mcp_bump_updates_version_targets_only(
     assert bump_result.applied is True, f"expected applied=True for dry_run=False: {output}"
     assert bump_result.new == "0.1.1", f"expected new version 0.1.1: {output}"
 
-    # Version target WAS updated (this is the part D9 gets "right").
+    # Version target updated.
     pyproject_text = pyproject.read_text(encoding="utf-8")
     assert "0.1.1" in pyproject_text, (
-        f"D9: expected pyproject.toml version target to be updated to 0.1.1; "
+        f"expected pyproject.toml version target to be updated to 0.1.1; "
         f"content:\n{pyproject_text}\nMCP result: {output}"
     )
 
-    # D9: pin targets are NOT updated by the MCP bump tool (unlike commands/bump.py's
-    # apply_version, which applies group.pin_targets + config.global_pin_targets).
+    # D9 (fixed): pin targets ARE now updated by the MCP bump tool, matching
+    # commands/bump.py's apply_version (group.pin_targets + config.global_pin_targets).
     pin_doc_text = pin_doc.read_text(encoding="utf-8")
-    assert pin_doc_text == original_pin_doc, (
-        f"D9: MCP bump is a partial pipeline — pinned as-is; Phase 5 unifies it onto "
-        f"perform_bump and MUST flip this assertion. Expected docs/action.md to be "
-        f"UNCHANGED (still v0.1.0) after MCP rrt_bump; got:\n{pin_doc_text}"
+    assert "v0.1.1" in pin_doc_text, (
+        f"D9 fix: expected docs/action.md pin target to be updated to v0.1.1 after "
+        f"MCP rrt_bump; got:\n{pin_doc_text}"
     )
 
-    # D9: [Unreleased] is NOT promoted by the MCP bump tool.
+    # D9 (fixed): [Unreleased] IS now promoted by the MCP bump tool.
     changelog_text = changelog.read_text(encoding="utf-8")
-    assert changelog_text == original_changelog, (
-        f"D9: MCP bump is a partial pipeline — pinned as-is; Phase 5 unifies it onto "
-        f"perform_bump and MUST flip this assertion. Expected CHANGELOG.md to be "
-        f"UNCHANGED (still [Unreleased]) after MCP rrt_bump; got:\n{changelog_text}"
-    )
     assert "[Unreleased]" in changelog_text, (
-        f"D9: [Unreleased] heading must survive untouched; got:\n{changelog_text}"
+        f"D9 fix: promoted changelog must still carry a fresh empty [Unreleased] "
+        f"placeholder above the new section; got:\n{changelog_text}"
     )
-    assert "[0.1.1]" not in changelog_text, (
-        f"D9: no [0.1.1] section should have been created by MCP bump; got:\n{changelog_text}"
+    assert "[0.1.1]" in changelog_text, (
+        f"D9 fix: expected [Unreleased] to be promoted to a [0.1.1] section by MCP "
+        f"rrt_bump; got:\n{changelog_text}"
     )
 
 
 @pytest.mark.mcp
-def test_d9_mcp_bump_creates_no_git_branch_or_commit(
+def test_d9_mcp_bump_creates_release_branch_and_commit(
     e2e_repo_factory: RepoFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """MCP ``rrt_bump`` (non-dry-run) never branches or commits, unlike the CLI's full pipeline.
+    """MCP ``rrt_bump`` (non-dry-run) now branches and commits, matching the CLI's pipeline.
 
-    # D9: MCP bump is a partial pipeline — pinned as-is; Phase 5 unifies it onto
-    # perform_bump and MUST flip these assertions.
+    # D9 (fixed): MCP bump now calls finalize_bump_git (the same stage function
+    # commands/bump.py's cmd_bump uses), so it checks out the release branch, stages
+    # the changed files, and commits -- exactly like the CLI. Phase 5 flipped this
+    # assertion from "no branch/commit" to "branch + commit created".
     """
     pytest.importorskip("fastmcp")
     from fastmcp import Client
@@ -300,27 +302,27 @@ def test_d9_mcp_bump_creates_no_git_branch_or_commit(
     branch_list = git("branch", "--list", cwd=repo).stdout
     status = git("status", "--short", cwd=repo).stdout
 
-    assert after_branch == before_branch == "main", (
-        f"D9: MCP bump is a partial pipeline — pinned as-is; Phase 5 unifies it onto "
-        f"perform_bump and MUST flip this assertion. Expected to remain on 'main'; "
-        f"was {before_branch!r}, now {after_branch!r}. MCP result: {data!r}"
+    assert before_branch == "main", f"fixture should start on 'main'; was {before_branch!r}"
+    assert after_branch == "release/v0.1.1", (
+        f"D9 fix: expected MCP rrt_bump to check out the release branch "
+        f"'release/v0.1.1', matching the CLI's finalize_bump_git; was on "
+        f"{after_branch!r}. MCP result: {data!r}"
     )
-    assert "release/v0.1.1" not in branch_list, (
-        f"D9: no release branch should be created by MCP bump; branches:\n{branch_list}"
+    assert "release/v0.1.1" in branch_list, (
+        f"D9 fix: expected a release branch to be created by MCP bump; branches:\n{branch_list}"
     )
-    assert after_log == before_log, (
-        f"D9: MCP bump is a partial pipeline — pinned as-is; Phase 5 unifies it onto "
-        f"perform_bump and MUST flip this assertion. Expected no new commit; "
+    assert after_log != before_log, (
+        f"D9 fix: expected a new commit on the release branch; "
         f"before:\n{before_log}\nafter:\n{after_log}"
     )
-    assert "pyproject.toml" in status, (
-        f"D9: the version-target write should be left as an uncommitted, unstaged change "
-        f"(no git add/commit happens); git status --short:\n{status}"
+    assert status.strip() == "", (
+        f"D9 fix: MCP bump should commit the changed files (nothing left uncommitted), "
+        f"matching the CLI's git add + git commit; git status --short:\n{status}"
     )
 
 
 # ---------------------------------------------------------------------------
-# D4/D6 — MCP publish-snapshot confirmation shape
+# D4/D6 (fixed) — MCP publish-snapshot confirmation parity with the CLI
 # ---------------------------------------------------------------------------
 
 
@@ -338,7 +340,8 @@ def test_d4_publish_snapshot_dry_run_defaults_true(
 ) -> None:
     """``rrt_publish_snapshot`` defaults to ``dry_run=True`` when the argument is omitted.
 
-    # D4/D6: weaker than CLI's explicit confirm flag — pinned as-is; Phase 5 adds parity.
+    # D4/D6: the safe default (dry_run=True) is unchanged by the Phase 5 fix — only the
+    # *destructive* path gained a second required signal (see test_d6 below).
     """
     pytest.importorskip("fastmcp")
     from fastmcp import Client
@@ -379,7 +382,8 @@ def test_d4_publish_snapshot_dry_run_true_pushes_nothing(
 ) -> None:
     """``dry_run=True`` (explicit) previews the publish but pushes nothing to the remote.
 
-    # D4/D6: weaker than CLI's explicit confirm flag — pinned as-is; Phase 5 adds parity.
+    # D4/D6: unaffected by the Phase 5 fix — dry_run=True always previews, regardless
+    # of confirm.
     """
     pytest.importorskip("fastmcp")
     from fastmcp import Client
@@ -413,14 +417,18 @@ def test_d4_publish_snapshot_dry_run_true_pushes_nothing(
 
 
 @pytest.mark.mcp
-def test_d6_publish_snapshot_dry_run_false_alone_is_the_confirmation(
+def test_d6_publish_snapshot_dry_run_false_alone_no_longer_confirms(
     e2e_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``dry_run=False`` alone force-pushes — there is no separate ``confirm`` parameter.
+    """``dry_run=False`` alone (no ``confirm=True``) is now downgraded to a safe preview.
 
     Exercised against a local bare repo only, never a real remote.
 
-    # D4/D6: weaker than CLI's explicit confirm flag — pinned as-is; Phase 5 adds parity.
+    # D6 (fixed): the tool gained a ``confirm: bool = False`` parameter. Passing
+    # dry_run=False without confirm=True no longer force-pushes -- it fails safe and
+    # behaves exactly like a dry-run, mirroring the CLI's requirement for BOTH
+    # not-dry-run AND --yes-i-know-this-overwrites-remote-history. Phase 5 flipped
+    # this assertion from "force-pushes" to "fails safe / does not publish".
     """
     pytest.importorskip("fastmcp")
     from fastmcp import Client
@@ -428,7 +436,7 @@ def test_d6_publish_snapshot_dry_run_false_alone_is_the_confirmation(
     from repo_release_tools.mcp.server import create_server
     from repo_release_tools.mcp.tools import publish_tools
 
-    # NOTE(P1) D4/D6: confirm there is no separate confirmation parameter on this tool by
+    # D6 (fixed): confirm the new 'confirm' parameter now exists on this tool by
     # inspecting the registered function's signature directly (belt-and-braces alongside
     # the behavioral proof below).
     class _Capture:
@@ -447,9 +455,10 @@ def test_d6_publish_snapshot_dry_run_false_alone_is_the_confirmation(
     publish_tools.register(cast("Any", capture))  # duck-typed FastMCP stand-in
     assert capture.fn is not None
     param_names = set(inspect.signature(capture.fn).parameters)
-    assert "confirm" not in param_names, (
-        f"D4/D6: expected no separate 'confirm' parameter on rrt_publish_snapshot "
-        f"(dry_run=False alone is the destructive confirmation); got params {param_names}"
+    assert "confirm" in param_names, (
+        f"D6 fix: expected a separate 'confirm' parameter on rrt_publish_snapshot "
+        f"(dry_run=False alone must no longer be sufficient to force-push); "
+        f"got params {param_names}"
     )
 
     bare = _init_bare_remote(tmp_path)
@@ -460,7 +469,7 @@ def test_d6_publish_snapshot_dry_run_false_alone_is_the_confirmation(
     async def _call() -> Any:
         server = create_server()
         async with Client(server) as client:
-            # No 'confirm' kwarg exists on this surface — dry_run=False is the only gate.
+            # confirm intentionally omitted: dry_run=False alone must no longer be enough.
             result = await client.call_tool(
                 "rrt_publish_snapshot",
                 {"remote": "snapshot", "branch": "main", "dry_run": False},
@@ -469,14 +478,67 @@ def test_d6_publish_snapshot_dry_run_false_alone_is_the_confirmation(
 
     data = asyncio.run(_call())
 
+    assert data.published is False, (
+        f"D6 fix: dry_run=False without confirm=True must fail safe (no publish); got {data!r}"
+    )
+    assert data.dry_run is True, (
+        f"D6 fix: expected the call to be downgraded to dry_run=True when confirm is "
+        f"omitted; got {data!r}"
+    )
+    assert data.error is None, f"expected a clean fail-safe preview, not an error; got {data!r}"
+
+    branches = git("branch", "-a", "--list", cwd=bare).stdout
+    assert branches.strip() == "", (
+        f"D6 fix: dry_run=False without confirm=True must push nothing to the remote; "
+        f"bare repo branches:\n{branches!r}"
+    )
+
+
+@pytest.mark.mcp
+def test_d6_publish_snapshot_dry_run_false_and_confirm_true_force_pushes(
+    e2e_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``dry_run=False`` AND ``confirm=True`` together force-push -- the new two-signal gate.
+
+    Exercised against a local bare repo only, never a real remote.
+
+    # D4/D6 (fixed): this is the new positive case added by Phase 5 -- the destructive
+    # path now requires both signals, matching the CLI's two-flag requirement (C3).
+    """
+    pytest.importorskip("fastmcp")
+    from fastmcp import Client
+
+    from repo_release_tools.mcp.server import create_server
+
+    bare = _init_bare_remote(tmp_path)
+    git("remote", "add", "snapshot", str(bare), cwd=e2e_repo)
+
+    monkeypatch.chdir(e2e_repo)
+
+    async def _call() -> Any:
+        server = create_server()
+        async with Client(server) as client:
+            result = await client.call_tool(
+                "rrt_publish_snapshot",
+                {
+                    "remote": "snapshot",
+                    "branch": "main",
+                    "dry_run": False,
+                    "confirm": True,
+                },
+            )
+            return result.data
+
+    data = asyncio.run(_call())
+
     assert data.published is True, (
-        f"D4/D6: dry_run=False alone (no separate confirm flag) must force-push; got {data!r}"
+        f"D4/D6 fix: dry_run=False AND confirm=True together must force-push; got {data!r}"
     )
     assert data.error is None, f"expected a clean publish; got {data!r}"
 
     branches = run_ok(["git", "branch", "--list", "main"], cwd=bare).stdout
     assert "main" in branches, (
-        f"D4/D6: expected the snapshot to land on {bare}'s main branch; branches:\n{branches!r}"
+        f"D4/D6 fix: expected the snapshot to land on {bare}'s main branch; branches:\n{branches!r}"
     )
 
 

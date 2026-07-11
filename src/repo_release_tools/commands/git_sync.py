@@ -782,6 +782,44 @@ GIT_PUBLISH_SNAPSHOT_EXAMPLES = (
 )
 
 
+def _add_publish_snapshot_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the ``publish-snapshot`` flag set on ``parser``.
+
+    Single source of truth for this command's flags. Consumed by both the
+    real ``rrt git publish-snapshot`` parser built in :func:`register_sync`
+    and by ``workflow/hooks.py``'s ``publish-snapshot`` subparser, so the two
+    surfaces can no longer drift out of sync (previously a copy-pasted
+    ``add_argument`` block lived in each file — see
+    ``PublishSnapshotOptions.from_args`` for the historical note on that
+    duplication).
+    """
+    parser.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="Named [tool.rrt.publish_targets.<name>] entry to resolve remote/branch/message from.",
+    )
+    parser.add_argument("--remote", default=None, help="Remote name or URL to force-push to.")
+    parser.add_argument(
+        "--branch", default=None, help="Remote branch to force-push to. Defaults to main."
+    )
+    parser.add_argument("--message", default=None, help="Commit message for the snapshot commit.")
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Glob (fnmatch, repo-relative) to exclude from the snapshot. Repeatable; extends "
+        "the resolved target's [tool.rrt.publish_targets.<name>].exclude list.",
+    )
+    parser.add_argument(
+        "--yes-i-know-this-overwrites-remote-history",
+        action="store_true",
+        help="Required confirmation to actually force-push. Without it, behaves as --dry-run.",
+    )
+    add_dry_run_flag(parser)
+
+
 def register_sync(git_sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the branch maintenance and synchronization subcommands."""
     sync_parser = git_sub.add_parser(
@@ -905,33 +943,5 @@ def register_sync(git_sub: argparse._SubParsersAction[argparse.ArgumentParser]) 
         ),
         epilog=GIT_PUBLISH_SNAPSHOT_EXAMPLES,
     )
-    publish_snapshot_parser.add_argument(
-        "target",
-        nargs="?",
-        default=None,
-        help="Named [tool.rrt.publish_targets.<name>] entry to resolve remote/branch/message from.",
-    )
-    publish_snapshot_parser.add_argument(
-        "--remote", default=None, help="Remote name or URL to force-push to."
-    )
-    publish_snapshot_parser.add_argument(
-        "--branch", default=None, help="Remote branch to force-push to. Defaults to main."
-    )
-    publish_snapshot_parser.add_argument(
-        "--message", default=None, help="Commit message for the snapshot commit."
-    )
-    publish_snapshot_parser.add_argument(
-        "--exclude",
-        action="append",
-        default=None,
-        metavar="PATTERN",
-        help="Glob (fnmatch, repo-relative) to exclude from the snapshot. Repeatable; extends "
-        "the resolved target's [tool.rrt.publish_targets.<name>].exclude list.",
-    )
-    publish_snapshot_parser.add_argument(
-        "--yes-i-know-this-overwrites-remote-history",
-        action="store_true",
-        help="Required confirmation to actually force-push. Without it, behaves as --dry-run.",
-    )
-    add_dry_run_flag(publish_snapshot_parser)
+    _add_publish_snapshot_arguments(publish_snapshot_parser)
     publish_snapshot_parser.set_defaults(handler=cmd_publish_snapshot)

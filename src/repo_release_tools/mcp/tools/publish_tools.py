@@ -31,9 +31,19 @@ def register(mcp: FastMCP) -> None:
         message: str = "Initial commit",
         exclude: list[str] | None = None,
         dry_run: bool = True,
+        confirm: bool = False,
     ) -> PublishSnapshotResult:
-        """Force-push a single-commit snapshot of tracked content to a secondary remote. dry_run=True by default; force-push additionally requires dry_run=False (no separate confirmation flag on this surface — treat dry_run=False as the explicit confirmation)."""
+        """Force-push a single-commit snapshot of tracked content to a secondary remote.
+
+        dry_run=True by default. The force-push requires BOTH ``dry_run=False`` AND
+        ``confirm=True`` -- mirroring the CLI's ``rrt git publish-snapshot``, which
+        requires an explicit ``--yes-i-know-this-overwrites-remote-history`` flag in
+        addition to not passing ``--dry-run`` (two independent signals for one
+        destructive, history-rewriting operation). If ``confirm`` is omitted or False,
+        the call is always treated as a dry-run preview, regardless of ``dry_run``.
+        """
         root: Path = ctx.lifespan_context.get("root", Path.cwd())
+        dry_run = dry_run or not confirm
 
         if not git.is_git_repository(root):
             return PublishSnapshotResult(
