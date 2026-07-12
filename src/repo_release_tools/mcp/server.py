@@ -81,7 +81,8 @@ def create_server(*, auth_token: str | None = None) -> FastMCP[Any]:
         instructions=(
             "MCP server for repo-release-tools (rrt). "
             "Exposes version management, changelog, health/drift/tree/artifact lock inspection, "
-            "branch and commit validation, and config introspection as MCP tools and resources. "
+            "branch and commit validation, config introspection, and eol/release/sync/folder/docs "
+            "checks as MCP tools and resources. "
             "Mutating tools rrt_bump, rrt_branch_new, and rrt_init_run default to dry_run=True "
             "for safety."
         ),

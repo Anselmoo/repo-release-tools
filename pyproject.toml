@@ -93,7 +93,7 @@ cmd = "rrt docs publish --check"
 [tool.poe.groups.docs.tasks.docs-toc]
 help = "Inject auto-generated TOC into all doc pages that carry a toc anchor."
 shell = """
-for f in docs/commands/*.md docs/action.md docs/agent-instructions.md; do
+for f in docs/commands/*.md; do
   uv run rrt toc "$f" --inject "$f" --anchor toc --min-level 2 --max-level 3 2>/dev/null || true
 done
 """
@@ -216,23 +216,23 @@ kind = "package_json"
 
 [[tool.rrt.pin_targets]]
 path = "README.md"
-pattern = '(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()'
+pattern = '(Anselmoo/repo-release-tools(?:/[\w.-]+)*@v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.pin_targets]]
 path = "src/repo_release_tools/workflow/hooks.py"
-pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+pattern = '(Anselmoo/repo-release-tools(?:/[\w.-]+)*@v|rev: v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.pin_targets]]
 path = "src/repo_release_tools/integrations/action.py"
-pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+pattern = '(Anselmoo/repo-release-tools(?:/[\w.-]+)*@v|rev: v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.pin_targets]]
 path = "src/repo_release_tools/integrations/skill_assets.py"
-pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+pattern = '(Anselmoo/repo-release-tools(?:/[\w.-]+)*@v|rev: v)(\d+\.\d+\.\d+)()'
 
 [[tool.rrt.pin_targets]]
 path = ".github/skills/**/SKILL.md"
-pattern = '(Anselmoo/repo-release-tools@v|rev: v)(\d+\.\d+\.\d+)()'
+pattern = '(Anselmoo/repo-release-tools(?:/[\w.-]+)*@v|rev: v)(\d+\.\d+\.\d+)()'
 
 [tool.rrt.folders]
 
@@ -466,9 +466,6 @@ content = """{platform_badge_adaptive_reto}
 before_blank_lines = 0
 after_blank_lines = 1
 targets = [
-    "docs/index.md",
-    "docs/action.md",
-    "docs/agent-instructions.md",
     "docs/commands/*.md",
 ]
 
@@ -506,14 +503,11 @@ position = "append"
 content = """
 ---
 
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub]({repo_url})
+[↑ Docs index](https://anselmoo.github.io/repo-release-tools/) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub]({repo_url})
 """
 before_blank_lines = 1
 after_blank_lines = 0
 targets = [
-    "docs/index.md",
-    "docs/action.md",
-    "docs/agent-instructions.md",
     "docs/commands/*.md",
 ]
 

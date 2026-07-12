@@ -138,7 +138,7 @@ These files auto-apply for matching paths — do not duplicate their rules here:
 
 ## Docs
 
-- [GitHub Action guide](../docs/action.md)
+- [GitHub Action guide](https://anselmoo.github.io/repo-release-tools/action/)
 - [CLI reference](../docs/commands/rrt-cli.md)
 - [Hook setup (pre-commit & lefthook)](../docs/commands/hooks.md)
 - [Semantic branch naming](../docs/commands/branch.md)

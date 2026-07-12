@@ -64,6 +64,52 @@ def test_collect_metrics_reads_detached_head(
     assert metrics["branch"] == "ABC1234"
 
 
+def test_collect_metrics_reads_branch_from_linked_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In a linked git worktree, ``.git`` is a text file (``gitdir: <path>``)
+    pointing at the real git-dir, not a directory containing HEAD directly.
+    Regression test for issue #143 follow-up."""
+    import repo_release_tools.assets.banner as bmod
+
+    real_git_dir = tmp_path / "main-repo" / ".git" / "worktrees" / "my-worktree"
+    real_git_dir.mkdir(parents=True)
+    (real_git_dir / "HEAD").write_text("ref: refs/heads/feat/worktree-branch\n", encoding="utf-8")
+
+    worktree_root = tmp_path / "worktree"
+    worktree_root.mkdir()
+    (worktree_root / ".git").write_text(f"gitdir: {real_git_dir}\n", encoding="utf-8")
+
+    fake_file = str(worktree_root / "src" / "repo_release_tools" / "assets" / "banner.py")
+    monkeypatch.setattr(bmod, "__file__", fake_file)
+
+    metrics = bmod._collect_metrics()
+    assert metrics["branch"] == "WORKTREE-BRANCH"
+
+
+def test_collect_metrics_reads_branch_from_linked_worktree_relative_gitdir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A relative ``gitdir:`` path in the .git file is resolved against .git's parent."""
+    import repo_release_tools.assets.banner as bmod
+
+    real_git_dir = tmp_path / "main-repo" / ".git" / "worktrees" / "my-worktree"
+    real_git_dir.mkdir(parents=True)
+    (real_git_dir / "HEAD").write_text("ref: refs/heads/feat/relative-branch\n", encoding="utf-8")
+
+    worktree_root = tmp_path / "worktree"
+    worktree_root.mkdir()
+    (worktree_root / ".git").write_text(
+        "gitdir: ../main-repo/.git/worktrees/my-worktree\n", encoding="utf-8"
+    )
+
+    fake_file = str(worktree_root / "src" / "repo_release_tools" / "assets" / "banner.py")
+    monkeypatch.setattr(bmod, "__file__", fake_file)
+
+    metrics = bmod._collect_metrics()
+    assert metrics["branch"] == "RELATIVE-BRANCH"
+
+
 def test_collect_metrics_handles_unreadable_files(monkeypatch: pytest.MonkeyPatch) -> None:
     # Simulate an OSError when opening files to exercise the except branch
     import builtins

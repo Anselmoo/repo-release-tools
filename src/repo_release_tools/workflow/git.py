@@ -17,6 +17,10 @@ summary first, followed by the details needed to act on the result.
 - **Draft commits**: `rrt git commit`, `commit-all`, `squash-local`
 - **Move and sync**: `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
 - **Branch workflows**: `rrt branch new`, `rescue`, `rename`
+- **Publish**: `rrt git publish-snapshot` force-pushes a single-commit,
+  no-history snapshot of tracked content to a secondary remote (e.g. a public
+  mirror); `--exclude` drops specific paths (secrets, internal docs) from
+  that snapshot.
 
 ## Responsibilities
 

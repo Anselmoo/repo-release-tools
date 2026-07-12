@@ -99,5 +99,5 @@ the TOC, so code examples with `#!` shebangs or comment lines are ignored.
 <!-- rrt:auto:start:doc-footer -->
 ---
 
-[↑ Docs index](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
+[↑ Docs index](https://anselmoo.github.io/repo-release-tools/) · [CLI reference](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md) · [Changelog](https://github.com/Anselmoo/repo-release-tools/blob/main/CHANGELOG.md) · [GitHub](https://github.com/Anselmoo/repo-release-tools)
 <!-- rrt:auto:end:doc-footer -->

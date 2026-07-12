@@ -65,7 +65,7 @@ drifts from your release policy.
 ```
 
 See the full action guide:
-<https://github.com/Anselmoo/repo-release-tools/blob/main/docs/action.md>
+<https://anselmoo.github.io/repo-release-tools/action/>
 
 See the full CLI and commands reference:
 <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md>
@@ -75,7 +75,7 @@ See the full CLI and commands reference:
 Choose the package if you want the developer-side tools: branch helpers,
 version bumps, config inspection, pre-commit hooks, and release automation.
 The Python package is published on [PyPI](https://pypi.org/project/repo-release-tools/)
-and has a CI counterpart in the [GitHub Action guide](https://github.com/Anselmoo/repo-release-tools/blob/main/docs/action.md).
+and has a CI counterpart in the [GitHub Action guide](https://anselmoo.github.io/repo-release-tools/action/).
 
 ```bash
 pip install repo-release-tools
@@ -155,8 +155,8 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 ## Start with the doc that matches your task
 
 <!-- rrt:auto:start:readme-links -->
-- Docs index: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/index.md>
-- GitHub Action: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/action.md>
+- Docs index: <https://anselmoo.github.io/repo-release-tools/>
+- GitHub Action: <https://anselmoo.github.io/repo-release-tools/action/>
 - CLI reference: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/rrt-cli.md>
 - Hook setup: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/hooks.md>
 - Conventional branches: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/branch.md>
@@ -166,8 +166,8 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 - Markdown TOC: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/toc.md>
 - Config health checks: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/doctor.md>
 - Runtime EOL tracking: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/commands/eol_check.md>
-- MCP Server: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/mcp-server.md>
-- Agent instructions: <https://github.com/Anselmoo/repo-release-tools/blob/main/docs/agent-instructions.md>
+- MCP Server: <https://anselmoo.github.io/repo-release-tools/mcp-server/>
+- Agent instructions: <https://anselmoo.github.io/repo-release-tools/agent-instructions/>
 <!-- rrt:auto:end:readme-links -->
 
 ## License

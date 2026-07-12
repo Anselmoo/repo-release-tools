@@ -42,6 +42,7 @@ from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.config import is_missing_tool_rrt_error
 from repo_release_tools.docs.formats.markdown import heading_level, normalize_markdown_headings
 from repo_release_tools.integrations import action as action_module
+from repo_release_tools.integrations import mcp_server as mcp_server_module
 from repo_release_tools.tools.inject import (
     ANCHOR_END_TOKEN,
     ANCHOR_START_TOKEN,
@@ -97,6 +98,7 @@ def _anchor_stub_pair(anchor_id: str, output_path: Path) -> tuple[str, str]:
 
 
 _README_BASE: str = "https://github.com/Anselmoo/repo-release-tools/blob/main"
+_STARLIGHT_BASE: str = "https://anselmoo.github.io/repo-release-tools"
 
 # ---------------------------------------------------------------------------
 # Command-group reference page registry
@@ -184,6 +186,7 @@ SOURCE_OWNED_TOPIC_DOCS: dict[str, str] = _collect_source_owned_topic_docs(
         git_helpers,
         hooks_module,
         action_module,
+        mcp_server_module,
         skill_module,
         doctor_module,
         install_module,
@@ -540,8 +543,8 @@ def generate_index_topic_links_markdown() -> str:
 def generate_readme_links_markdown() -> str:
     """Return the generated doc-link bullets for README.md."""
     links = [
-        f"- Docs index: <{_README_BASE}/docs/index.md>",
-        f"- GitHub Action: <{_README_BASE}/docs/action.md>",
+        f"- Docs index: <{_STARLIGHT_BASE}/>",
+        f"- GitHub Action: <{_STARLIGHT_BASE}/action/>",
         f"- CLI reference: <{_README_BASE}/docs/commands/rrt-cli.md>",
         f"- Hook setup: <{_README_BASE}/docs/commands/hooks.md>",
         f"- Conventional branches: <{_README_BASE}/docs/commands/branch.md>",
@@ -551,8 +554,8 @@ def generate_readme_links_markdown() -> str:
         f"- Markdown TOC: <{_README_BASE}/docs/commands/toc.md>",
         f"- Config health checks: <{_README_BASE}/docs/commands/doctor.md>",
         f"- Runtime EOL tracking: <{_README_BASE}/docs/commands/eol_check.md>",
-        f"- MCP Server: <{_README_BASE}/docs/mcp-server.md>",
-        f"- Agent instructions: <{_README_BASE}/docs/agent-instructions.md>",
+        f"- MCP Server: <{_STARLIGHT_BASE}/mcp-server/>",
+        f"- Agent instructions: <{_STARLIGHT_BASE}/agent-instructions/>",
     ]
     return "\n".join(links)
 
@@ -608,6 +611,7 @@ TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
     "hooks": Path("docs/src/content/docs/commands/hooks.mdx"),
     "action": Path("docs/src/content/docs/action.mdx"),
     "publish-snapshot-action": Path("docs/src/content/docs/publish-snapshot-action.mdx"),
+    "mcp-server": Path("docs/src/content/docs/mcp-server.mdx"),
     "skill": Path("docs/src/content/docs/commands/skill.mdx"),
     "install": Path("docs/src/content/docs/commands/install.mdx"),
     "agent-instructions": Path("docs/src/content/docs/agent-instructions.mdx"),
@@ -628,6 +632,7 @@ TITLE_OVERRIDES: dict[str, str] = {
     "hooks": "rrt hooks",
     "action": "GitHub Action",
     "publish-snapshot-action": "publish-snapshot Action",
+    "mcp-server": "MCP Server",
     "skill": "rrt skill",
     "install": "rrt install",
     "agent-instructions": "Hook & Action Reference",
@@ -657,6 +662,10 @@ DESCRIPTION_OVERRIDES: dict[str, str] = {
     "action": (
         "CI policy gate wrapping rrt-hooks for branch, commit, and changelog checks in "
         "GitHub Actions."
+    ),
+    "mcp-server": (
+        "FastMCP 3.x server exposing repo-release-tools' version, changelog, health, and "
+        "doctor tooling as MCP tools, resources, and Prefab UI dashboards."
     ),
     "skill": "Bundled uvx and installed-CLI agent skills managed by rrt skill install.",
     "install": "Installing the rrt CLI and its optional extras with rrt install.",

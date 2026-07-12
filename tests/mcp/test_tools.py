@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import subprocess
+from datetime import date
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,24 +14,42 @@ import pytest
 
 pytest.importorskip("fastmcp", reason="[mcp] extra not installed")
 
-from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.config import (
+    EolConfig,
+    PinTarget,
+    RrtConfig,
+    VersionGroup,
+    VersionTarget,
+    load_or_autodetect_config,
+)
+from repo_release_tools.eol import EolRecord
 from repo_release_tools.mcp.models import (
     BranchResult,
     BranchValidationResult,
     ChangelogResponse,
     CommitValidationResult,
     ConfigError,
+    DocsCheckResponse,
     DoctorResponse,
+    EolResponse,
+    FolderCheckResponse,
     LockError,
     PublishSnapshotResult,
+    ReleaseCheckResponse,
+    SyncCheckResponse,
 )
 from repo_release_tools.mcp.tools import publish_tools, register_tools
 from repo_release_tools.mcp.tools.changelog_tools import register as register_changelog
 from repo_release_tools.mcp.tools.config_tools import _path_to_str
 from repo_release_tools.mcp.tools.config_tools import register as register_config
+from repo_release_tools.mcp.tools.docs_tools import register as register_docs
+from repo_release_tools.mcp.tools.eol_tools import register as register_eol
+from repo_release_tools.mcp.tools.folder_tools import register as register_folder
 from repo_release_tools.mcp.tools.git_tools import register as register_git
 from repo_release_tools.mcp.tools.lock_tools import register as register_locks
 from repo_release_tools.mcp.tools.publish_tools import register as register_publish
+from repo_release_tools.mcp.tools.release_tools import register as register_release
+from repo_release_tools.mcp.tools.sync_tools import register as register_sync
 from repo_release_tools.mcp.tools.validation_tools import register as register_validation
 from repo_release_tools.mcp.tools.version_tools import register as register_version
 
@@ -79,6 +99,11 @@ def test_register_tools_all_present() -> None:
         "rrt_validate_commit",
         "rrt_changelog",
         "rrt_branch_new",
+        "rrt_eol",
+        "rrt_release_check",
+        "rrt_sync_check",
+        "rrt_folder_check",
+        "rrt_docs_check",
     }
     assert expected <= set(mcp._tools.keys())
 
@@ -1403,3 +1428,432 @@ def test_rrt_publish_snapshot_cleanup_failure_after_success_still_published(
     warned = [call.args[0] for call in ctx.warning.call_args_list]
     assert any("failed to restore branch" in message for message in warned)
     assert any("failed to delete temp branch" in message for message in warned)
+
+
+# ── eol tools ─────────────────────────────────────────────────────────────────
+
+
+def _eol_tools(tmp_path: Path, config: Any = None) -> tuple[dict[str, Any], MagicMock]:
+    mcp = _CaptureMCP()
+    register_eol(mcp)  # ty: ignore[invalid-argument-type]
+    return mcp._tools, _ctx(tmp_path, config=config)
+
+
+def test_rrt_eol_default_python_no_config(tmp_path: Path) -> None:
+    tools, ctx = _eol_tools(tmp_path)
+    with (
+        patch(
+            "repo_release_tools.commands.eol_check.detect_host_version",
+            return_value="3.12.4",
+        ),
+        patch(
+            "repo_release_tools.commands.eol_check.detect_project_minimum",
+            return_value="3.12.0",
+        ),
+        patch("repo_release_tools.commands.eol_check.get_eol_records", return_value=[]),
+    ):
+        result = tools["rrt_eol"](ctx)
+    assert isinstance(result, EolResponse)
+    assert result.all_ok is True
+    names = {c.name for c in result.checks}
+    assert names == {"eol.python.host", "eol.python.minimum"}
+
+
+def test_rrt_eol_language_param_overrides_config_default(tmp_path: Path) -> None:
+    eol_cfg = EolConfig(languages=("go",))
+    config = MagicMock(eol=eol_cfg)
+    tools, ctx = _eol_tools(tmp_path, config=config)
+    with (
+        patch(
+            "repo_release_tools.commands.eol_check.detect_host_version",
+            return_value="20.0.0",
+        ),
+        patch(
+            "repo_release_tools.commands.eol_check.detect_project_minimum",
+            return_value="20.0.0",
+        ),
+        patch("repo_release_tools.commands.eol_check.get_eol_records", return_value=[]),
+    ):
+        result = tools["rrt_eol"](ctx, language="node")
+    names = {c.name for c in result.checks}
+    assert names == {"eol.node.host", "eol.node.minimum"}
+
+
+def test_rrt_eol_reports_error_status(tmp_path: Path) -> None:
+    eol_record = EolRecord(
+        cycle="3.10",
+        release_date=None,
+        eol_date=date(2023, 10, 1),
+        is_eol=True,
+        days_until_eol=None,
+    )
+    tools, ctx = _eol_tools(tmp_path)
+    with (
+        patch(
+            "repo_release_tools.commands.eol_check.detect_host_version",
+            return_value="3.10.0",
+        ),
+        patch(
+            "repo_release_tools.commands.eol_check.detect_project_minimum",
+            return_value="3.10.0",
+        ),
+        patch(
+            "repo_release_tools.commands.eol_check.get_eol_records",
+            return_value=[eol_record],
+        ),
+    ):
+        result = tools["rrt_eol"](ctx)
+    assert result.all_ok is False
+    assert any(c.status == "error" for c in result.checks)
+
+
+def test_rrt_eol_suppresses_stdout(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """run_eol_checks prints unconditionally; the tool must not leak it to stdout."""
+    tools, ctx = _eol_tools(tmp_path)
+    with (
+        patch(
+            "repo_release_tools.commands.eol_check.detect_host_version",
+            return_value="3.12.4",
+        ),
+        patch(
+            "repo_release_tools.commands.eol_check.detect_project_minimum",
+            return_value="3.12.0",
+        ),
+        patch("repo_release_tools.commands.eol_check.get_eol_records", return_value=[]),
+    ):
+        tools["rrt_eol"](ctx)
+    assert capsys.readouterr().out == ""
+
+
+# ── release-check tools ──────────────────────────────────────────────────────
+
+
+def _release_tools(tmp_path: Path) -> dict[str, Any]:
+    mcp = _CaptureMCP()
+    register_release(mcp)  # ty: ignore[invalid-argument-type]
+    return mcp._tools
+
+
+def _release_group_config(
+    tmp_path: Path,
+    *,
+    pin_targets: list[Any] | None = None,
+    global_pin_targets: list[Any] | None = None,
+) -> RrtConfig:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n", encoding="utf-8")
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        pin_targets=pin_targets or [],
+    )
+    return RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[group],
+        global_pin_targets=global_pin_targets or [],
+    )
+
+
+def test_rrt_release_check_no_config(tmp_path: Path) -> None:
+    tools = _release_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=None)
+    result = tools["rrt_release_check"](ctx)
+    assert isinstance(result, ReleaseCheckResponse)
+    assert result.all_ok is False
+    assert result.error == "No rrt configuration found."
+
+
+def test_rrt_release_check_config_error(tmp_path: Path) -> None:
+    tools = _release_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=None)
+    ctx.lifespan_context["config_error"] = "boom"
+    result = tools["rrt_release_check"](ctx)
+    assert result.all_ok is False
+    assert "boom" in (result.error or "")
+
+
+def test_rrt_release_check_all_ok(tmp_path: Path) -> None:
+    tools = _release_tools(tmp_path)
+    config = _release_group_config(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+    result = tools["rrt_release_check"](ctx)
+    assert result.all_ok is True
+    assert len(result.groups) == 1
+    assert result.groups[0].group == "default"
+    assert result.groups[0].ok is True
+    assert any(e.message.endswith("CHANGELOG.md exists") for e in result.groups[0].entries)
+
+
+def test_rrt_release_check_missing_version_target(tmp_path: Path) -> None:
+    tools = _release_tools(tmp_path)
+    config = _release_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").unlink()
+    ctx = _ctx(tmp_path, config=config)
+    result = tools["rrt_release_check"](ctx)
+    assert result.all_ok is False
+    assert result.groups[0].ok is False
+    assert any(not e.ok and e.severity == "error" for e in result.groups[0].entries)
+
+
+def test_rrt_release_check_dedupes_pin_targets_across_global_and_group(
+    tmp_path: Path,
+) -> None:
+    action_file = tmp_path / "action.py"
+    action_file.write_text("Anselmoo/repo-release-tools@v1.0.0\n", encoding="utf-8")
+    pin = PinTarget(
+        path=action_file,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+    config = _release_group_config(
+        tmp_path,
+        pin_targets=[pin],
+        global_pin_targets=[pin],
+    )
+    tools = _release_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+    result = tools["rrt_release_check"](ctx)
+    pin_entries = [e for e in result.groups[0].entries if "action.py" in e.message]
+    assert len(pin_entries) == 1
+    assert pin_entries[0].ok is True
+
+
+def test_rrt_release_check_missing_pin_target_file(tmp_path: Path) -> None:
+    pin = PinTarget(path=tmp_path / "missing.md", pattern=r"(v)(\d+\.\d+\.\d+)()")
+    config = _release_group_config(tmp_path, pin_targets=[pin])
+    tools = _release_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+    result = tools["rrt_release_check"](ctx)
+    assert result.all_ok is False
+    assert result.groups[0].ok is False
+    assert any("not found" in e.message and not e.ok for e in result.groups[0].entries)
+
+
+def test_rrt_release_check_missing_changelog(tmp_path: Path) -> None:
+    config = _release_group_config(tmp_path)
+    (tmp_path / "CHANGELOG.md").unlink()
+    tools = _release_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+    result = tools["rrt_release_check"](ctx)
+    assert result.all_ok is False
+    assert result.groups[0].ok is False
+    assert any(
+        e.message.endswith("CHANGELOG.md not found") and not e.ok for e in result.groups[0].entries
+    )
+
+
+# ── sync-check tools ─────────────────────────────────────────────────────────
+
+
+def _sync_tools(tmp_path: Path) -> dict[str, Any]:
+    mcp = _CaptureMCP()
+    register_sync(mcp)  # ty: ignore[invalid-argument-type]
+    return mcp._tools
+
+
+def _sync_group_config(
+    tmp_path: Path,
+    *,
+    upstream_package: str | None = "example-pkg",
+    upstream_provider: str = "pypi",
+    default_group_name: str | None = None,
+) -> RrtConfig:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        upstream_package=upstream_package,
+        upstream_provider=upstream_provider,
+    )
+    return RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[group],
+        default_group_name=default_group_name,
+    )
+
+
+def test_rrt_sync_check_no_config(tmp_path: Path) -> None:
+    tools = _sync_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=None)
+    result = tools["rrt_sync_check"](ctx)
+    assert isinstance(result, SyncCheckResponse)
+    assert result.error == "No rrt configuration found."
+
+
+def test_rrt_sync_check_unknown_group(tmp_path: Path) -> None:
+    config = _sync_group_config(tmp_path)
+    tools = _sync_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+    result = tools["rrt_sync_check"](ctx, group="nonexistent")
+    assert result.error is not None
+    assert "Unknown version group" in result.error
+
+
+def test_rrt_sync_check_no_upstream_package(tmp_path: Path) -> None:
+    config = _sync_group_config(tmp_path, upstream_package=None)
+    tools = _sync_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+    result = tools["rrt_sync_check"](ctx)
+    assert result.group == "default"
+    assert result.error == "No [tool.rrt.upstream] package configured."
+
+
+def test_rrt_sync_check_reports_newer_versions(tmp_path: Path) -> None:
+    config = _sync_group_config(tmp_path)
+    tools = _sync_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+    with patch(
+        "repo_release_tools.sync.providers.fetch_versions",
+        return_value=["0.9.0", "1.0.0", "1.1.0", "1.2.0", "not-a-version"],
+    ) as mock_fetch:
+        result = tools["rrt_sync_check"](ctx)
+    mock_fetch.assert_called_once_with("example-pkg", "pypi")
+    assert result.error is None
+    assert result.current == "1.0.0"
+    assert result.upstream_package == "example-pkg"
+    assert result.upstream_provider == "pypi"
+    assert result.newer_versions == ["1.1.0", "1.2.0"]
+
+
+def test_rrt_sync_check_no_newer_versions(tmp_path: Path) -> None:
+    config = _sync_group_config(tmp_path)
+    tools = _sync_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+    with patch(
+        "repo_release_tools.sync.providers.fetch_versions",
+        return_value=["1.0.0"],
+    ):
+        result = tools["rrt_sync_check"](ctx)
+    assert result.newer_versions == []
+
+
+# ── folder-check tools ───────────────────────────────────────────────────────
+
+
+def _folder_tools(tmp_path: Path) -> dict[str, Any]:
+    mcp = _CaptureMCP()
+    register_folder(mcp)  # ty: ignore[invalid-argument-type]
+    return mcp._tools
+
+
+def test_rrt_folder_check_passes_for_python_package_template(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "README.md").write_text("# Example\n", encoding="utf-8")
+    (tmp_path / "src" / "package").mkdir(parents=True)
+    (tmp_path / "src" / "package" / "__init__.py").write_text(
+        '"""Example package."""\n', encoding="utf-8"
+    )
+    (tmp_path / "tests").mkdir()
+
+    tools = _folder_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+    result = tools["rrt_folder_check"](ctx, template=["python-package"])
+    assert isinstance(result, FolderCheckResponse)
+    assert result.ok is True
+    assert result.violation_count == 0
+
+
+def test_rrt_folder_check_reports_violations_for_missing_template_files(
+    tmp_path: Path,
+) -> None:
+    tools = _folder_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+    result = tools["rrt_folder_check"](ctx, template=["python-package"])
+    assert result.ok is False
+    assert result.violation_count > 0
+    assert any(not t.ok and t.violations for t in result.targets)
+
+
+# ── docs-check tools ─────────────────────────────────────────────────────────
+
+
+def _docs_repo(tmp_path: Path) -> Path:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        """
+[project]
+name = "test-project"
+version = "1.0.0"
+
+[tool.rrt.docs]
+extraction_mode = "explicit"
+formats = ["md", "json"]
+languages = ["python"]
+src_dir = "src"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "src" / "module.py").write_text(
+        '# sym: hello\nHELLO_DOC = """\nHello docs.\n"""\n',
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def _generate_docs_lock(repo: Path) -> None:
+    from repo_release_tools.commands.docs_cmd import _cmd_generate
+
+    _cmd_generate(argparse.Namespace(root=str(repo), dry_run=False, format="toml", lang=None))
+
+
+def test_rrt_docs_check_current(tmp_path: Path) -> None:
+    repo = _docs_repo(tmp_path)
+    _generate_docs_lock(repo)
+    config = load_or_autodetect_config(repo)
+
+    mcp = _CaptureMCP()
+    register_docs(mcp)  # ty: ignore[invalid-argument-type]
+    ctx = _ctx(repo, config=config)
+    result = mcp._tools["rrt_docs_check"](ctx)
+    assert isinstance(result, DocsCheckResponse)
+    assert result.is_current is True
+    assert result.messages == []
+
+
+def test_rrt_docs_check_stale(tmp_path: Path) -> None:
+    repo = _docs_repo(tmp_path)
+    _generate_docs_lock(repo)
+    (repo / "src" / "new_module.py").write_text(
+        '# sym: new\nNEW_DOC = """New doc"""\n', encoding="utf-8"
+    )
+    config = load_or_autodetect_config(repo)
+
+    mcp = _CaptureMCP()
+    register_docs(mcp)  # ty: ignore[invalid-argument-type]
+    ctx = _ctx(repo, config=config)
+    result = mcp._tools["rrt_docs_check"](ctx)
+    assert result.is_current is False
+    assert result.messages
+
+
+def test_rrt_docs_check_no_config_uses_default(tmp_path: Path) -> None:
+    repo = _docs_repo(tmp_path)
+    mcp = _CaptureMCP()
+    register_docs(mcp)  # ty: ignore[invalid-argument-type]
+    ctx = _ctx(repo, config=None)
+    result = mcp._tools["rrt_docs_check"](ctx)
+    assert isinstance(result, DocsCheckResponse)

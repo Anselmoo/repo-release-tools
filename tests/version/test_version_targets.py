@@ -360,6 +360,63 @@ def test_replace_pin_in_file_replaces_all_occurrences(
     assert "v0.1.7" not in updated
 
 
+def test_replace_pin_in_file_matches_subpath_action_reference(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """The action.py pin pattern must also match monorepo-subpath action refs
+    (e.g. Anselmoo/repo-release-tools/actions/publish-snapshot@vX.Y.Z), not just
+    the bare owner/repo@v form. Regression test for issue #143."""
+    from repo_release_tools.config import PinTarget
+    from repo_release_tools.version.targets import replace_pin_in_file
+
+    f = tmp_path / "action.py"
+    content = (
+        "- uses: Anselmoo/repo-release-tools@v1.12.0\n"
+        "- uses: Anselmoo/repo-release-tools/actions/publish-snapshot@v1.11.1\n"
+    )
+    f.write_text(content, encoding="utf-8")
+    pin = PinTarget(
+        path=f,
+        pattern=r"(Anselmoo/repo-release-tools(?:/[\w.-]+)*@v|rev: v)(\d+\.\d+\.\d+)()",
+    )
+
+    replace_pin_in_file(pin, "1.13.0", dry_run=False)
+
+    updated = f.read_text(encoding="utf-8")
+    assert "Anselmoo/repo-release-tools@v1.13.0" in updated
+    assert "Anselmoo/repo-release-tools/actions/publish-snapshot@v1.13.0" in updated
+    assert "v1.12.0" not in updated
+    assert "v1.11.1" not in updated
+
+
+def test_replace_pin_in_file_subpath_pattern_does_not_overmatch(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """The widened subpath pattern must not match unrelated repos that merely
+    share a name prefix (e.g. a fork or an unrelated owner)."""
+    from repo_release_tools.config import PinTarget
+    from repo_release_tools.version.targets import replace_pin_in_file
+
+    f = tmp_path / "notes.md"
+    content = (
+        "- uses: Anselmoo/repo-release-tools-fork@v1.0.0\n"
+        "- uses: SomeOther/repo-release-tools@v1.0.0\n"
+    )
+    f.write_text(content, encoding="utf-8")
+    pin = PinTarget(
+        path=f,
+        pattern=r"(Anselmoo/repo-release-tools(?:/[\w.-]+)*@v|rev: v)(\d+\.\d+\.\d+)()",
+    )
+
+    replace_pin_in_file(pin, "2.0.0", dry_run=False, pin_target_missing="warn")
+
+    assert f.read_text(encoding="utf-8") == content
+    captured = capsys.readouterr()
+    assert "did not match" in captured.out.lower() or "skipping" in captured.out.lower()
+
+
 def test_read_current_version_helpers(tmp_path: Path) -> None:
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text('[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8")
