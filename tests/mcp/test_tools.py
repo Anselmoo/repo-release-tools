@@ -1639,6 +1639,69 @@ def test_rrt_release_check_missing_pin_target_file(tmp_path: Path) -> None:
     assert any("not found" in e.message and not e.ok for e in result.groups[0].entries)
 
 
+def test_rrt_release_check_pin_drift_skipped_when_version_target_missing(
+    tmp_path: Path,
+) -> None:
+    """Missing primary version target + configured pins must not crash the tool.
+
+    Regression test: `rrt_release_check` previously called `_check_pin_target`
+    with the old 2-arg signature (a CI-breaking merge conflict with the PR
+    that added the 3rd `expected_version` arg), and separately,
+    `_resolve_expected_version` must not let an unguarded `read_version_string`
+    raise `FileNotFoundError` when the primary target file doesn't exist.
+    """
+    action_file = tmp_path / "action.py"
+    action_file.write_text("Anselmoo/repo-release-tools@v9.9.9\n", encoding="utf-8")
+    pin = PinTarget(
+        path=action_file,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+    config = _release_group_config(tmp_path, pin_targets=[pin])
+    (tmp_path / "pyproject.toml").unlink()
+    tools = _release_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+
+    result = tools["rrt_release_check"](ctx)
+
+    assert result.all_ok is False  # missing version target is still a reported error
+    pin_entries = [e for e in result.groups[0].entries if "action.py" in e.message]
+    assert len(pin_entries) == 1
+    assert pin_entries[0].message.endswith("match")
+    assert "drift" not in pin_entries[0].message
+
+
+def test_rrt_release_check_warns_on_bad_version_source(tmp_path: Path) -> None:
+    """A `version_source` that doesn't match any target surfaces a warning entry."""
+    action_file = tmp_path / "action.py"
+    action_file.write_text("Anselmoo/repo-release-tools@v1.0.0\n", encoding="utf-8")
+    pin = PinTarget(
+        path=action_file,
+        pattern=r"(Anselmoo/repo-release-tools@v)(\d+\.\d+\.\d+)()",
+    )
+    config = _release_group_config(tmp_path, pin_targets=[pin])
+    group = config.version_groups[0]
+    config.version_groups[0] = VersionGroup(
+        name=group.name,
+        release_branch=group.release_branch,
+        changelog_file=group.changelog_file,
+        lock_command=group.lock_command,
+        generated_files=group.generated_files,
+        version_targets=group.version_targets,
+        pin_targets=group.pin_targets,
+        version_source=tmp_path / "no-such-target.py",
+    )
+    tools = _release_tools(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+
+    result = tools["rrt_release_check"](ctx)
+
+    warnings = [e for e in result.groups[0].entries if "pin drift check skipped" in e.message]
+    assert len(warnings) == 1
+    assert warnings[0].ok is True
+    assert warnings[0].severity == "warning"
+    assert "version_source" in warnings[0].message
+
+
 def test_rrt_release_check_missing_changelog(tmp_path: Path) -> None:
     config = _release_group_config(tmp_path)
     (tmp_path / "CHANGELOG.md").unlink()

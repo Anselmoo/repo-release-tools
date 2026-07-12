@@ -516,6 +516,7 @@ For each resolved version group, the command checks:
 - version target values can be read
 - pin target patterns compile as regular expressions
 - pin target files contain at least one match
+- pin target captured versions match the group's canonical version
 - the group changelog file exists
 
 It also checks any global pin targets, deduplicating repeated path/pattern
@@ -529,6 +530,8 @@ the end.
 - missing targets and missing changelog files are errors
 - unreadable version content is reported as a warning
 - pin patterns that compile but do not match are reported as a warning
+- pin patterns that match but capture a stale version (drift from the
+  group's canonical version) are reported as a warning
 - valid matches and readable targets are reported as OK
 
 ### Config discovery behavior
@@ -587,6 +590,13 @@ Error: pin target pattern has no matches in 'docs/conf.py'
 ```
 → The pattern compiles but matches nothing. Check the regex, or set
 `pin_target_missing = "warn"` to downgrade to a warning during migration.
+
+```
+Warning: docs/README.md drift: pin has '0.15.17', expected '0.15.18'
+```
+→ The pin pattern matched, but the captured version is stale — the file
+was not updated on the last release. Run `rrt bump` to refresh pin targets,
+or check for a release step that skipped this file.
 
 ```
 Error: changelog file 'CHANGELOG.md' not found

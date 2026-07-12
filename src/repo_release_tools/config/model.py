@@ -181,7 +181,8 @@ GENERIC_TOOL_RRT_EXAMPLE = dedent(
     # Replace this starter target with the file that owns your version string.
     [[tool.rrt.version_targets]]
     path = "path/to/version-file"
-    pattern = '^(const Version = ")([^"]+)(")$'
+    kind = "pattern"
+    pattern = '^VERSION = "([^"]+)"$'
     """,
 ).strip()
 
@@ -275,10 +276,14 @@ class VersionTarget:
 class PinTarget:
     r"""A single doc/CI pin target updated by 'rrt bump'.
 
-    Unlike ``VersionTarget``, ``PinTarget`` is write-only and does not
-    participate in version consistency checks.  Use it to keep version pins
-    in documentation and CI configs (e.g. ``@v1.2.3`` or ``rev: v1.2.3``)
-    in sync with every release.
+    Unlike ``VersionTarget``, ``PinTarget`` is write-only — ``rrt bump``
+    always overwrites it unconditionally rather than reading it first. Use
+    it to keep version pins in documentation and CI configs (e.g.
+    ``@v1.2.3`` or ``rev: v1.2.3``) in sync with every release.
+    ``rrt release check`` does read pin targets, non-destructively: it
+    warns (without failing) when a pin's captured version has drifted from
+    the group's canonical version, so stale pins are visible before they
+    accumulate.
 
     The ``pattern`` must follow the 3-group convention used by
     ``VersionTarget`` custom patterns:
