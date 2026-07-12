@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+## [1.13.0] - 2026-07-12
+
+### Added
+- **release**: warn on pin_target version drift in release check (#171)
+
+### Fixed
+- **release,mcp,docs**: polish pass on docs/MCP surface after publish-snapshot rollout (#170)
+- **git**: force-remove excluded paths on orphan snapshot branch (#165) (#166)
+
 ## [1.12.0] - 2026-07-11
 ### Breaking Changes
 - remove hooks.py legacy compat shim
