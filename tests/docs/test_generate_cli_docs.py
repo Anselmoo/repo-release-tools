@@ -325,7 +325,7 @@ def test_generate_readme_links_markdown_includes_mcp_server_doc() -> None:
 
     content = docs.generate_readme_links_markdown()
 
-    assert "docs/mcp-server.md" in content
+    assert "https://anselmoo.github.io/repo-release-tools/mcp-server/" in content
 
 
 def test_iter_generated_doc_targets_exposes_all_targets() -> None:
@@ -545,8 +545,8 @@ def test_generate_readme_links_markdown_contains_all_doc_entries() -> None:
 
     content = docs.generate_readme_links_markdown()
 
-    assert "docs/index.md" in content
-    assert "docs/action.md" in content
+    assert "https://anselmoo.github.io/repo-release-tools/" in content
+    assert "https://anselmoo.github.io/repo-release-tools/action/" in content
     assert "docs/commands/rrt-cli.md" in content
     assert "docs/commands/hooks.md" in content
     assert "docs/commands/branch.md" in content
@@ -556,7 +556,7 @@ def test_generate_readme_links_markdown_contains_all_doc_entries() -> None:
     assert "docs/commands/toc.md" in content
     assert "docs/commands/doctor.md" in content
     assert "docs/commands/eol_check.md" in content
-    assert "docs/agent-instructions.md" in content
+    assert "https://anselmoo.github.io/repo-release-tools/agent-instructions/" in content
 
 
 def test_task_generate_and_check_cover_all_generated_docs(

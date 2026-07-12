@@ -164,8 +164,8 @@ visualizations of `rrt://locks/{name}` data.
 
 ## Full reference
 
-See `docs/mcp-server.md` in the repository (or `/mcp-server/` on the docs site)
-for the complete tool, resource, and prompt reference.
+See <https://anselmoo.github.io/repo-release-tools/mcp-server/> for the
+complete tool, resource, and prompt reference.
 
 ## Expected outcome / success criteria
 

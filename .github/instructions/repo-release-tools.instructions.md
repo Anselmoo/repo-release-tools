@@ -76,7 +76,7 @@ When working in `repo-release-tools`, follow these rules:
 - Inside a domain package, split logic by role (`core.py`, `data.py`, `detect.py`, `targets.py`, `semver.py`) rather than creating a new oversized sibling module.
 - Anchor-based file injection lives in `src/repo_release_tools/tools/inject.py` — import from `repo_release_tools.tools.inject`, not from `repo_release_tools.inject` (old path removed).
 - Prefer `match` for closed-set dispatch helpers such as hook surface selection or managed config-path resolution; keep simple guard clauses for validation and command flow.
-- In `src/repo_release_tools/docs/publisher.py`, never add YAML frontmatter to content rendered for targets that use `anchor_id` (for example `docs/index.md` and `README.md`); anchored targets must render body-only fragments.
+- In `src/repo_release_tools/docs/publisher.py`, never add YAML frontmatter to content rendered for targets that use `anchor_id` (for example `docs/src/content/docs/index.mdx` and `README.md`); anchored targets must render body-only fragments.
 - Author docs shared blocks inline in `[tool.rrt.docs.shared_blocks].content` under `pyproject.toml` or `.rrt.toml`; do not add new scripts or template files for doc footers, headers, or shared text fragments.
 - Keep the `README.md` `readme-header` shared block pointed at a committed static badge asset under `docs/assets/readme-badges/`; do not reuse the generated `docs/assets/badges/` docs directory for README images.
 - After changing `[tool.rrt.docs.shared_blocks]`, run `rrt docs inject --check` and keep the shared-block content in sync with the injected README output.
