@@ -291,6 +291,81 @@ def test_release_check_pin_no_match_warns_not_errors(
     assert "no match" in capsys.readouterr().out
 
 
+def test_release_check_pin_matches_canonical_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Pin whose captured version equals the group's canonical version reports match."""
+    monkeypatch.chdir(tmp_path)
+    pin_file = tmp_path / "docs" / "page.md"
+    pin_file.parent.mkdir(parents=True)
+    pin_file.write_text("uses: Anselmoo/repo-release-tools@v1.2.3\n", encoding="utf-8")
+    pin = PinTarget(path=pin_file, pattern=_VALID_PIN_PATTERN)
+    conf = _make_config(tmp_path, pin_targets=[pin])
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(release_cmd, "load_or_autodetect_config", lambda _: conf)
+
+    rc = release_cmd.cmd_release_check(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "drift" not in out
+    assert "docs/page.md match" in out
+
+
+def test_release_check_pin_drift_warns_not_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Pin whose captured version differs from the canonical version warns, not errors."""
+    monkeypatch.chdir(tmp_path)
+    pin_file = tmp_path / "docs" / "page.md"
+    pin_file.parent.mkdir(parents=True)
+    pin_file.write_text("uses: Anselmoo/repo-release-tools@v9.9.9\n", encoding="utf-8")
+    pin = PinTarget(path=pin_file, pattern=_VALID_PIN_PATTERN)
+    conf = _make_config(tmp_path, pin_targets=[pin])
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(release_cmd, "load_or_autodetect_config", lambda _: conf)
+
+    rc = release_cmd.cmd_release_check(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "drift" in out
+    assert "9.9.9" in out
+    assert "1.2.3" in out
+
+
+def test_release_check_pin_drift_skipped_when_version_unreadable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When the canonical version can't be read, pins fall back to match-only (no drift)."""
+    monkeypatch.chdir(tmp_path)
+    pin_file = tmp_path / "docs" / "page.md"
+    pin_file.parent.mkdir(parents=True)
+    pin_file.write_text("uses: Anselmoo/repo-release-tools@v9.9.9\n", encoding="utf-8")
+    pin = PinTarget(path=pin_file, pattern=_VALID_PIN_PATTERN)
+    conf = _make_config(tmp_path, pin_targets=[pin])
+    version_path = conf.version_groups[0].version_targets[0].path
+    version_path.parent.mkdir(parents=True, exist_ok=True)
+    version_path.write_text("no version assignment here\n", encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(release_cmd, "load_or_autodetect_config", lambda _: conf)
+
+    rc = release_cmd.cmd_release_check(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "drift" not in out
+    assert "docs/page.md match" in out
+
+
 def test_release_check_global_pins_deduplicated(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -353,7 +428,7 @@ def test_release_check_pin_target_obsolete_status(
     (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     monkeypatch.setattr(release_cmd, "load_or_autodetect_config", lambda _: conf)
 
-    def mock_check_pin(_: object, __: Path) -> tuple[str, bool, str]:
+    def mock_check_pin(_: object, __: Path, ___: str | None) -> tuple[str, bool, str]:
         return ("docs/page.md (obsolete: deprecated)", True, "obsolete")
 
     monkeypatch.setattr(release_cmd, "_check_pin_target", mock_check_pin)

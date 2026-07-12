@@ -14,6 +14,7 @@ For each resolved version group, the command checks:
 - version target values can be read
 - pin target patterns compile as regular expressions
 - pin target files contain at least one match
+- pin target captured versions match the group's canonical version
 - the group changelog file exists
 
 It also checks any global pin targets, deduplicating repeated path/pattern
@@ -27,6 +28,8 @@ the end.
 - missing targets and missing changelog files are errors
 - unreadable version content is reported as a warning
 - pin patterns that compile but do not match are reported as a warning
+- pin patterns that match but capture a stale version (drift from the
+  group's canonical version) are reported as a warning
 - valid matches and readable targets are reported as OK
 
 ## Config discovery behavior
@@ -118,6 +121,13 @@ Error: pin target pattern has no matches in 'docs/conf.py'
 `pin_target_missing = "warn"` to downgrade to a warning during migration.
 
 ```
+Warning: docs/README.md drift: pin has '0.15.17', expected '0.15.18'
+```
+→ The pin pattern matched, but the captured version is stale — the file
+was not updated on the last release. Run `rrt bump` to refresh pin targets,
+or check for a release step that skipped this file.
+
+```
 Error: changelog file 'CHANGELOG.md' not found
 ```
 → First-release setup: the changelog file doesn't exist yet. Create it
@@ -153,8 +163,18 @@ def _check_version_target(target: VersionTarget, root: Path) -> tuple[str, bool,
         return f"{relative}{suffix} version unreadable", True, "warning"
 
 
-def _check_pin_target(pin: PinTarget, root: Path) -> tuple[str, bool, str]:
-    """Return the status message, whether it is okay, and its severity."""
+def _check_pin_target(
+    pin: PinTarget,
+    root: Path,
+    expected_version: str | None,
+) -> tuple[str, bool, str]:
+    """Return the status message, whether it is okay, and its severity.
+
+    *expected_version* is the group's canonical current version (``None``
+    when it could not be read). When the pin's captured version group
+    differs from it, this is reported as a non-blocking "drift" warning —
+    the pattern still matched, but the file is stale.
+    """
     relative = str(pin.path.relative_to(root))
 
     if not pin.path.exists():
@@ -166,8 +186,18 @@ def _check_pin_target(pin: PinTarget, root: Path) -> tuple[str, bool, str]:
         return f"{relative} bad pattern: {exc}", False, "error"
 
     text = pin.path.read_text(encoding="utf-8")
-    if compiled.search(text) is None:
+    match = compiled.search(text)
+    if match is None:
         return f"{relative} no match", True, "warning"
+
+    if expected_version is not None:
+        current = match.group(2)
+        if current != expected_version:
+            return (
+                f"{relative} drift: pin has {current!r}, expected {expected_version!r}",
+                True,
+                "warning",
+            )
 
     return f"{relative} match", True, "ok"
 
@@ -220,6 +250,11 @@ def _check_release_group(
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins:
+        try:
+            expected_version = read_version_string(group.primary_target())
+        except (RuntimeError, ValueError):
+            expected_version = None
+
         seen: set[tuple[object, str]] = set()
         unique_pins = []
         for pin in all_pins:
@@ -229,7 +264,7 @@ def _check_release_group(
                 unique_pins.append(pin)
 
         for pin in unique_pins:
-            message, ok, severity = _check_pin_target(pin, root)
+            message, ok, severity = _check_pin_target(pin, root, expected_version)
             statuses.append((message, severity))
             if not ok:
                 group_ok = False
