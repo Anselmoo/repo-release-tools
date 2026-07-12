@@ -366,6 +366,82 @@ def test_release_check_pin_drift_skipped_when_version_unreadable(
     assert "docs/page.md match" in out
 
 
+def test_release_check_pin_drift_skipped_when_version_file_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A missing primary version target must not crash the pin-drift check.
+
+    Regression test: `_resolve_expected_version` previously called
+    `read_version_string` unguarded, and `read_version_string` raises
+    `FileNotFoundError` (an `OSError`, not caught by the old
+    `except (RuntimeError, ValueError)`) when the target file doesn't
+    exist -- crashing `rrt release check` instead of degrading gracefully,
+    the same way an unreadable-but-present file already does.
+    """
+    monkeypatch.chdir(tmp_path)
+    pin_file = tmp_path / "docs" / "page.md"
+    pin_file.parent.mkdir(parents=True)
+    pin_file.write_text("uses: Anselmoo/repo-release-tools@v9.9.9\n", encoding="utf-8")
+    pin = PinTarget(path=pin_file, pattern=_VALID_PIN_PATTERN)
+    conf = _make_config(tmp_path, pin_targets=[pin])
+    # Deliberately do not create the version target file.
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    monkeypatch.setattr(release_cmd, "load_or_autodetect_config", lambda _: conf)
+
+    rc = release_cmd.cmd_release_check(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 1  # the missing version target itself is still a reported error
+    assert "drift" not in out
+    assert "docs/page.md match" in out
+
+
+def test_release_check_pin_drift_skipped_and_warns_on_bad_version_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A `version_source` that doesn't match any target warns, not silently skips.
+
+    Regression test: `group.primary_target()` raises `ValueError` for this
+    misconfiguration, which the old `except (RuntimeError, ValueError)` in
+    `_check_release_group` silently swallowed -- disabling drift detection
+    for the group with no visible message, unlike this exact misconfiguration
+    surfacing loudly in other commands (e.g. `rrt bump`).
+    """
+    monkeypatch.chdir(tmp_path)
+    pin_file = tmp_path / "docs" / "page.md"
+    pin_file.parent.mkdir(parents=True)
+    pin_file.write_text("uses: Anselmoo/repo-release-tools@v9.9.9\n", encoding="utf-8")
+    pin = PinTarget(path=pin_file, pattern=_VALID_PIN_PATTERN)
+    conf = _make_config(tmp_path, pin_targets=[pin])
+    _write_version_file(conf.version_groups[0].version_targets[0].path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    group = conf.version_groups[0]
+    conf.version_groups[0] = VersionGroup(
+        name=group.name,
+        release_branch=group.release_branch,
+        changelog_file=group.changelog_file,
+        lock_command=group.lock_command,
+        generated_files=group.generated_files,
+        version_targets=group.version_targets,
+        pin_targets=group.pin_targets,
+        version_source=tmp_path / "no-such-target.py",
+    )
+    monkeypatch.setattr(release_cmd, "load_or_autodetect_config", lambda _: conf)
+
+    rc = release_cmd.cmd_release_check(_ARGS)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "pin drift check skipped" in out
+    assert "version_source" in out
+    assert "drift:" not in out
+    assert "docs/page.md match" in out
+
+
 def test_release_check_global_pins_deduplicated(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

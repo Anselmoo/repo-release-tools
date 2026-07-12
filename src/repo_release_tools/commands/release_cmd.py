@@ -202,6 +202,31 @@ def _check_pin_target(
     return f"{relative} match", True, "ok"
 
 
+def _resolve_expected_version(group: VersionGroup) -> tuple[str | None, str | None]:
+    """Return ``(expected_version, warning)`` for a group's pin-drift check.
+
+    *expected_version* is the group's canonical current version, or ``None``
+    when it could not be determined. *warning* is set only when
+    ``group.primary_target()`` itself raised ``ValueError`` (a
+    ``version_source`` misconfiguration) -- a real config bug that would
+    otherwise be silently swallowed, unlike an unreadable/missing version
+    file, which is already surfaced separately via the per-target checks in
+    :func:`_check_release_group`.
+    """
+    try:
+        primary = group.primary_target()
+    except ValueError as exc:
+        return None, f"pin drift check skipped: {exc}"
+
+    if not primary.path.exists():
+        return None, None
+
+    try:
+        return read_version_string(primary), None
+    except (RuntimeError, ValueError):
+        return None, None
+
+
 @dataclass(frozen=True)
 class ReleaseCheckOptions:
     """Typed view of ``argparse.Namespace`` for ``rrt release check``.
@@ -250,10 +275,9 @@ def _check_release_group(
 
     all_pins = group.pin_targets + config.global_pin_targets
     if all_pins:
-        try:
-            expected_version = read_version_string(group.primary_target())
-        except (RuntimeError, ValueError):
-            expected_version = None
+        expected_version, warning = _resolve_expected_version(group)
+        if warning is not None:
+            statuses.append((warning, "warning"))
 
         seen: set[tuple[object, str]] = set()
         unique_pins = []

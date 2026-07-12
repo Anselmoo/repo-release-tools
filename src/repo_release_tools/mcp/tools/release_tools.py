@@ -29,6 +29,7 @@ def register(mcp: FastMCP) -> None:
         from repo_release_tools.commands.release_cmd import (
             _check_pin_target,
             _check_version_target,
+            _resolve_expected_version,
         )
 
         config_error = ctx.lifespan_context.get("config_error")
@@ -55,16 +56,21 @@ def register(mcp: FastMCP) -> None:
                     group_ok = False
 
             all_pins = group.pin_targets + config.global_pin_targets
-            seen: set[tuple[object, str]] = set()
-            for pin in all_pins:
-                key = (pin.path, pin.pattern)
-                if key in seen:
-                    continue
-                seen.add(key)
-                message, ok, severity = _check_pin_target(pin, root)
-                entries.append(ReleaseCheckEntry(message=message, ok=ok, severity=severity))
-                if not ok:
-                    group_ok = False
+            if all_pins:
+                expected_version, warning = _resolve_expected_version(group)
+                if warning is not None:
+                    entries.append(ReleaseCheckEntry(message=warning, ok=True, severity="warning"))
+
+                seen: set[tuple[object, str]] = set()
+                for pin in all_pins:
+                    key = (pin.path, pin.pattern)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    message, ok, severity = _check_pin_target(pin, root, expected_version)
+                    entries.append(ReleaseCheckEntry(message=message, ok=ok, severity=severity))
+                    if not ok:
+                        group_ok = False
 
             changelog = group.changelog_file
             if changelog.exists():
