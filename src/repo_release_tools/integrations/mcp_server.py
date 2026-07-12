@@ -1,17 +1,17 @@
----
-title: "MCP Server"
-permalink: "/mcp-server/"
----
-<!-- rrt:auto:start:page-header -->
-<p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../assets/badges/github-reto-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="../assets/badges/github-reto-light.svg">
-  <img alt="GitHub" src="../assets/badges/github-reto-dark.svg">
-</picture></a></p>
-<!-- rrt:auto:end:page-header -->
+"""MCP server documentation for repo-release-tools.
 
+Lives under ``integrations/`` (not ``mcp/``) so that
+``repo_release_tools.docs.publisher`` -- which must stay importable without
+the optional ``[mcp]`` extra installed -- can register this topic doc
+unconditionally. Importing any submodule of ``repo_release_tools.mcp``
+executes ``mcp/__init__.py``, which eagerly imports ``fastmcp`` and raises
+``ImportError`` when it is not installed; this module intentionally sits
+outside that package to avoid forcing that dependency onto doc generation.
+"""
 
-# MCP Server
+from __future__ import annotations
+
+MCP_SERVER_DOC = """# MCP Server
 
 The `[mcp]` extra ships a [FastMCP 3.x](https://gofastmcp.com) server named
 `repo-release-tools` that exposes version management, changelog, health /
@@ -58,7 +58,7 @@ claude mcp add rrt -- uv run --with "repo-release-tools[mcp]" rrt-mcp
 ### Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`
-(macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+(macOS) or `%APPDATA%\\Claude\\claude_desktop_config.json` (Windows):
 
 ```json
 {
@@ -74,9 +74,28 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ### HTTP transport
 
+`--transport http` binds a real network listener — unlike `stdio`, anyone who
+can reach `--host`:`--port` could invoke every `rrt_*` tool, including
+destructive ones like `rrt_bump` and `rrt_publish_snapshot`. To prevent that,
+HTTP transport **requires a bearer token**: pass `--auth-token` or set
+`RRT_MCP_AUTH_TOKEN`. If neither is set, the server refuses to start rather
+than opening an unauthenticated port. `--host` still defaults to `127.0.0.1`
+(loopback-only) unless overridden.
+
 ```bash
+# Token via flag
+uv run rrt-mcp --transport http --port 8000 --auth-token "$(openssl rand -hex 32)"
+
+# Token via env var
+export RRT_MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
 uv run rrt-mcp --transport http --port 8000
 ```
+
+Clients connect with the same token as a bearer credential, e.g. an
+`Authorization: Bearer <token>` header or FastMCP's `Client(url, auth=token)`.
+
+`stdio` transport (the default) is process-local and piped over stdin/stdout —
+no token is required or checked.
 
 ---
 
@@ -96,6 +115,11 @@ uv run rrt-mcp --transport http --port 8000
 | `rrt_validate_branch` | validation | Conventional branch naming check |
 | `rrt_validate_commit` | validation | Conventional commit subject check |
 | `rrt_changelog` | changelog | Unreleased entries or full content |
+| `rrt_eol` | eol, inspection | Host/project EOL status per language against policy |
+| `rrt_release_check` | release, inspection | Version/pin/changelog target validation per group |
+| `rrt_sync_check` | sync, inspection | Newer upstream package versions (not idempotent — network) |
+| `rrt_folder_check` | folders, inspection | Folder structure policy violations |
+| `rrt_docs_check` | docs, inspection | `.rrt/docs.lock.toml` drift status |
 
 ### Mutating tools (default dry_run=True)
 
@@ -104,7 +128,7 @@ uv run rrt-mcp --transport http --port 8000
 | `rrt_bump` | versioning | Semver bump — preview or apply |
 | `rrt_branch_new` | git | Create conventionally-named branch |
 | `rrt_init_run` | init, config | Run `rrt init` with selected target |
-| `rrt_publish_snapshot` | git, publishing | Force-push a single-commit snapshot to a secondary remote |
+| `rrt_publish_snapshot` | git, publishing | Force-push a single-commit snapshot of tracked content to a secondary remote; `exclude` drops specific glob patterns from the snapshot |
 
 ---
 
@@ -180,3 +204,7 @@ Seven reusable prompts guide AI-assisted workflows:
 "Give me a custom chart of the lock file data"
 → LLM uses generate_prefab_ui + rrt://locks/{name} resources
 ```
+"""
+
+# Ordered source-owned topic docs for docs generation.
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("mcp-server", MCP_SERVER_DOC),)

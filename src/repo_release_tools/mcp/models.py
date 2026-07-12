@@ -104,6 +104,28 @@ Fields:
   ready to paste into `rrt git commit`
 - `error` — set when branch creation failed (e.g. branch already exists)
 
+### `EolCheckEntry` / `EolResponse`
+Result of `rrt_eol`: one entry per host-runtime/project-minimum check, aggregated into
+`EolResponse.checks` with an overall `all_ok` flag.
+
+### `ReleaseCheckEntry` / `ReleaseGroupCheck` / `ReleaseCheckResponse`
+Result of `rrt_release_check`: one `ReleaseCheckEntry` per version-target, pin-target, or
+changelog-file check, grouped into a `ReleaseGroupCheck` per `[tool.rrt]` version group,
+aggregated into `ReleaseCheckResponse.groups` with an overall `all_ok` flag.
+
+### `SyncCheckResponse`
+Result of `rrt_sync_check`: upstream package versions newer than the current project
+version for one version group's `[tool.rrt.upstream]` package.
+
+### `FolderViolationEntry` / `FolderTargetEntry` / `FolderCheckResponse`
+Result of `rrt_folder_check`: one `FolderViolationEntry` per policy violation, grouped into
+a `FolderTargetEntry` per matched target path, aggregated into `FolderCheckResponse` with
+an overall `ok` flag and `violation_count`.
+
+### `DocsCheckResponse`
+Result of `rrt_docs_check`: whether `.rrt/docs.lock.toml` is current against source-owned
+docs, with a `messages` list describing any drift found.
+
 ### `RawLockData`
 Passthrough wrapper for arbitrary lock-style data when a structured tool model is not needed.
 
@@ -215,6 +237,94 @@ class PublishSnapshotResult(BaseModel):
     dry_run: bool
     error: str | None = None
     excluded_paths: tuple[str, ...] = ()
+
+
+class EolCheckEntry(BaseModel):
+    """One EOL check result (host runtime or project minimum) for one language."""
+
+    name: str
+    status: str
+    message: str
+
+
+class EolResponse(BaseModel):
+    """Aggregated EOL check results across all requested languages."""
+
+    all_ok: bool
+    checks: list[EolCheckEntry] = Field(default_factory=list)
+    error: str | None = None
+
+
+class ReleaseCheckEntry(BaseModel):
+    """One release-check status line (version target, pin target, or changelog file)."""
+
+    message: str
+    ok: bool
+    severity: str
+
+
+class ReleaseGroupCheck(BaseModel):
+    """Aggregated release-check results for one version group."""
+
+    group: str
+    ok: bool
+    entries: list[ReleaseCheckEntry] = Field(default_factory=list)
+
+
+class ReleaseCheckResponse(BaseModel):
+    """Aggregated rrt_release_check results across all configured version groups."""
+
+    all_ok: bool
+    groups: list[ReleaseGroupCheck] = Field(default_factory=list)
+    error: str | None = None
+
+
+class SyncCheckResponse(BaseModel):
+    """Newer upstream package versions available for a version group's tracked package."""
+
+    group: str
+    current: str | None = None
+    upstream_package: str | None = None
+    upstream_provider: str | None = None
+    newer_versions: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class FolderViolationEntry(BaseModel):
+    """One folder-policy violation."""
+
+    code: str
+    path: str
+    message: str
+    severity: str = "error"
+
+
+class FolderTargetEntry(BaseModel):
+    """Folder check result for one matched target path."""
+
+    rule_name: str
+    selector: str
+    base_path: str
+    ok: bool
+    violations: list[FolderViolationEntry] = Field(default_factory=list)
+
+
+class FolderCheckResponse(BaseModel):
+    """Aggregated folder structure policy check results."""
+
+    mode: str
+    ok: bool
+    violation_count: int
+    targets: list[FolderTargetEntry] = Field(default_factory=list)
+    error: str | None = None
+
+
+class DocsCheckResponse(BaseModel):
+    """Docs lockfile (.rrt/docs.lock.toml) drift status."""
+
+    is_current: bool
+    messages: list[str] = Field(default_factory=list)
+    error: str | None = None
 
 
 class RawLockData(BaseModel):

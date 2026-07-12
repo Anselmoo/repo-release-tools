@@ -1487,9 +1487,14 @@ def main(argv: list[str] | None = None) -> int:
             elif parsed.subject is not None:
                 subject = parsed.subject
             else:
-                # Fall back to reading the commit message file that git sets during commit hooks.
-                commit_editmsg = cwd / ".git" / "COMMIT_EDITMSG"
-                if commit_editmsg.exists():
+                # Fall back to reading the commit message file that git sets during
+                # commit hooks. Resolve via `git rev-parse --git-dir` (not a naive
+                # cwd / ".git" join) since COMMIT_EDITMSG lives under
+                # <common-git-dir>/worktrees/<name>/ in a linked worktree, where
+                # ``.git`` is a text file rather than a directory.
+                resolved_git_dir = git.git_dir(cwd)
+                commit_editmsg = resolved_git_dir / "COMMIT_EDITMSG" if resolved_git_dir else None
+                if commit_editmsg is not None and commit_editmsg.exists():
                     subject = read_commit_subject(commit_editmsg)
                 else:
                     subject = ""

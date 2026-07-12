@@ -65,6 +65,37 @@ registrations in dependency order.
   `origin`, or when a git operation (rebase, merge, etc.) is already in progress.
   Always defaults to `dry_run=True`. Returns a `PublishSnapshotResult`.
 
+### `eol_tools` → `rrt_eol`
+
+- **`rrt_eol`** — Checks host runtime and project minimum versions against EOL policy
+  for one or more languages. Read-only — never writes `.rrt/health.lock.toml`. Returns
+  an `EolResponse` with one `EolCheckEntry` per host/project check.
+
+### `release_tools` → `rrt_release_check`
+
+- **`rrt_release_check`** — Validates version targets, pin targets, and changelog files
+  for every configured version group. Read-only — never modifies files. Returns a
+  `ReleaseCheckResponse` with one `ReleaseGroupCheck` per version group.
+
+### `sync_tools` → `rrt_sync_check`
+
+- **`rrt_sync_check`** — Lists upstream package versions newer than the current project
+  version for a version group's `[tool.rrt.upstream]` package. Read-only — never applies
+  a bump. Requires network access to the configured registry; not idempotent since new
+  upstream releases can appear between calls.
+
+### `folder_tools` → `rrt_folder_check`
+
+- **`rrt_folder_check`** — Validates the repository folder structure against
+  `[tool.rrt.folders]` policy or named built-in templates. Read-only — never scaffolds
+  files. Returns a `FolderCheckResponse` with one `FolderTargetEntry` per matched target.
+
+### `docs_tools` → `rrt_docs_check`
+
+- **`rrt_docs_check`** — Checks whether `.rrt/docs.lock.toml` is current against
+  source-owned docs. Read-only — never regenerates or writes files. Returns a
+  `DocsCheckResponse` with `is_current` and any drift `messages`.
+
 ## Response conventions
 
 All tools return Pydantic models (see `mcp.models`) serialised to JSON by FastMCP.
@@ -87,9 +118,14 @@ from fastmcp import FastMCP
 
 from .changelog_tools import register as register_changelog
 from .config_tools import register as register_config
+from .docs_tools import register as register_docs
+from .eol_tools import register as register_eol
+from .folder_tools import register as register_folder
 from .git_tools import register as register_git
 from .lock_tools import register as register_locks
 from .publish_tools import register as register_publish
+from .release_tools import register as register_release
+from .sync_tools import register as register_sync
 from .validation_tools import register as register_validation
 from .version_tools import register as register_version
 
@@ -103,3 +139,8 @@ def register_tools(mcp: FastMCP) -> None:
     register_changelog(mcp)
     register_git(mcp)
     register_publish(mcp)
+    register_eol(mcp)
+    register_release(mcp)
+    register_sync(mcp)
+    register_folder(mcp)
+    register_docs(mcp)
