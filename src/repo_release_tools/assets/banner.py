@@ -120,8 +120,19 @@ def _collect_metrics() -> dict[str, str]:
     # Hard facts
     branch = "UNKNOWN"
     with suppress(Exception):
-        # Fast way to get branch without subprocess
-        head_path = src_root.parent / ".git" / "HEAD"
+        # Fast way to get branch without subprocess. In a linked git worktree,
+        # ``.git`` is a text file (``gitdir: <path>``) rather than a directory,
+        # so HEAD must be read from the path it redirects to, not from
+        # ``.git/HEAD`` directly.
+        git_path = src_root.parent / ".git"
+        if git_path.is_dir():
+            head_path = git_path / "HEAD"
+        else:
+            gitdir_line = git_path.read_text(encoding="utf-8").strip()
+            gitdir = Path(gitdir_line.removeprefix("gitdir:").strip())
+            if not gitdir.is_absolute():
+                gitdir = (git_path.parent / gitdir).resolve()
+            head_path = gitdir / "HEAD"
         if head_path.exists():
             content = head_path.read_text().strip()
             branch = content.split("/")[-1].upper() if "/" in content else content[:7].upper()

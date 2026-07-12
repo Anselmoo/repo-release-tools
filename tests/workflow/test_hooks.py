@@ -1282,9 +1282,62 @@ def test_main_update_unreleased_uses_message_file_and_commit_editmsg(
     git_dir = tmp_path / ".git"
     git_dir.mkdir()
     (git_dir / "COMMIT_EDITMSG").write_text("fix: fallback subject\n", encoding="utf-8")
+    monkeypatch.setattr(hooks.git, "git_dir", lambda cwd: git_dir)
     assert hooks.main(["update-unreleased"]) == 21
 
     assert [subject for _, subject, _ in captured] == ["feat: add parser", "fix: fallback subject"]
+
+
+def test_main_update_unreleased_commit_editmsg_fallback_resolves_via_git_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """COMMIT_EDITMSG must be located via git.git_dir(), not a naive cwd/.git join.
+
+    In a linked git worktree, ``.git`` is a text file (``gitdir: <path>``)
+    pointing at ``<common-git-dir>/worktrees/<name>``, where COMMIT_EDITMSG
+    actually lives -- a plain ``cwd / ".git" / "COMMIT_EDITMSG"`` join would
+    silently miss it. Regression test for issue #143 follow-up.
+    """
+    monkeypatch.chdir(tmp_path)
+
+    worktree_git_dir = tmp_path / "elsewhere" / "worktrees" / "my-worktree"
+    worktree_git_dir.mkdir(parents=True)
+    (worktree_git_dir / "COMMIT_EDITMSG").write_text(
+        "fix: worktree fallback subject\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(hooks.git, "git_dir", lambda cwd: worktree_git_dir)
+
+    captured: list[str] = []
+    monkeypatch.setattr(
+        hooks,
+        "run_update_unreleased",
+        lambda cwd, *, subject, changelog_file=hooks.DEFAULT_CHANGELOG, verbose=0: (
+            captured.append(subject) or 21
+        ),
+    )
+
+    assert hooks.main(["update-unreleased"]) == 21
+    assert captured == ["fix: worktree fallback subject"]
+
+
+def test_main_update_unreleased_commit_editmsg_fallback_empty_when_git_dir_unknown(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Falls back to an empty subject (not a crash) when git-dir can't be resolved."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hooks.git, "git_dir", lambda cwd: None)
+
+    captured: list[str] = []
+    monkeypatch.setattr(
+        hooks,
+        "run_update_unreleased",
+        lambda cwd, *, subject, changelog_file=hooks.DEFAULT_CHANGELOG, verbose=0: (
+            captured.append(subject) or 21
+        ),
+    )
+
+    assert hooks.main(["update-unreleased"]) == 21
+    assert captured == [""]
 
 
 def test_main_update_unreleased_handles_unreadable_message_file_and_empty_fallback(
