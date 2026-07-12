@@ -423,6 +423,28 @@ All notable changes to this project will be documented in this file.
 # D8 — GitHub Action changelog-status grep characterization
 # ---------------------------------------------------------------------------
 
+# Verbatim mirror of action.yml's "Detect project version and changelog
+# status" step's grep/awk classification logic (not a re-implementation).
+# Kept in sync by test_d8_action_grep_pattern_is_taken_verbatim_from_action_yml.
+_CHANGELOG_STATUS_SCRIPT = r"""
+set -euo pipefail
+changelog_file="$1"
+changelog_status="missing"
+if [[ -f "$changelog_file" ]]; then
+  if grep -q '^## \[Unreleased\]' -- "$changelog_file" 2>/dev/null; then
+    entries=$(awk '/^## \[Unreleased\]/{p=1;next} /^## \[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
+    if [[ "$entries" -gt 0 ]]; then
+      changelog_status="dirty"
+    else
+      changelog_status="clean"
+    fi
+  else
+    changelog_status="clean"
+  fi
+fi
+echo "$changelog_status"
+"""
+
 
 def test_d8_action_grep_pattern_matches_keep_a_changelog_heading(e2e_repo: Path) -> None:
     """D8 (fixed): the Action's changelog-status grep is anchored ``^## \\[Unreleased\\]``.
@@ -472,26 +494,8 @@ def test_d8_action_three_way_classification_reports_dirty_for_standard_heading(
     content = changelog_file.read_text(encoding="utf-8")
     assert "- Seed feature entry" in content, content  # sanity: fixture has an unreleased bullet
 
-    script = r"""
-set -euo pipefail
-changelog_file="$1"
-changelog_status="missing"
-if [[ -f "$changelog_file" ]]; then
-  if grep -q '^## \[Unreleased\]' "$changelog_file" 2>/dev/null; then
-    entries=$(awk '/^## \[Unreleased\]/{p=1;next} /^## \[/{p=0} p && /^\s*-/{count++} END{print count+0}' "$changelog_file")
-    if [[ "$entries" -gt 0 ]]; then
-      changelog_status="dirty"
-    else
-      changelog_status="clean"
-    fi
-  else
-    changelog_status="clean"
-  fi
-fi
-echo "$changelog_status"
-"""
     result = subprocess.run(
-        ["bash", "-c", script, "bash", "CHANGELOG.md"],
+        ["bash", "-c", _CHANGELOG_STATUS_SCRIPT, "bash", "CHANGELOG.md"],
         cwd=e2e_repo,
         capture_output=True,
         text=True,
@@ -501,6 +505,33 @@ echo "$changelog_status"
     # D8 fixed: a real Keep-a-Changelog [Unreleased] section with a bullet in it
     # now correctly reports "dirty" (unreleased work pending), because the fixed
     # anchor `^## \[Unreleased\]` matches and the awk counting branch is reached.
+    assert result.stdout.strip() == "dirty", f"stdout={result.stdout}\nstderr={result.stderr}"
+
+
+def test_sec008_action_changelog_grep_handles_dash_prefixed_filename(
+    e2e_repo: Path,
+) -> None:
+    """SEC-008: a dash-prefixed changelog filename must not be parsed as a grep option.
+
+    ``changelog_file`` comes straight from the ``changelog-file`` Action input.
+    Without a ``--`` separator before it, a value that happens to start with
+    ``-`` (e.g. a file literally named ``-e``) is parsed by ``grep`` as an
+    option instead of a path — ``grep`` then errors, the surrounding ``if``
+    falls through to its ``else`` branch, and a populated [Unreleased]
+    section is silently misclassified as "clean". This replicates
+    action.yml's exact shell logic (``_CHANGELOG_STATUS_SCRIPT``) verbatim.
+    """
+    changelog_file = e2e_repo / "-e"
+    changelog_file.write_text("## [Unreleased]\n\n- pending change\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["bash", "-c", _CHANGELOG_STATUS_SCRIPT, "bash", "-e"],
+        cwd=e2e_repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
     assert result.stdout.strip() == "dirty", f"stdout={result.stdout}\nstderr={result.stderr}"
 
 

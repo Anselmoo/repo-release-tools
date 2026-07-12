@@ -96,6 +96,38 @@ def test_c3_publish_snapshot_with_confirm_pushes_single_commit_snapshot(
     assert branches.stdout.strip() == "", _out(branches)
 
 
+def test_c3_publish_snapshot_exclude_removes_tracked_file_on_orphan_branch(
+    e2e_repo: Path, tmp_path: Path
+) -> None:
+    """--exclude removes a tracked file even though the orphan branch has no HEAD (#165).
+
+    ``git checkout --orphan`` leaves no HEAD to compare against, so the
+    subsequent ``git rm`` on excluded paths needs ``-f``/``--force`` - without
+    it, git's "does this match HEAD?" safety check refuses removal of any
+    tracked file, even with ``--ignore-unmatch`` (which only suppresses the
+    separate "no pathspec match" error).
+    """
+    snap = _bare_repo(tmp_path / "snap.git")
+    _add_origin(e2e_repo, _bare_repo(tmp_path / "origin.git"))
+
+    result = rrt(
+        "git",
+        "publish-snapshot",
+        "--remote",
+        str(snap),
+        "--exclude",
+        "CHANGELOG.md",
+        CONFIRM_PUSH,
+        cwd=e2e_repo,
+    )
+
+    assert result.returncode == 0, _out(result)
+    tree = run(["git", "ls-tree", "-r", "--name-only", "refs/heads/main"], cwd=snap)
+    names = tree.stdout.split()
+    assert "CHANGELOG.md" not in names, f"{_out(result)}\ntree:\n{tree.stdout}"
+    assert "pyproject.toml" in names, f"{_out(result)}\ntree:\n{tree.stdout}"
+
+
 def test_c3_publish_snapshot_refuses_remote_with_same_url_as_origin(
     e2e_repo: Path, tmp_path: Path
 ) -> None:

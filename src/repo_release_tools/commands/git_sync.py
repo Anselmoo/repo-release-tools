@@ -728,7 +728,7 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
             to_remove = resolve_excluded_paths(tracked, exclude_patterns)
             if to_remove:
                 git.run(
-                    ["git", "rm", "-r", "--ignore-unmatch", "--", *to_remove],
+                    ["git", "rm", "-f", "-r", "--ignore-unmatch", "--", *to_remove],
                     root,
                     dry_run=dry_run,
                     label="git rm",

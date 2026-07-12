@@ -949,7 +949,7 @@ def test_publish_snapshot_excludes_matching_paths_before_commit(
     assert git_sync.cmd_publish_snapshot(args) == 0
     assert commands == [
         ["git", "checkout", "--orphan", "rrt-snap-tmp"],
-        ["git", "rm", "-r", "--ignore-unmatch", "--", "docs/superpowers/plans/x.md"],
+        ["git", "rm", "-f", "-r", "--ignore-unmatch", "--", "docs/superpowers/plans/x.md"],
         ["git", "add", "-u"],
         ["git", "commit", "-m", "Initial commit"],
         ["git", "push", "--force", "--", "mirror", "rrt-snap-tmp:main"],

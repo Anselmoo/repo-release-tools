@@ -304,6 +304,32 @@ def test_cmd_rescue_no_commits_returns_error(
     assert "Nothing to rescue" in capsys.readouterr().err
 
 
+def test_cmd_rescue_reports_clean_error_for_dash_prefixed_since(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A --since value starting with '-' must produce a clean CLI error, not a traceback."""
+    from repo_release_tools.commands.branch import cmd_rescue
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch",
+        lambda root: "main",
+    )
+
+    args = argparse.Namespace(
+        type="fix",
+        description=["extract", "helper"],
+        scope=None,
+        dry_run=False,
+        since="--upload-pack=evil",
+    )
+
+    result = cmd_rescue(args)
+
+    assert result == 1
+    assert "must not start with '-'" in capsys.readouterr().err
+
+
 def test_cmd_rescue_existing_target_branch_returns_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

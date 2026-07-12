@@ -193,7 +193,12 @@ def cmd_squash_local(args: argparse.Namespace) -> int:
         p.line(str(exc), ok=False, stream=sys.stderr)
         return 1
 
-    commits = git.commits_ahead(root, base_ref)
+    try:
+        commits = git.commits_ahead(root, base_ref)
+    except ValueError as exc:
+        p = VerbosePrinter(verbose=verbose)
+        p.line(str(exc), ok=False, stream=sys.stderr)
+        return 1
     if not commits:
         p = VerbosePrinter(verbose=verbose)
         p.line(

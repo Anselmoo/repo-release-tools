@@ -104,13 +104,30 @@ def _fetch_crates_versions(package: str, *, timeout: int = 10) -> list[str]:
 def _quote_vendor_name_package(package: str) -> str:
     """Percent-encode a Packagist ``vendor/name`` identifier, segment by segment.
 
-    Packagist routes on a literal two-segment ``vendor/name`` path, so the
-    single separating ``/`` must stay literal — but each segment (and any
-    *extra* ``/`` beyond the first, e.g. a ``../`` traversal attempt) is
-    percent-encoded with ``safe=""`` so the value cannot smuggle additional
-    path segments (CWE-20).
+    Packagist routes on a literal two-segment ``vendor/name`` path, so *only*
+    the first ``/`` stays literal as the separator — the vendor and name
+    parts are each fully percent-encoded (any further ``/`` becomes ``%2F``),
+    so the value cannot smuggle additional path segments (CWE-20).
     """
-    return "/".join(urllib.parse.quote(part, safe="") for part in package.split("/"))
+    vendor, sep, name = package.partition("/")
+    if not sep:
+        return _quote_packagist_segment(package)
+    return f"{_quote_packagist_segment(vendor)}/{_quote_packagist_segment(name)}"
+
+
+def _quote_packagist_segment(segment: str) -> str:
+    """Percent-encode one Packagist path segment, closing the dot-segment gap.
+
+    ``.`` is an RFC 3986 unreserved character, so ``quote()`` never encodes
+    it — a segment that is *exactly* ``.`` or ``..`` would otherwise survive
+    as a literal dot-segment that a downstream proxy could remove via
+    RFC 3986 §5.2.4 normalization, escaping the intended ``/packages/``
+    prefix (CWE-22).
+    """
+    quoted = urllib.parse.quote(segment, safe="")
+    if quoted in (".", ".."):
+        quoted = quoted.replace(".", "%2E")
+    return quoted
 
 
 def _fetch_packagist_versions(package: str, *, timeout: int = 10) -> list[str]:

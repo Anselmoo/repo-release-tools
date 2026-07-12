@@ -107,7 +107,7 @@ def register(mcp: FastMCP) -> None:
             )
             if excluded_paths:
                 git.run(
-                    ["git", "rm", "-r", "--ignore-unmatch", "--", *excluded_paths],
+                    ["git", "rm", "-f", "-r", "--ignore-unmatch", "--", *excluded_paths],
                     root,
                     dry_run=False,
                     label="git rm",

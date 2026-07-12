@@ -358,6 +358,44 @@ def test_fetch_versions_packagist_percent_encodes_each_segment(
     assert captured["url"] == "https://packagist.org/packages/vendor%20name/pkg%3Fname.json"
 
 
+def test_fetch_versions_packagist_percent_encodes_bare_package_without_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed package with no vendor/name separator is still percent-encoded whole."""
+    captured: dict[str, str] = {}
+
+    def fake_urlopen(req: urllib.request.Request, timeout: int = 10) -> _Resp:
+        captured["url"] = req.full_url
+        return _Resp(json.dumps({"package": {"versions": {}}}).encode())
+
+    monkeypatch.setattr(providers.urllib.request, "urlopen", fake_urlopen)
+    providers.fetch_versions("bare package", "packagist")
+    assert captured["url"] == "https://packagist.org/packages/bare%20package.json"
+
+
+def test_fetch_versions_packagist_rejects_extra_path_segments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SEC-005: a bare ``..`` segment cannot survive as a literal dot-segment.
+
+    ``.`` is an RFC3986 unreserved character, so ``urllib.parse.quote()``
+    never encodes it - a vendor/name segment that is *exactly* ``..`` would
+    otherwise pass through untouched and could be removed by dot-segment
+    normalization (RFC 3986 5.2.4) in an intermediary, escaping the intended
+    ``/packages/`` prefix.
+    """
+    captured: dict[str, str] = {}
+
+    def fake_urlopen(req: urllib.request.Request, timeout: int = 10) -> _Resp:
+        captured["url"] = req.full_url
+        return _Resp(json.dumps({"package": {"versions": {}}}).encode())
+
+    monkeypatch.setattr(providers.urllib.request, "urlopen", fake_urlopen)
+    providers.fetch_versions("../../evil", "packagist")
+    assert "/../" not in captured["url"]
+    assert captured["url"] == "https://packagist.org/packages/%2E%2E/..%2Fevil.json"
+
+
 # ---------------------------------------------------------------------------
 # pypi (via delegation to fetch_pypi_versions)
 # ---------------------------------------------------------------------------

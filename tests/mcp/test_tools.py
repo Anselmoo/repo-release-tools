@@ -1271,7 +1271,15 @@ def test_rrt_publish_snapshot_excludes_matching_paths(
     result = asyncio.run(_run())
     assert result.published is True
     assert result.excluded_paths == ("docs/superpowers/plans/x.md",)
-    assert ["git", "rm", "-r", "--ignore-unmatch", "--", "docs/superpowers/plans/x.md"] in run_calls
+    assert [
+        "git",
+        "rm",
+        "-f",
+        "-r",
+        "--ignore-unmatch",
+        "--",
+        "docs/superpowers/plans/x.md",
+    ] in run_calls
 
 
 def test_rrt_publish_snapshot_apply_push_fails(

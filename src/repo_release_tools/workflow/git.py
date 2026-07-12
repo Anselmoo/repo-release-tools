@@ -106,8 +106,12 @@ def run(
         if result.stderr.strip():
             for line in result.stderr.strip().splitlines():
                 p.warn(line, stream=None)
-        first_err = result.stderr.strip().splitlines()[0] if result.stderr.strip() else ""
-        detail = f": {first_err}" if first_err else ""
+        # The last stderr line is usually the actionable one (e.g. a
+        # pre-commit hook's summary starts with a generic "<hook>...Failed"
+        # header and ends with the specific reason, like "- files were
+        # modified by this hook").
+        last_err = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
+        detail = f": {last_err}" if last_err else ""
         raise RuntimeError(f"{label} failed (exit {result.returncode}){detail}")
     if result.stdout.strip():
         p = VerbosePrinter()
