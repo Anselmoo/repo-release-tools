@@ -363,14 +363,8 @@ def test_resolve_changelog_mode_prefers_requested_mode(tmp_path: Path) -> None:
         version_targets=[target],
         changelog_workflow="incremental",
     )
-    config = RrtConfig(
-        root=tmp_path,
-        config_file=tmp_path / ".rrt.toml",
-        version_groups=[group],
-        default_group_name="default",
-    )
 
-    assert resolve_changelog_mode(config, "promote") == "promote"
+    assert resolve_changelog_mode(group, "promote") == "promote"
 
 
 def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path) -> None:
@@ -385,14 +379,8 @@ def test_resolve_changelog_mode_defaults_to_auto_for_incremental(tmp_path: Path)
         version_targets=[target],
         changelog_workflow="incremental",
     )
-    config = RrtConfig(
-        root=tmp_path,
-        config_file=tmp_path / ".rrt.toml",
-        version_groups=[group],
-        default_group_name="default",
-    )
 
-    assert resolve_changelog_mode(config, None) == "auto"
+    assert resolve_changelog_mode(group, None) == "auto"
 
 
 def test_resolve_changelog_mode_defaults_to_generate_for_squash(tmp_path: Path) -> None:
@@ -407,14 +395,42 @@ def test_resolve_changelog_mode_defaults_to_generate_for_squash(tmp_path: Path) 
         version_targets=[target],
         changelog_workflow="squash",
     )
-    config = RrtConfig(
+
+    assert resolve_changelog_mode(group, None) == "generate"
+
+
+def test_resolve_changelog_mode_with_multiple_groups_configured(tmp_path: Path) -> None:
+    """Regression test for #175: resolving a single group's mode must not require the
+    ambiguous multi-group config to pick a default group.
+    """
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    quality_group = VersionGroup(
+        name="quality",
+        release_branch="release/quality/v{version}",
+        changelog_file=tmp_path / "quality" / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="incremental",
+    )
+    compass_group = VersionGroup(
+        name="compass",
+        release_branch="release/compass/v{version}",
+        changelog_file=tmp_path / "compass" / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        changelog_workflow="squash",
+    )
+    # Multiple groups, no default_group_name -- config.resolve_group() would raise here.
+    RrtConfig(
         root=tmp_path,
         config_file=tmp_path / ".rrt.toml",
-        version_groups=[group],
-        default_group_name="default",
+        version_groups=[quality_group, compass_group],
     )
 
-    assert resolve_changelog_mode(config, None) == "generate"
+    assert resolve_changelog_mode(quality_group, None) == "auto"
+    assert resolve_changelog_mode(compass_group, None) == "generate"
 
 
 def test_git_log_since_latest_tag_uses_latest_tag_range(

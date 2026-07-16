@@ -139,7 +139,7 @@ def register(mcp: FastMCP) -> None:
                     target_group, new, config, dry_run=dry_run
                 )
 
-                effective_changelog_mode = bump_cmd.resolve_changelog_mode(config, None)
+                effective_changelog_mode = bump_cmd.resolve_changelog_mode(target_group, None)
                 bump_cmd.update_changelog(
                     bump_cmd.RrtConfig(
                         root=config.root,
