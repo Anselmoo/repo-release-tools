@@ -390,11 +390,11 @@ def apply_version(
     return changed
 
 
-def resolve_changelog_mode(config: RrtConfig, requested_mode: str | None) -> str:
+def resolve_changelog_mode(group: VersionGroup, requested_mode: str | None) -> str:
     """Resolve the changelog update mode from CLI input and workflow defaults."""
     if requested_mode is not None:
         return requested_mode
-    return "generate" if config.changelog_workflow == "squash" else "auto"
+    return "generate" if group.changelog_workflow == "squash" else "auto"
 
 
 def git_log_since_latest_tag(root: Path) -> list[str]:
@@ -652,7 +652,7 @@ def cmd_bump(args: argparse.Namespace) -> int:
     if not opts.no_changelog:
         p.section("Updating changelog")
         effective_changelog_mode = resolve_changelog_mode(
-            config,
+            group,
             opts.changelog_mode,
         )
         update_changelog(
