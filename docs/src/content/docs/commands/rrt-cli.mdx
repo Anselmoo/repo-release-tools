@@ -55,6 +55,7 @@ Repository Health
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   doctor     Validate the core automation wiring for the current repository.
   artifacts  Hash and verify generated files against a committed fingerprint lock.
+  fields     Check or sync a JSON field value that's duplicated as a copy across
   config     Inspect the resolved rrt configuration after discovery and auto-detection.
   env        Show environment variables and interpreter details that affect rrt behavior.
   eol        Check detected host runtimes and project minimum versions against end-of-life dates.
@@ -107,7 +108,7 @@ Each command group has its own reference page with the full argparse help.
 | Group | Commands | Reference |
 |---|---|---|
 | **Version & Release** | `bump`, `changelog`, `ci-version`, `release`, `sync`, `workspace`, `tag` | [Version & Release](/repo-release-tools/commands/version-release/) |
-| **Repository Health** | `doctor`, `artifacts`, `config`, `env`, `eol`, `toc`, `tree`, `docs`, `drift`, `folder` | [Repository Health](/repo-release-tools/commands/repo-health/) |
+| **Repository Health** | `doctor`, `artifacts`, `fields`, `config`, `env`, `eol`, `toc`, `tree`, `docs`, `drift`, `folder` | [Repository Health](/repo-release-tools/commands/repo-health/) |
 | **Git Workflow** | `branch`, `git` | [Git Workflow](/repo-release-tools/commands/git-workflow/) |
 | **CI & Automation** | `action` | [CI & Automation](/repo-release-tools/commands/ci-automation/) |
 | **Setup & Tooling** | `install`, `init`, `skill`, `agents`, `hooks` | [Setup & Tooling](/repo-release-tools/commands/setup-tooling/) |

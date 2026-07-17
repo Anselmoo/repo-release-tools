@@ -41,6 +41,8 @@ from .model import (
     DocsConfig,
     EolConfig,
     EolOverride,
+    FieldTarget,
+    FieldTargetEntry,
     FolderPolicyConfig,
     FolderRule,
     FolderScaffoldFile,
@@ -741,6 +743,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         docs=_load_docs_config(raw.get("docs"), root=root),
         folders=_load_folders_config(raw.get("folders")),
         artifact_targets=_load_artifact_targets(raw.get("artifact_targets", [])),
+        field_targets=_load_field_targets(raw.get("field_targets", [])),
         pin_target_missing=_load_pin_target_missing(raw.get("pin_target_missing")),
         primary_remote=_load_primary_remote(raw.get("primary_remote")),
         extra_commit_types=_load_extra_commit_types(raw.get("extra_commit_types", [])),
@@ -1227,6 +1230,58 @@ def _load_artifact_targets(raw_targets: object) -> list[ArtifactTarget]:
             description=description,
             command=cast("list[str]", fields["command"]),
             inputs=cast("list[str]", fields["inputs"]),
+        )
+        target.validate()
+        targets.append(target)
+    return targets
+
+
+_FIELD_TARGET_ENTRY_FIELDS = [
+    _str_field("path", "Each field_targets.targets entry must have a non-empty 'path' string"),
+    _str_field("field", "Each field_targets.targets entry must have a non-empty 'field' string"),
+]
+
+_FIELD_TARGET_FIELDS = [
+    _str_field("source", "Each field_targets entry must have a non-empty 'source' string"),
+    _str_field(
+        "source_field", "Each field_targets entry must have a non-empty 'source_field' string"
+    ),
+]
+
+
+def _load_field_target_entries(raw_entries: object) -> list[FieldTargetEntry]:
+    """Parse the ``targets`` list of a single ``field_targets`` entry."""
+    if not isinstance(raw_entries, list):
+        raise ValueError("field_targets.targets must be an array of tables")
+    entries: list[FieldTargetEntry] = []
+    for item in raw_entries:
+        if not isinstance(item, dict):
+            raise ValueError("Each field_targets.targets entry must be a table")
+        typed_item = cast("dict[str, object]", item)
+        fields = _walk_fields(typed_item, _FIELD_TARGET_ENTRY_FIELDS)
+        entry = FieldTargetEntry(
+            path=cast("str", fields["path"]),
+            field=cast("str", fields["field"]),
+        )
+        entry.validate()
+        entries.append(entry)
+    return entries
+
+
+def _load_field_targets(raw_targets: object) -> list[FieldTarget]:
+    """Parse a list of field_targets tables into ``FieldTarget`` objects."""
+    if not isinstance(raw_targets, list):
+        raise ValueError("field_targets must be an array of tables")
+    targets: list[FieldTarget] = []
+    for item in raw_targets:
+        if not isinstance(item, dict):
+            raise ValueError("Each field_targets entry must be a table")
+        typed_item = cast("dict[str, object]", item)
+        fields = _walk_fields(typed_item, _FIELD_TARGET_FIELDS)
+        target = FieldTarget(
+            source=cast("str", fields["source"]),
+            source_field=cast("str", fields["source_field"]),
+            targets=_load_field_target_entries(typed_item.get("targets", [])),
         )
         target.validate()
         targets.append(target)
