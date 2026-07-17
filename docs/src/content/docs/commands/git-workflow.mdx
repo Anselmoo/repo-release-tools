@@ -30,6 +30,7 @@ description: "Generated command reference for the Git Workflow command group."
   - [`rrt git rebootstrap`](#rrt-git-rebootstrap)
   - [`rrt git purge-cache`](#rrt-git-purge-cache)
   - [`rrt git publish-snapshot`](#rrt-git-publish-snapshot)
+  - [`rrt git backport-from-target`](#rrt-git-backport-from-target)
 {/* rrt:auto:end:toc */}
 
 ## `rrt branch`
@@ -248,7 +249,9 @@ summary first, followed by the details needed to act on the result.
 - **Publish**: `rrt git publish-snapshot` force-pushes a single-commit,
   no-history snapshot of tracked content to a secondary remote (e.g. a public
   mirror); `--exclude` drops specific paths (secrets, internal docs) from
-  that snapshot.
+  that snapshot. `rrt git backport-from-target` is the read-only counterpart:
+  it fetches a publish target and lists commits pending backport to the
+  primary, along with the exact commands to cherry-pick them manually.
 
 #### Responsibilities
 
@@ -290,26 +293,27 @@ Git workflow helpers for repository status, commit, sync, and history operations
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  status            Show a compact branch and worktree status view.
-  diff              Show a compact diff using rrt glyph formatting.
-  log               Show a compact commit history view.
-  doctor            Run a compact repository health report for rrt workflows.
-  sync-status       Analyze unresolved conflicts and whether sync/rebase work is needed.
-  check-dirty-tree  Exit non-zero when the working tree is dirty. Useful in hooks and CI.
-  commit            Create a conventional commit, inferring type from the current branch.
-  commit-all        Stage all files and create a conventional commit from the branch context.
-  squash-local      Squash local commits since upstream or a base ref into one commit.
-  sync              Fetch, stash if needed, and pull the current branch safely.
-  move              Switch branches safely by stashing and restoring local changes.
-  undo-safe         Undo a commit while keeping work staged or in the working tree.
-  rebootstrap       Destroy current git history and create a fresh repository history.
-  purge-cache       Expire reflogs and run git garbage collection.
-  publish-snapshot  Force-push a single-commit snapshot of tracked content to a secondary remote.
+  status                Show a compact branch and worktree status view.
+  diff                  Show a compact diff using rrt glyph formatting.
+  log                   Show a compact commit history view.
+  doctor                Run a compact repository health report for rrt workflows.
+  sync-status           Analyze unresolved conflicts and whether sync/rebase work is needed.
+  check-dirty-tree      Exit non-zero when the working tree is dirty. Useful in hooks and CI.
+  commit                Create a conventional commit, inferring type from the current branch.
+  commit-all            Stage all files and create a conventional commit from the branch context.
+  squash-local          Squash local commits since upstream or a base ref into one commit.
+  sync                  Fetch, stash if needed, and pull the current branch safely.
+  move                  Switch branches safely by stashing and restoring local changes.
+  undo-safe             Undo a commit while keeping work staged or in the working tree.
+  rebootstrap           Destroy current git history and create a fresh repository history.
+  purge-cache           Expire reflogs and run git garbage collection.
+  publish-snapshot      Force-push a single-commit snapshot of tracked content to a secondary remote.
+  backport-from-target  List commits pending backport from a publish-snapshot target.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help        Show this message and exit.
+  -h, --help            Show this message and exit.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -320,6 +324,7 @@ Examples
   $ rrt git sync
   $ rrt git undo-safe
   $ rrt git publish-snapshot --remote mirror --dry-run
+  $ rrt git backport-from-target demo
 ```
 
 ### `rrt git status`
@@ -715,4 +720,33 @@ Examples
   $ rrt git publish-snapshot demo --yes-i-know-this-overwrites-remote-history
   $ rrt git publish-snapshot --remote mirror --branch main --message "Initial commit" --yes-i-know-this-overwrites-remote-history
   $ rrt git publish-snapshot --remote mirror --exclude 'docs/internal/*' --dry-run
+```
+
+### `rrt git backport-from-target`
+
+```text
+Usage:  rrt git backport-from-target [OPTIONS] <target>
+
+Fetch a [tool.rrt.publish_targets.<name>] entry's remote/branch and list the commits present there but not on the primary's tracked branch, along with the exact git checkout -b / git cherry-pick commands to run next. Never cherry-picks, merges, or pushes on its own -- reviewing and landing a change that skipped the primary's own CI needs a human decision.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <target>        Named [tool.rrt.publish_targets.<name>] entry to resolve remote/branch from.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help      Show this message and exit.
+  --remote        Remote name or URL to fetch from. Overrides the target's configured remote.
+  --branch        Remote branch to fetch. Overrides the target's configured branch.
+  --base-ref REF  Primary-side ref to compare against. Defaults to the current branch.
+  --dry-run       Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git backport-from-target demo
+  $ rrt git backport-from-target demo --dry-run
+  $ rrt git backport-from-target demo --base-ref origin/main
 ```

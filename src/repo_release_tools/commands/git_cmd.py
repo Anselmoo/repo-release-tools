@@ -43,6 +43,14 @@ summary first, followed by the details needed to act on the result.
   fresh history snapshot or empty bootstrap commit.
 - `purge-cache` expires reflogs and runs `git gc` to reclaim local cache space.
 
+### Publish
+
+- `publish-snapshot` force-pushes a single-commit, no-history snapshot of tracked
+  content to a secondary remote (e.g. a public mirror).
+- `backport-from-target` is the read-only counterpart: it fetches a publish
+  target and lists commits present there but not on the primary, along with the
+  exact commands to cherry-pick them back manually.
+
 ## Behavior details
 
 - Commit subjects use conventional commit syntax with optional scope and
@@ -65,6 +73,7 @@ $ rrt git sync --dry-run
 $ rrt git squash-local --base-ref origin/main "ship parser"
 $ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
 $ rrt git purge-cache --dry-run
+$ rrt git backport-from-target demo
 ```
 
 ## Safety notes
@@ -81,6 +90,7 @@ from __future__ import annotations
 
 import argparse
 
+from repo_release_tools.commands.git_backport import register_backport
 from repo_release_tools.commands.git_commit import register_commit
 from repo_release_tools.commands.git_inspect import register_inspect
 from repo_release_tools.commands.git_sync import register_sync
@@ -91,7 +101,8 @@ GIT_EPILOG = (
     '  $ rrt git commit --type fix "make output clearer"\n'
     "  $ rrt git sync\n"
     "  $ rrt git undo-safe\n"
-    "  $ rrt git publish-snapshot --remote mirror --dry-run"
+    "  $ rrt git publish-snapshot --remote mirror --dry-run\n"
+    "  $ rrt git backport-from-target demo"
 )
 
 
@@ -112,3 +123,4 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     register_inspect(git_sub)
     register_commit(git_sub)
     register_sync(git_sub)
+    register_backport(git_sub)
