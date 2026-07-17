@@ -603,6 +603,65 @@ class TestCmdArtifactsCheckStaleness:
 
 
 # ---------------------------------------------------------------------------
+# cmd_artifacts --check with a target matching zero files (vacuous-pass guard)
+# ---------------------------------------------------------------------------
+
+
+class TestCmdArtifactsCheckZeroMatch:
+    """Tests for the zero-match/no-command drift guard in artifacts_lock_is_current."""
+
+    def test_check_strict_fails_on_zero_match_no_command(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        config = _make_config(tmp_path, targets=[{"path": "badges/*.svg"}])
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            cmd_artifacts(_make_args(snapshot=True))
+            rc = cmd_artifacts(_make_args(check=True, strict=True))
+        assert rc == 1
+        err = capsys.readouterr().err
+        assert "matched 0 files" in err
+
+    def test_check_advisory_warns_on_zero_match_no_command(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        config = _make_config(tmp_path, targets=[{"path": "badges/*.svg"}])
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            cmd_artifacts(_make_args(snapshot=True))
+            rc = cmd_artifacts(_make_args(check=True))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "matched 0 files" in out
+
+    def test_check_zero_match_with_command_configured_is_silent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        target = ArtifactTarget(path="badges/*.svg", description="", command=["true"], inputs=[])
+        config = _make_config(tmp_path, artifact_targets=[target])
+        monkeypatch.chdir(tmp_path)
+        with unittest.mock.patch(
+            "repo_release_tools.commands.artifacts_cmd.load_or_autodetect_config",
+            return_value=config,
+        ):
+            cmd_artifacts(_make_args(snapshot=True))
+            rc = cmd_artifacts(_make_args(check=True, strict=True))
+        assert rc == 0
+
+
+# ---------------------------------------------------------------------------
 # cmd_artifacts --dry-run validation
 # ---------------------------------------------------------------------------
 

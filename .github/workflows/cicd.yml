@@ -53,12 +53,6 @@ jobs:
         run: uv sync --all-groups
 
       - name: Ruff lint
-        # Skip rrt-artifacts-check here: badge SVGs are git-ignored and generated
-        # fresh, never committed. The dedicated "Snapshot drift checks" job below
-        # regenerates them before verifying artifact integrity, so running the gate
-        # in this job (without that regen step) would fail on a clean checkout.
-        env:
-          SKIP: rrt-artifacts-check
         run: uvx pre-commit run --all-files --show-diff-on-failure
 
   verify:

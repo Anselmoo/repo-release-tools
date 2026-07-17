@@ -27,7 +27,9 @@ summary first, followed by the details needed to act on the result.
 - **Publish**: `rrt git publish-snapshot` force-pushes a single-commit,
   no-history snapshot of tracked content to a secondary remote (e.g. a public
   mirror); `--exclude` drops specific paths (secrets, internal docs) from
-  that snapshot.
+  that snapshot. `rrt git backport-from-target` is the read-only counterpart:
+  it fetches a publish target and lists commits pending backport to the
+  primary, along with the exact commands to cherry-pick them manually.
 
 ## Responsibilities
 

@@ -489,8 +489,10 @@ def artifacts_lock_is_current(
     """Compare current artifact hashes against the artifacts lockfile.
 
     Drifts on: hash mismatch, file tracked in lock but now missing, file
-    matched by a target but not yet in the lock, or input files changed
-    since the lock was written.
+    matched by a target but not yet in the lock, input files changed since the
+    lock was written, or a target's glob matching zero files with no
+    ``command`` configured to generate them (otherwise ``--check --strict``
+    would vacuously pass over an empty integrity set).
 
     Returns ``(is_current, list_of_drift_messages)``.
     """
@@ -504,6 +506,7 @@ def artifacts_lock_is_current(
     for target in artifact_targets:
         pattern = str(target.get("path", ""))
         inputs_globs: list[str] = target.get("inputs", [])  # type: ignore[assignment]
+        command: list[str] = target.get("command", [])  # type: ignore[assignment]
 
         # Input-staleness check
         if inputs_globs:
@@ -521,9 +524,13 @@ def artifacts_lock_is_current(
                     f" (target: {pattern}) — run rrt artifacts --regenerate or --snapshot"
                 )
 
-        for matched in sorted(repo_root.glob(pattern)):
-            if not matched.is_file():
-                continue
+        matched_files = [m for m in sorted(repo_root.glob(pattern)) if m.is_file()]
+        if not matched_files and not command:
+            drifted.append(
+                f"Target matched 0 files and has no command configured to generate"
+                f" them (target: {pattern}) — nothing to verify"
+            )
+        for matched in matched_files:
             rel = str(matched.relative_to(repo_root))
             seen_paths.add(rel)
             locked = locked_files.get(rel)

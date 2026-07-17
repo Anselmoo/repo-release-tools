@@ -180,7 +180,7 @@
   language: python
   pass_filenames: false
   always_run: true
-  stages: [pre-commit, pre-push]
+  stages: [manual]
   minimum_pre_commit_version: "3.2.0"
 
 - id: rrt-artifacts-snapshot
