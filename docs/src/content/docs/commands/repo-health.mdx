@@ -303,14 +303,23 @@ source = "plugins/self-assess/.claude-plugin/plugin.json"
 source_field = "description"
 targets = [
   { path = ".claude-plugin/marketplace.json", field = "plugins[name=self-assess].description" },
+  { path = "README.md", anchor = "self-assess-description" },
 ]
 ```
 
 - `source` — relative path to the source-of-truth JSON file.
 - `source_field` — a path into the parsed source JSON (see "Field path
   syntax" below).
-- `targets` — a list of `{path, field}` write destinations. `path` is the
-  target JSON file; `field` uses the same path syntax as `source_field`.
+- `targets` — a list of write destinations, each setting exactly one of:
+  - `field` — a JSON target. `path` is the target JSON file; `field` uses
+    the same path syntax as `source_field`.
+  - `anchor` — a Markdown/MDX/RST target. `path` is the prose file; `anchor`
+    is the anchor id of an `<!-- rrt:auto:start:<id> -->` /
+    `{/* rrt:auto:start:<id> */}` / `.. rrt:auto:start:<id>` block already
+    present in that file (format auto-detected from the file extension, the
+    same primitive used by `rrt docs publish`/`inject` and `rrt tree
+    --inject`). A target file missing the anchor markers fails loudly
+    (exit 1) rather than being silently skipped.
 
 #### Field path syntax
 
@@ -347,10 +356,13 @@ rrt fields --list
 
 ### Caveats
 
-- Only JSON source/target files are supported in this first pass (TOML/YAML
-  sources are not handled).
-- A target field path must resolve to an existing key on an existing
+- Only JSON source files are supported in this first pass (TOML/YAML sources
+  are not handled). Targets may be JSON (`field`) or Markdown/MDX/RST
+  (`anchor`).
+- A `field` target path must resolve to an existing key on an existing
   object — `--sync` will not create new keys.
+- An `anchor` target file must already contain the matching anchor marker
+  pair; `--sync`/`--check` fail loudly rather than creating or skipping it.
 
 ```text
 Usage:  rrt fields [OPTIONS]

@@ -306,8 +306,22 @@ def test_field_target_entry_validate_escapes_root() -> None:
 
 
 def test_field_target_entry_validate_empty_field() -> None:
-    with pytest.raises(ValueError, match="non-empty string"):
+    with pytest.raises(ValueError, match="exactly one of 'field' or 'anchor'"):
         FieldTargetEntry(path="a.json", field="").validate()
+
+
+def test_field_target_entry_validate_neither_field_nor_anchor() -> None:
+    with pytest.raises(ValueError, match="exactly one of 'field' or 'anchor'"):
+        FieldTargetEntry(path="a.json").validate()
+
+
+def test_field_target_entry_validate_both_field_and_anchor() -> None:
+    with pytest.raises(ValueError, match="exactly one of 'field' or 'anchor'"):
+        FieldTargetEntry(path="a.json", field="x", anchor="y").validate()
+
+
+def test_field_target_entry_validate_anchor_only_ok() -> None:
+    FieldTargetEntry(path="README.md", anchor="self-assess-description").validate()
 
 
 def test_field_target_validate_ok() -> None:
@@ -768,3 +782,248 @@ def test_print_field_list_shows_error(tmp_path: Path, capsys: pytest.CaptureFixt
     _print_field_list([_simple_field_target()], tmp_path)
     captured = capsys.readouterr()
     assert "cannot read" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# anchor targets (#180)
+# ---------------------------------------------------------------------------
+
+_MD_ANCHOR_DOC = (
+    "# werkstoff\n"
+    "\n"
+    "<!-- rrt:auto:start:self-assess-description -->\n"
+    "old description\n"
+    "<!-- rrt:auto:end:self-assess-description -->\n"
+    "\n"
+    "trailing text\n"
+)
+
+_MDX_ANCHOR_DOC = (
+    "# werkstoff\n"
+    "\n"
+    "{/* rrt:auto:start:self-assess-description */}\n"
+    "old description\n"
+    "{/* rrt:auto:end:self-assess-description */}\n"
+    "\n"
+    "trailing text\n"
+)
+
+_RST_ANCHOR_DOC = (
+    "werkstoff\n"
+    "=========\n"
+    "\n"
+    ".. rrt:auto:start:self-assess-description\n"
+    "\n"
+    "old description\n"
+    "\n"
+    ".. rrt:auto:end:self-assess-description\n"
+    "\n"
+    "trailing text\n"
+)
+
+
+def _anchor_field_target(
+    *,
+    source: str = "plugin.json",
+    source_field: str = "description",
+    target_path: str = "README.md",
+    anchor: str = "self-assess-description",
+) -> FieldTarget:
+    return FieldTarget(
+        source=source,
+        source_field=source_field,
+        targets=[FieldTargetEntry(path=target_path, anchor=anchor)],
+    )
+
+
+@pytest.mark.parametrize(
+    ("doc", "filename"),
+    [
+        (_MD_ANCHOR_DOC, "README.md"),
+        (_MDX_ANCHOR_DOC, "README.mdx"),
+        (_RST_ANCHOR_DOC, "README.rst"),
+    ],
+)
+def test_compare_field_target_anchor_match(tmp_path: Path, doc: str, filename: str) -> None:
+    _write_json(tmp_path / "plugin.json", {"description": "old description"})
+    (tmp_path / filename).write_text(doc)
+    ft = _anchor_field_target(target_path=filename)
+    comparisons = _compare_field_target(ft, tmp_path)
+    assert len(comparisons) == 1
+    assert comparisons[0].matches
+    assert comparisons[0].target_label == "anchor:self-assess-description"
+
+
+def test_compare_field_target_anchor_mismatch(tmp_path: Path) -> None:
+    _write_json(tmp_path / "plugin.json", {"description": "new description"})
+    (tmp_path / "README.md").write_text(_MD_ANCHOR_DOC)
+    comparisons = _compare_field_target(_anchor_field_target(), tmp_path)
+    assert len(comparisons) == 1
+    assert not comparisons[0].matches
+    assert comparisons[0].error is None
+
+
+def test_compare_field_target_anchor_missing_markers_errors(tmp_path: Path) -> None:
+    _write_json(tmp_path / "plugin.json", {"description": "d"})
+    (tmp_path / "README.md").write_text("# no anchors here\n")
+    comparisons = _compare_field_target(_anchor_field_target(), tmp_path)
+    assert len(comparisons) == 1
+    assert comparisons[0].error is not None
+    assert "missing anchor markers" in comparisons[0].error
+
+
+def test_compare_field_target_anchor_missing_file_errors(tmp_path: Path) -> None:
+    _write_json(tmp_path / "plugin.json", {"description": "d"})
+    comparisons = _compare_field_target(_anchor_field_target(), tmp_path)
+    assert len(comparisons) == 1
+    assert comparisons[0].error is not None
+    assert "cannot read" in comparisons[0].error
+
+
+def test_compare_field_target_mixed_field_and_anchor_targets(tmp_path: Path) -> None:
+    _write_json(tmp_path / "plugin.json", {"description": "shared value"})
+    _write_json(
+        tmp_path / "marketplace.json",
+        {"plugins": [{"name": "self-assess", "description": "shared value"}]},
+    )
+    (tmp_path / "README.md").write_text(_MD_ANCHOR_DOC.replace("old description", "shared value"))
+    ft = FieldTarget(
+        source="plugin.json",
+        source_field="description",
+        targets=[
+            FieldTargetEntry(
+                path="marketplace.json", field="plugins[name=self-assess].description"
+            ),
+            FieldTargetEntry(path="README.md", anchor="self-assess-description"),
+        ],
+    )
+    comparisons = _compare_field_target(ft, tmp_path)
+    assert len(comparisons) == 2
+    assert all(c.matches for c in comparisons)
+
+
+def test_compare_field_target_mixed_source_error_propagates_to_both(tmp_path: Path) -> None:
+    # plugin.json missing entirely -> source_error should apply to every target.
+    ft = FieldTarget(
+        source="plugin.json",
+        source_field="description",
+        targets=[
+            FieldTargetEntry(
+                path="marketplace.json", field="plugins[name=self-assess].description"
+            ),
+            FieldTargetEntry(path="README.md", anchor="self-assess-description"),
+        ],
+    )
+    comparisons = _compare_field_target(ft, tmp_path)
+    assert len(comparisons) == 2
+    assert all(c.error is not None for c in comparisons)
+    assert comparisons[0].error == comparisons[1].error
+
+
+def test_check_anchor_advisory_warns_on_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write_json(tmp_path / "plugin.json", {"description": "new description"})
+    (tmp_path / "README.md").write_text(_MD_ANCHOR_DOC)
+    config = _make_config(tmp_path, field_targets=[_anchor_field_target()])
+    with patch(
+        "repo_release_tools.commands.fields_cmd.load_or_autodetect_config", return_value=config
+    ):
+        rc = cmd_fields(_make_args(check=True))
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "mismatch" in captured.err.lower() or "advisory" in captured.out.lower()
+
+
+def test_check_anchor_strict_missing_markers_exits_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write_json(tmp_path / "plugin.json", {"description": "d"})
+    (tmp_path / "README.md").write_text("# no anchors here\n")
+    config = _make_config(tmp_path, field_targets=[_anchor_field_target()])
+    with patch(
+        "repo_release_tools.commands.fields_cmd.load_or_autodetect_config", return_value=config
+    ):
+        rc = cmd_fields(_make_args(check=True, strict=True))
+    assert rc == 1
+
+
+def test_sync_writes_anchor_block_preserving_surrounding_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write_json(tmp_path / "plugin.json", {"description": "brand new description"})
+    (tmp_path / "README.md").write_text(_MD_ANCHOR_DOC)
+    config = _make_config(tmp_path, field_targets=[_anchor_field_target()])
+    with patch(
+        "repo_release_tools.commands.fields_cmd.load_or_autodetect_config", return_value=config
+    ):
+        rc = cmd_fields(_make_args(sync=True))
+    assert rc == 0
+    updated = (tmp_path / "README.md").read_text()
+    assert "brand new description" in updated
+    assert "old description" not in updated
+    assert "# werkstoff" in updated
+    assert "trailing text" in updated
+
+
+def test_sync_anchor_dry_run_does_not_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write_json(tmp_path / "plugin.json", {"description": "brand new description"})
+    (tmp_path / "README.md").write_text(_MD_ANCHOR_DOC)
+    original_text = (tmp_path / "README.md").read_text()
+    config = _make_config(tmp_path, field_targets=[_anchor_field_target()])
+    with patch(
+        "repo_release_tools.commands.fields_cmd.load_or_autodetect_config", return_value=config
+    ):
+        rc = cmd_fields(_make_args(sync=True, dry_run=True))
+    assert rc == 0
+    assert (tmp_path / "README.md").read_text() == original_text
+
+
+def test_sync_anchor_missing_markers_fails_loudly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write_json(tmp_path / "plugin.json", {"description": "d"})
+    (tmp_path / "README.md").write_text("# no anchors here\n")
+    config = _make_config(tmp_path, field_targets=[_anchor_field_target()])
+    with patch(
+        "repo_release_tools.commands.fields_cmd.load_or_autodetect_config", return_value=config
+    ):
+        rc = cmd_fields(_make_args(sync=True))
+    assert rc == 1
+
+
+def test_sync_anchor_missing_file_returns_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write_json(tmp_path / "plugin.json", {"description": "d"})
+    config = _make_config(tmp_path, field_targets=[_anchor_field_target()])
+    with patch(
+        "repo_release_tools.commands.fields_cmd.load_or_autodetect_config", return_value=config
+    ):
+        rc = cmd_fields(_make_args(sync=True))
+    assert rc == 1
+
+
+def test_list_anchor_shows_match(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _write_json(tmp_path / "plugin.json", {"description": "same"})
+    (tmp_path / "README.md").write_text(_MD_ANCHOR_DOC.replace("old description", "same"))
+    _print_field_list([_anchor_field_target()], tmp_path)
+    captured = capsys.readouterr()
+    assert "✓" in captured.out
+    assert "anchor:self-assess-description" in captured.out
+
+
+def test_list_anchor_shows_mismatch(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _write_json(tmp_path / "plugin.json", {"description": "new"})
+    (tmp_path / "README.md").write_text(_MD_ANCHOR_DOC)
+    _print_field_list([_anchor_field_target()], tmp_path)
+    captured = capsys.readouterr()
+    assert "MISMATCH" in captured.out

@@ -78,6 +78,32 @@ GIT_DOC = (
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", GIT_DOC),)
 
 
+def _failure_detail(stdout: str, stderr: str) -> str:
+    """Pick the actionable reason from a failed command's captured output.
+
+    Pre-commit's hook summary lines end in "...Passed" or "...Failed"; naively
+    taking the last output line breaks when a later hook happens to pass after
+    an earlier one failed, surfacing the wrong line as the reason. Scan
+    backward through stderr, then stdout, for the last line ending in
+    "Failed" and return it plus any detail lines pre-commit prints
+    immediately after (e.g. "- files were modified by this hook") up to the
+    next blank line. Fall back to the plain last line of either stream if no
+    such marker is found, so a caller still sees *something*.
+    """
+    for text in (stderr, stdout):
+        lines = text.strip().splitlines()
+        for idx in range(len(lines) - 1, -1, -1):
+            if lines[idx].rstrip().endswith("Failed"):
+                detail_lines = [lines[idx]]
+                for follow in lines[idx + 1 :]:
+                    if not follow.strip():
+                        break
+                    detail_lines.append(follow.strip())
+                return " ".join(detail_lines)
+    tail = stderr.strip().splitlines() or stdout.strip().splitlines()
+    return tail[-1] if tail else ""
+
+
 def run(
     cmd: list[str],
     cwd: Path,
@@ -110,12 +136,8 @@ def run(
         if result.stderr.strip():
             for line in result.stderr.strip().splitlines():
                 p.warn(line, stream=None)
-        # The last stderr line is usually the actionable one (e.g. a
-        # pre-commit hook's summary starts with a generic "<hook>...Failed"
-        # header and ends with the specific reason, like "- files were
-        # modified by this hook").
-        last_err = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
-        detail = f": {last_err}" if last_err else ""
+        detail_text = _failure_detail(result.stdout, result.stderr)
+        detail = f": {detail_text}" if detail_text else ""
         raise RuntimeError(f"{label} failed (exit {result.returncode}){detail}")
     if result.stdout.strip():
         p = VerbosePrinter()
@@ -147,7 +169,9 @@ def capture_checked(cmd: list[str], cwd: Path) -> str:
     )
     if result.returncode != 0:
         label = " ".join(cmd)
-        raise RuntimeError(f"{label} failed (exit {result.returncode})")
+        detail_text = _failure_detail(result.stdout, result.stderr)
+        detail = f": {detail_text}" if detail_text else ""
+        raise RuntimeError(f"{label} failed (exit {result.returncode}){detail}")
     return result.stdout.strip()
 
 

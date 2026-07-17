@@ -1238,7 +1238,8 @@ def _load_artifact_targets(raw_targets: object) -> list[ArtifactTarget]:
 
 _FIELD_TARGET_ENTRY_FIELDS = [
     _str_field("path", "Each field_targets.targets entry must have a non-empty 'path' string"),
-    _str_field("field", "Each field_targets.targets entry must have a non-empty 'field' string"),
+    _opt_str_field("field", "field_targets.targets.field must be a string when provided"),
+    _opt_str_field("anchor", "field_targets.targets.anchor must be a string when provided"),
 ]
 
 _FIELD_TARGET_FIELDS = [
@@ -1261,7 +1262,8 @@ def _load_field_target_entries(raw_entries: object) -> list[FieldTargetEntry]:
         fields = _walk_fields(typed_item, _FIELD_TARGET_ENTRY_FIELDS)
         entry = FieldTargetEntry(
             path=cast("str", fields["path"]),
-            field=cast("str", fields["field"]),
+            field=cast("str | None", fields["field"]),
+            anchor=cast("str | None", fields["anchor"]),
         )
         entry.validate()
         entries.append(entry)

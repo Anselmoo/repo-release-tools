@@ -177,23 +177,10 @@ def ensure_anchor_stub(
         path.write_text(updated, encoding="utf-8")
 
 
-def replace_anchored_block(
-    existing: str, *, anchor_id: str, content: str, fmt: str = "md"
-) -> str | None:
-    """Replace the body between matching anchor markers in *existing*.
+def _find_anchor_bounds(lines: list[str], *, anchor_id: str, fmt: str) -> tuple[int, int] | None:
+    """Return the (start_idx, end_idx) of the anchor marker lines in *lines*.
 
-    Args:
-        existing: Full text of the target file.
-        anchor_id: The anchor identifier, e.g. ``"project-tree"``.  Must match
-            ``[A-Za-z0-9][A-Za-z0-9._-]*``.
-        content: New content to place between the markers. Trailing newline is
-            normalised automatically.
-        fmt: ``'md'`` for Markdown HTML-comment anchors (default), ``'rst'`` for
-            reStructuredText comment anchors, ``'mdx'`` for MDX JSX-comment anchors.
-
-    Returns:
-        Updated file text with the block replaced, or ``None`` when the start
-        marker for *anchor_id* is not found in *existing*.
+    Returns ``None`` when the start marker for *anchor_id* is absent.
 
     Raises:
         ValueError: When *anchor_id* is invalid, or when the start marker is
@@ -201,8 +188,6 @@ def replace_anchored_block(
     """
     if not _ANCHOR_ID_RE.fullmatch(anchor_id):
         raise ValueError(f"Invalid anchor id: {anchor_id!r}")
-
-    lines = existing.splitlines(keepends=True)
 
     if fmt == "rst":
         start_re = _anchor_rst_pattern(RST_ANCHOR_START_TOKEN, anchor_id)
@@ -234,6 +219,63 @@ def replace_anchored_block(
     )
     if end_idx is None:
         raise ValueError(f"Missing end anchor for {anchor_id!r} ({end_token_display})")
+
+    return start_idx, end_idx
+
+
+def extract_anchored_block(existing: str, *, anchor_id: str, fmt: str = "md") -> str | None:
+    """Return the body between matching anchor markers in *existing*.
+
+    Args:
+        existing: Full text of the target file.
+        anchor_id: The anchor identifier, e.g. ``"project-tree"``.  Must match
+            ``[A-Za-z0-9][A-Za-z0-9._-]*``.
+        fmt: ``'md'`` for Markdown HTML-comment anchors (default), ``'rst'`` for
+            reStructuredText comment anchors, ``'mdx'`` for MDX JSX-comment anchors.
+
+    Returns:
+        The text strictly between the start and end marker lines, or ``None``
+        when the start marker for *anchor_id* is not found in *existing*.
+
+    Raises:
+        ValueError: When *anchor_id* is invalid, or when the start marker is
+            present but the end marker is absent.
+    """
+    lines = existing.splitlines(keepends=True)
+    bounds = _find_anchor_bounds(lines, anchor_id=anchor_id, fmt=fmt)
+    if bounds is None:
+        return None
+    start_idx, end_idx = bounds
+    return "".join(lines[start_idx + 1 : end_idx])
+
+
+def replace_anchored_block(
+    existing: str, *, anchor_id: str, content: str, fmt: str = "md"
+) -> str | None:
+    """Replace the body between matching anchor markers in *existing*.
+
+    Args:
+        existing: Full text of the target file.
+        anchor_id: The anchor identifier, e.g. ``"project-tree"``.  Must match
+            ``[A-Za-z0-9][A-Za-z0-9._-]*``.
+        content: New content to place between the markers. Trailing newline is
+            normalised automatically.
+        fmt: ``'md'`` for Markdown HTML-comment anchors (default), ``'rst'`` for
+            reStructuredText comment anchors, ``'mdx'`` for MDX JSX-comment anchors.
+
+    Returns:
+        Updated file text with the block replaced, or ``None`` when the start
+        marker for *anchor_id* is not found in *existing*.
+
+    Raises:
+        ValueError: When *anchor_id* is invalid, or when the start marker is
+            present but the end marker is absent.
+    """
+    lines = existing.splitlines(keepends=True)
+    bounds = _find_anchor_bounds(lines, anchor_id=anchor_id, fmt=fmt)
+    if bounds is None:
+        return None
+    start_idx, end_idx = bounds
 
     block = content.rstrip("\n")
     body = f"{block}\n" if block else ""
