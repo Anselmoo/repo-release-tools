@@ -25,6 +25,7 @@ from repo_release_tools.commands import (
     drift_cmd,
     env_cmd,
     eol_check,
+    fields_cmd,
     folder,
     git_cmd,
     hooks_cmd,
@@ -115,6 +116,7 @@ COMMAND_GROUPS: dict[str, list[str]] = {
     "Repository Health": [
         "doctor",
         "artifacts",
+        "fields",
         "config",
         "env",
         "eol",
@@ -178,6 +180,7 @@ COMMAND_REGISTRARS = (
     drift_cmd.register,
     env_cmd.register,
     eol_check.register,
+    fields_cmd.register,
     folder.register,
     git_cmd.register,
     hooks_cmd.register,

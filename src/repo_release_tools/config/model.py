@@ -359,6 +359,58 @@ class ArtifactTarget:
 
 
 @dataclass(frozen=True)
+class FieldTargetEntry:
+    """A single ``{path, field}`` write destination inside a ``FieldTarget``."""
+
+    path: str
+    field: str
+
+    def validate(self) -> None:
+        """Validate the target entry."""
+        if not self.path:
+            raise ValueError("field_targets.targets.path must be a non-empty string")
+        if Path(self.path).is_absolute():
+            raise ValueError("field_targets.targets.path must be a relative path")
+        if ".." in Path(self.path).parts:
+            raise ValueError(
+                "field_targets.targets.path must not escape the repo root (no '..' components)"
+            )
+        if not self.field:
+            raise ValueError("field_targets.targets.field must be a non-empty string")
+
+
+@dataclass(frozen=True)
+class FieldTarget:
+    """A field-level manifest sync mapping: one source field, one or more target fields.
+
+    Unlike :class:`ArtifactTarget`, there is no lockfile — ``source`` is itself
+    a git-tracked file, so ``rrt fields --check`` always compares the live
+    source field against each live target field directly.
+    """
+
+    source: str
+    source_field: str
+    targets: list[FieldTargetEntry] = field(default_factory=list)
+
+    def validate(self) -> None:
+        """Validate field target configuration."""
+        if not self.source:
+            raise ValueError("field_targets.source must be a non-empty string")
+        if Path(self.source).is_absolute():
+            raise ValueError("field_targets.source must be a relative path")
+        if ".." in Path(self.source).parts:
+            raise ValueError(
+                "field_targets.source must not escape the repo root (no '..' components)"
+            )
+        if not self.source_field:
+            raise ValueError("field_targets.source_field must be a non-empty string")
+        if not self.targets:
+            raise ValueError("field_targets entries must define at least one target")
+        for target in self.targets:
+            target.validate()
+
+
+@dataclass(frozen=True)
 class PublishTarget:
     """A named publish-snapshot destination: remote, branch, and commit message."""
 
@@ -733,6 +785,7 @@ class RrtConfig:
     docs: DocsConfig | None = None
     folders: FolderPolicyConfig | None = None
     artifact_targets: list[ArtifactTarget] = field(default_factory=list)
+    field_targets: list[FieldTarget] = field(default_factory=list)
     pin_target_missing: str = "error"
     extra_commit_types: tuple[str, ...] = ()
     extra_section_map: dict[str, str] = field(default_factory=dict)

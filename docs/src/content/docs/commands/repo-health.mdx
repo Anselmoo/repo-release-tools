@@ -21,54 +21,60 @@ description: "Generated command reference for the Repository Health command grou
   - [Configuration](#configuration)
   - [Subcommands](#subcommands)
   - [Examples](#examples-1)
-- [`rrt config`](#rrt-config)
+- [`rrt fields`](#rrt-fields)
   - [Overview](#overview-2)
+  - [Configuration](#configuration-1)
+  - [Subcommands](#subcommands-1)
+  - [Examples](#examples-2)
+  - [Caveats](#caveats-1)
+- [`rrt config`](#rrt-config)
+  - [Overview](#overview-3)
   - [What the command reports](#what-the-command-reports)
   - [Raw mode](#raw-mode)
   - [Validate mode](#validate-mode)
   - [Schema mode](#schema-mode)
   - [Failure behavior](#failure-behavior)
-  - [Examples](#examples-2)
-  - [Caveats](#caveats-1)
-- [`rrt env`](#rrt-env)
-  - [Overview](#overview-3)
-  - [What it reports](#what-it-reports)
-  - [JSON mode](#json-mode)
   - [Examples](#examples-3)
   - [Caveats](#caveats-2)
+- [`rrt env`](#rrt-env)
+  - [Overview](#overview-4)
+  - [What it reports](#what-it-reports)
+  - [JSON mode](#json-mode)
+  - [Examples](#examples-4)
+  - [Caveats](#caveats-3)
   - [`rrt env check`](#rrt-env-check)
 - [`rrt eol`](#rrt-eol)
-  - [Overview](#overview-4)
+  - [Overview](#overview-5)
   - [What the command checks](#what-the-command-checks)
   - [Data sources](#data-sources)
   - [Policy behavior](#policy-behavior)
   - [Output](#output)
-  - [Examples](#examples-4)
-  - [Caveats](#caveats-3)
+  - [Examples](#examples-5)
+  - [Caveats](#caveats-4)
   - [`rrt eol check`](#rrt-eol-check)
 - [`rrt toc`](#rrt-toc)
-  - [Overview](#overview-5)
+  - [Overview](#overview-6)
   - [Usage](#usage)
   - [Anchors](#anchors)
   - [Options](#options)
 - [`rrt tree`](#rrt-tree)
-  - [Overview](#overview-6)
+  - [Overview](#overview-7)
   - [Ignore behavior](#ignore-behavior)
   - [Output formats](#output-formats)
   - [Common options](#common-options)
   - [Failure behavior](#failure-behavior-1)
-  - [Examples](#examples-5)
+  - [Examples](#examples-6)
   - [Embedding a tree into a Markdown file](#embedding-a-tree-into-a-markdown-file)
-  - [Caveats](#caveats-4)
+  - [Caveats](#caveats-5)
   - [Related docs](#related-docs-1)
 - [`rrt docs`](#rrt-docs)
-  - [Overview](#overview-7)
+  - [Overview](#overview-8)
   - [Responsibilities](#responsibilities)
   - [Sub-actions](#sub-actions)
   - [Extraction modes](#extraction-modes)
   - [Supported languages](#supported-languages)
   - [Lockfile](#lockfile)
-  - [Examples](#examples-6)
+  - [Examples](#examples-7)
   - [Related docs](#related-docs-2)
   - [`rrt docs generate`](#rrt-docs-generate)
   - [`rrt docs check`](#rrt-docs-check)
@@ -79,12 +85,12 @@ description: "Generated command reference for the Repository Health command grou
   - [`rrt docs api`](#rrt-docs-api)
   - [`rrt docs map`](#rrt-docs-map)
 - [`rrt drift`](#rrt-drift)
-  - [Overview](#overview-8)
+  - [Overview](#overview-9)
   - [Responsibilities](#responsibilities-1)
   - [Tracked Surfaces](#tracked-surfaces)
   - [Behavior](#behavior)
-  - [Examples](#examples-7)
-  - [Caveats](#caveats-5)
+  - [Examples](#examples-8)
+  - [Caveats](#caveats-6)
   - [`rrt drift generate`](#rrt-drift-generate)
   - [`rrt drift check`](#rrt-drift-check)
 - [`rrt folder`](#rrt-folder)
@@ -265,6 +271,115 @@ Examples
   $ rrt artifacts --snapshot
   $ rrt artifacts --check --strict
   $ rrt artifacts --list
+```
+
+## `rrt fields`
+
+Field-level manifest sync for values duplicated across independent JSON files.
+
+### Overview
+
+`rrt fields` keeps a single logical fact — a value embedded in more than one
+JSON manifest — from silently drifting. The motivating case: a Claude Code
+plugin marketplace's root `.claude-plugin/marketplace.json` lists each
+plugin's `description`, copied by hand from that plugin's own
+`plugin.json`. Nothing catches it when the two copies diverge.
+
+This is the same shape of problem `rrt artifacts` and `rrt drift` already
+solve — a sensitive value silently drifting from its source of truth — but
+at individual JSON field granularity rather than whole-file content hash.
+
+Unlike `rrt artifacts`, **there is no lockfile**. The source of truth is
+itself a git-tracked file, so `--check` always compares the live source
+field against each live target field directly, on every run.
+
+### Configuration
+
+Add `[[tool.rrt.field_targets]]` entries to `pyproject.toml` (or `.rrt.toml`):
+
+```toml
+[[tool.rrt.field_targets]]
+source = "plugins/self-assess/.claude-plugin/plugin.json"
+source_field = "description"
+targets = [
+  { path = ".claude-plugin/marketplace.json", field = "plugins[name=self-assess].description" },
+]
+```
+
+- `source` — relative path to the source-of-truth JSON file.
+- `source_field` — a path into the parsed source JSON (see "Field path
+  syntax" below).
+- `targets` — a list of `{path, field}` write destinations. `path` is the
+  target JSON file; `field` uses the same path syntax as `source_field`.
+
+#### Field path syntax
+
+Only two forms are supported, deliberately — this is a hand-rolled stdlib
+resolver, not a general JSONPath/JMESPath engine (no new runtime
+dependency is taken on for it):
+
+- Dotted keys for nested objects: `author.name`
+- One bracket-filter form, for selecting an array element by a matching
+  field: `arrayKey[matchField=matchValue]` — selects the element of the
+  array at `arrayKey` whose `matchField` equals `matchValue`. Chainable
+  with further dotted segments, e.g. `plugins[name=self-assess].description`.
+
+### Subcommands
+
+- `--check` — resolve the source field and each target field, compare.
+  Advisory by default (warns on mismatch, exits 0); `--strict` makes any
+  mismatch exit 1 (for CI gates).
+- `--sync` — overwrite each target field with the current source field
+  value, in place, preserving the target file's existing key order and
+  formatting (a value-only edit). Supports `--dry-run`.
+- `--list` — show every configured `(source_field -> target.field)`
+  mapping with its current match/mismatch status.
+
+### Examples
+
+```bash
+rrt fields --check
+rrt fields --check --strict
+rrt fields --sync --dry-run
+rrt fields --sync
+rrt fields --list
+```
+
+### Caveats
+
+- Only JSON source/target files are supported in this first pass (TOML/YAML
+  sources are not handled).
+- A target field path must resolve to an existing key on an existing
+  object — `--sync` will not create new keys.
+
+```text
+Usage:  rrt fields [OPTIONS]
+
+Check or sync a JSON field value that's duplicated as a copy across
+one or more other JSON files. No lockfile — the source file is the
+source of truth, compared live on every run.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --check     Compare each target field against its source field. Advisory by default.
+  --sync      Write each target field to match its current source field value.
+  --list      Display all configured field mappings and their current match status.
+  --dry-run   Show what --sync would do without writing any files.
+  --strict    With --check: exit 1 on any field mismatch (for CI gates).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt fields --check
+  $ rrt fields --check --strict
+  $ rrt fields --sync --dry-run
+  $ rrt fields --list
 ```
 
 ## `rrt config`

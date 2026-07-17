@@ -3710,6 +3710,166 @@ def test_load_artifact_targets_bad_inputs_empty_string() -> None:
 
 
 # ---------------------------------------------------------------------------
+# FieldTarget / FieldTargetEntry — config parsing
+# ---------------------------------------------------------------------------
+
+
+def test_load_field_targets_parses_valid_entry() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    result = _load_field_targets(
+        [
+            {
+                "source": "plugin.json",
+                "source_field": "description",
+                "targets": [
+                    {
+                        "path": "marketplace.json",
+                        "field": "plugins[name=self-assess].description",
+                    }
+                ],
+            }
+        ]
+    )
+    assert len(result) == 1
+    assert result[0].source == "plugin.json"
+    assert result[0].source_field == "description"
+    assert len(result[0].targets) == 1
+    assert result[0].targets[0].path == "marketplace.json"
+    assert result[0].targets[0].field == "plugins[name=self-assess].description"
+
+
+def test_load_field_targets_not_a_list() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    with pytest.raises(ValueError, match="array"):
+        _load_field_targets("not-a-list")
+
+
+def test_load_field_targets_item_not_dict() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    with pytest.raises(ValueError, match="table"):
+        _load_field_targets(["not-a-dict"])
+
+
+def test_load_field_targets_missing_source() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    with pytest.raises(ValueError, match="non-empty 'source'"):
+        _load_field_targets([{"source_field": "description", "targets": []}])
+
+
+def test_load_field_targets_missing_source_field() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    with pytest.raises(ValueError, match="non-empty 'source_field'"):
+        _load_field_targets([{"source": "plugin.json", "targets": []}])
+
+
+def test_load_field_targets_no_targets_raises() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    with pytest.raises(ValueError, match="at least one target"):
+        _load_field_targets(
+            [{"source": "plugin.json", "source_field": "description", "targets": []}]
+        )
+
+
+def test_load_field_targets_default_targets_empty_list() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    with pytest.raises(ValueError, match="at least one target"):
+        _load_field_targets([{"source": "plugin.json", "source_field": "description"}])
+
+
+def test_load_field_targets_source_escapes_root() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    with pytest.raises(ValueError, match="escape"):
+        _load_field_targets(
+            [
+                {
+                    "source": "../plugin.json",
+                    "source_field": "description",
+                    "targets": [{"path": "marketplace.json", "field": "description"}],
+                }
+            ]
+        )
+
+
+def test_load_field_target_entries_not_a_list() -> None:
+    from repo_release_tools.config.core import _load_field_target_entries
+
+    with pytest.raises(ValueError, match="array"):
+        _load_field_target_entries("not-a-list")
+
+
+def test_load_field_target_entries_item_not_dict() -> None:
+    from repo_release_tools.config.core import _load_field_target_entries
+
+    with pytest.raises(ValueError, match="table"):
+        _load_field_target_entries(["not-a-dict"])
+
+
+def test_load_field_target_entries_missing_path() -> None:
+    from repo_release_tools.config.core import _load_field_target_entries
+
+    with pytest.raises(ValueError, match="non-empty 'path'"):
+        _load_field_target_entries([{"field": "description"}])
+
+
+def test_load_field_target_entries_missing_field() -> None:
+    from repo_release_tools.config.core import _load_field_target_entries
+
+    with pytest.raises(ValueError, match="non-empty 'field'"):
+        _load_field_target_entries([{"path": "marketplace.json"}])
+
+
+def test_load_field_targets_target_escapes_root() -> None:
+    from repo_release_tools.config.core import _load_field_targets
+
+    with pytest.raises(ValueError, match="escape"):
+        _load_field_targets(
+            [
+                {
+                    "source": "plugin.json",
+                    "source_field": "description",
+                    "targets": [{"path": "../marketplace.json", "field": "description"}],
+                }
+            ]
+        )
+
+
+def test_load_config_parses_field_targets_end_to_end(tmp_path: Path) -> None:
+    from repo_release_tools.config.core import load_config
+
+    (tmp_path / "plugin.json").write_text('{"description": "hi"}\n')
+    (tmp_path / "marketplace.json").write_text(
+        '{"plugins": [{"name": "self-assess", "description": "old"}]}\n'
+    )
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "demo"\nversion = "0.1.0"\n\n'
+        "[tool.rrt]\n"
+        'release_branch = "release/v{version}"\n\n'
+        "[[tool.rrt.version_targets]]\n"
+        'path = "pyproject.toml"\n'
+        'kind = "pep621"\n\n'
+        "[[tool.rrt.field_targets]]\n"
+        'source = "plugin.json"\n'
+        'source_field = "description"\n'
+        "targets = [\n"
+        '  { path = "marketplace.json", field = "plugins[name=self-assess].description" },\n'
+        "]\n"
+    )
+    config = load_config(tmp_path)
+    assert len(config.field_targets) == 1
+    assert config.field_targets[0].source == "plugin.json"
+    assert config.field_targets[0].targets[0].field == "plugins[name=self-assess].description"
+
+
+# ---------------------------------------------------------------------------
 # PublishTarget — config parsing
 # ---------------------------------------------------------------------------
 
