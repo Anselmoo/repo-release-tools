@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [1.14.0] - 2026-07-17
+
+### Added
+- enhance project configuration options
+- add rrt fields command for field-level manifest sync (#179)
+
 ## [1.13.1] - 2026-07-16
 
 ### Fixed
