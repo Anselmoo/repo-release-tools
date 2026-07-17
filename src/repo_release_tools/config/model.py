@@ -360,10 +360,14 @@ class ArtifactTarget:
 
 @dataclass(frozen=True)
 class FieldTargetEntry:
-    """A single ``{path, field}`` write destination inside a ``FieldTarget``."""
+    """A single write destination inside a ``FieldTarget``.
+
+    Either a JSON ``field`` or a prose ``anchor`` block, never both.
+    """
 
     path: str
-    field: str
+    field: str | None = None
+    anchor: str | None = None
 
     def validate(self) -> None:
         """Validate the target entry."""
@@ -375,8 +379,10 @@ class FieldTargetEntry:
             raise ValueError(
                 "field_targets.targets.path must not escape the repo root (no '..' components)"
             )
-        if not self.field:
-            raise ValueError("field_targets.targets.field must be a non-empty string")
+        if bool(self.field) == bool(self.anchor):
+            raise ValueError(
+                "field_targets.targets entries must set exactly one of 'field' or 'anchor'"
+            )
 
 
 @dataclass(frozen=True)

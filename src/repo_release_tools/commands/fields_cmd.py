@@ -26,14 +26,23 @@ source = "plugins/self-assess/.claude-plugin/plugin.json"
 source_field = "description"
 targets = [
   { path = ".claude-plugin/marketplace.json", field = "plugins[name=self-assess].description" },
+  { path = "README.md", anchor = "self-assess-description" },
 ]
 ```
 
 - `source` — relative path to the source-of-truth JSON file.
 - `source_field` — a path into the parsed source JSON (see "Field path
   syntax" below).
-- `targets` — a list of `{path, field}` write destinations. `path` is the
-  target JSON file; `field` uses the same path syntax as `source_field`.
+- `targets` — a list of write destinations, each setting exactly one of:
+  - `field` — a JSON target. `path` is the target JSON file; `field` uses
+    the same path syntax as `source_field`.
+  - `anchor` — a Markdown/MDX/RST target. `path` is the prose file; `anchor`
+    is the anchor id of an `<!-- rrt:auto:start:<id> -->` /
+    `{/* rrt:auto:start:<id> */}` / `.. rrt:auto:start:<id>` block already
+    present in that file (format auto-detected from the file extension, the
+    same primitive used by `rrt docs publish`/`inject` and `rrt tree
+    --inject`). A target file missing the anchor markers fails loudly
+    (exit 1) rather than being silently skipped.
 
 ### Field path syntax
 
@@ -70,10 +79,13 @@ rrt fields --list
 
 ## Caveats
 
-- Only JSON source/target files are supported in this first pass (TOML/YAML
-  sources are not handled).
-- A target field path must resolve to an existing key on an existing
+- Only JSON source files are supported in this first pass (TOML/YAML sources
+  are not handled). Targets may be JSON (`field`) or Markdown/MDX/RST
+  (`anchor`).
+- A `field` target path must resolve to an existing key on an existing
   object — `--sync` will not create new keys.
+- An `anchor` target file must already contain the matching anchor marker
+  pair; `--sync`/`--check` fail loudly rather than creating or skipping it.
 """
 
 from __future__ import annotations
@@ -91,7 +103,12 @@ from repo_release_tools.config import (
     find_repo_root,
     load_or_autodetect_config,
 )
-from repo_release_tools.config.model import FieldTarget
+from repo_release_tools.config.model import FieldTarget, FieldTargetEntry
+from repo_release_tools.tools.inject import (
+    _detect_inject_format,
+    extract_anchored_block,
+    replace_anchored_block,
+)
 from repo_release_tools.ui import (
     DryRunPrinter,
     VerbosePrinter,
@@ -215,22 +232,45 @@ def _write_json_file(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def _read_text_file(path: Path) -> str:
+    """Read a target file's raw text, raising ``FieldPathError`` on failure."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise FieldPathError(f"cannot read {path}: {exc}") from exc
+
+
+def _target_label(entry: FieldTargetEntry) -> str:
+    """Return a human-readable label for a target entry: its field path or anchor id."""
+    if entry.anchor is not None:
+        return f"anchor:{entry.anchor}"
+    return entry.field or ""
+
+
 @dataclass(frozen=True)
 class FieldComparison:
-    """Result of comparing one target field against its source field."""
+    """Result of comparing one target (a JSON field or an anchor block) against its source field."""
 
     source: str
     source_field: str
     target_path: str
-    target_field: str
+    target_field: str | None = None
+    target_anchor: str | None = None
     source_value: Any = None
     target_value: Any = None
     error: str | None = None
 
     @property
     def matches(self) -> bool:
-        """Return whether the target field currently matches the source field."""
+        """Return whether the target currently matches the source field."""
         return self.error is None and self.source_value == self.target_value
+
+    @property
+    def target_label(self) -> str:
+        """Return a human-readable label: the field path, or ``anchor:<id>``."""
+        if self.target_anchor is not None:
+            return f"anchor:{self.target_anchor}"
+        return self.target_field or ""
 
 
 def _compare_field_target(field_target: FieldTarget, root: Path) -> list[FieldComparison]:
@@ -253,33 +293,53 @@ def _compare_field_target(field_target: FieldTarget, root: Path) -> list[FieldCo
                     source_field=field_target.source_field,
                     target_path=entry.path,
                     target_field=entry.field,
+                    target_anchor=entry.anchor,
                     error=source_error,
                 )
             )
             continue
         target_path = root / entry.path
         try:
-            target_data = _load_json_file(target_path)
-            target_value = resolve_field(target_data, entry.field)
-            results.append(
-                FieldComparison(
-                    source=field_target.source,
-                    source_field=field_target.source_field,
-                    target_path=entry.path,
-                    target_field=entry.field,
-                    source_value=source_value,
-                    target_value=target_value,
+            if entry.anchor is not None:
+                text = _read_text_file(target_path)
+                fmt = _detect_inject_format(target_path)
+                extracted = extract_anchored_block(text, anchor_id=entry.anchor, fmt=fmt)
+                if extracted is None:
+                    raise FieldPathError(f"missing anchor markers for {entry.anchor!r}")
+                results.append(
+                    FieldComparison(
+                        source=field_target.source,
+                        source_field=field_target.source_field,
+                        target_path=entry.path,
+                        target_anchor=entry.anchor,
+                        source_value=str(source_value).strip(),
+                        target_value=extracted.strip(),
+                    )
                 )
-            )
-        except FieldPathError as exc:
+            else:
+                assert entry.field is not None  # exactly one of field/anchor per validate()
+                target_data = _load_json_file(target_path)
+                target_value = resolve_field(target_data, entry.field)
+                results.append(
+                    FieldComparison(
+                        source=field_target.source,
+                        source_field=field_target.source_field,
+                        target_path=entry.path,
+                        target_field=entry.field,
+                        source_value=source_value,
+                        target_value=target_value,
+                    )
+                )
+        except ValueError as exc:
             results.append(
                 FieldComparison(
                     source=field_target.source,
                     source_field=field_target.source_field,
                     target_path=entry.path,
                     target_field=entry.field,
+                    target_anchor=entry.anchor,
                     source_value=source_value,
-                    error=f"{entry.path}#{entry.field}: {exc}",
+                    error=f"{entry.path}#{_target_label(entry)}: {exc}",
                 )
             )
     return results
@@ -342,10 +402,10 @@ def _run_fields_check(
 
     for c in problems:
         if c.error:
-            msg = f"{c.source}#{c.source_field} -> {c.target_path}#{c.target_field}: {c.error}"
+            msg = f"{c.source}#{c.source_field} -> {c.target_path}#{c.target_label}: {c.error}"
         else:
             msg = (
-                f"{c.source}#{c.source_field} -> {c.target_path}#{c.target_field}: "
+                f"{c.source}#{c.source_field} -> {c.target_path}#{c.target_label}: "
                 f"mismatch (source={c.source_value!r}, target={c.target_value!r})"
             )
         if strict:
@@ -379,7 +439,7 @@ def _run_fields_sync(
     errors = [c for c in comparisons if c.error]
     for c in errors:
         rp.line(
-            f"{c.source}#{c.source_field} -> {c.target_path}#{c.target_field}: {c.error}",
+            f"{c.source}#{c.source_field} -> {c.target_path}#{c.target_label}: {c.error}",
             ok=False,
             stream=sys.stderr,
         )
@@ -387,6 +447,7 @@ def _run_fields_sync(
         return 1
 
     loaded: dict[Path, Any] = {}
+    loaded_text: dict[Path, str] = {}
     written = 0
     unchanged = 0
     for c in comparisons:
@@ -395,9 +456,25 @@ def _run_fields_sync(
             continue
         target_path = root / c.target_path
         if dry_run:
-            rp.would_write(c.target_path, f"{c.target_field} = {c.source_value!r}")
+            rp.would_write(c.target_path, f"{c.target_label} = {c.source_value!r}")
             written += 1
             continue
+        if c.target_anchor is not None:
+            text = loaded_text.get(target_path)
+            if text is None:
+                text = target_path.read_text(encoding="utf-8")
+            fmt = _detect_inject_format(target_path)
+            updated = replace_anchored_block(
+                text, anchor_id=c.target_anchor, content=str(c.source_value), fmt=fmt
+            )
+            # The anchor markers were already confirmed present for this exact
+            # (path, anchor_id, fmt) during the error-gated comparison above,
+            # so replace_anchored_block cannot return None here.
+            assert updated is not None
+            loaded_text[target_path] = updated
+            written += 1
+            continue
+        assert c.target_field is not None  # target_anchor is None, so this is a JSON target
         data = loaded.get(target_path)
         if data is None:
             data = _load_json_file(target_path)
@@ -408,16 +485,19 @@ def _run_fields_sync(
     if not dry_run:
         for target_path, data in loaded.items():
             _write_json_file(target_path, data)
+        for target_path, text in loaded_text.items():
+            target_path.write_text(text, encoding="utf-8")
 
     if written == 0:
         rp.footer(f"All {unchanged} field mapping(s) already in sync — nothing to write.")
         return 0
 
+    total_files = len(loaded) + len(loaded_text)
     if dry_run:
         rp.footer(f"Would update {written} field(s); {unchanged} already in sync.")
     else:
         rp.footer(
-            f"Updated {written} field(s) across {len(loaded)} target file(s); "
+            f"Updated {written} field(s) across {total_files} target file(s); "
             f"{unchanged} already in sync."
         )
     return 0
@@ -434,13 +514,13 @@ def _print_field_list(field_targets: list[FieldTarget], root: Path) -> None:
         label = f"{field_target.source}#{field_target.source_field}"
         p.line(rule(label, width=width))
         for c in _compare_field_target(field_target, root):
-            target_label = f"{c.target_path}#{c.target_field}"
+            label_text = f"{c.target_path}#{c.target_label}"
             if c.error:
-                p.line(f"{target_label:<60}  {c.error}", ok=False)
+                p.line(f"{label_text:<60}  {c.error}", ok=False)
             elif c.matches:
-                p.line(f"{target_label:<60}  ✓", ok=True)
+                p.line(f"{label_text:<60}  ✓", ok=True)
             else:
-                p.line(f"{target_label:<60}  MISMATCH", ok=False)
+                p.line(f"{label_text:<60}  MISMATCH", ok=False)
 
 
 def cmd_fields(args: argparse.Namespace) -> int:

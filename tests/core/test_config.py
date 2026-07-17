@@ -3822,8 +3822,18 @@ def test_load_field_target_entries_missing_path() -> None:
 def test_load_field_target_entries_missing_field() -> None:
     from repo_release_tools.config.core import _load_field_target_entries
 
-    with pytest.raises(ValueError, match="non-empty 'field'"):
+    with pytest.raises(ValueError, match="exactly one of 'field' or 'anchor'"):
         _load_field_target_entries([{"path": "marketplace.json"}])
+
+
+def test_load_field_target_entries_anchor_ok() -> None:
+    from repo_release_tools.config.core import _load_field_target_entries
+
+    entries = _load_field_target_entries(
+        [{"path": "README.md", "anchor": "self-assess-description"}]
+    )
+    assert entries[0].field is None
+    assert entries[0].anchor == "self-assess-description"
 
 
 def test_load_field_targets_target_escapes_root() -> None:

@@ -150,6 +150,115 @@ def test_run_error_detail_surfaces_last_stderr_line_not_first(
         git.run(["git", "commit", "-m", "x"], tmp_path, dry_run=False, label="git commit")
 
 
+def test_run_error_detail_ignores_trailing_passed_hook_line(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Regression test for #182: a hook that passes *after* the actually
+    failing hook must not have its "...Passed" status line mistaken for the
+    failure reason just because it happened to print last.
+    """
+
+    def fake_run(
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout="",
+            stderr="rewriter.................................................Failed\n"
+            "- hook id: rewriter\n"
+            "- files were modified by this hook\n"
+            "\n"
+            "check for case conflicts.................................................Passed\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        git.run(["git", "commit", "-m", "x"], tmp_path, dry_run=False, label="git commit")
+
+    message = str(exc_info.value)
+    assert "files were modified by this hook" in message
+    assert "check for case conflicts" not in message
+
+
+def test_run_error_detail_multiple_failed_hooks_uses_last(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_run(
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout="",
+            stderr="first-hook...............................................Failed\n"
+            "- first hook detail\n"
+            "\n"
+            "second-hook..............................................Failed\n"
+            "- second hook detail\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        git.run(["git", "commit", "-m", "x"], tmp_path, dry_run=False, label="git commit")
+
+    message = str(exc_info.value)
+    assert "second hook detail" in message
+    assert "first hook detail" not in message
+
+
+def test_run_error_detail_falls_back_to_last_line_without_failed_marker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_run(
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            cmd, 128, stdout="", stderr="fatal: not a git repository\nsome other line\n"
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="some other line"):
+        git.run(["git", "status"], tmp_path, dry_run=False, label="git status")
+
+
+def test_run_error_detail_falls_back_to_stdout_when_stderr_empty(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_run(
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 1, stdout="only stdout output\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="only stdout output"):
+        git.run(["git", "status"], tmp_path, dry_run=False, label="git status")
+
+
 def test_capture_and_capture_checked_strip_output(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -184,8 +293,33 @@ def test_capture_checked_raises_on_nonzero_exit(
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    with pytest.raises(RuntimeError, match=r"git rev-parse HEAD failed \(exit 7\)"):
+    with pytest.raises(RuntimeError, match=r"git rev-parse HEAD failed \(exit 7\): fatal"):
         git.capture_checked(["git", "rev-parse", "HEAD"], tmp_path)
+
+
+def test_capture_checked_includes_failed_hook_detail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fake_run(
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout="",
+            stderr="rewriter.................................................Failed\n"
+            "- files were modified by this hook\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="files were modified by this hook"):
+        git.capture_checked(["git", "commit", "-m", "x"], tmp_path)
 
 
 def test_current_branch_branch_exists_and_commits_ahead_delegate(
