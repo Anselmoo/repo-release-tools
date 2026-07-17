@@ -597,8 +597,18 @@ class TestArtifactsLockIsCurrent:
         assert not ok
         assert any("missing" in m.lower() for m in msgs)
 
-    def test_no_drift_empty_lock_empty_files(self, tmp_path: Path) -> None:
+    def test_drift_on_zero_match_with_no_command(self, tmp_path: Path) -> None:
+        """A target matching 0 files with no command must not vacuously pass."""
         targets = [{"path": "*.png", "description": ""}]
+        lock_path = tmp_path / "artifacts.lock.toml"
+        write_lock(lock_path, build_artifacts_lock(targets, tmp_path))
+        ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
+        assert not ok
+        assert any("matched 0 files" in m for m in msgs)
+
+    def test_no_drift_empty_lock_empty_files_with_command(self, tmp_path: Path) -> None:
+        """A target matching 0 files stays silent when a regenerate command is configured."""
+        targets = [{"path": "*.png", "description": "", "command": ["true"]}]
         lock_path = tmp_path / "artifacts.lock.toml"
         write_lock(lock_path, build_artifacts_lock(targets, tmp_path))
         ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
@@ -750,7 +760,7 @@ class TestArtifactsLockIsCurrentWithInputs:
         current_hash = _compute_inputs_hash(["*.py"], tmp_path)
         assert current_hash is not None
         lock_path = self._make_lock_with_inputs(tmp_path, current_hash)
-        targets = [{"path": "*.svg", "description": "", "command": [], "inputs": ["*.py"]}]
+        targets = [{"path": "*.svg", "description": "", "command": ["true"], "inputs": ["*.py"]}]
         is_ok, msgs = artifacts_lock_is_current(lock_path, targets, tmp_path)
         assert is_ok
         assert msgs == []
