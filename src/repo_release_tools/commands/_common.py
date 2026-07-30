@@ -88,3 +88,29 @@ def describe_config_load_error(
             text=format_missing_tool_rrt_guidance(root, iter_config_files(root)),
         )
     return ConfigLoadError(kind="other", text=str(exc))
+
+
+def parse_group_names(raw: str) -> list[str]:
+    """Split a comma-separated ``--group`` value into stripped, non-empty names.
+
+    Mirrors ``workspace.py``'s ``_resolve_packages`` split/strip/drop-empty
+    idiom for ``--packages``, minus the path resolution (group names are
+    just config lookups via ``config.resolve_group(name)``). Order is
+    preserved so error messages and per-group output stay predictable.
+    """
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def find_duplicate_group_names(names: list[str]) -> list[str]:
+    """Return distinct names that appear more than once, in first-seen order.
+
+    A duplicate in a ``--group a,a,b`` batch is almost certainly a typo, so
+    callers reject it outright rather than silently processing it twice.
+    """
+    seen: set[str] = set()
+    dupes: list[str] = []
+    for name in names:
+        if name in seen and name not in dupes:
+            dupes.append(name)
+        seen.add(name)
+    return dupes

@@ -15,6 +15,7 @@ import pytest
 from repo_release_tools.commands.bump import (
     BumpResolutionError,
     Options,
+    _cmd_bump_batch,
     apply_bump_files,
     cmd_bump,
     finalize_bump_git,
@@ -33,6 +34,7 @@ from repo_release_tools.config import (
     VersionGroup,
     VersionTarget,
 )
+from repo_release_tools.preflight import PreflightError
 from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import Version
 from repo_release_tools.version.targets import VersionWriteEvent
@@ -3176,3 +3178,561 @@ def test_cmd_bump_calver_from_calver_version(
     import re
 
     assert re.search(r"\d{4}\.\d+\.\d+", new_content), f"CalVer not found in {new_content!r}"
+
+
+# ---------------------------------------------------------------------------
+# Batch `--group a,b,c` (issue #191)
+# ---------------------------------------------------------------------------
+
+_BATCH_TOML = """\
+[tool.rrt]
+
+[[tool.rrt.version_groups]]
+name = "alpha"
+release_branch = "release/alpha/v{version}"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "alpha.json"
+kind = "package_json"
+
+[[tool.rrt.version_groups]]
+name = "beta"
+release_branch = "release/beta/v{version}"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "beta.json"
+kind = "package_json"
+"""
+
+
+def _write_batch_config(
+    tmp_path: Path, alpha_version: str = "1.0.0", beta_version: str = "2.0.0"
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(_BATCH_TOML, encoding="utf-8")
+    (tmp_path / "alpha.json").write_text(
+        f'{{"name":"alpha","version":"{alpha_version}"}}', encoding="utf-8"
+    )
+    (tmp_path / "beta.json").write_text(
+        f'{{"name":"beta","version":"{beta_version}"}}', encoding="utf-8"
+    )
+
+
+def test_cmd_bump_batch_bumps_all_listed_groups(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Dry-run batch bump previews every listed group in one invocation."""
+    _write_batch_config(tmp_path)
+
+    cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        result = cmd_bump(
+            Namespace(
+                bump="patch",
+                dry_run=True,
+                no_commit=False,
+                no_changelog=True,
+                no_update=True,
+                include_maintenance=False,
+                base_branch=None,
+                group="alpha,beta",
+            ),
+        )
+    finally:
+        os.chdir(cwd)
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "release/alpha/v1.0.1" in captured.out
+    assert "release/beta/v2.0.1" in captured.out
+    assert "Groups" in captured.out
+
+
+def test_cmd_bump_batch_creates_separate_commits_per_group(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Real (non-dry-run) batch bump checks out and commits each group separately."""
+    _write_batch_config(tmp_path)
+
+    calls: list[list[str]] = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+
+    def fake_run(
+        cmd: list[str], root: Path, *, dry_run: bool, label: str, suppress_announce: bool = False
+    ) -> str:
+        calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=False,
+            no_changelog=False,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group="alpha,beta",
+        ),
+    )
+
+    assert result == 0
+    checkouts = [c for c in calls if c[:3] == ["git", "checkout", "-b"]]
+    commits = [c for c in calls if c[:2] == ["git", "commit"]]
+    assert len(checkouts) == 2
+    assert len(commits) == 2
+    assert any(c[3] == "release/alpha/v1.0.1" for c in checkouts)
+    assert any(c[3] == "release/beta/v2.0.1" for c in checkouts)
+
+
+def test_cmd_bump_batch_unknown_group_in_list_fails_before_any_write(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An unknown group name in the list fails the whole batch before any write."""
+    _write_batch_config(tmp_path)
+
+    cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        result = cmd_bump(
+            Namespace(
+                bump="patch",
+                dry_run=True,
+                no_commit=False,
+                no_changelog=True,
+                no_update=True,
+                include_maintenance=False,
+                base_branch=None,
+                group="alpha,doesnotexist",
+            ),
+        )
+    finally:
+        os.chdir(cwd)
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Unknown version group" in captured.err
+
+
+def test_cmd_bump_batch_duplicate_group_name_fails_before_any_write(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A repeated group name in the list fails fast with a clear error."""
+    _write_batch_config(tmp_path)
+
+    cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        result = cmd_bump(
+            Namespace(
+                bump="patch",
+                dry_run=True,
+                no_commit=False,
+                no_changelog=True,
+                no_update=True,
+                include_maintenance=False,
+                base_branch=None,
+                group="alpha,alpha,beta",
+            ),
+        )
+    finally:
+        os.chdir(cwd)
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Duplicate group name" in captured.err
+    assert "'alpha'" in captured.err
+
+
+def test_cmd_bump_batch_rejects_no_commit(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--no-commit is rejected outright for a multi-group batch."""
+    _write_batch_config(tmp_path)
+
+    cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        result = cmd_bump(
+            Namespace(
+                bump="patch",
+                dry_run=True,
+                no_commit=True,
+                no_changelog=True,
+                no_update=True,
+                include_maintenance=False,
+                base_branch=None,
+                group="alpha,beta",
+            ),
+        )
+    finally:
+        os.chdir(cwd)
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "--no-commit is not supported" in captured.err
+
+
+def test_cmd_bump_batch_existing_branch_without_force_fails_all(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """One group's pre-existing branch blocks the whole batch (validate-all-then-apply-all)."""
+    _write_batch_config(tmp_path)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: "beta" in branch,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=False,
+            no_commit=False,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group="alpha,beta",
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "already exists" in captured.err
+    assert "Version bump" not in captured.out
+
+
+def test_cmd_bump_single_group_comma_free_unaffected(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A single, comma-free --group value still takes the pre-existing single-group path."""
+    _write_batch_config(tmp_path)
+
+    cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        result = cmd_bump(
+            Namespace(
+                bump="patch",
+                dry_run=True,
+                no_commit=True,
+                no_changelog=True,
+                no_update=True,
+                include_maintenance=False,
+                base_branch=None,
+                group="alpha",
+            ),
+        )
+    finally:
+        os.chdir(cwd)
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "release/alpha/v1.0.1" in captured.out
+    assert "Groups" not in captured.out
+
+
+def test_cmd_bump_batch_empty_group_names_fails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A --group value that is only commas/whitespace fails before any group resolves."""
+    _write_batch_config(tmp_path)
+
+    cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        result = cmd_bump(
+            Namespace(
+                bump="patch",
+                dry_run=True,
+                no_commit=False,
+                no_changelog=True,
+                no_update=True,
+                include_maintenance=False,
+                base_branch=None,
+                group=" , ,",
+            ),
+        )
+    finally:
+        os.chdir(cwd)
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "no valid group names" in captured.err
+
+
+def test_cmd_bump_batch_phase1_preflight_failure_stops_batch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Phase-1 preflight failure (e.g. unreadable version target) stops the batch."""
+    _write_batch_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    def _boom(group: VersionGroup) -> None:
+        raise PreflightError(f"boom for {group.name}")
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.check_version_targets_readable", _boom)
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=False,
+            no_commit=False,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group="alpha,beta",
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "boom for alpha" in captured.err
+
+
+def test_cmd_bump_batch_phase2_preflight_failure_stops_batch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A Phase-2 preflight failure (dirty working tree) stops the batch before any commit."""
+    _write_batch_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr("repo_release_tools.workflow.git.working_tree_clean", lambda root: False)
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=False,
+            no_commit=False,
+            no_changelog=True,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group="alpha,beta",
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "uncommitted changes" in captured.err
+
+
+def test_cmd_bump_batch_checks_out_base_branch_when_different(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Checks out --base-branch when it differs from the current branch."""
+    _write_batch_config(tmp_path)
+    calls: list[list[str]] = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: False
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.current_branch", lambda root: "feature/x"
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+
+    def fake_run(
+        cmd: list[str], root: Path, *, dry_run: bool, label: str, suppress_announce: bool = False
+    ) -> str:
+        calls.append(cmd)
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            no_commit=False,
+            no_changelog=False,
+            no_update=True,
+            include_maintenance=False,
+            base_branch="main",
+            group="alpha,beta",
+        ),
+    )
+
+    assert result == 0
+    assert ["git", "checkout", "main"] in calls
+
+
+def test_cmd_bump_batch_force_resets_existing_branch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--force resets an already-existing release branch for each group."""
+    _write_batch_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean", lambda root: True
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists", lambda root, branch: True
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.run",
+        lambda cmd, root, *, dry_run, label, suppress_announce=False: "",
+    )
+
+    result = cmd_bump(
+        Namespace(
+            bump="patch",
+            dry_run=False,
+            force=True,
+            no_commit=False,
+            no_changelog=False,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group="alpha,beta",
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Resetting it with --force" in captured.out
+
+
+def test_cmd_bump_batch_prints_pin_sync_section(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Prints the 'Updating doc pins' section when a group has pin targets."""
+    (tmp_path / "alpha.json").write_text('{"name":"alpha","version":"1.0.0"}', encoding="utf-8")
+    pin_file = tmp_path / "docs.md"
+    pin_file.write_text("version: 1.0.0\n", encoding="utf-8")
+    target = VersionTarget(path=tmp_path / "alpha.json", kind="package_json")
+    pin = PinTarget(path=pin_file, pattern=r"(version: )(\d+\.\d+\.\d+)()")
+    group = VersionGroup(
+        name="alpha",
+        release_branch="release/alpha/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        pin_targets=[pin],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="alpha",
+    )
+    opts = _options(group="alpha", dry_run=True, no_commit=False, no_changelog=True, no_update=True)
+
+    result = _cmd_bump_batch(opts, config, tmp_path, ["alpha"])
+
+    assert result == 0
+    assert "Updating doc pins" in capsys.readouterr().out
+
+
+def test_cmd_bump_batch_runs_lock_command(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Runs a group's configured lock command when --no-update is not set."""
+    (tmp_path / "alpha.json").write_text('{"name":"alpha","version":"1.0.0"}', encoding="utf-8")
+    target = VersionTarget(path=tmp_path / "alpha.json", kind="package_json")
+    group = VersionGroup(
+        name="alpha",
+        release_branch="release/alpha/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=["true"],
+        generated_files=[],
+        version_targets=[target],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="alpha",
+    )
+    opts = _options(
+        group="alpha", dry_run=True, no_commit=False, no_changelog=True, no_update=False
+    )
+
+    result = _cmd_bump_batch(opts, config, tmp_path, ["alpha"])
+
+    assert result == 0
+    assert "Refreshing lockfiles" in capsys.readouterr().out
+
+
+def test_cmd_bump_batch_generated_asset_failure_stops_batch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A real generated-asset failure stops the batch (Phase 2 early return)."""
+    (tmp_path / "alpha.json").write_text('{"name":"alpha","version":"1.0.0"}', encoding="utf-8")
+    target = VersionTarget(path=tmp_path / "alpha.json", kind="package_json")
+    asset = GeneratedAsset(path=Path("out.txt"), command=["false"])
+    group = VersionGroup(
+        name="alpha",
+        release_branch="release/alpha/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+        generated_assets=[asset],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="alpha",
+    )
+    opts = _options(
+        group="alpha", dry_run=True, no_commit=False, no_changelog=True, no_update=False
+    )
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.refresh_bump_generated_assets",
+        lambda group, root, *, dry_run, verbose=0: False,
+    )
+
+    result = _cmd_bump_batch(opts, config, tmp_path, ["alpha"])
+
+    assert result == 1

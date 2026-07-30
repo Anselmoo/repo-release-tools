@@ -66,8 +66,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_release_tools.commands._common import describe_config_load_error
+from repo_release_tools.commands._common import (
+    describe_config_load_error,
+    find_duplicate_group_names,
+    parse_group_names,
+)
 from repo_release_tools.config import (
+    VersionGroup,
     find_repo_root,
     iter_config_files,
     load_or_autodetect_config,
@@ -82,6 +87,17 @@ def _git(args: list[str], cwd: Path, *, check: bool = True) -> subprocess.Comple
 
 def _tag_name(version: str, prefix: str) -> str:
     return f"{prefix}{version}"
+
+
+def _tag_name_for_group(version: str, prefix: str, group_name: str) -> str:
+    """Render --prefix's {group} token (batch mode only), then build the tag name.
+
+    Uses ``str.replace``, not ``str.format``: a plain ``.format(group=...)``
+    would raise ``KeyError`` on any *other* stray ``{...}`` in a user's custom
+    prefix (e.g. ``--prefix "release-{build}"``). ``.replace`` only ever
+    touches the one documented token and is a no-op for any prefix without it.
+    """
+    return f"{prefix.replace('{group}', group_name)}{version}"
 
 
 def _load_config_and_version(root: Path, group_name: str | None) -> tuple[object, str] | None:
@@ -161,11 +177,122 @@ class TagCreateOptions:
         )
 
 
+def _cmd_tag_create_batch(opts: TagCreateOptions, root: Path, group_names: list[str]) -> int:
+    """Create tags for every group in *group_names* in one invocation (issue #191).
+
+    Validates every group name and checks every tag for a pre-existing
+    conflict before creating any tag (fail-fast, no partial state) --
+    mirrors ``_cmd_bump_batch``'s two-phase design.
+    """
+    verbose = opts.verbose
+    try:
+        config = load_or_autodetect_config(root)
+    except FileNotFoundError as exc:
+        err = describe_config_load_error(exc, root, no_config_file_checked=iter_config_files(root))
+        VerbosePrinter(verbose=verbose).line(err.text, ok=False, stream=sys.stderr)
+        return 1
+    except (ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        p = VerbosePrinter(verbose=verbose)
+        if err.kind == "missing_tool_rrt":
+            p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
+        return 1
+
+    existing = _existing_tags(root)
+
+    # --- Phase 1: resolve and validate every group before tagging anything -----
+    validated: list[tuple[VersionGroup, str, str]] = []
+    for name in group_names:
+        try:
+            group = config.resolve_group(name)
+        except ValueError as exc:
+            VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
+            return 1
+        version = str(read_group_current_version(group))
+        tag = _tag_name_for_group(version, opts.prefix, group.name)
+        if tag in existing and not opts.force:
+            VerbosePrinter(verbose=verbose).line(
+                f"Tag '{tag}' already exists (group {group.name!r}). Use --force to overwrite.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        validated.append((group, version, tag))
+
+    # --- Phase 2: create every tag -----------------------------------------------
+    p = DryRunPrinter(opts.dry_run, verbose=verbose)
+    p.blank_line()
+    p.header("Tag create", Groups=str(len(validated)))
+
+    for group, _version, tag in validated:
+        msg = opts.message or f"Release {tag}"
+        p.section(group.name)
+        p.meta("Tag", tag)
+        p.meta("Message", msg)
+
+        if opts.dry_run:
+            p.line(f"would run: git tag -a {tag} -m {msg!r}")
+            continue
+
+        try:
+            if tag in existing and opts.force:
+                _git(["git", "tag", "-d", tag], root)
+            _git(["git", "tag", "-a", tag, "-m", msg], root)
+        except subprocess.CalledProcessError as exc:
+            VerbosePrinter(verbose=verbose).line(
+                f"git tag failed: {exc.stderr.strip()}", ok=False, stream=sys.stderr
+            )
+            return 1
+        p.ok(f"Created tag {tag!r}")
+
+        if opts.push:
+            try:
+                _git(["git", "push", "origin", tag], root)
+                p.ok(f"Pushed {tag!r} to origin")
+            except subprocess.CalledProcessError as exc:
+                VerbosePrinter(verbose=verbose).line(
+                    f"git push failed: {exc.stderr.strip()}", ok=False, stream=sys.stderr
+                )
+                return 1
+
+    if opts.dry_run:
+        p.line("no changes were made")
+
+    return 0
+
+
 def cmd_tag_create(args: argparse.Namespace) -> int:
     """Create an annotated git tag matching the current configured version."""
     opts = TagCreateOptions.from_args(args)
     verbose = opts.verbose
     root = find_repo_root(Path.cwd())
+
+    if opts.group is not None and "," in opts.group:
+        group_names = parse_group_names(opts.group)
+        if not group_names:
+            VerbosePrinter(verbose=verbose).line(
+                f"--group has no valid group names: {opts.group!r}", ok=False, stream=sys.stderr
+            )
+            return 1
+        if dupes := find_duplicate_group_names(group_names):
+            VerbosePrinter(verbose=verbose).line(
+                "Duplicate group name(s) in --group: "
+                f"{', '.join(repr(d) for d in dupes)}. Each group may be listed only once.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        if "{group}" not in opts.prefix:
+            VerbosePrinter(verbose=verbose).line(
+                "--prefix must include the '{group}' placeholder when --group lists "
+                f"multiple groups (got --prefix {opts.prefix!r}). Example: --prefix '{{group}}-v'.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        return _cmd_tag_create_batch(opts, root, group_names)
 
     result = _load_config_and_version(root, opts.group)
     if result is None:
@@ -251,11 +378,105 @@ class TagCheckOptions:
         )
 
 
+def _cmd_tag_check_batch(opts: TagCheckOptions, root: Path, group_names: list[str]) -> int:
+    """Check tags for every group in *group_names*, aggregating results (issue #191).
+
+    Read-only, so unlike the bump/tag-create batches this evaluates every
+    group even after one fails -- there is no "apply" step to protect, and a
+    user wants to see every group's mismatches in one pass, not stop at the
+    first. Each group is checked with the exact single-group logic
+    ``cmd_tag_check`` already uses, just with ``{group}`` rendered to that
+    group's name in the expected prefix.
+    """
+    verbose = opts.verbose
+    try:
+        config = load_or_autodetect_config(root)
+    except FileNotFoundError as exc:
+        err = describe_config_load_error(exc, root, no_config_file_checked=iter_config_files(root))
+        VerbosePrinter(verbose=verbose).line(err.text, ok=False, stream=sys.stderr)
+        return 1
+    except (ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        p = VerbosePrinter(verbose=verbose)
+        if err.kind == "missing_tool_rrt":
+            p.line("No [tool.rrt] configuration found.", ok=False, stream=sys.stderr)
+        else:
+            p.line(err.text, ok=False, stream=sys.stderr)
+        return 1
+
+    resolved: list[tuple[VersionGroup, str]] = []
+    for name in group_names:
+        try:
+            group = config.resolve_group(name)
+        except ValueError as exc:
+            VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
+            return 1
+        resolved.append((group, str(read_group_current_version(group))))
+
+    existing_tags = _existing_tags(root)
+    p = VerbosePrinter(verbose=verbose)
+    p.blank_line()
+    p.header("Tag check", Groups=str(len(resolved)), Total=str(len(existing_tags)))
+
+    any_errors = False
+    for group, version in resolved:
+        group_prefix = opts.prefix.replace("{group}", group.name)
+        expected_tag = f"{group_prefix}{version}"
+        p.section(group.name)
+
+        errors: list[str] = []
+        for tag in existing_tags:
+            if not tag.startswith(group_prefix):
+                errors.append(f"Tag '{tag}' does not match prefix '{group_prefix}'")
+
+        if expected_tag not in existing_tags:
+            if opts.strict:
+                errors.append(f"Expected tag '{expected_tag}' not found (run `rrt tag create`)")
+            else:
+                p.line(
+                    f"  Expected tag '{expected_tag}' not found (run `rrt tag create`)", ok=False
+                )
+
+        if errors:
+            any_errors = True
+            for err in errors:
+                p.line(f"  {err}", ok=False)
+        else:
+            p.ok(f"Tag '{expected_tag}' is present and consistent.")
+
+    return 1 if any_errors else 0
+
+
 def cmd_tag_check(args: argparse.Namespace) -> int:
     """Validate existing tags match the configured naming convention."""
     opts = TagCheckOptions.from_args(args)
     verbose = opts.verbose
     root = find_repo_root(Path.cwd())
+
+    if opts.group is not None and "," in opts.group:
+        group_names = parse_group_names(opts.group)
+        if not group_names:
+            VerbosePrinter(verbose=verbose).line(
+                f"--group has no valid group names: {opts.group!r}", ok=False, stream=sys.stderr
+            )
+            return 1
+        if dupes := find_duplicate_group_names(group_names):
+            VerbosePrinter(verbose=verbose).line(
+                "Duplicate group name(s) in --group: "
+                f"{', '.join(repr(d) for d in dupes)}. Each group may be listed only once.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        if "{group}" not in opts.prefix:
+            VerbosePrinter(verbose=verbose).line(
+                "--prefix must include the '{group}' placeholder when --group lists "
+                f"multiple groups (got --prefix {opts.prefix!r}). Example: --prefix '{{group}}-v'.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        return _cmd_tag_check_batch(opts, root, group_names)
 
     result = _load_config_and_version(root, opts.group)
     if result is None:
@@ -295,8 +516,10 @@ _TAG_EPILOG = (
     "  $ rrt tag create\n"
     "  $ rrt tag create --push\n"
     "  $ rrt tag create --prefix '' --message 'Release 1.2.3'\n"
+    "  $ rrt tag create --group backend,sdk --prefix '{group}-v'\n"
     "  $ rrt tag check\n"
-    "  $ rrt tag check --strict"
+    "  $ rrt tag check --strict\n"
+    "  $ rrt tag check --group backend,sdk --prefix '{group}-v'"
 )
 
 
@@ -327,7 +550,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--prefix",
         default="v",
         metavar="PREFIX",
-        help="Tag prefix (default: 'v'). Pass empty string for no prefix.",
+        help=(
+            "Tag prefix (default: 'v'). Pass empty string for no prefix. "
+            "Include the '{group}' token to render each group's name when "
+            "--group lists multiple groups (e.g. '{group}-v')."
+        ),
     )
     create_parser.add_argument(
         "--message",
@@ -354,7 +581,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--group",
         default=None,
         metavar="GROUP",
-        help="Version group to read when multiple groups are configured.",
+        help=(
+            "Version group to read when multiple groups are configured. "
+            "Pass a comma-separated list (e.g. 'a,b,c') to tag several groups "
+            "in one invocation; --prefix must then include the '{group}' token."
+        ),
     )
     create_parser.set_defaults(handler=cmd_tag_create)
 
@@ -369,7 +600,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--prefix",
         default="v",
         metavar="PREFIX",
-        help="Expected tag prefix (default: 'v').",
+        help=(
+            "Expected tag prefix (default: 'v'). Include the '{group}' token to "
+            "render each group's name when --group lists multiple groups "
+            "(e.g. '{group}-v')."
+        ),
     )
     check_parser.add_argument(
         "--strict",
@@ -380,6 +615,10 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--group",
         default=None,
         metavar="GROUP",
-        help="Version group to read when multiple groups are configured.",
+        help=(
+            "Version group to read when multiple groups are configured. "
+            "Pass a comma-separated list (e.g. 'a,b,c') to check several groups "
+            "in one invocation; --prefix must then include the '{group}' token."
+        ),
     )
     check_parser.set_defaults(handler=cmd_tag_check)
