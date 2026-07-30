@@ -783,6 +783,99 @@ kind = "package_json"
     assert ["git", "add", "-u"] in calls[first_commit_index + 1 : last_commit_index + 1]
 
 
+def test_cmd_bump_retries_commit_twice_for_cascading_hook_auto_fixes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Two *different* auto-fixing hooks can each trip the "files were
+    modified by this hook" failure on successive attempts (e.g. rrt-cli-docs
+    regenerates on attempt 1, then rrt-tree-auto-update regenerates on
+    attempt 2). A single retry isn't enough here; bump must keep retrying,
+    up to _MAX_COMMIT_ATTEMPTS, re-staging before each attempt.
+    """
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+release_branch = "release/v{version}"
+lock_command = []
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "example",\n  "version": "0.1.0"\n}\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+    calls: list[list[str]] = []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.working_tree_clean",
+        lambda root: True,
+    )
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git.branch_exists",
+        lambda root, branch: False,
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.current_branch", lambda root: "main")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.replace_all_versions_atomic",
+        lambda *a, **k: [],
+    )
+    monkeypatch.setattr("repo_release_tools.commands.bump.update_changelog", lambda *a, **k: None)
+
+    commit_attempts = 0
+
+    def fake_run(
+        cmd: list[str],
+        root: Path,
+        *,
+        dry_run: bool,
+        label: str,
+        suppress_announce: bool = False,
+    ) -> str:
+        nonlocal commit_attempts
+        calls.append(cmd)
+        if cmd[:2] == ["git", "commit"]:
+            commit_attempts += 1
+            if commit_attempts == 1:
+                raise RuntimeError(
+                    "git commit failed (exit 1): rrt cli docs - files were modified by this hook"
+                )
+            if commit_attempts == 2:
+                raise RuntimeError(
+                    "git commit failed (exit 1): rrt tree auto-update - "
+                    "files were modified by this hook"
+                )
+        return ""
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.run", fake_run)
+
+    result = cmd_bump(
+        Namespace(
+            bump="minor",
+            dry_run=False,
+            no_commit=False,
+            no_changelog=False,
+            no_update=True,
+            include_maintenance=False,
+            base_branch=None,
+            group=None,
+        ),
+    )
+
+    assert result == 0
+    assert commit_attempts == 3
+    commit_calls = [c for c in calls if c[:2] == ["git", "commit"]]
+    assert commit_calls == [["git", "commit", "-m", "chore: bump version to v0.2.0"]] * 3
+    assert calls.count(["git", "add", "-u"]) >= 3
+
+
 def test_cmd_bump_does_not_retry_unrelated_commit_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
