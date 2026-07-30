@@ -122,6 +122,13 @@ _BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_
 # thereby failed its own pass even though the fix is now correct on disk.
 _HOOK_MODIFIED_FILES_MARKER = "files were modified by this hook"
 
+# Upper bound on commit attempts in finalize_bump_git's auto-fix retry loop.
+# More than one auto-fixing hook (ruff, tree/doctor/config-reference
+# auto-update, ...) can cascade across successive commit attempts, so a
+# single retry isn't always enough; this caps the loop rather than retrying
+# forever.
+_MAX_COMMIT_ATTEMPTS = 3
+
 
 class BumpResolutionError(Exception):
     """Raised by :func:`resolve_bump_target` when the bump kind or version group is invalid.
@@ -296,9 +303,11 @@ def finalize_bump_git(
 ) -> None:
     """Checkout the release branch, stage changed files, and commit.
 
-    Ordering is contract: checkout -> stage -> commit. Retries the commit
-    once if a pre-commit hook auto-regenerated files during the first
-    attempt (matches cmd_bump's original inline retry).
+    Ordering is contract: checkout -> stage -> commit. Retries the commit,
+    up to ``_MAX_COMMIT_ATTEMPTS`` times, whenever a pre-commit hook
+    auto-regenerated files during the previous attempt -- more than one
+    auto-fixing hook can trip across successive attempts, so a single retry
+    isn't always enough.
     """
     p = DryRunPrinter(opts.dry_run, verbose=opts.verbose)
     p.section("Git")
@@ -333,19 +342,22 @@ def finalize_bump_git(
         commit_cmd = ["git", "commit", "-m", commit_msg]
         if opts.no_verify:
             commit_cmd.append("--no-verify")
-        try:
-            git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
-        except RuntimeError as exc:
-            if _HOOK_MODIFIED_FILES_MARKER not in str(exc):
-                raise
-            # A pre-commit hook (e.g. rrt-cli-docs) may have auto-regenerated
-            # files during this pass — pre-commit always fails that pass even
-            # though the fix is now correct. Re-stage and retry once.
-            git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
+        prev_exc: RuntimeError | None = None
+        for attempt in range(1, _MAX_COMMIT_ATTEMPTS + 1):
             try:
                 git.run(commit_cmd, root, dry_run=opts.dry_run, label="git commit")
-            except RuntimeError as retry_exc:
-                raise retry_exc from exc
+                break
+            except RuntimeError as exc:
+                has_marker = _HOOK_MODIFIED_FILES_MARKER in str(exc)
+                if not has_marker or attempt == _MAX_COMMIT_ATTEMPTS:
+                    if prev_exc is not None:
+                        raise exc from prev_exc
+                    raise
+                # A pre-commit hook (e.g. rrt-cli-docs) may have auto-regenerated
+                # files during this pass — pre-commit always fails that pass even
+                # though the fix is now correct. Re-stage and retry.
+                git.run(["git", "add", "-u"], root, dry_run=opts.dry_run, label="git add -u")
+                prev_exc = exc
         done_msg = f"Done. Branch '{branch_name}' created with commit: {commit_msg!r}"
         p.footer(done_msg)
     else:
