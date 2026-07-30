@@ -14,6 +14,7 @@ from repo_release_tools.commands.tag import (
     _git,
     _load_config_and_version,
     _tag_name,
+    _tag_name_for_group,
     cmd_tag_check,
     cmd_tag_create,
 )
@@ -500,3 +501,543 @@ def test_load_config_and_version_resolve_group_value_error(
     result = _load_config_and_version(tmp_path, "staging")
     assert result is None
     assert "unknown group 'staging'" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Batch `--group a,b,c` and `{group}` prefix token (issue #191)
+# ---------------------------------------------------------------------------
+
+
+def _make_multi_group_config(tmp_path: Path, versions: dict[str, str]) -> RrtConfig:
+    groups = []
+    for name, version in versions.items():
+        init_file = tmp_path / name / "__init__.py"
+        init_file.parent.mkdir(parents=True, exist_ok=True)
+        init_file.write_text(f'__version__ = "{version}"\n', encoding="utf-8")
+        target = VersionTarget(path=init_file, kind="python_version")
+        groups.append(
+            VersionGroup(
+                name=name,
+                release_branch=f"release/{name}/v{{version}}",
+                changelog_file=tmp_path / name / "CHANGELOG.md",
+                lock_command=[],
+                generated_files=[],
+                version_targets=[target],
+                pin_targets=[],
+            )
+        )
+    return RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=groups,
+        default_group_name=None,
+    )
+
+
+def test_tag_name_for_group_renders_group_token() -> None:
+    """Substitutes {group} with the group's name before the version."""
+    assert _tag_name_for_group("1.2.3", "{group}-v", "alpha") == "alpha-v1.2.3"
+
+
+def test_tag_name_for_group_no_op_without_token() -> None:
+    """Behaves exactly like _tag_name when --prefix has no {group} token."""
+    assert _tag_name_for_group("1.2.3", "v", "alpha") == "v1.2.3"
+
+
+def test_tag_name_for_group_preserves_unrelated_braces() -> None:
+    """A stray unrelated `{...}` in a custom prefix is left untouched (no KeyError)."""
+    assert _tag_name_for_group("1.2.3", "release-{build}-", "alpha") == "release-{build}-1.2.3"
+
+
+def test_cmd_tag_create_batch_creates_tags_for_all_groups(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Creates one correctly-prefixed tag per listed group in one invocation."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    git_calls: list[list[str]] = []
+
+    def _fake_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        git_calls.append(cmd)
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fake_git)
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta"))
+
+    assert rc == 0
+    tag_calls = [c for c in git_calls if "tag" in c and "-a" in c]
+    assert any("alpha-v1.0.0" in c for c in tag_calls)
+    assert any("beta-v2.0.0" in c for c in tag_calls)
+    out = capsys.readouterr().out
+    assert "Created tag 'alpha-v1.0.0'" in out
+    assert "Created tag 'beta-v2.0.0'" in out
+
+
+def test_cmd_tag_create_batch_requires_group_token_in_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Fails fast if --prefix omits {group} while --group lists multiple groups."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+
+    rc = cmd_tag_create(_args_create(prefix="v", group="alpha,beta"))
+
+    assert rc == 1
+    assert "must include the '{group}' placeholder" in capsys.readouterr().err
+
+
+def test_cmd_tag_create_batch_unknown_group_fails_before_any_tag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An unknown group name in the list fails the whole batch before tagging anything."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,doesnotexist"))
+
+    assert rc == 1
+    assert "Unknown version group" in capsys.readouterr().err
+
+
+def test_cmd_tag_create_batch_duplicate_group_fails_before_any_tag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A repeated group name in the list fails fast with a clear error."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,alpha,beta"))
+
+    assert rc == 1
+    captured = capsys.readouterr().err
+    assert "Duplicate group name" in captured
+    assert "'alpha'" in captured
+
+
+def test_cmd_tag_create_batch_existing_tag_without_force_fails_all(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A pre-existing tag for one group blocks the whole batch (validate-all-then-apply-all)."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: ["beta-v2.0.0"])
+
+    git_calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag._git",
+        lambda cmd, _root, **kwargs: git_calls.append(cmd),
+    )
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta"))
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "already exists" in captured.err
+    assert not git_calls
+
+
+def test_cmd_tag_create_batch_dry_run_no_tags_created(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Dry-run batch previews every tag without creating any of them."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    git_calls: list[list[str]] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag._git",
+        lambda cmd, _root, **kwargs: git_calls.append(cmd),
+    )
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta", dry_run=True))
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert not git_calls
+    assert "would run: git tag -a alpha-v1.0.0" in out
+    assert "would run: git tag -a beta-v2.0.0" in out
+    assert "no changes were made" in out
+
+
+def test_cmd_tag_check_batch_aggregates_results_across_all_groups(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Evaluates every group even when an earlier one has errors, aggregating the result."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: ["beta-v2.0.0"])
+
+    rc = cmd_tag_check(_args_check(prefix="{group}-v", strict=True, group="alpha,beta"))
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "alpha-v1.0.0" in out
+    assert "beta-v2.0.0" in out
+    assert "is present and consistent" in out
+
+
+def test_cmd_tag_check_batch_requires_group_token_in_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Fails fast if --prefix omits {group} while --group lists multiple groups."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+
+    rc = cmd_tag_check(_args_check(prefix="v", group="alpha,beta"))
+
+    assert rc == 1
+    assert "must include the '{group}' placeholder" in capsys.readouterr().err
+
+
+def test_cmd_tag_create_single_group_unaffected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A single, comma-free --group value still takes the pre-existing single-group path."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    git_calls: list[list[str]] = []
+
+    def _fake_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        git_calls.append(cmd)
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fake_git)
+
+    rc = cmd_tag_create(_args_create(group="default"))
+
+    assert rc == 0
+    assert any("v1.2.3" in c for c in git_calls if "tag" in c and "-a" in c)
+
+
+def test_cmd_tag_check_single_group_unaffected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A single, comma-free --group value still takes the pre-existing single-group path."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(tmp_path)
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: ["v1.2.3"])
+
+    rc = cmd_tag_check(_args_check(group="default"))
+
+    assert rc == 0
+    assert "is present and consistent" in capsys.readouterr().out
+
+
+def test_cmd_tag_create_batch_no_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when no rrt config is found for a batch invocation."""
+    monkeypatch.chdir(tmp_path)
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta"))
+    assert rc == 1
+    assert capsys.readouterr().err
+
+
+def test_cmd_tag_create_batch_is_missing_rrt_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when config ValueError signals missing [tool.rrt] config."""
+    from repo_release_tools.config import MissingRrtConfigError
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag.load_or_autodetect_config",
+        lambda _: (_ for _ in ()).throw(MissingRrtConfigError("no rrt")),
+    )
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta"))
+    assert rc == 1
+    assert capsys.readouterr().err
+
+
+def test_cmd_tag_create_batch_value_error_non_rrt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when config raises a generic ValueError."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag.load_or_autodetect_config",
+        lambda _: (_ for _ in ()).throw(ValueError("generic error")),
+    )
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta"))
+    assert rc == 1
+    assert capsys.readouterr().err
+
+
+def test_cmd_tag_create_batch_force_deletes_and_recreates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--force deletes and recreates an already-existing tag for one group in the batch."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag._existing_tags", lambda _: ["alpha-v1.0.0"]
+    )
+
+    git_calls: list[list[str]] = []
+
+    def _fake_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        git_calls.append(cmd)
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fake_git)
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta", force=True))
+
+    assert rc == 0
+    delete_calls = [c for c in git_calls if "tag" in c and "-d" in c]
+    assert any("alpha-v1.0.0" in c for c in delete_calls)
+
+
+def test_cmd_tag_create_batch_git_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 and stops the batch when `git tag` fails for a group."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    def _fail_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        if "-a" in cmd:
+            exc = subprocess.CalledProcessError(1, cmd)
+            exc.stderr = "fatal: tag already exists"
+            raise exc
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fail_git)
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta"))
+
+    assert rc == 1
+    assert "git tag failed" in capsys.readouterr().err
+
+
+def test_cmd_tag_create_batch_with_push(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--push pushes each group's tag to origin after creating it."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    git_calls: list[list[str]] = []
+
+    def _fake_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        git_calls.append(cmd)
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fake_git)
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta", push=True))
+
+    assert rc == 0
+    assert any("push" in c and "alpha-v1.0.0" in c for c in git_calls)
+    assert "Pushed 'alpha-v1.0.0' to origin" in capsys.readouterr().out
+
+
+def test_cmd_tag_create_batch_push_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 and stops the batch when `git push` fails for a group."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    def _fake_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        if "push" in cmd:
+            exc = subprocess.CalledProcessError(1, cmd)
+            exc.stderr = "remote: repository not found"
+            raise exc
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fake_git)
+
+    rc = cmd_tag_create(_args_create(prefix="{group}-v", group="alpha,beta", push=True))
+
+    assert rc == 1
+    assert "git push failed" in capsys.readouterr().err
+
+
+def test_cmd_tag_create_batch_empty_group_names_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A --group value that is only commas/whitespace fails before any group resolves."""
+    monkeypatch.chdir(tmp_path)
+    rc = cmd_tag_create(_args_create(group=" , ,"))
+    assert rc == 1
+    assert "no valid group names" in capsys.readouterr().err
+
+
+def test_cmd_tag_check_batch_no_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when no rrt config is found for a batch invocation."""
+    monkeypatch.chdir(tmp_path)
+    rc = cmd_tag_check(_args_check(prefix="{group}-v", group="alpha,beta"))
+    assert rc == 1
+    assert capsys.readouterr().err
+
+
+def test_cmd_tag_check_batch_is_missing_rrt_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when config ValueError signals missing [tool.rrt] config."""
+    from repo_release_tools.config import MissingRrtConfigError
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag.load_or_autodetect_config",
+        lambda _: (_ for _ in ()).throw(MissingRrtConfigError("no rrt")),
+    )
+    rc = cmd_tag_check(_args_check(prefix="{group}-v", group="alpha,beta"))
+    assert rc == 1
+    assert capsys.readouterr().err
+
+
+def test_cmd_tag_check_batch_value_error_non_rrt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Returns 1 when config raises a generic ValueError."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag.load_or_autodetect_config",
+        lambda _: (_ for _ in ()).throw(ValueError("generic error")),
+    )
+    rc = cmd_tag_check(_args_check(prefix="{group}-v", group="alpha,beta"))
+    assert rc == 1
+    assert capsys.readouterr().err
+
+
+def test_cmd_tag_check_batch_unknown_group_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An unknown group name in the list fails before checking anything."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+
+    rc = cmd_tag_check(_args_check(prefix="{group}-v", group="alpha,doesnotexist"))
+
+    assert rc == 1
+    assert "Unknown version group" in capsys.readouterr().err
+
+
+def test_cmd_tag_check_batch_reports_missing_tag_when_not_strict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Non-strict mode reports a missing expected tag without failing the group."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"alpha": "1.0.0", "beta": "2.0.0"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    rc = cmd_tag_check(_args_check(prefix="{group}-v", strict=False, group="alpha,beta"))
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Expected tag 'alpha-v1.0.0' not found" in out
+
+
+def test_cmd_tag_check_batch_duplicate_group_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A repeated group name in the list fails fast with a clear error."""
+    monkeypatch.chdir(tmp_path)
+    rc = cmd_tag_check(_args_check(prefix="{group}-v", group="alpha,alpha,beta"))
+
+    assert rc == 1
+    captured = capsys.readouterr().err
+    assert "Duplicate group name" in captured
+    assert "'alpha'" in captured
+
+
+def test_cmd_tag_check_batch_empty_group_names_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A --group value that is only commas/whitespace fails before any group resolves."""
+    monkeypatch.chdir(tmp_path)
+    rc = cmd_tag_check(_args_check(group=" , ,"))
+    assert rc == 1
+    assert "no valid group names" in capsys.readouterr().err

@@ -168,6 +168,14 @@ rrt bump minor --group backend
 rrt bump patch --group sdk
 ```
 
+Bump several groups in one invocation with a comma-separated list -- each
+group gets its own release branch and commit, identical to running the
+command once per group:
+
+```bash
+rrt bump patch --group backend,sdk
+```
+
 When a single group is configured, `--group` is optional. With multiple
 groups, set `default_group_name` to select the default:
 
@@ -213,7 +221,7 @@ Content
 Git
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   --base-branch BRANCH    Branch to base the release on.
-  --group GROUP           Version group to bump when multiple groups are configured.
+  --group GROUP           Version group to bump when multiple groups are configured. Pass a comma-separated list (e.g. 'a,b,c') to bump several groups in one invocation, each with its own release branch and commit.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -222,6 +230,7 @@ Examples
   $ rrt bump minor --dry-run
   $ rrt bump 2.1.0 --no-changelog --no-commit
   $ rrt bump major --base-branch develop
+  $ rrt bump patch --group self-assess,cupertino,confab
 ```
 
 ## `rrt changelog`
@@ -1022,12 +1031,12 @@ Arguments
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help       Show this message and exit.
-  --prefix PREFIX  Tag prefix (default: 'v'). Pass empty string for no prefix.
+  --prefix PREFIX  Tag prefix (default: 'v'). Pass empty string for no prefix. Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
   --message MSG    Annotation message. Defaults to 'Release <tag>'.
   --push           Push the tag to origin after creating it.
   --force          Delete and recreate the tag if it already exists.
   --dry-run        Preview what would happen without making changes.
-  --group GROUP    Version group to read when multiple groups are configured.
+  --group GROUP    Version group to read when multiple groups are configured. Pass a comma-separated list (e.g. 'a,b,c') to tag several groups in one invocation; --prefix must then include the '{group}' token.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -1035,8 +1044,10 @@ Examples
   $ rrt tag create
   $ rrt tag create --push
   $ rrt tag create --prefix '' --message 'Release 1.2.3'
+  $ rrt tag create --group backend,sdk --prefix '{group}-v'
   $ rrt tag check
   $ rrt tag check --strict
+  $ rrt tag check --group backend,sdk --prefix '{group}-v'
 ```
 
 ### `rrt tag check`
@@ -1054,9 +1065,9 @@ Arguments
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help       Show this message and exit.
-  --prefix PREFIX  Expected tag prefix (default: 'v').
+  --prefix PREFIX  Expected tag prefix (default: 'v'). Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
   --strict         Fail if the expected tag for the current version is missing.
-  --group GROUP    Version group to read when multiple groups are configured.
+  --group GROUP    Version group to read when multiple groups are configured. Pass a comma-separated list (e.g. 'a,b,c') to check several groups in one invocation; --prefix must then include the '{group}' token.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -1064,6 +1075,8 @@ Examples
   $ rrt tag create
   $ rrt tag create --push
   $ rrt tag create --prefix '' --message 'Release 1.2.3'
+  $ rrt tag create --group backend,sdk --prefix '{group}-v'
   $ rrt tag check
   $ rrt tag check --strict
+  $ rrt tag check --group backend,sdk --prefix '{group}-v'
 ```

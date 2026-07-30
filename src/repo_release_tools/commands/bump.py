@@ -78,7 +78,11 @@ from repo_release_tools.changelog import (
     insert_generated_section,
     promote_unreleased,
 )
-from repo_release_tools.commands._common import describe_config_load_error
+from repo_release_tools.commands._common import (
+    describe_config_load_error,
+    find_duplicate_group_names,
+    parse_group_names,
+)
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     RrtConfig,
@@ -88,7 +92,12 @@ from repo_release_tools.config import (
     iter_config_files,  # noqa: F401 -- re-exported for test monkeypatch compatibility
     load_or_autodetect_config,
 )
-from repo_release_tools.preflight import PreflightError, run_preflight
+from repo_release_tools.preflight import (
+    PreflightError,
+    check_config_consistent,
+    check_version_targets_readable,
+    run_preflight,
+)
 from repo_release_tools.ui import (
     GLYPHS,
     DryRunPrinter,
@@ -563,6 +572,143 @@ class Options:
         )
 
 
+def _cmd_bump_batch(
+    opts: Options,
+    config: RrtConfig,
+    root: Path,
+    group_names: list[str],
+) -> int:
+    """Bump every group in *group_names* in one invocation (issue #191).
+
+    Reuses every per-group helper ``cmd_bump`` already has --
+    :func:`resolve_bump_target`, :func:`run_preflight`, :func:`apply_bump_files`,
+    :func:`resolve_changelog_mode`, :func:`update_changelog`,
+    :func:`refresh_bump_lockfile`, :func:`refresh_bump_generated_assets`, and
+    :func:`finalize_bump_git` -- unchanged. Each group gets its own release
+    branch and commit, identical to running ``rrt bump`` once per group by
+    hand. Every group is resolved and validated before anything is written
+    (fail-fast, no partial state); any failure -- in validation or during
+    apply -- stops the whole batch immediately.
+    """
+    verbose = opts.verbose
+
+    if opts.no_commit:
+        VerbosePrinter(verbose=verbose).line(
+            "--no-commit is not supported with a multi-group --group batch (each "
+            "group's checkout would carry the previous group's uncommitted changes "
+            "onto the next branch); commit each group or bump one at a time.",
+            ok=False,
+            stream=sys.stderr,
+        )
+        return 1
+
+    # --- Phase 1: resolve and validate every group before writing anything -----
+    validated: list[tuple[BumpTarget, str]] = []
+    for name in group_names:
+        sub_opts = dataclasses.replace(opts, group=name)
+        try:
+            target = resolve_bump_target(config, sub_opts)
+        except BumpResolutionError as exc:
+            VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
+            return 1
+
+        branch_name = target.group.release_branch.format(version=target.new)
+        if not opts.dry_run:
+            try:
+                check_config_consistent(config)
+                check_version_targets_readable(target.group)
+            except PreflightError as exc:
+                VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
+                return 1
+            if git.branch_exists(root, branch_name) and not opts.force:
+                VerbosePrinter(verbose=verbose).line(
+                    f"Branch '{branch_name}' already exists. Delete it first or "
+                    "choose a different version.",
+                    ok=False,
+                    stream=sys.stderr,
+                )
+                return 1
+
+        validated.append((target, branch_name))
+
+    # --- Phase 2: apply every group ---------------------------------------------
+    pr = DryRunPrinter(opts.dry_run, verbose=verbose)
+    pr.blank_line()
+    pr.header("Version bump", Groups=str(len(validated)), Bump=opts.bump)
+
+    for target, branch_name in validated:
+        group, current, new = target.group, target.current, target.new
+        current_branch = "<current>" if opts.dry_run else git.current_branch(root)
+        base = opts.base_branch or current_branch
+
+        pr.section(f"{group.name}: {current} {GLYPHS.arrow.right} {new}")
+        pr.meta("Branch", branch_name)
+        pr.meta("Base", base)
+
+        try:
+            run_preflight(config, dry_run=opts.dry_run, group=group)
+        except PreflightError as exc:
+            VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
+            return 1
+
+        if not opts.dry_run:
+            branch_exists = git.branch_exists(root, branch_name)
+            if current_branch != base:
+                git.run(["git", "checkout", base], root, dry_run=False, label="git checkout base")
+            if branch_exists:
+                VerbosePrinter(verbose=verbose).line(
+                    f"Branch '{branch_name}' already exists. Resetting it with --force."
+                )
+
+        pr.section("Updating version strings")
+
+        all_pins = group.pin_targets + config.global_pin_targets
+        no_pin_sync = opts.no_pin_sync
+        if all_pins and not no_pin_sync:
+            pr.section("Updating doc pins")
+
+        apply_group = dataclasses.replace(group, pin_targets=[]) if no_pin_sync else group
+        apply_config = dataclasses.replace(config, global_pin_targets=[]) if no_pin_sync else config
+        changed_paths = apply_bump_files(apply_group, new, apply_config, dry_run=opts.dry_run)
+
+        if not opts.no_changelog:
+            effective_changelog_mode = resolve_changelog_mode(group, opts.changelog_mode)
+            update_changelog(
+                RrtConfig(
+                    root=config.root,
+                    config_file=config.config_file,
+                    version_groups=[group],
+                    default_group_name=group.name,
+                ),
+                str(new),
+                include_maintenance=opts.include_maintenance,
+                dry_run=opts.dry_run,
+                changelog_mode=effective_changelog_mode,
+            )
+
+        if group.lock_command and not opts.no_update:
+            refresh_bump_lockfile(group, root, dry_run=opts.dry_run, verbose=verbose)
+
+        if group.generated_assets and not opts.no_update:
+            if not refresh_bump_generated_assets(
+                group, root, dry_run=opts.dry_run, verbose=verbose
+            ):
+                return 1
+
+        finalize_bump_git(
+            group,
+            new,
+            changed_paths,
+            root,
+            branch_name=branch_name,
+            base=base,
+            force=opts.force,
+            opts=opts,
+        )
+
+    return 0
+
+
 def cmd_bump(args: argparse.Namespace) -> int:
     """Bump project version using [tool.rrt]."""
     opts = Options.from_args(args)
@@ -590,6 +736,23 @@ def cmd_bump(args: argparse.Namespace) -> int:
         if mismatch := check_autodetected_version_consistency(config):
             p.line(mismatch, ok=False, stream=sys.stderr)
             return 1
+
+    if opts.group is not None and "," in opts.group:
+        group_names = parse_group_names(opts.group)
+        if not group_names:
+            p = VerbosePrinter(verbose=verbose)
+            p.line(f"--group has no valid group names: {opts.group!r}", ok=False, stream=sys.stderr)
+            return 1
+        if dupes := find_duplicate_group_names(group_names):
+            p = VerbosePrinter(verbose=verbose)
+            p.line(
+                "Duplicate group name(s) in --group: "
+                f"{', '.join(repr(d) for d in dupes)}. Each group may be listed only once.",
+                ok=False,
+                stream=sys.stderr,
+            )
+            return 1
+        return _cmd_bump_batch(opts, config, root, group_names)
 
     try:
         target = resolve_bump_target(config, opts)
@@ -692,7 +855,8 @@ _BUMP_EXAMPLES = (
     "  $ rrt bump patch\n"
     "  $ rrt bump minor --dry-run\n"
     "  $ rrt bump 2.1.0 --no-changelog --no-commit\n"
-    "  $ rrt bump major --base-branch develop"
+    "  $ rrt bump major --base-branch develop\n"
+    "  $ rrt bump patch --group self-assess,cupertino,confab"
 )
 
 
@@ -778,7 +942,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--group",
         default=None,
         metavar="GROUP",
-        help="Version group to bump when multiple groups are configured.",
+        help=(
+            "Version group to bump when multiple groups are configured. "
+            "Pass a comma-separated list (e.g. 'a,b,c') to bump several groups "
+            "in one invocation, each with its own release branch and commit."
+        ),
     )
     parser.set_defaults(handler=cmd_bump)
 
@@ -890,6 +1058,14 @@ Bump a specific group:
 ```bash
 rrt bump minor --group backend
 rrt bump patch --group sdk
+```
+
+Bump several groups in one invocation with a comma-separated list -- each
+group gets its own release branch and commit, identical to running the
+command once per group:
+
+```bash
+rrt bump patch --group backend,sdk
 ```
 
 When a single group is configured, `--group` is optional. With multiple
