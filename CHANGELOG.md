@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [1.14.1] - 2026-07-30
+
+### Added
+- **bump,tag**: support comma-separated --group batches and {group} prefix token (#192)
+- **git**: add backport-from-target; fix(artifacts): guard vacuous check pass (#184)
+- **fields**: support Markdown/MDX/RST anchor targets via existing inject primitive (#183)
+
 ## [1.14.0] - 2026-07-17
 
 ### Added
