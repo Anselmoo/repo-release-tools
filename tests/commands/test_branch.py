@@ -496,6 +496,32 @@ def test_cmd_rename_full_rebuild_dry_run(
     assert "feat/introduce-v2" in out
 
 
+def test_cmd_rename_full_rebuild_preserves_type_without_type_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Description words without --type reuse the type parsed from a conventional branch."""
+    from repo_release_tools.commands.branch import cmd_rename
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch",
+        lambda root: "feat/add-login",
+    )
+
+    args = argparse.Namespace(
+        type=None,
+        scope=None,
+        no_scope=False,
+        description=["update", "login", "flow"],
+        dry_run=True,
+    )
+    result = cmd_rename(args)
+
+    assert result == 0
+    out = capsys.readouterr().out
+    assert "feat/update-login-flow" in out
+
+
 def test_cmd_rename_no_change_returns_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -665,6 +691,57 @@ def test_cmd_rename_non_conventional_branch_errors(
     assert result == 1
     err = capsys.readouterr().err
     assert "convention" in err
+
+
+def test_cmd_rename_non_conventional_branch_with_type_and_description_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--type + description can rebuild a non-conventional branch from scratch (issue #196)."""
+    from repo_release_tools.commands.branch import cmd_rename
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch",
+        lambda root: "add-rrt-for-conventianl-branching-name",
+    )
+
+    args = argparse.Namespace(
+        type="feat",
+        scope=None,
+        no_scope=False,
+        description=["rrt", "conventional", "branch", "naming", "enforcement"],
+        dry_run=True,
+    )
+    result = cmd_rename(args)
+
+    assert result == 0
+    out = capsys.readouterr().out
+    assert "feat/rrt-conventional-branch-naming-enforcement" in out
+
+
+def test_cmd_rename_non_conventional_branch_without_type_still_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Description words alone (no --type) against a non-conventional branch still fails."""
+    from repo_release_tools.commands.branch import cmd_rename
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.branch.git.current_branch",
+        lambda root: "add-rrt-for-conventianl-branching-name",
+    )
+
+    args = argparse.Namespace(
+        type=None,
+        scope=None,
+        no_scope=False,
+        description=["rrt", "conventional", "branch", "naming", "enforcement"],
+        dry_run=True,
+    )
+    result = cmd_rename(args)
+
+    assert result == 1
+    assert "convention" in capsys.readouterr().err
 
 
 def test_cmd_rename_branch_already_exists_returns_error(
