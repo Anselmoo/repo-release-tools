@@ -354,23 +354,43 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
     current_branch = git.current_branch(root)
 
+    parse_error: str | None = None
     try:
         current_type, current_slug = _parse_current_branch(current_branch)
     except ValueError as exc:
-        VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
-        return 1
-
-    new_type = new_type_arg or current_type
+        current_type = current_slug = None
+        parse_error = str(exc)
 
     if description_words:
-        # Full rebuild: type + scope + new description
+        # Full rebuild: type + scope + new description. A supplied --type
+        # means we never need the old name to have parsed at all, since
+        # nothing is being preserved from it (this is what lets `rename`
+        # bring a non-conventional branch into compliance).
+        if new_type_arg:
+            new_type = new_type_arg
+        elif parse_error is None:
+            assert current_type is not None
+            new_type = current_type
+        else:
+            VerbosePrinter(verbose=verbose).line(parse_error, ok=False, stream=sys.stderr)
+            return 1
+
         description = join_description(description_words)
         effective_scope = None if no_scope else scope
         branch = BranchName(type=new_type, description=description, scope=effective_scope)
         new_name = branch.slug()
         commit_title = branch.commit_title()
     else:
-        # Slug-preserving rename: only type and/or scope prefix changes
+        # Slug-preserving rename: only type and/or scope prefix changes.
+        # This always needs the old name to have parsed, since the slug is
+        # carried over from it.
+        if parse_error is not None:
+            VerbosePrinter(verbose=verbose).line(parse_error, ok=False, stream=sys.stderr)
+            return 1
+        assert current_type is not None
+        assert current_slug is not None
+        new_type = new_type_arg or current_type
+
         if scope:
             scope_slug = re.sub(r"[^a-z0-9]+", "-", scope.lower()).strip("-")
             new_slug = f"{scope_slug}-{current_slug}"
