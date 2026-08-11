@@ -3,6 +3,9 @@
 ### Added
 - add AI-agent-optimized PR and issue templates
 
+### Documentation
+- point Claude at the PR/issue templates in CLAUDE.md
+
 ## [1.14.1] - 2026-07-30
 
 ### Added
