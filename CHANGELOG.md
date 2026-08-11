@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Added
+- add AI-agent-optimized PR and issue templates
+
 ## [1.14.1] - 2026-07-30
 
 ### Added
