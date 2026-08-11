@@ -1,0 +1,136 @@
+name: "🤖 Agent Task"
+description: A scoped task meant to be picked up and completed by an AI coding agent with minimal back-and-forth.
+title: ""
+labels: ["agent-task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is read by an agent, not just a human. Fill it so an agent can start without
+        asking clarifying questions. See "Suitability check" below before filing — some tasks are a bad fit.
+
+  - type: dropdown
+    id: target-agent
+    attributes:
+      label: Target agent
+      description: |
+        Which agent should pick this up? This only changes how you hand it off, not what you write below:
+          Claude   → mention `@claude` in this issue's body or a comment (triggers .github/workflows/claude.yml)
+          Copilot  → assign this issue to Copilot from the sidebar (triggers GitHub's coding agent)
+          Codex / Gemini / other → paste this issue's rendered body into the agent's context manually
+      options:
+        - Claude
+        - GitHub Copilot
+        - Codex
+        - Gemini
+        - Unspecified / any
+      default: 4
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: suitability
+    attributes:
+      label: Suitability check
+      description: |
+        Agent-appropriate tasks are small, have a defined end state, and are easy to review:
+        bug fixes, test coverage, docs updates, small refactors, targeted feature slices.
+        NOT a good fit: broad cross-cutting refactors, security-sensitive changes, or anything
+        where the requirements themselves are still being figured out — write those up as a
+        normal discussion first instead.
+      options:
+        - label: This task is small, has a defined end state, and its diff will be easy to review
+          required: true
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: One or two sentences — what should exist when this is done.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, checkable statements. Tests that must pass, commands that must succeed, behavior that must hold.
+      placeholder: |
+        - [ ] `uv run pytest tests/test_x.py -xvs` passes
+        - [ ] `rrt <command>` produces <exact output>
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: plan
+    attributes:
+      label: Suggested approach / subtasks (optional)
+      description: |
+        If this breaks into independent steps, list them in order — each should be separately
+        testable, and if one depends on a prior step say so. For anything non-trivial, the agent
+        should still post its plan before writing code rather than jumping straight to a diff.
+      placeholder: |
+        1. Add `--foo` flag to `commands/bar.py`
+        2. Wire it through to `workflow/git.py`
+        3. Add a regression test in `tests/test_bar.py`
+
+  - type: textarea
+    id: modules
+    attributes:
+      label: Known affected modules/files (optional)
+      description: Best-known paths, even if incomplete. Not required — agents can search — but it saves a discovery pass.
+      render: shell
+
+  - type: textarea
+    id: code-ref
+    attributes:
+      label: Code / error reference (optional)
+      description: |
+        A snippet, traceback, or existing pattern to follow, if you have one. If you don't,
+        that's fine — make Objective and Acceptance criteria above precise enough to act on without it.
+      render: shell
+
+  - type: textarea
+    id: commands
+    attributes:
+      label: Relevant commands
+      description: Exact commands to reproduce, implement against, or verify with.
+      render: shell
+
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundaries
+      description: What must not change, and what needs a check-in first.
+      value: |
+        ✅ Always: <!-- e.g. add tests for new behavior -->
+        ⚠️ Ask first: <!-- e.g. changing a public CLI flag -->
+        🚫 Never: <!-- e.g. lower the coverage floor, edit CHANGELOG [Unreleased] by hand -->
+
+  - type: dropdown
+    id: commit-type
+    attributes:
+      label: Conventional commit type
+      description: Feeds the branch name and commit subject the agent should use.
+      options:
+        - feat
+        - fix
+        - refactor
+        - perf
+        - docs
+        - chore
+        - ci
+        - build
+        - test
+        - deps
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: self-contained
+    attributes:
+      label: Completeness
+      options:
+        - label: This issue includes everything needed to start without asking clarifying questions
+          required: true
