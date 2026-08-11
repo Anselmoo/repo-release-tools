@@ -1,0 +1,54 @@
+name: "✨ Feature Request"
+description: Propose a new capability or improvement for rrt.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What's missing or painful today? What can't you do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What should exist instead. Sketch the CLI surface or config shape if relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - rrt CLI
+        - rrt-hooks (pre-commit/lefthook)
+        - GitHub Action
+        - MCP server
+        - Docs
+        - Other/new
+
+  - type: textarea
+    id: code-ref
+    attributes:
+      label: Reference (optional)
+      description: |
+        A code snippet, a similar tool's flag/output, or an existing rrt command this resembles.
+        If you don't have one, skip this — the sections above are enough to act on.
+      render: shell
+
+  - type: checkboxes
+    id: dup-check
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and didn't find a duplicate
+          required: true

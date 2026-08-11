@@ -1,0 +1,81 @@
+name: "🐛 Bug Report"
+description: Report a problem with the rrt CLI, rrt-hooks, the GitHub Action, or the MCP server.
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. The more precise the repro, the faster this gets fixed — by a human or an agent.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: A clear description of the incorrect behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Exact commands, in order, with flags.
+      placeholder: |
+        1. `rrt branch new my-slug --dry-run`
+        2. ...
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - rrt CLI
+        - rrt-hooks (pre-commit/lefthook)
+        - GitHub Action
+        - MCP server
+        - Docs
+        - Other/unsure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: rrt version
+      description: Output of `rrt --version`
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version (`python3 --version`), uv version (`uv --version`)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output / traceback
+      render: shell
+
+  - type: textarea
+    id: code-ref
+    attributes:
+      label: Code reference (optional)
+      description: |
+        A snippet, config excerpt, or file:line if you have one. If you don't, that's fine —
+        describe the exact symptom above precisely enough that it can be searched for.
+      render: shell
