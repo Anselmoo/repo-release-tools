@@ -6,6 +6,9 @@
 ### Documentation
 - point Claude at the PR/issue templates in CLAUDE.md
 
+### Fixed
+- resolve PR review findings in agent templates
+
 ## [1.14.1] - 2026-07-30
 
 ### Added
