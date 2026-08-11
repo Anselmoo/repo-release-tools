@@ -83,6 +83,7 @@ from repo_release_tools.commands._common import (
     find_duplicate_group_names,
     parse_group_names,
 )
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     RrtConfig,
@@ -872,6 +873,7 @@ _BUMP_EXAMPLES = (
 )
 
 
+@register_command(name="bump", category=CommandCategory.WRITE, group=CommandGroup.VERSION_RELEASE)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the bump command."""
     parser = subparsers.add_parser(

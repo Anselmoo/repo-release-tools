@@ -58,6 +58,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import __version__
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter, highlight_terminal
 
 WORKFLOW_PATH = Path(".github/workflows/rrt.yml")
@@ -156,6 +157,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+@register_command(name="action", category=CommandCategory.WRITE, group=CommandGroup.CI_AUTOMATION)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the action command group."""
     parser = subparsers.add_parser(

@@ -70,6 +70,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     DEFAULT_INIT_CONFIG,
     find_explicit_config_file,
@@ -357,6 +358,7 @@ def _has_rrt_section(manifest: str, text: str) -> bool:
     return isinstance(tool_rrt, dict)
 
 
+@register_command(name="init", category=CommandCategory.WRITE, group=CommandGroup.SETUP_TOOLING)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the init command."""
     parser = subparsers.add_parser(

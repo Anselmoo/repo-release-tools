@@ -31,6 +31,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     RrtConfig,
     is_missing_tool_rrt_error,
@@ -327,6 +328,7 @@ def _add_folder_check_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+@register_command(name="folder", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the folder command family."""
     parser = subparsers.add_parser(

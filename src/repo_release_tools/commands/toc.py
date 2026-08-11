@@ -47,6 +47,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.tools.inject import (
     ANCHOR_END_TOKEN,
     ANCHOR_START_TOKEN,
@@ -166,6 +167,7 @@ def cmd_toc(args: argparse.Namespace) -> int:
     return 0
 
 
+@register_command(name="toc", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """Register the ``toc`` subcommand on *sub*."""
     parser: argparse.ArgumentParser = sub.add_parser(

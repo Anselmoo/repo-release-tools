@@ -56,6 +56,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._common import describe_config_load_error
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     VALID_CI_FORMATS,
@@ -502,6 +503,9 @@ def _add_compute_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+@register_command(
+    name="ci-version", category=CommandCategory.WRITE, group=CommandGroup.VERSION_RELEASE
+)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the ``ci-version`` command and its subcommands."""
     parser = subparsers.add_parser(

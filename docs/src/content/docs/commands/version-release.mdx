@@ -44,22 +44,22 @@ description: "Generated command reference for the Version & Release command grou
   - [Mirror-orchestration mode](#mirror-orchestration-mode)
   - [CI mirror loop](#ci-mirror-loop)
   - [Hook](#hook)
-- [`rrt workspace`](#rrt-workspace)
-  - [Overview](#overview-2)
-  - [When to use this](#when-to-use-this)
-  - [What it does](#what-it-does)
-  - [Safety notes](#safety-notes)
-  - [Examples](#examples-2)
-  - [`rrt workspace bump`](#rrt-workspace-bump)
 - [`rrt tag`](#rrt-tag)
-  - [Overview](#overview-3)
+  - [Overview](#overview-2)
   - [Responsibilities](#responsibilities-1)
   - [Tag Format](#tag-format)
   - [Behavior](#behavior-1)
-  - [Examples](#examples-3)
+  - [Examples](#examples-2)
   - [Caveats](#caveats)
   - [`rrt tag create`](#rrt-tag-create)
   - [`rrt tag check`](#rrt-tag-check)
+- [`rrt workspace`](#rrt-workspace)
+  - [Overview](#overview-3)
+  - [When to use this](#when-to-use-this)
+  - [What it does](#what-it-does)
+  - [Safety notes](#safety-notes)
+  - [Examples](#examples-3)
+  - [`rrt workspace bump`](#rrt-workspace-bump)
 {/* rrt:auto:end:toc */}
 
 ## `rrt bump`
@@ -853,91 +853,6 @@ Examples
   $ rrt sync --bump --commit --commit-message 'chore: mirror {version}' --dry-run
 ```
 
-## `rrt workspace`
-
-Coordinate version bumps across multiple packages in a monorepo.
-
-### Overview
-
-`rrt workspace bump` applies the same version bump to every listed package in
-one pass.  It reads each package's own ``[tool.rrt]`` configuration, verifies
-that all packages are loadable, then updates version targets and changelogs in
-a single coordinated sweep.
-
-### When to use this
-
-Use ``rrt workspace bump`` when your repository contains multiple
-independently-versioned packages (e.g. a Python backend, a TypeScript SDK, and
-a Go CLI tool) that are always released together at the same version.
-
-### What it does
-
-1. Resolve each package path from ``--packages``.
-2. Load each package's rrt config and read its current version.
-3. Compute the new version using the same bump logic as ``rrt bump``.
-4. For each package: update version targets and, unless ``--no-changelog``,
-   the changelog.
-5. Report every file write to stdout (or preview them with ``--dry-run``).
-
-### Safety notes
-
-* All package configs must exist and be valid before any file is written.
-* ``--dry-run`` previews all planned writes without touching any file.
-
-### Examples
-
-```bash
-rrt workspace bump minor --packages api,sdk,docs
-rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
-rrt workspace bump patch --dry-run --packages api,sdk
-```
-
-```text
-Usage:  rrt workspace [OPTIONS] <workspace_command>
-
-Apply a unified version bump to every listed package.
-
-Each package must have its own [tool.rrt] configuration. All configs are validated before any file is written.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  bump        Bump versions across all listed packages.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help  Show this message and exit.
-```
-
-### `rrt workspace bump`
-
-```text
-Usage:  rrt workspace bump [OPTIONS] <bump>
-
-Apply the same version bump to every package listed in --packages.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  <bump>            major | minor | patch | pre-release | calver | <version>
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help        Show this message and exit.
-  --packages PATHS  Comma-separated list of package directories to bump.
-  --dry-run         Preview changes without writing to disk.
-  --no-changelog    Skip changelog updates.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt workspace bump minor --packages api,sdk,docs
-  $ rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
-  $ rrt workspace bump patch --dry-run --packages api,sdk
-```
-
 ## `rrt tag`
 
 Create and validate release tags for the current repository.
@@ -1079,4 +994,89 @@ Examples
   $ rrt tag check
   $ rrt tag check --strict
   $ rrt tag check --group backend,sdk --prefix '{group}-v'
+```
+
+## `rrt workspace`
+
+Coordinate version bumps across multiple packages in a monorepo.
+
+### Overview
+
+`rrt workspace bump` applies the same version bump to every listed package in
+one pass.  It reads each package's own ``[tool.rrt]`` configuration, verifies
+that all packages are loadable, then updates version targets and changelogs in
+a single coordinated sweep.
+
+### When to use this
+
+Use ``rrt workspace bump`` when your repository contains multiple
+independently-versioned packages (e.g. a Python backend, a TypeScript SDK, and
+a Go CLI tool) that are always released together at the same version.
+
+### What it does
+
+1. Resolve each package path from ``--packages``.
+2. Load each package's rrt config and read its current version.
+3. Compute the new version using the same bump logic as ``rrt bump``.
+4. For each package: update version targets and, unless ``--no-changelog``,
+   the changelog.
+5. Report every file write to stdout (or preview them with ``--dry-run``).
+
+### Safety notes
+
+* All package configs must exist and be valid before any file is written.
+* ``--dry-run`` previews all planned writes without touching any file.
+
+### Examples
+
+```bash
+rrt workspace bump minor --packages api,sdk,docs
+rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
+rrt workspace bump patch --dry-run --packages api,sdk
+```
+
+```text
+Usage:  rrt workspace [OPTIONS] <workspace_command>
+
+Apply a unified version bump to every listed package.
+
+Each package must have its own [tool.rrt] configuration. All configs are validated before any file is written.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  bump        Bump versions across all listed packages.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt workspace bump`
+
+```text
+Usage:  rrt workspace bump [OPTIONS] <bump>
+
+Apply the same version bump to every package listed in --packages.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <bump>            major | minor | patch | pre-release | calver | <version>
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help        Show this message and exit.
+  --packages PATHS  Comma-separated list of package directories to bump.
+  --dry-run         Preview changes without writing to disk.
+  --no-changelog    Skip changelog updates.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt workspace bump minor --packages api,sdk,docs
+  $ rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
+  $ rrt workspace bump patch --dry-run --packages api,sdk
 ```

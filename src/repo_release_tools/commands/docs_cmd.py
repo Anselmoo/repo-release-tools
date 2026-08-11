@@ -87,6 +87,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.config import (
     DocsConfig,
@@ -1319,6 +1320,7 @@ def _add_docs_map_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+@register_command(name="docs", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the docs command."""
     parser = subparsers.add_parser(

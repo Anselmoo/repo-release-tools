@@ -98,6 +98,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     RrtConfig,
     find_repo_root,
@@ -590,6 +591,7 @@ def _add_fields_strict_argument(parser: argparse.ArgumentParser, *, default: boo
         )
 
 
+@register_command(name="fields", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """Register the fields subcommand."""
     parser = subparsers.add_parser(

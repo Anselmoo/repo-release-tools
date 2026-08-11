@@ -76,6 +76,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     EolConfig,
     EolOverride,
@@ -434,6 +435,7 @@ def cmd_eol(args: argparse.Namespace) -> int:
     return 1
 
 
+@register_command(name="eol", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the eol command."""
     parser = subparsers.add_parser(

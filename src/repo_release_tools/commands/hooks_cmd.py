@@ -54,6 +54,7 @@ from pathlib import Path
 from sysconfig import get_path
 from typing import Any, cast
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 HOOK_TARGET_PATHS = {
@@ -629,6 +630,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+@register_command(name="hooks", category=CommandCategory.WRITE, group=CommandGroup.SETUP_TOOLING)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the hooks command group."""
     parser = subparsers.add_parser(

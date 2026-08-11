@@ -13,6 +13,14 @@ package CLI surface.
 avoid a circular-import cycle:
   ``cli`` → ``docs_cmd`` → ``docs_publisher`` → ``cli``
 All other package imports are at module level.
+
+``COMMAND_GROUPS_CONFIG`` below is computed eagerly at module-import time from
+:data:`repo_release_tools.commands._registry.registry`, after calling
+``ensure_registered()`` to guarantee every command module has registered
+first. That's only safe because nothing under ``repo_release_tools.commands``
+imports ``docs_publisher`` at *its own* module level (``docs_cmd`` does it
+lazily too, inside a function body) — so this module is never itself
+imported mid-way through ``ensure_registered()``'s sweep. Keep it that way.
 """
 
 from __future__ import annotations
@@ -39,6 +47,7 @@ from repo_release_tools.commands import skill as skill_module
 from repo_release_tools.commands import sync_cmd as sync_cmd_module
 from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
+from repo_release_tools.commands._registry import ensure_registered, registry
 from repo_release_tools.config import is_missing_tool_rrt_error
 from repo_release_tools.docs.formats.markdown import heading_level, normalize_markdown_headings
 from repo_release_tools.integrations import action as action_module
@@ -105,34 +114,12 @@ _STARLIGHT_BASE: str = "https://anselmoo.github.io/repo-release-tools"
 # ---------------------------------------------------------------------------
 
 # Maps a URL-safe slug to (group display name, tuple of CLI command names).
-# Command names must match the argparse names used in cli.COMMAND_GROUPS.
-COMMAND_GROUPS_CONFIG: tuple[tuple[str, str, tuple[str, ...]], ...] = (
-    (
-        "version-release",
-        "Version & Release",
-        ("bump", "changelog", "ci-version", "release", "sync", "workspace", "tag"),
-    ),
-    (
-        "repo-health",
-        "Repository Health",
-        (
-            "doctor",
-            "artifacts",
-            "fields",
-            "config",
-            "env",
-            "eol",
-            "toc",
-            "tree",
-            "docs",
-            "drift",
-            "folder",
-        ),
-    ),
-    ("git-workflow", "Git Workflow", ("branch", "git")),
-    ("ci-automation", "CI & Automation", ("action",)),
-    ("setup-tooling", "Setup & Tooling", ("install", "init", "skill", "agents", "hooks")),
-)
+# Sourced from commands/_registry.py's CommandRegistry — every command module
+# declares its own name/category/group once, at its own register() function,
+# via @register_command. ensure_registered() guarantees every module has done
+# so before groups_config() reads the result (see "Import discipline" above).
+ensure_registered()
+COMMAND_GROUPS_CONFIG: tuple[tuple[str, str, tuple[str, ...]], ...] = registry.groups_config()
 
 
 # ---------------------------------------------------------------------------
@@ -221,36 +208,56 @@ def _render_topic_doc(slug: str) -> str:
 
 
 def _get_command_doc_modules() -> dict[str, object]:
-    """Return the per-command module registry (lazily importing cli)."""
-    from repo_release_tools import cli  # noqa: PLC0415  (lazy – avoid circular)
-    from repo_release_tools.commands import action_cmd  # noqa: PLC0415
+    """Return the per-command module registry."""
+    from repo_release_tools.commands import (  # noqa: PLC0415
+        action_cmd,
+        agents_cmd,
+        artifacts_cmd,
+        changelog_cmd,
+        ci_version,
+        config_cmd,
+        docs_cmd,
+        drift_cmd,
+        env_cmd,
+        fields_cmd,
+        folder,
+        git_cmd,
+        hooks_cmd,
+        init,
+        mcp_cmd,
+        project_cmd,
+        tag,
+        workspace,
+    )
 
     return {
         "action": action_cmd,
-        "agents": cli.agents_cmd,
-        "artifacts": cli.artifacts_cmd,
-        "branch": cli.branch,
-        "bump": cli.bump,
-        "changelog": cli.changelog_cmd,
-        "ci-version": cli.ci_version,
-        "config": cli.config_cmd,
-        "docs": cli.docs_cmd,
-        "doctor": cli.doctor,
-        "drift": cli.drift_cmd,
-        "env": cli.env_cmd,
-        "eol": cli.eol_check,
-        "fields": cli.fields_cmd,
-        "folder": cli.folder,
-        "git": cli.git_cmd,
-        "hooks": cli.hooks_cmd,
-        "init": cli.init,
-        "install": cli.install_cmd,
-        "release": cli.release_cmd,
-        "skill": cli.skill,
-        "tag": cli.tag,
+        "agents": agents_cmd,
+        "artifacts": artifacts_cmd,
+        "branch": branch_module,
+        "bump": bump_module,
+        "changelog": changelog_cmd,
+        "ci-version": ci_version,
+        "config": config_cmd,
+        "docs": docs_cmd,
+        "doctor": doctor_module,
+        "drift": drift_cmd,
+        "env": env_cmd,
+        "eol": eol_check_module,
+        "fields": fields_cmd,
+        "folder": folder,
+        "git": git_cmd,
+        "hooks": hooks_cmd,
+        "init": init,
+        "install": install_module,
+        "mcp": mcp_cmd,
+        "project": project_cmd,
+        "release": release_cmd_module,
+        "skill": skill_module,
+        "tag": tag,
         "toc": toc_module,
-        "tree": cli.tree,
-        "workspace": cli.workspace,
+        "tree": tree_module,
+        "workspace": workspace,
     }
 
 

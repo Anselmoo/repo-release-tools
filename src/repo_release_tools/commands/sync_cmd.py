@@ -18,6 +18,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands.bump import apply_version
 from repo_release_tools.commands.tag import cmd_tag_create
 from repo_release_tools.config import load_or_autodetect_config
@@ -302,6 +303,7 @@ _SYNC_EXAMPLES = (
 )
 
 
+@register_command(name="sync", category=CommandCategory.WRITE, group=CommandGroup.VERSION_RELEASE)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the ``rrt sync`` command."""
     parser = subparsers.add_parser(

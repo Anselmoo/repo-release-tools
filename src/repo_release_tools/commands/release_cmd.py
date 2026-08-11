@@ -72,6 +72,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._common import describe_config_load_error
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands.release_notes import register_subcommand as _register_notes
 from repo_release_tools.commands.release_repair import register_subcommand as _register_repair
 from repo_release_tools.config import (
@@ -368,6 +369,7 @@ def cmd_release_check(args: argparse.Namespace) -> int:
     return 1
 
 
+@register_command(name="release", category=CommandCategory.READ, group=CommandGroup.VERSION_RELEASE)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register release-oriented commands."""
     parser = subparsers.add_parser(

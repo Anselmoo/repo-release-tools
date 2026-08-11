@@ -12,36 +12,7 @@ from collections.abc import Callable, Iterable
 from typing import IO, Any, NoReturn, cast
 
 from repo_release_tools.assets.banner import get_cached_banner
-from repo_release_tools.commands import (
-    agents_cmd,
-    artifacts_cmd,
-    branch,
-    bump,
-    changelog_cmd,
-    ci_version,
-    config_cmd,
-    docs_cmd,
-    doctor,
-    drift_cmd,
-    env_cmd,
-    eol_check,
-    fields_cmd,
-    folder,
-    git_cmd,
-    hooks_cmd,
-    init,
-    install_cmd,
-    mcp_cmd,
-    project_cmd,
-    release_cmd,
-    skill,
-    sync_cmd,
-    tag,
-    toc,
-    tree,
-    workspace,
-)
-from repo_release_tools.commands.action_cmd import register as action_register
+from repo_release_tools.commands._registry import CommandCategory, ensure_registered, registry
 from repo_release_tools.ui import (
     IS_LEGACY_TERMINAL,
     Style,
@@ -111,91 +82,41 @@ def _compute_col_width(actions: list[argparse.Action], width: int | None = None)
     return min(2 + max_left + 2, total_width // 2)
 
 
-COMMAND_GROUPS: dict[str, list[str]] = {
-    "Version & Release": ["bump", "changelog", "ci-version", "release", "sync", "workspace", "tag"],
-    "Repository Health": [
-        "doctor",
-        "artifacts",
-        "fields",
-        "config",
-        "env",
-        "eol",
-        "toc",
-        "tree",
-        "docs",
-        "drift",
-        "folder",
-    ],
-    "CI & Automation": ["action"],
-    "Git Workflow": ["branch", "git"],
-    "Setup & Tooling": ["install", "init", "skill", "agents", "hooks"],
+ensure_registered()
+
+COMMAND_GROUPS: dict[str, list[str]] = registry.groups_by_label()
+
+# `git`'s own subcommands (status, commit, undo-safe, ...) aren't top-level
+# CommandSpecs, so they aren't covered by the registry above. They keep their
+# own small, explicit classification here.
+_NESTED_COMMAND_CATEGORIES: dict[str, CommandCategory] = {
+    "status": CommandCategory.READ,
+    "diff": CommandCategory.READ,
+    "log": CommandCategory.READ,
+    "sync-status": CommandCategory.READ,
+    "check-dirty-tree": CommandCategory.READ,
+    "commit": CommandCategory.WRITE,
+    "commit-all": CommandCategory.WRITE,
+    "move": CommandCategory.WRITE,
+    "squash-local": CommandCategory.WRITE,
+    "undo-safe": CommandCategory.DANGER,
+    "rebootstrap": CommandCategory.DANGER,
 }
 
-READ_COMMANDS = {
-    "status",
-    "diff",
-    "log",
-    "doctor",
-    "release",
-    "sync-status",
-    "check-dirty-tree",
-    "config",
-    "env",
-}
 
-WRITE_COMMANDS = {
-    "action",
-    "agents",
-    "branch",
-    "bump",
-    "ci-version",
-    "drift",
-    "git",
-    "hooks",
-    "init",
-    "install",
-    "skill",
-    "commit",
-    "commit-all",
-    "sync",
-    "move",
-    "squash-local",
-}
+def _nested_names(category: CommandCategory) -> set[str]:
+    """Return nested-subcommand names classified under *category*."""
+    return {name for name, cat in _NESTED_COMMAND_CATEGORIES.items() if cat is category}
 
-DANGER_COMMANDS = {
-    "undo-safe",
-    "rebootstrap",
-}
 
-COMMAND_REGISTRARS = (
-    agents_cmd.register,
-    artifacts_cmd.register,
-    branch.register,
-    bump.register,
-    changelog_cmd.register,
-    ci_version.register,
-    action_register,
-    config_cmd.register,
-    doctor.register,
-    drift_cmd.register,
-    env_cmd.register,
-    eol_check.register,
-    fields_cmd.register,
-    folder.register,
-    git_cmd.register,
-    hooks_cmd.register,
-    init.register,
-    install_cmd.register,
-    mcp_cmd.register,
-    project_cmd.register,
-    release_cmd.register,
-    skill.register,
-    sync_cmd.register,
-    tag.register,
-    toc.register,
-    tree.register,
-    docs_cmd.register,
-    workspace.register,
+READ_COMMANDS = registry.names_in_category(CommandCategory.READ) | _nested_names(
+    CommandCategory.READ
+)
+WRITE_COMMANDS = registry.names_in_category(CommandCategory.WRITE) | _nested_names(
+    CommandCategory.WRITE
+)
+DANGER_COMMANDS = registry.names_in_category(CommandCategory.DANGER) | _nested_names(
+    CommandCategory.DANGER
 )
 
 
@@ -203,8 +124,7 @@ def _register_command_parsers(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
     """Register all top-level command modules on the root parser."""
-    for register in COMMAND_REGISTRARS:
-        register(subparsers)
+    registry.register_all(subparsers)
 
 
 _ROOT_EXAMPLES = (

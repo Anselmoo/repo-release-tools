@@ -50,6 +50,7 @@ from repo_release_tools.changelog import (
     promote_unreleased,
 )
 from repo_release_tools.commands._common import describe_config_load_error
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
     RrtConfig,
@@ -253,6 +254,9 @@ _WORKSPACE_EPILOG = (
 )
 
 
+@register_command(
+    name="workspace", category=CommandCategory.READ, group=CommandGroup.VERSION_RELEASE
+)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the workspace command."""
     parser = subparsers.add_parser(
