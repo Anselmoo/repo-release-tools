@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/rrt_ux_guard.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/rrt_ux_guard.py\"",
             "timeout": 5
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/check_push_coverage.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_push_coverage.py\"",
             "timeout": 900
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/rrt_ux_write_guard.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/rrt_ux_write_guard.py\"",
             "timeout": 5
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/refresh_coverage_baseline.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/refresh_coverage_baseline.py\"",
             "timeout": 60
           }
         ]
@@ -52,17 +52,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/completeness_guard.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/completeness_guard.py\"",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "python3 .claude/hooks/drift_guard.py",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/drift_guard.py\"",
             "timeout": 120
           },
           {
             "type": "command",
-            "command": "TARGET_COVERAGE_PCT=90 MAX_ABSOLUTE_DROP_PCT=10 MAX_RELATIVE_DROP_PCT=10 python3 .claude/hooks/coverage_non_regression.py",
+            "command": "TARGET_COVERAGE_PCT=90 MAX_ABSOLUTE_DROP_PCT=10 MAX_RELATIVE_DROP_PCT=10 python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/coverage_non_regression.py\"",
             "timeout": 60
           }
         ]

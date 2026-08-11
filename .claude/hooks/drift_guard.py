@@ -26,7 +26,7 @@ def main() -> int:
     """Run the canonical drift check and block if lockfile surfaces are stale."""
     _ = sys.stdin.read()
 
-    repo_root = Path.cwd()
+    repo_root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
     command = os.getenv("RRT_DRIFT_CHECK_COMMAND", "uv run rrt drift check")
 
     env = os.environ.copy()
