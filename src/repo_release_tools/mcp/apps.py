@@ -618,12 +618,13 @@ def register_apps(mcp: FastMCP) -> None:
             await proc.wait()
             return "[error]: rrt init timed out after 20 seconds"
 
-        output = stdout_bytes.decode()
-        stderr = stderr_bytes.decode()
+        stdout = stdout_bytes.decode(errors="replace")
+        stderr = stderr_bytes.decode(errors="replace")
+        output = stdout
         if stderr:
             output += f"\n[stderr]: {stderr}"
         if proc.returncode != 0:
-            details = (stderr or stdout_bytes.decode()).strip()
+            details = (stderr or stdout).strip()
             if details:
                 return f"[error]: rrt init exited with code {proc.returncode}: {details}"
             return f"[error]: rrt init exited with code {proc.returncode}"
