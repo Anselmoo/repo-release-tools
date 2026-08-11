@@ -118,6 +118,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeAlias
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.state import (
     build_tree_lock,
     hash_content,
@@ -1180,6 +1181,7 @@ def cmd_tree(args: argparse.Namespace) -> int:
     return 0
 
 
+@register_command(name="tree", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the tree command."""
     parser = subparsers.add_parser(

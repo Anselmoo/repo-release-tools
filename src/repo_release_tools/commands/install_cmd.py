@@ -67,6 +67,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
 from repo_release_tools.commands import agents_cmd, hooks_cmd, skill
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 INSTALL_EXAMPLES = (
@@ -202,6 +203,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+@register_command(name="install", category=CommandCategory.WRITE, group=CommandGroup.SETUP_TOOLING)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the unified install command."""
     parser = subparsers.add_parser(

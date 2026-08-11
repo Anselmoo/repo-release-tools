@@ -82,6 +82,7 @@ from repo_release_tools.changelog import (
     has_unreleased_section,
 )
 from repo_release_tools.commands._common import describe_config_load_error
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     RrtConfig,
     find_repo_root,
@@ -459,6 +460,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0 if all_ok else 1
 
 
+@register_command(name="doctor", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the doctor command."""
     parser = subparsers.add_parser(

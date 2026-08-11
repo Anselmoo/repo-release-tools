@@ -37,6 +37,15 @@ description: "Generated command reference for the Version & Release command grou
   - [`rrt release check`](#rrt-release-check)
   - [`rrt release notes`](#rrt-release-notes)
   - [`rrt release repair`](#rrt-release-repair)
+- [`rrt tag`](#rrt-tag)
+  - [Overview](#overview-2)
+  - [Responsibilities](#responsibilities-1)
+  - [Tag Format](#tag-format)
+  - [Behavior](#behavior-1)
+  - [Examples](#examples-2)
+  - [Caveats](#caveats)
+  - [`rrt tag create`](#rrt-tag-create)
+  - [`rrt tag check`](#rrt-tag-check)
 - [`rrt sync`](#rrt-sync)
   - [Configuration](#configuration)
   - [Supported providers](#supported-providers)
@@ -45,21 +54,12 @@ description: "Generated command reference for the Version & Release command grou
   - [CI mirror loop](#ci-mirror-loop)
   - [Hook](#hook)
 - [`rrt workspace`](#rrt-workspace)
-  - [Overview](#overview-2)
+  - [Overview](#overview-3)
   - [When to use this](#when-to-use-this)
   - [What it does](#what-it-does)
   - [Safety notes](#safety-notes)
-  - [Examples](#examples-2)
-  - [`rrt workspace bump`](#rrt-workspace-bump)
-- [`rrt tag`](#rrt-tag)
-  - [Overview](#overview-3)
-  - [Responsibilities](#responsibilities-1)
-  - [Tag Format](#tag-format)
-  - [Behavior](#behavior-1)
   - [Examples](#examples-3)
-  - [Caveats](#caveats)
-  - [`rrt tag create`](#rrt-tag-create)
-  - [`rrt tag check`](#rrt-tag-check)
+  - [`rrt workspace bump`](#rrt-workspace-bump)
 {/* rrt:auto:end:toc */}
 
 ## `rrt bump`
@@ -727,6 +727,149 @@ Examples
   $ rrt release repair --from main --hotfix
 ```
 
+## `rrt tag`
+
+Create and validate release tags for the current repository.
+
+### Overview
+
+`rrt tag` centralizes the management of Git release tags, ensuring that the
+repository's version history remains consistent with its configuration. It
+automates the creation of annotated tags and provides validation tools to
+verify that existing tags align with the project's versioning policy.
+
+The command supports both manual release tagging and automated verification in
+CI pipelines, helping to maintain a clean and reliable release record.
+
+### Responsibilities
+
+- create annotated Git tags matching the current configured version
+- support custom tag prefixes and annotation messages
+- validate that existing tags follow the expected naming convention
+- verify that the expected tag for the current version is present
+- optionally push newly created tags to the remote repository
+
+### Tag Format
+
+By default, tags are created with a `v` prefix (e.g., `v1.2.3`) as is standard
+for many version control and release automation tools.
+
+- The prefix can be customized using `--prefix <string>`.
+- The prefix can be removed entirely using `--prefix ""`.
+- Tag names are derived directly from the current version read from the
+  active `[tool.rrt]` configuration group.
+
+### Behavior
+
+- **create**: Reads the current version from config, builds the tag name and
+  message, and executes `git tag -a`. Refuses to overwrite existing tags
+  unless `--force` is used.
+- **check**: Scans all repository tags, identifies those that don't match the
+  requested prefix, and verifies the presence of the tag corresponding to the
+  current version.
+- **push**: When `--push` is used with `create`, the command executes
+  `git push origin <tag>` after a successful local tag creation.
+- **dry-run**: Previews the `git` commands that would be executed without
+  modifying the repository.
+
+### Examples
+
+- `rrt tag create`
+- `rrt tag create --push --message "Production release v1.5.0"`
+- `rrt tag create --prefix "" --force`
+- `rrt tag check`
+- `rrt tag check --strict --prefix "rel-"`
+
+### Caveats
+
+- Requires a valid Git repository and `repo-release-tools` configuration.
+- Annotated tags are used to ensure that metadata (author, date, message) is
+  correctly captured in the Git history.
+- The `check --strict` mode is recommended for CI pipelines to ensure that a
+  tag was correctly created before a release proceeds.
+
+```text
+Usage:  rrt tag [OPTIONS] <tag_command>
+
+Create annotated git tags from the current configured version, or check that existing tags follow the naming convention.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  create      Create an annotated git tag for the current version.
+  check       Validate existing tags against the configured version.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt tag create`
+
+```text
+Usage:  rrt tag create [OPTIONS]
+
+Create an annotated git tag matching the current configured version.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --prefix PREFIX  Tag prefix (default: 'v'). Pass empty string for no prefix. Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
+  --message MSG    Annotation message. Defaults to 'Release <tag>'.
+  --push           Push the tag to origin after creating it.
+  --force          Delete and recreate the tag if it already exists.
+  --dry-run        Preview what would happen without making changes.
+  --group GROUP    Version group to read when multiple groups are configured. Pass a comma-separated list (e.g. 'a,b,c') to tag several groups in one invocation; --prefix must then include the '{group}' token.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt tag create
+  $ rrt tag create --push
+  $ rrt tag create --prefix '' --message 'Release 1.2.3'
+  $ rrt tag create --group backend,sdk --prefix '{group}-v'
+  $ rrt tag check
+  $ rrt tag check --strict
+  $ rrt tag check --group backend,sdk --prefix '{group}-v'
+```
+
+### `rrt tag check`
+
+```text
+Usage:  rrt tag check [OPTIONS]
+
+Check that existing git tags follow the naming convention.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --prefix PREFIX  Expected tag prefix (default: 'v'). Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
+  --strict         Fail if the expected tag for the current version is missing.
+  --group GROUP    Version group to read when multiple groups are configured. Pass a comma-separated list (e.g. 'a,b,c') to check several groups in one invocation; --prefix must then include the '{group}' token.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt tag create
+  $ rrt tag create --push
+  $ rrt tag create --prefix '' --message 'Release 1.2.3'
+  $ rrt tag create --group backend,sdk --prefix '{group}-v'
+  $ rrt tag check
+  $ rrt tag check --strict
+  $ rrt tag check --group backend,sdk --prefix '{group}-v'
+```
+
 ## `rrt sync`
 
 ### Configuration
@@ -936,147 +1079,4 @@ Examples
   $ rrt workspace bump minor --packages api,sdk,docs
   $ rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
   $ rrt workspace bump patch --dry-run --packages api,sdk
-```
-
-## `rrt tag`
-
-Create and validate release tags for the current repository.
-
-### Overview
-
-`rrt tag` centralizes the management of Git release tags, ensuring that the
-repository's version history remains consistent with its configuration. It
-automates the creation of annotated tags and provides validation tools to
-verify that existing tags align with the project's versioning policy.
-
-The command supports both manual release tagging and automated verification in
-CI pipelines, helping to maintain a clean and reliable release record.
-
-### Responsibilities
-
-- create annotated Git tags matching the current configured version
-- support custom tag prefixes and annotation messages
-- validate that existing tags follow the expected naming convention
-- verify that the expected tag for the current version is present
-- optionally push newly created tags to the remote repository
-
-### Tag Format
-
-By default, tags are created with a `v` prefix (e.g., `v1.2.3`) as is standard
-for many version control and release automation tools.
-
-- The prefix can be customized using `--prefix <string>`.
-- The prefix can be removed entirely using `--prefix ""`.
-- Tag names are derived directly from the current version read from the
-  active `[tool.rrt]` configuration group.
-
-### Behavior
-
-- **create**: Reads the current version from config, builds the tag name and
-  message, and executes `git tag -a`. Refuses to overwrite existing tags
-  unless `--force` is used.
-- **check**: Scans all repository tags, identifies those that don't match the
-  requested prefix, and verifies the presence of the tag corresponding to the
-  current version.
-- **push**: When `--push` is used with `create`, the command executes
-  `git push origin <tag>` after a successful local tag creation.
-- **dry-run**: Previews the `git` commands that would be executed without
-  modifying the repository.
-
-### Examples
-
-- `rrt tag create`
-- `rrt tag create --push --message "Production release v1.5.0"`
-- `rrt tag create --prefix "" --force`
-- `rrt tag check`
-- `rrt tag check --strict --prefix "rel-"`
-
-### Caveats
-
-- Requires a valid Git repository and `repo-release-tools` configuration.
-- Annotated tags are used to ensure that metadata (author, date, message) is
-  correctly captured in the Git history.
-- The `check --strict` mode is recommended for CI pipelines to ensure that a
-  tag was correctly created before a release proceeds.
-
-```text
-Usage:  rrt tag [OPTIONS] <tag_command>
-
-Create annotated git tags from the current configured version, or check that existing tags follow the naming convention.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  create      Create an annotated git tag for the current version.
-  check       Validate existing tags against the configured version.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help  Show this message and exit.
-```
-
-### `rrt tag create`
-
-```text
-Usage:  rrt tag create [OPTIONS]
-
-Create an annotated git tag matching the current configured version.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help       Show this message and exit.
-  --prefix PREFIX  Tag prefix (default: 'v'). Pass empty string for no prefix. Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
-  --message MSG    Annotation message. Defaults to 'Release <tag>'.
-  --push           Push the tag to origin after creating it.
-  --force          Delete and recreate the tag if it already exists.
-  --dry-run        Preview what would happen without making changes.
-  --group GROUP    Version group to read when multiple groups are configured. Pass a comma-separated list (e.g. 'a,b,c') to tag several groups in one invocation; --prefix must then include the '{group}' token.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt tag create
-  $ rrt tag create --push
-  $ rrt tag create --prefix '' --message 'Release 1.2.3'
-  $ rrt tag create --group backend,sdk --prefix '{group}-v'
-  $ rrt tag check
-  $ rrt tag check --strict
-  $ rrt tag check --group backend,sdk --prefix '{group}-v'
-```
-
-### `rrt tag check`
-
-```text
-Usage:  rrt tag check [OPTIONS]
-
-Check that existing git tags follow the naming convention.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help       Show this message and exit.
-  --prefix PREFIX  Expected tag prefix (default: 'v'). Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
-  --strict         Fail if the expected tag for the current version is missing.
-  --group GROUP    Version group to read when multiple groups are configured. Pass a comma-separated list (e.g. 'a,b,c') to check several groups in one invocation; --prefix must then include the '{group}' token.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt tag create
-  $ rrt tag create --push
-  $ rrt tag create --prefix '' --message 'Release 1.2.3'
-  $ rrt tag create --group backend,sdk --prefix '{group}-v'
-  $ rrt tag check
-  $ rrt tag check --strict
-  $ rrt tag check --group backend,sdk --prefix '{group}-v'
 ```

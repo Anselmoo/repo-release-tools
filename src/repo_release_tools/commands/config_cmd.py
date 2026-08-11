@@ -90,6 +90,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import config as cfg
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config.reference import render_reference_toml
 from repo_release_tools.ui import (
     GLYPHS,
@@ -390,6 +391,7 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+@register_command(name="config", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the config command."""
     parser = subparsers.add_parser(

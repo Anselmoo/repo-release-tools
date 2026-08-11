@@ -78,6 +78,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.workflow import git
 
@@ -591,6 +592,7 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     return 0
 
 
+@register_command(name="branch", category=CommandCategory.WRITE, group=CommandGroup.GIT_WORKFLOW)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register branch subcommands."""
     branch_parser = subparsers.add_parser(

@@ -64,6 +64,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.integrations.skill_assets import BUNDLED_SKILLS
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
@@ -249,6 +250,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+@register_command(name="skill", category=CommandCategory.WRITE, group=CommandGroup.SETUP_TOOLING)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the skill command group."""
     parser = subparsers.add_parser(

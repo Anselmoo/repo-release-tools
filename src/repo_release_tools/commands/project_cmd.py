@@ -23,6 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, register_command
 from repo_release_tools.config.project_meta import (
     ProjectMetadata,
     load_project_metadata,
@@ -147,6 +148,7 @@ def _render_text(metadata: ProjectMetadata) -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+@register_command(name="project", category=CommandCategory.READ)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the `project` command group on the root parser."""
     parser = subparsers.add_parser(

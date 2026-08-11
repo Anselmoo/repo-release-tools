@@ -50,6 +50,7 @@ import os
 import sys
 from dataclasses import dataclass
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import VerbosePrinter
 
 ENV_EPILOG = "  $ rrt env\n  $ rrt env --json"
@@ -179,6 +180,7 @@ def cmd_env_check(args: argparse.Namespace) -> int:
     return 1
 
 
+@register_command(name="env", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the env command."""
     parser = subparsers.add_parser(

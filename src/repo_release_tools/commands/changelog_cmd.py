@@ -52,10 +52,14 @@ from __future__ import annotations
 
 import argparse
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands.changelog_compare import register_subcommand as _register_compare
 from repo_release_tools.commands.changelog_lint import register_subcommand as _register_lint
 
 
+@register_command(
+    name="changelog", category=CommandCategory.READ, group=CommandGroup.VERSION_RELEASE
+)
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """Register the ``changelog`` command group."""
     parser = subparsers.add_parser(

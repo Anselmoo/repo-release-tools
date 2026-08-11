@@ -71,6 +71,7 @@ from repo_release_tools.commands._common import (
     find_duplicate_group_names,
     parse_group_names,
 )
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     VersionGroup,
     find_repo_root,
@@ -523,6 +524,7 @@ _TAG_EPILOG = (
 )
 
 
+@register_command(name="tag", category=CommandCategory.READ, group=CommandGroup.VERSION_RELEASE)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the tag command."""
     parser = subparsers.add_parser(

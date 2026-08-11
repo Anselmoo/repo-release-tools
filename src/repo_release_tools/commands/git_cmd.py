@@ -90,6 +90,7 @@ from __future__ import annotations
 
 import argparse
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands.git_backport import register_backport
 from repo_release_tools.commands.git_commit import register_commit
 from repo_release_tools.commands.git_inspect import register_inspect
@@ -106,6 +107,7 @@ GIT_EPILOG = (
 )
 
 
+@register_command(name="git", category=CommandCategory.WRITE, group=CommandGroup.GIT_WORKFLOW)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the git command group."""
     parser = subparsers.add_parser(

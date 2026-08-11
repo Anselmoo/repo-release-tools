@@ -8,108 +8,116 @@ description: "Generated command reference for the Setup & Tooling command group.
 {/* Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. */}
 
 {/* rrt:auto:start:toc */}
-- [`rrt install`](#rrt-install)
+- [`rrt agents`](#rrt-agents)
   - [Overview](#overview)
-  - [Responsibilities](#responsibilities)
-  - [Target roots](#target-roots)
+  - [Target surfaces](#target-surfaces)
   - [Behavior](#behavior)
   - [Examples](#examples)
   - [Caveats](#caveats)
-- [`rrt init`](#rrt-init)
+  - [`rrt agents install`](#rrt-agents-install)
+- [`rrt hooks`](#rrt-hooks)
   - [Overview](#overview-1)
-  - [Responsibilities](#responsibilities-1)
-  - [Target Surfaces](#target-surfaces)
+  - [Target surfaces](#target-surfaces-1)
   - [Behavior](#behavior-1)
   - [Examples](#examples-1)
   - [Caveats](#caveats-1)
-- [`rrt skill`](#rrt-skill)
+  - [`rrt hooks install`](#rrt-hooks-install)
+- [`rrt init`](#rrt-init)
   - [Overview](#overview-2)
-  - [Target surfaces](#target-surfaces-1)
+  - [Responsibilities](#responsibilities)
+  - [Target Surfaces](#target-surfaces-2)
   - [Behavior](#behavior-2)
   - [Examples](#examples-2)
   - [Caveats](#caveats-2)
-  - [`rrt skill install`](#rrt-skill-install)
-- [`rrt agents`](#rrt-agents)
+- [`rrt skill`](#rrt-skill)
   - [Overview](#overview-3)
-  - [Target surfaces](#target-surfaces-2)
+  - [Target surfaces](#target-surfaces-3)
   - [Behavior](#behavior-3)
   - [Examples](#examples-3)
   - [Caveats](#caveats-3)
-  - [`rrt agents install`](#rrt-agents-install)
-- [`rrt hooks`](#rrt-hooks)
+  - [`rrt skill install`](#rrt-skill-install)
+- [`rrt install`](#rrt-install)
   - [Overview](#overview-4)
-  - [Target surfaces](#target-surfaces-3)
+  - [Responsibilities](#responsibilities-1)
+  - [Target roots](#target-roots)
   - [Behavior](#behavior-4)
   - [Examples](#examples-4)
   - [Caveats](#caveats-4)
-  - [`rrt hooks install`](#rrt-hooks-install)
 {/* rrt:auto:end:toc */}
 
-## `rrt install`
+## `rrt agents`
 
-Install bundled rrt user workflow surfaces into local/global tool roots.
+Install bundled rrt user agent definitions (.agent.md files).
 
 ### Overview
 
-`rrt install` provides a unified, top-level entrypoint for the existing
-specialized installer surfaces:
+`rrt agents` manages installation of the packaged user-facing agent definitions
+into tool-specific agent directories. The only implemented subcommand is `install`.
 
-- `skill install`
-- `agents install`
-- `hooks install`
+### Target surfaces
 
-It is designed to simplify the initial setup and maintenance of the agentic
-workflow tools by allowing users to install all (or a subset of) surfaces
-into one or more target destinations in a single operation.
+The install command can write to local or global agent roots for:
 
-### Responsibilities
+- Claude: `.claude/agents`
+- Codex: `.codex/agents`
+- Copilot: `.github/agents` (local), `~/.copilot/agents` (global)
+- Gemini: `.gemini/agents`
 
-- coordinate the installation of multiple surface types (skills, agents, hooks)
-- validate target compatibility across all requested surfaces
-- provide a consistent dry-run experience for multi-surface installation
-- manage local and global tool root discovery
-
-### Target roots
-
-Supported local/global roots include:
-
-- **Claude**: `./.claude` (local) and `~/.claude` (global)
-- **Codex**: `./.codex` (local) and `~/.codex` (global)
-- **Copilot**: `./.github` (local) and `~/.copilot` (global)
-- **Gemini**: `./.gemini` (local) and `~/.gemini` (global)
-
-Each surface appends its own standardized subdirectory (e.g., `skills`,
-`agents`, or `hooks`) using the internal per-surface logic.
+Each target receives one flat `.agent.md` file per bundled user agent.
 
 ### Behavior
 
-- If `--surface` is omitted, all bundled surfaces are installed.
-- Accepts multiple `--target` values to support parallel installation into
-  different tools or both local and global roots.
-- Respects `--force` to overwrite existing files across all selected surfaces.
-- Supports `--dry-run` to preview the entire installation plan without modifying
-  any files.
-- Exits with an error if any requested target is unsupported by a selected
-  surface.
+- Accepts one or more `--target` values; duplicates are ignored after first use.
+- Resolves local targets relative to the current working directory and global
+  targets relative to the home directory.
+- Refuses to overwrite an existing file unless `--force` is provided.
+- Supports `--dry-run` previews that show the resolved destination paths
+  without writing files.
 
 ### Examples
 
-- `rrt install --target claude-local`
-- `rrt install --surface skill --target copilot-local`
-- `rrt install --surface agents --surface hooks --target codex-global --dry-run`
-- `rrt install --target gemini-local --target gemini-global --force`
+- `rrt agents install --target claude-local`
+- `rrt agents install --target claude-local --target codex-local`
+- `rrt agents install --target claude-global --force`
+- `rrt agents install --dry-run`
 
 ### Caveats
 
+- `rrt agents` requires a subcommand; use `rrt agents install ...`.
 - Without `--target`, the command prints available destinations in dry-run
   mode and otherwise fails.
-- The installation is additive by default; existing files are only replaced
-  when `--force` is explicitly passed.
+- Existing files at the destination are replaced only when `--force` is used.
 
 ```text
-Usage:  rrt install [OPTIONS]
+Usage:  rrt agents [OPTIONS] <agents_command>
 
-Install one or more bundled rrt agent surfaces (skill, agents, hooks) into one or more local/global targets.
+Install bundled rrt user agents into one or more local or global agent directories.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  install     Install bundled rrt user agents into agent directories.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt agents install --target claude-local
+  $ rrt agents install --target claude-local --target codex-local
+  $ rrt agents install --target copilot-local
+  $ rrt agents install --target claude-global --force
+```
+
+### `rrt agents install`
+
+```text
+Usage:  rrt agents install [OPTIONS]
+
+Install bundled .agent.md user agents into one or more local or global agent directories.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -118,18 +126,117 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help         Show this message and exit.
-  --surface SURFACE  Surface to install. Repeat for multiple values. Defaults to all: skill, agents, hooks.
-  --target DEST      Install target. Repeat to install into multiple locations. Use --dry-run with no targets to inspect supported values.
-  --dry-run          Preview without writing files.
-  --force            Overwrite existing installed files.
+  -h, --help     Show this message and exit.
+  --target DEST  Install target. Repeat to install into multiple locations: claude-local, claude-global, codex-local, codex-global, copilot-local, copilot-global, gemini-local, gemini-global.
+  --agent AGENT  Install a specific agent by name. When the agent declares a `family:` metadata, the entire family will be installed. Repeat for multiple agents.
+  --dry-run      Preview without writing files.
+  --force        Overwrite existing agent files.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt install --target claude-local
-  $ rrt install --surface skill --target copilot-local
-  $ rrt install --surface agents --surface hooks --target codex-global --dry-run
+  $ rrt agents install --target claude-local
+  $ rrt agents install --target claude-local --target codex-local
+  $ rrt agents install --target gemini-local
+  $ rrt agents install --target claude-global --force --dry-run
+  $ rrt agents install --target copilot-global
+```
+
+## `rrt hooks`
+
+Install bundled rrt user workflow hook scripts and register them automatically.
+
+### Overview
+
+`rrt hooks` manages installation of the packaged user-facing hook scripts into
+tool-specific hook directories and writes managed hook-registration config for
+the selected surface. The only implemented subcommand is `install`.
+
+### Target surfaces
+
+The install command can write to local or global hook roots for:
+
+- Claude: `.claude/hooks`
+- Codex: `.codex/hooks`
+- Copilot: `.github/hooks` (local), `~/.copilot/hooks` (global)
+- Gemini: `.gemini/hooks`
+
+Each target receives the same bundled `.py` hook scripts for user-facing `rrt`
+workflow checks and a managed hook-registration file in the surface's native
+JSON format.
+
+### Behavior
+
+- Accepts one or more `--target` values; duplicates are ignored after first use.
+- Resolves local targets relative to the current working directory.
+- Refuses to overwrite an existing script file unless `--force` is provided.
+- Supports `--dry-run` previews that show the resolved destination paths
+    without writing files.
+- Merges managed hook registrations additively, preserving unrelated settings.
+
+### Examples
+
+- `rrt hooks install --target claude-local`
+- `rrt hooks install --target claude-local --force`
+- `rrt hooks install --dry-run`
+
+### Caveats
+
+- `rrt hooks` requires a subcommand; use `rrt hooks install ...`.
+- Without `--target`, the command prints available destinations in dry-run
+  mode and otherwise fails.
+- Hook registration happens automatically during installation.
+
+```text
+Usage:  rrt hooks [OPTIONS] <hooks_command>
+
+Install bundled rrt user workflow hook scripts into one or more local hook directories and update the surface's hook registration JSON.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  install     Install bundled rrt hook scripts into hook directories and register them.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt hooks install --target claude-local
+  $ rrt hooks install --target codex-local
+  $ rrt hooks install --target gemini-local
+  $ rrt hooks install --target claude-local --force
+```
+
+### `rrt hooks install`
+
+```text
+Usage:  rrt hooks install [OPTIONS]
+
+Install bundled rrt user workflow hook .py scripts into one or more local hook directories and update the native hook-registration JSON for that surface.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --target DEST  Install target. Repeat to install into multiple locations: claude-local, claude-global, codex-local, codex-global, copilot-local, copilot-global, gemini-local, gemini-global.
+  --dry-run      Preview without writing files.
+  --force        Overwrite existing hook files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt hooks install --target claude-local
+  $ rrt hooks install --target claude-local --force --dry-run
+  $ rrt hooks install --target codex-global
+  $ rrt hooks install --target copilot-local
 ```
 
 ## `rrt init`
@@ -332,178 +439,71 @@ Examples
   $ rrt skill install --target gemini-global
 ```
 
-## `rrt agents`
+## `rrt install`
 
-Install bundled rrt user agent definitions (.agent.md files).
-
-### Overview
-
-`rrt agents` manages installation of the packaged user-facing agent definitions
-into tool-specific agent directories. The only implemented subcommand is `install`.
-
-### Target surfaces
-
-The install command can write to local or global agent roots for:
-
-- Claude: `.claude/agents`
-- Codex: `.codex/agents`
-- Copilot: `.github/agents` (local), `~/.copilot/agents` (global)
-- Gemini: `.gemini/agents`
-
-Each target receives one flat `.agent.md` file per bundled user agent.
-
-### Behavior
-
-- Accepts one or more `--target` values; duplicates are ignored after first use.
-- Resolves local targets relative to the current working directory and global
-  targets relative to the home directory.
-- Refuses to overwrite an existing file unless `--force` is provided.
-- Supports `--dry-run` previews that show the resolved destination paths
-  without writing files.
-
-### Examples
-
-- `rrt agents install --target claude-local`
-- `rrt agents install --target claude-local --target codex-local`
-- `rrt agents install --target claude-global --force`
-- `rrt agents install --dry-run`
-
-### Caveats
-
-- `rrt agents` requires a subcommand; use `rrt agents install ...`.
-- Without `--target`, the command prints available destinations in dry-run
-  mode and otherwise fails.
-- Existing files at the destination are replaced only when `--force` is used.
-
-```text
-Usage:  rrt agents [OPTIONS] <agents_command>
-
-Install bundled rrt user agents into one or more local or global agent directories.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  install     Install bundled rrt user agents into agent directories.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help  Show this message and exit.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt agents install --target claude-local
-  $ rrt agents install --target claude-local --target codex-local
-  $ rrt agents install --target copilot-local
-  $ rrt agents install --target claude-global --force
-```
-
-### `rrt agents install`
-
-```text
-Usage:  rrt agents install [OPTIONS]
-
-Install bundled .agent.md user agents into one or more local or global agent directories.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help     Show this message and exit.
-  --target DEST  Install target. Repeat to install into multiple locations: claude-local, claude-global, codex-local, codex-global, copilot-local, copilot-global, gemini-local, gemini-global.
-  --agent AGENT  Install a specific agent by name. When the agent declares a `family:` metadata, the entire family will be installed. Repeat for multiple agents.
-  --dry-run      Preview without writing files.
-  --force        Overwrite existing agent files.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt agents install --target claude-local
-  $ rrt agents install --target claude-local --target codex-local
-  $ rrt agents install --target gemini-local
-  $ rrt agents install --target claude-global --force --dry-run
-  $ rrt agents install --target copilot-global
-```
-
-## `rrt hooks`
-
-Install bundled rrt user workflow hook scripts and register them automatically.
+Install bundled rrt user workflow surfaces into local/global tool roots.
 
 ### Overview
 
-`rrt hooks` manages installation of the packaged user-facing hook scripts into
-tool-specific hook directories and writes managed hook-registration config for
-the selected surface. The only implemented subcommand is `install`.
+`rrt install` provides a unified, top-level entrypoint for the existing
+specialized installer surfaces:
 
-### Target surfaces
+- `skill install`
+- `agents install`
+- `hooks install`
 
-The install command can write to local or global hook roots for:
+It is designed to simplify the initial setup and maintenance of the agentic
+workflow tools by allowing users to install all (or a subset of) surfaces
+into one or more target destinations in a single operation.
 
-- Claude: `.claude/hooks`
-- Codex: `.codex/hooks`
-- Copilot: `.github/hooks` (local), `~/.copilot/hooks` (global)
-- Gemini: `.gemini/hooks`
+### Responsibilities
 
-Each target receives the same bundled `.py` hook scripts for user-facing `rrt`
-workflow checks and a managed hook-registration file in the surface's native
-JSON format.
+- coordinate the installation of multiple surface types (skills, agents, hooks)
+- validate target compatibility across all requested surfaces
+- provide a consistent dry-run experience for multi-surface installation
+- manage local and global tool root discovery
+
+### Target roots
+
+Supported local/global roots include:
+
+- **Claude**: `./.claude` (local) and `~/.claude` (global)
+- **Codex**: `./.codex` (local) and `~/.codex` (global)
+- **Copilot**: `./.github` (local) and `~/.copilot` (global)
+- **Gemini**: `./.gemini` (local) and `~/.gemini` (global)
+
+Each surface appends its own standardized subdirectory (e.g., `skills`,
+`agents`, or `hooks`) using the internal per-surface logic.
 
 ### Behavior
 
-- Accepts one or more `--target` values; duplicates are ignored after first use.
-- Resolves local targets relative to the current working directory.
-- Refuses to overwrite an existing script file unless `--force` is provided.
-- Supports `--dry-run` previews that show the resolved destination paths
-    without writing files.
-- Merges managed hook registrations additively, preserving unrelated settings.
+- If `--surface` is omitted, all bundled surfaces are installed.
+- Accepts multiple `--target` values to support parallel installation into
+  different tools or both local and global roots.
+- Respects `--force` to overwrite existing files across all selected surfaces.
+- Supports `--dry-run` to preview the entire installation plan without modifying
+  any files.
+- Exits with an error if any requested target is unsupported by a selected
+  surface.
 
 ### Examples
 
-- `rrt hooks install --target claude-local`
-- `rrt hooks install --target claude-local --force`
-- `rrt hooks install --dry-run`
+- `rrt install --target claude-local`
+- `rrt install --surface skill --target copilot-local`
+- `rrt install --surface agents --surface hooks --target codex-global --dry-run`
+- `rrt install --target gemini-local --target gemini-global --force`
 
 ### Caveats
 
-- `rrt hooks` requires a subcommand; use `rrt hooks install ...`.
 - Without `--target`, the command prints available destinations in dry-run
   mode and otherwise fails.
-- Hook registration happens automatically during installation.
+- The installation is additive by default; existing files are only replaced
+  when `--force` is explicitly passed.
 
 ```text
-Usage:  rrt hooks [OPTIONS] <hooks_command>
+Usage:  rrt install [OPTIONS]
 
-Install bundled rrt user workflow hook scripts into one or more local hook directories and update the surface's hook registration JSON.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  install     Install bundled rrt hook scripts into hook directories and register them.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help  Show this message and exit.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt hooks install --target claude-local
-  $ rrt hooks install --target codex-local
-  $ rrt hooks install --target gemini-local
-  $ rrt hooks install --target claude-local --force
-```
-
-### `rrt hooks install`
-
-```text
-Usage:  rrt hooks install [OPTIONS]
-
-Install bundled rrt user workflow hook .py scripts into one or more local hook directories and update the native hook-registration JSON for that surface.
+Install one or more bundled rrt agent surfaces (skill, agents, hooks) into one or more local/global targets.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
@@ -512,16 +512,16 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help     Show this message and exit.
-  --target DEST  Install target. Repeat to install into multiple locations: claude-local, claude-global, codex-local, codex-global, copilot-local, copilot-global, gemini-local, gemini-global.
-  --dry-run      Preview without writing files.
-  --force        Overwrite existing hook files.
+  -h, --help         Show this message and exit.
+  --surface SURFACE  Surface to install. Repeat for multiple values. Defaults to all: skill, agents, hooks.
+  --target DEST      Install target. Repeat to install into multiple locations. Use --dry-run with no targets to inspect supported values.
+  --dry-run          Preview without writing files.
+  --force            Overwrite existing installed files.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt hooks install --target claude-local
-  $ rrt hooks install --target claude-local --force --dry-run
-  $ rrt hooks install --target codex-global
-  $ rrt hooks install --target copilot-local
+  $ rrt install --target claude-local
+  $ rrt install --surface skill --target copilot-local
+  $ rrt install --surface agents --surface hooks --target codex-global --dry-run
 ```

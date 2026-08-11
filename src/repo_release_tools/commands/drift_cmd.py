@@ -63,6 +63,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.state import (
     DRIFT_LOCK_NAME,
     build_lock,
@@ -179,6 +180,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 1
 
 
+@register_command(name="drift", category=CommandCategory.WRITE, group=CommandGroup.REPO_HEALTH)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the drift command group."""
     parser = subparsers.add_parser(

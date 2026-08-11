@@ -26,6 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._registry import CommandCategory, register_command
 from repo_release_tools.ui import DryRunPrinter
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -179,6 +180,7 @@ def _studly_case(name: str) -> str:
     return "".join(part.capitalize() for part in name.split("_"))
 
 
+@register_command(name="mcp", category=CommandCategory.READ)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the `mcp` command group on the root parser."""
     parser = subparsers.add_parser(
