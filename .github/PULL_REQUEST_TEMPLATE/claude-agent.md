@@ -10,7 +10,7 @@ CLAUDE: fill the three fields above first — every other section below depends 
   scope    -> the `(scope)` from your commit subject(s), or leave blank if you used none.
   breaking -> true only if a commit subject has `!` after type/scope, or a commit body has a
               `BREAKING CHANGE:` footer. Verify, don't guess:
-                git log --format='%B' "$BASE"...HEAD | grep -E '^\w+(\(.+\))?!:|BREAKING CHANGE:'
+                git log --format='%B' "$(git merge-base HEAD origin/main)"...HEAD | grep -E '^\w+(\(.+\))?!:|BREAKING CHANGE:'
   `type` determines the required changelog section (see SECTION_MAP in
   src/repo_release_tools/changelog.py); `breaking` gates the "Breaking changes" section below.
 -->
