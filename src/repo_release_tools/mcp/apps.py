@@ -590,7 +590,7 @@ def register_apps(mcp: FastMCP) -> None:
         force: bool = False,
     ) -> str:
         """Run rrt init with the given target format. Defaults to dry_run=True for safety."""
-        import subprocess
+        import asyncio
         import sys
         from pathlib import Path
 
@@ -604,20 +604,30 @@ def register_apps(mcp: FastMCP) -> None:
             cmd.append("--dry-run")
         if force:
             cmd.append("--force")
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=str(root),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
         try:
-            result = subprocess.run(
-                cmd, cwd=str(root), capture_output=True, text=True, timeout=20.0
-            )
-        except subprocess.TimeoutExpired:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=20.0)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
             return "[error]: rrt init timed out after 20 seconds"
-        output = result.stdout
-        if result.stderr:
-            output += f"\n[stderr]: {result.stderr}"
-        if result.returncode != 0:
-            details = (result.stderr or result.stdout).strip()
+
+        stdout = stdout_bytes.decode(errors="replace")
+        stderr = stderr_bytes.decode(errors="replace")
+        output = stdout
+        if stderr:
+            output += f"\n[stderr]: {stderr}"
+        if proc.returncode != 0:
+            details = (stderr or stdout).strip()
             if details:
-                return f"[error]: rrt init exited with code {result.returncode}: {details}"
-            return f"[error]: rrt init exited with code {result.returncode}"
+                return f"[error]: rrt init exited with code {proc.returncode}: {details}"
+            return f"[error]: rrt init exited with code {proc.returncode}"
         return output.strip() or "Init complete."
 
     @mcp.tool(

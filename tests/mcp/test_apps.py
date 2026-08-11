@@ -357,20 +357,26 @@ def test_rrt_init(tmp_path: Path) -> None:
 # ── rrt_init_run ──────────────────────────────────────────────────────────────
 
 
+def _mock_proc(stdout: bytes = b"", stderr: bytes = b"", returncode: int = 0) -> AsyncMock:
+    proc = AsyncMock()
+    proc.communicate.return_value = (stdout, stderr)
+    proc.returncode = returncode
+    return proc
+
+
 def test_rrt_init_run_dry_run(tmp_path: Path) -> None:
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)
-    fake_proc = MagicMock(stdout="Would write .rrt.toml", stderr="", returncode=0)
-    mock_run = MagicMock(return_value=fake_proc)
+    proc = _mock_proc(stdout=b"Would write .rrt.toml")
+    mock_exec = AsyncMock(return_value=proc)
 
     async def _run() -> str:
-        with patch("subprocess.run", mock_run):
+        with patch("asyncio.create_subprocess_exec", mock_exec):
             return await tools["rrt_init_run"](ctx)
 
     result = asyncio.run(_run())
     assert "Would write" in result
-    mock_run.assert_called_once()
-    assert mock_run.call_args.kwargs["timeout"] == 20.0
+    mock_exec.assert_called_once()
 
 
 def test_rrt_init_run_rejects_unknown_target_without_invoking_subprocess(
@@ -379,25 +385,25 @@ def test_rrt_init_run_rejects_unknown_target_without_invoking_subprocess(
     """SEC-007: an unallowlisted `target` must never reach subprocess argv."""
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)
-    mock_run = MagicMock()
+    mock_exec = AsyncMock()
 
     async def _run() -> str:
-        with patch("subprocess.run", mock_run):
+        with patch("asyncio.create_subprocess_exec", mock_exec):
             return await tools["rrt_init_run"](ctx, target="rrt-toml; rm -rf /")
 
     result = asyncio.run(_run())
     assert "[error]" in result
     assert "Invalid target" in result
-    mock_run.assert_not_called()
+    mock_exec.assert_not_called()
 
 
 def test_rrt_init_run_apply(tmp_path: Path) -> None:
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)
-    fake_proc = MagicMock(stdout="Wrote .rrt.toml", stderr="", returncode=0)
+    proc = _mock_proc(stdout=b"Wrote .rrt.toml")
 
     async def _run() -> str:
-        with patch("subprocess.run", return_value=fake_proc):
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
             return await tools["rrt_init_run"](ctx, target="rrt-toml", dry_run=False, force=False)
 
     result = asyncio.run(_run())
@@ -407,10 +413,10 @@ def test_rrt_init_run_apply(tmp_path: Path) -> None:
 def test_rrt_init_run_with_stderr(tmp_path: Path) -> None:
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)
-    fake_proc = MagicMock(stdout="", stderr="some warning", returncode=1)
+    proc = _mock_proc(stderr=b"some warning", returncode=1)
 
     async def _run() -> str:
-        with patch("subprocess.run", return_value=fake_proc):
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
             return await tools["rrt_init_run"](ctx)
 
     result = asyncio.run(_run())
@@ -421,10 +427,10 @@ def test_rrt_init_run_with_stderr(tmp_path: Path) -> None:
 def test_rrt_init_run_empty_output(tmp_path: Path) -> None:
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)
-    fake_proc = MagicMock(stdout="", stderr="", returncode=0)
+    proc = _mock_proc()
 
     async def _run() -> str:
-        with patch("subprocess.run", return_value=fake_proc):
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
             return await tools["rrt_init_run"](ctx, force=True)
 
     result = asyncio.run(_run())
@@ -434,10 +440,10 @@ def test_rrt_init_run_empty_output(tmp_path: Path) -> None:
 def test_rrt_init_run_nonzero_no_output(tmp_path: Path) -> None:
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)
-    fake_proc = MagicMock(stdout="", stderr="", returncode=1)
+    proc = _mock_proc(returncode=1)
 
     async def _run() -> str:
-        with patch("subprocess.run", return_value=fake_proc):
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
             return await tools["rrt_init_run"](ctx)
 
     result = asyncio.run(_run())
@@ -448,18 +454,22 @@ def test_rrt_init_run_nonzero_no_output(tmp_path: Path) -> None:
 def test_rrt_init_run_timeout(tmp_path: Path) -> None:
     tools = _registered(tmp_path)
     ctx = _ctx(tmp_path)
+    proc = AsyncMock()
+    proc.communicate.return_value = (b"", b"")
+    proc.kill = MagicMock()
+    proc.wait = AsyncMock()
 
     async def _run() -> str:
-        with patch(
-            "subprocess.run",
-            side_effect=subprocess.TimeoutExpired(
-                cmd=["python", "-m", "repo_release_tools.cli"], timeout=20
-            ),
+        with (
+            patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)),
+            patch("asyncio.wait_for", AsyncMock(side_effect=TimeoutError)),
         ):
             return await tools["rrt_init_run"](ctx)
 
     result = asyncio.run(_run())
     assert result == "[error]: rrt init timed out after 20 seconds"
+    proc.kill.assert_called_once()
+    proc.wait.assert_awaited_once()
 
 
 # ── rrt_locks_overview ────────────────────────────────────────────────────────

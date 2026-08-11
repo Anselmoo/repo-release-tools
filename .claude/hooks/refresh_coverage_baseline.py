@@ -134,7 +134,7 @@ def main() -> int:
     if not _extract_success(payload):
         return 0
 
-    repo_root = Path.cwd()
+    repo_root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
     coverage_xml = repo_root / "coverage.xml"
     if not coverage_xml.exists():
         return 0

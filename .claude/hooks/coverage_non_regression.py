@@ -51,7 +51,7 @@ def main() -> int:
     # Ignore stdin payload (event JSON) for this deterministic check.
     _ = sys.stdin.read()
 
-    repo_root = Path.cwd()
+    repo_root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
     coverage_xml = Path(os.getenv("COVERAGE_XML_PATH", str(repo_root / "coverage.xml")))
     baseline_file = Path(
         os.getenv("COVERAGE_BASELINE_FILE", str(repo_root / ".claude" / "coverage-baseline.json")),

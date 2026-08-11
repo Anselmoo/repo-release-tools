@@ -18,6 +18,7 @@ Exit codes:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -97,7 +98,7 @@ def _extract_paths(prompt: str) -> list[Path]:
     """Return existing Python files mentioned in the prompt."""
     raw = _PY_PATH.findall(prompt)
     found: list[Path] = []
-    root = Path.cwd()
+    root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
     for p in raw:
         candidate = root / p
         if candidate.exists():

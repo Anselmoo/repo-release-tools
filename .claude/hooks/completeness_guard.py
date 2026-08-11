@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -56,7 +57,7 @@ def main() -> int:
     """Block when required shipped agent surfaces are missing."""
     _ = sys.stdin.read()
 
-    root = Path.cwd()
+    root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
     if missing := [str(path) for path in REQUIRED_PATHS if not (root / path).exists()]:
         joined = ", ".join(missing)
         return _block(f"Missing required agent surfaces: {joined}")
