@@ -224,6 +224,8 @@ def _get_command_doc_modules() -> dict[str, object]:
         git_cmd,
         hooks_cmd,
         init,
+        mcp_cmd,
+        project_cmd,
         tag,
         workspace,
     )
@@ -248,6 +250,8 @@ def _get_command_doc_modules() -> dict[str, object]:
         "hooks": hooks_cmd,
         "init": init,
         "install": install_module,
+        "mcp": mcp_cmd,
+        "project": project_cmd,
         "release": release_cmd_module,
         "skill": skill_module,
         "tag": tag,

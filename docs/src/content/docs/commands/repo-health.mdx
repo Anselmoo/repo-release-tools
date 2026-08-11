@@ -82,21 +82,24 @@ description: "Generated command reference for the Repository Health command grou
   - [`rrt folder check`](#rrt-folder-check)
   - [`rrt folder scaffold`](#rrt-folder-scaffold)
   - [`rrt folder design`](#rrt-folder-design)
-- [`rrt tree`](#rrt-tree)
+- [`rrt project`](#rrt-project)
+  - [Examples](#examples-8)
+  - [`rrt project info`](#rrt-project-info)
+- [`rrt toc`](#rrt-toc)
   - [Overview](#overview-8)
+  - [Usage](#usage)
+  - [Anchors](#anchors)
+  - [Options](#options)
+- [`rrt tree`](#rrt-tree)
+  - [Overview](#overview-9)
   - [Ignore behavior](#ignore-behavior)
   - [Output formats](#output-formats)
   - [Common options](#common-options)
   - [Failure behavior](#failure-behavior-1)
-  - [Examples](#examples-8)
+  - [Examples](#examples-9)
   - [Embedding a tree into a Markdown file](#embedding-a-tree-into-a-markdown-file)
   - [Caveats](#caveats-6)
   - [Related docs](#related-docs-2)
-- [`rrt toc`](#rrt-toc)
-  - [Overview](#overview-9)
-  - [Usage](#usage)
-  - [Anchors](#anchors)
-  - [Options](#options)
 {/* rrt:auto:end:toc */}
 
 ## `rrt artifacts`
@@ -1248,6 +1251,141 @@ Options
   --loose          Emit a permissive loose template instead of an exact one.
 ```
 
+## `rrt project`
+
+`rrt project info` — surface project metadata from the project manifest.
+
+Reads ``pyproject.toml`` / ``Cargo.toml`` / ``package.json`` and emits
+``name``, ``description``, ``version``, ``authors``, ``license``, and
+``urls`` as text (default) or JSON. Useful for generating README headers,
+populating release-body templates, or scripting CI tasks that need a
+single field via ``--key``.
+
+### Examples
+
+- ``rrt project info``
+- ``rrt project info --format json``
+- ``rrt project info --key description``
+- ``rrt project info --format json --output project-info.json``
+
+```text
+Usage:  rrt project [OPTIONS] <project_command>
+
+Read project metadata (name, description, version, authors, license, urls) from the appropriate manifest in the current repository.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  info        Print project metadata as text (default) or JSON.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt project info`
+
+```text
+Usage:  rrt project info [OPTIONS]
+
+Resolve the project manifest (pyproject.toml, Cargo.toml, or package.json) and emit name, version, description, authors, license, and URLs.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help       Show this message and exit.
+  --root PATH      Project root to read (default: current directory).
+  --format FORMAT  Output format: text (default) or json.
+  --key KEY        Emit only one field. Valid keys: name, version, description, authors, license, urls, source.
+  --output PATH    Write the output to PATH instead of stdout.
+```
+
+## `rrt toc`
+
+``rrt toc`` — generate and inject a Markdown table of contents.
+
+### Overview
+
+``rrt toc FILE`` reads a Markdown file and prints a nested bullet list of its
+headings to stdout.  With ``--inject`` and ``--anchor``, the generated TOC is
+written in-place inside a marked anchor block in a target file.
+
+### Usage
+
+```
+rrt toc FILE [--min-level N] [--max-level N]
+rrt toc FILE --inject TARGET --anchor ID [--min-level N] [--max-level N] [--dry-run]
+```
+
+### Anchors
+
+Place a pair of HTML comments in the target file to mark where the TOC
+should live:
+
+```markdown
+<!-- rrt:auto:start:toc -->
+<!-- rrt:auto:end:toc -->
+```
+
+The content between the markers is replaced on every ``rrt toc --inject`` run.
+Everything outside the markers is preserved unchanged.
+
+### Options
+
+| Flag | Default | Description |
+|---|---|---|
+| ``FILE`` | — | Markdown file to parse for headings |
+| ``--inject FILE`` | — | Target file to update in-place |
+| ``--anchor ID`` | — | Anchor ID inside the inject target |
+| ``--min-level N`` | 1 | Shallowest heading level to include (1 = ``#``) |
+| ``--max-level N`` | 6 | Deepest heading level to include (6 = ``######``) |
+| ``--dry-run`` | — | Print result instead of writing (requires ``--inject``) |
+
+``--inject`` and ``--anchor`` must always be used together.
+
+```text
+Usage:  rrt toc [OPTIONS] FILE
+
+Read a Markdown file and print a nested bullet-list TOC to stdout.
+
+With --inject and --anchor the generated TOC is written in-place inside
+an anchor block in a target file.  Markers delimit the block:
+
+  <!-- rrt:auto:start:ID -->
+  <!-- rrt:auto:end:ID -->
+
+Everything outside the markers is preserved unchanged.
+--inject and --anchor must always be used together.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  FILE           Markdown file to parse for headings.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help     Show this message and exit.
+  --inject FILE  Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
+  --anchor ID    Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
+  --min-level N  Shallowest heading level to include (default: 1 = #).
+  --max-level N  Deepest heading level to include (default: 6 = ######).
+  --dry-run      Print the result instead of writing (only effective with --inject).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt toc README.md
+  $ rrt toc README.md --min-level 2 --max-level 3
+  $ rrt toc README.md --inject README.md --anchor toc
+  $ rrt toc README.md --inject README.md --anchor toc --dry-run
+```
+
 ## `rrt tree`
 
 Render a project tree with gitignore-aware filtering.
@@ -1399,85 +1537,4 @@ Examples
   $ rrt tree --format markdown --max-depth 3
   $ rrt tree --root src/repo_release_tools --dirs-only
   $ rrt tree --format markdown --inject README.md --anchor project-tree
-```
-
-## `rrt toc`
-
-``rrt toc`` — generate and inject a Markdown table of contents.
-
-### Overview
-
-``rrt toc FILE`` reads a Markdown file and prints a nested bullet list of its
-headings to stdout.  With ``--inject`` and ``--anchor``, the generated TOC is
-written in-place inside a marked anchor block in a target file.
-
-### Usage
-
-```
-rrt toc FILE [--min-level N] [--max-level N]
-rrt toc FILE --inject TARGET --anchor ID [--min-level N] [--max-level N] [--dry-run]
-```
-
-### Anchors
-
-Place a pair of HTML comments in the target file to mark where the TOC
-should live:
-
-```markdown
-<!-- rrt:auto:start:toc -->
-<!-- rrt:auto:end:toc -->
-```
-
-The content between the markers is replaced on every ``rrt toc --inject`` run.
-Everything outside the markers is preserved unchanged.
-
-### Options
-
-| Flag | Default | Description |
-|---|---|---|
-| ``FILE`` | — | Markdown file to parse for headings |
-| ``--inject FILE`` | — | Target file to update in-place |
-| ``--anchor ID`` | — | Anchor ID inside the inject target |
-| ``--min-level N`` | 1 | Shallowest heading level to include (1 = ``#``) |
-| ``--max-level N`` | 6 | Deepest heading level to include (6 = ``######``) |
-| ``--dry-run`` | — | Print result instead of writing (requires ``--inject``) |
-
-``--inject`` and ``--anchor`` must always be used together.
-
-```text
-Usage:  rrt toc [OPTIONS] FILE
-
-Read a Markdown file and print a nested bullet-list TOC to stdout.
-
-With --inject and --anchor the generated TOC is written in-place inside
-an anchor block in a target file.  Markers delimit the block:
-
-  <!-- rrt:auto:start:ID -->
-  <!-- rrt:auto:end:ID -->
-
-Everything outside the markers is preserved unchanged.
---inject and --anchor must always be used together.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  FILE           Markdown file to parse for headings.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help     Show this message and exit.
-  --inject FILE  Markdown file to update in-place. Requires --anchor. The anchored block is replaced; all other content is preserved.
-  --anchor ID    Anchor ID to replace inside the --inject file. Place <!-- rrt:auto:start:<ID> --> and <!-- rrt:auto:end:<ID> --> markers in the target file.
-  --min-level N  Shallowest heading level to include (default: 1 = #).
-  --max-level N  Deepest heading level to include (default: 6 = ######).
-  --dry-run      Print the result instead of writing (only effective with --inject).
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt toc README.md
-  $ rrt toc README.md --min-level 2 --max-level 3
-  $ rrt toc README.md --inject README.md --anchor toc
-  $ rrt toc README.md --inject README.md --anchor toc --dry-run
 ```

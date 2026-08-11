@@ -41,9 +41,13 @@ class CommandCategory(StrEnum):
 
 
 class CommandGroup(StrEnum):
-    """The five command groups shown in grouped `--help` output.
+    """The command groups shown in grouped `--help` output, in display order.
 
-    Also used to generate the command-group reference doc pages.
+    The first five are also used to generate the command-group reference doc
+    pages (see ``_DOC_PAGE_GROUPS`` below). ``OTHER`` is a CLI-help-only
+    fallback bucket: a command that reaches this far without an explicit
+    group still shows up somewhere in `--help` instead of silently
+    vanishing — the exact failure mode this module exists to prevent.
     """
 
     VERSION_RELEASE = "version-release"
@@ -51,6 +55,7 @@ class CommandGroup(StrEnum):
     CI_AUTOMATION = "ci-automation"
     GIT_WORKFLOW = "git-workflow"
     SETUP_TOOLING = "setup-tooling"
+    OTHER = "other"
 
 
 COMMAND_GROUP_LABELS: dict[CommandGroup, str] = {
@@ -59,7 +64,18 @@ COMMAND_GROUP_LABELS: dict[CommandGroup, str] = {
     CommandGroup.CI_AUTOMATION: "CI & Automation",
     CommandGroup.GIT_WORKFLOW: "Git Workflow",
     CommandGroup.SETUP_TOOLING: "Setup & Tooling",
+    CommandGroup.OTHER: "Other",
 }
+
+# Groups rendered as their own doc page by docs/publisher.py. OTHER never gets a
+# dedicated page — it's a CLI-help-only fallback, not a real documented group.
+_DOC_PAGE_GROUPS: tuple[CommandGroup, ...] = (
+    CommandGroup.VERSION_RELEASE,
+    CommandGroup.REPO_HEALTH,
+    CommandGroup.CI_AUTOMATION,
+    CommandGroup.GIT_WORKFLOW,
+    CommandGroup.SETUP_TOOLING,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +85,7 @@ class CommandSpec:
     name: str
     register: RegisterFn
     category: CommandCategory
-    group: CommandGroup | None = None
+    group: CommandGroup = CommandGroup.OTHER
 
 
 @dataclass(slots=True)
@@ -99,26 +115,38 @@ class CommandRegistry:
         """Return the names of every top-level command in *category*."""
         return {spec.name for spec in self._specs.values() if spec.category is category}
 
-    def groups_by_label(self) -> dict[str, list[str]]:
-        """Return ``{group display name: [command names]}`` for grouped help output."""
-        result: dict[str, list[str]] = {}
-        for spec in self._specs.values():
-            if spec.group is None:
-                continue
-            label = COMMAND_GROUP_LABELS[spec.group]
-            result.setdefault(label, []).append(spec.name)
-        return result
-
-    def groups_config(self) -> tuple[tuple[str, str, tuple[str, ...]], ...]:
-        """Return ``((slug, label, (command names, ...)), ...)`` for doc generation."""
+    def _names_by_group(self) -> dict[CommandGroup, list[str]]:
         by_group: dict[CommandGroup, list[str]] = {}
         for spec in self._specs.values():
-            if spec.group is None:
-                continue
             by_group.setdefault(spec.group, []).append(spec.name)
+        return by_group
+
+    def groups_by_label(self) -> dict[str, list[str]]:
+        """Return ``{group display name: [command names]}`` for grouped help output.
+
+        Ordered by :class:`CommandGroup` declaration order (including ``OTHER``,
+        so a command is never silently omitted), each group's commands sorted
+        by name — independent of import/registration order.
+        """
+        by_group = self._names_by_group()
+        return {
+            COMMAND_GROUP_LABELS[group]: sorted(names)
+            for group in CommandGroup
+            if (names := by_group.get(group))
+        }
+
+    def groups_config(self) -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+        """Return ``((slug, label, (command names, ...)), ...)`` for doc generation.
+
+        Ordered by ``_DOC_PAGE_GROUPS`` (``OTHER`` excluded — it never gets a doc
+        page), each group's commands sorted by name — independent of
+        import/registration order.
+        """
+        by_group = self._names_by_group()
         return tuple(
-            (group.value, COMMAND_GROUP_LABELS[group], tuple(names))
-            for group, names in by_group.items()
+            (group.value, COMMAND_GROUP_LABELS[group], tuple(sorted(names)))
+            for group in _DOC_PAGE_GROUPS
+            if (names := by_group.get(group))
         )
 
 
@@ -129,7 +157,7 @@ def register_command(
     *,
     name: str,
     category: CommandCategory,
-    group: CommandGroup | None = None,
+    group: CommandGroup = CommandGroup.OTHER,
 ) -> Callable[[RegisterFn], RegisterFn]:
     """Decorate a command module's ``register()`` function to self-register it."""
 

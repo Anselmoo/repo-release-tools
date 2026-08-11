@@ -29,20 +29,23 @@ description: "Generated command reference for the Setup & Tooling command group.
   - [Behavior](#behavior-2)
   - [Examples](#examples-2)
   - [Caveats](#caveats-2)
-- [`rrt skill`](#rrt-skill)
+- [`rrt install`](#rrt-install)
   - [Overview](#overview-3)
-  - [Target surfaces](#target-surfaces-3)
+  - [Responsibilities](#responsibilities-1)
+  - [Target roots](#target-roots)
   - [Behavior](#behavior-3)
   - [Examples](#examples-3)
   - [Caveats](#caveats-3)
-  - [`rrt skill install`](#rrt-skill-install)
-- [`rrt install`](#rrt-install)
-  - [Overview](#overview-4)
-  - [Responsibilities](#responsibilities-1)
-  - [Target roots](#target-roots)
-  - [Behavior](#behavior-4)
+- [`rrt mcp`](#rrt-mcp)
   - [Examples](#examples-4)
+  - [`rrt mcp tool`](#rrt-mcp-tool)
+- [`rrt skill`](#rrt-skill)
+  - [Overview](#overview-4)
+  - [Target surfaces](#target-surfaces-3)
+  - [Behavior](#behavior-4)
+  - [Examples](#examples-5)
   - [Caveats](#caveats-4)
+  - [`rrt skill install`](#rrt-skill-install)
 {/* rrt:auto:end:toc */}
 
 ## `rrt agents`
@@ -331,6 +334,170 @@ Examples
   $ rrt init --target go
 ```
 
+## `rrt install`
+
+Install bundled rrt user workflow surfaces into local/global tool roots.
+
+### Overview
+
+`rrt install` provides a unified, top-level entrypoint for the existing
+specialized installer surfaces:
+
+- `skill install`
+- `agents install`
+- `hooks install`
+
+It is designed to simplify the initial setup and maintenance of the agentic
+workflow tools by allowing users to install all (or a subset of) surfaces
+into one or more target destinations in a single operation.
+
+### Responsibilities
+
+- coordinate the installation of multiple surface types (skills, agents, hooks)
+- validate target compatibility across all requested surfaces
+- provide a consistent dry-run experience for multi-surface installation
+- manage local and global tool root discovery
+
+### Target roots
+
+Supported local/global roots include:
+
+- **Claude**: `./.claude` (local) and `~/.claude` (global)
+- **Codex**: `./.codex` (local) and `~/.codex` (global)
+- **Copilot**: `./.github` (local) and `~/.copilot` (global)
+- **Gemini**: `./.gemini` (local) and `~/.gemini` (global)
+
+Each surface appends its own standardized subdirectory (e.g., `skills`,
+`agents`, or `hooks`) using the internal per-surface logic.
+
+### Behavior
+
+- If `--surface` is omitted, all bundled surfaces are installed.
+- Accepts multiple `--target` values to support parallel installation into
+  different tools or both local and global roots.
+- Respects `--force` to overwrite existing files across all selected surfaces.
+- Supports `--dry-run` to preview the entire installation plan without modifying
+  any files.
+- Exits with an error if any requested target is unsupported by a selected
+  surface.
+
+### Examples
+
+- `rrt install --target claude-local`
+- `rrt install --surface skill --target copilot-local`
+- `rrt install --surface agents --surface hooks --target codex-global --dry-run`
+- `rrt install --target gemini-local --target gemini-global --force`
+
+### Caveats
+
+- Without `--target`, the command prints available destinations in dry-run
+  mode and otherwise fails.
+- The installation is additive by default; existing files are only replaced
+  when `--force` is explicitly passed.
+
+```text
+Usage:  rrt install [OPTIONS]
+
+Install one or more bundled rrt agent surfaces (skill, agents, hooks) into one or more local/global targets.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help         Show this message and exit.
+  --surface SURFACE  Surface to install. Repeat for multiple values. Defaults to all: skill, agents, hooks.
+  --target DEST      Install target. Repeat to install into multiple locations. Use --dry-run with no targets to inspect supported values.
+  --dry-run          Preview without writing files.
+  --force            Overwrite existing installed files.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt install --target claude-local
+  $ rrt install --surface skill --target copilot-local
+  $ rrt install --surface agents --surface hooks --target codex-global --dry-run
+```
+
+## `rrt mcp`
+
+`rrt mcp tool new <name>` — scaffold a starter MCP tool module.
+
+Emits a new file under ``src/repo_release_tools/mcp/tools/<name>_tools.py``
+mirroring the pattern already used by the other modules in that directory:
+a ``register(mcp: FastMCP)`` function plus one ``@mcp.tool`` body with a
+typed Pydantic response model. Tool authors fill in the ``# TODO`` block.
+
+The scaffolder is intentionally minimal — it does not edit
+``mcp/tools/__init__.py``; the printed reminder tells the user to add the
+new ``register()`` call there. Keeping the edits separate makes the
+generated file reviewable on its own.
+
+### Examples
+
+- ``rrt mcp tool new sample``
+- ``rrt mcp tool new sample --title "Sample" --description "demo" --dry-run``
+- ``rrt mcp tool new sample --into custom/path.py --force``
+
+```text
+Usage:  rrt mcp [OPTIONS] <mcp_command>
+
+Scaffolders and utilities for the rrt MCP server. Currently exposes `mcp tool new` to generate a starter MCP tool module.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  tool        Manage MCP tool scaffolds.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt mcp tool`
+
+```text
+Usage:  rrt mcp tool [OPTIONS] <tool_command>
+
+Operations on MCP tool modules under mcp/tools/.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  new         Scaffold a new MCP tool module.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+#### `rrt mcp tool new`
+
+```text
+Usage:  rrt mcp tool new [OPTIONS] <name>
+
+Emit a starter `mcp/tools/<name>_tools.py` with one @mcp.tool body, a Pydantic response model, and a register(mcp) function ready to wire into mcp/tools/__init__.py:register_tools().
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <name>              Snake_case tool name (e.g. project_metadata).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help          Show this message and exit.
+  --title TITLE       Human-readable title (default: derived from name).
+  --description TEXT  Short description used in the docstring and tool body.
+  --into PATH         Target path for the new module (default: src/repo_release_tools/mcp/tools/<name>_tools.py).
+  --dry-run           Print the scaffold to stdout instead of writing the file.
+  --force             Overwrite the target file if it already exists.
+```
+
 ## `rrt skill`
 
 Install bundled rrt user workflow skills.
@@ -437,91 +604,4 @@ Examples
   $ rrt skill install --target claude-local --target codex-local
   $ rrt skill install --target copilot-global --force --dry-run
   $ rrt skill install --target gemini-global
-```
-
-## `rrt install`
-
-Install bundled rrt user workflow surfaces into local/global tool roots.
-
-### Overview
-
-`rrt install` provides a unified, top-level entrypoint for the existing
-specialized installer surfaces:
-
-- `skill install`
-- `agents install`
-- `hooks install`
-
-It is designed to simplify the initial setup and maintenance of the agentic
-workflow tools by allowing users to install all (or a subset of) surfaces
-into one or more target destinations in a single operation.
-
-### Responsibilities
-
-- coordinate the installation of multiple surface types (skills, agents, hooks)
-- validate target compatibility across all requested surfaces
-- provide a consistent dry-run experience for multi-surface installation
-- manage local and global tool root discovery
-
-### Target roots
-
-Supported local/global roots include:
-
-- **Claude**: `./.claude` (local) and `~/.claude` (global)
-- **Codex**: `./.codex` (local) and `~/.codex` (global)
-- **Copilot**: `./.github` (local) and `~/.copilot` (global)
-- **Gemini**: `./.gemini` (local) and `~/.gemini` (global)
-
-Each surface appends its own standardized subdirectory (e.g., `skills`,
-`agents`, or `hooks`) using the internal per-surface logic.
-
-### Behavior
-
-- If `--surface` is omitted, all bundled surfaces are installed.
-- Accepts multiple `--target` values to support parallel installation into
-  different tools or both local and global roots.
-- Respects `--force` to overwrite existing files across all selected surfaces.
-- Supports `--dry-run` to preview the entire installation plan without modifying
-  any files.
-- Exits with an error if any requested target is unsupported by a selected
-  surface.
-
-### Examples
-
-- `rrt install --target claude-local`
-- `rrt install --surface skill --target copilot-local`
-- `rrt install --surface agents --surface hooks --target codex-global --dry-run`
-- `rrt install --target gemini-local --target gemini-global --force`
-
-### Caveats
-
-- Without `--target`, the command prints available destinations in dry-run
-  mode and otherwise fails.
-- The installation is additive by default; existing files are only replaced
-  when `--force` is explicitly passed.
-
-```text
-Usage:  rrt install [OPTIONS]
-
-Install one or more bundled rrt agent surfaces (skill, agents, hooks) into one or more local/global targets.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Arguments
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Options
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help         Show this message and exit.
-  --surface SURFACE  Surface to install. Repeat for multiple values. Defaults to all: skill, agents, hooks.
-  --target DEST      Install target. Repeat to install into multiple locations. Use --dry-run with no targets to inspect supported values.
-  --dry-run          Preview without writing files.
-  --force            Overwrite existing installed files.
-
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-Examples
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  $ rrt install --target claude-local
-  $ rrt install --surface skill --target copilot-local
-  $ rrt install --surface agents --surface hooks --target codex-global --dry-run
 ```
