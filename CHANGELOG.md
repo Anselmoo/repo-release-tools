@@ -11,6 +11,7 @@
 
 ### Changed
 - consolidate dry-run flag into shared helper (#207)
+- extract shared install-family logic into `_install_shared.py` (#208)
 
 ## [1.14.1] - 2026-07-30
 

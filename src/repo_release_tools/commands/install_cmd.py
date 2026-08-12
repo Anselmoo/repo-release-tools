@@ -61,15 +61,15 @@ Each surface appends its own standardized subdirectory (e.g., `skills`,
 from __future__ import annotations
 
 import argparse
-import sys
 from argparse import Namespace
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from repo_release_tools.commands import agents_cmd, hooks_cmd, skill
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
+from repo_release_tools.commands._install_shared import dedupe_targets, emit_install_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
-from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
+from repo_release_tools.ui import DryRunPrinter
 
 INSTALL_EXAMPLES = (
     "  $ rrt install --target claude-local\n"
@@ -80,25 +80,8 @@ INSTALL_EXAMPLES = (
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("install", __doc__ or ""),)
 
 
-def _emit_install_error(message: str) -> int:
-    p = VerbosePrinter()
-    p.line(message, ok=False, stream=sys.stderr)
-    return 1
-
-
-def _dedupe(values: Iterable[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        ordered.append(value)
-    return ordered
-
-
 def _resolve_surfaces(surfaces: list[str] | None) -> list[str]:
-    resolved = _dedupe(surfaces or ["all"])
+    resolved = dedupe_targets(surfaces or ["all"])
     return ["skill", "agents", "hooks"] if "all" in resolved else resolved
 
 
@@ -167,12 +150,12 @@ class InstallOptions:
 def cmd_install(args: argparse.Namespace) -> int:
     """Install one or more bundled surfaces into one or more targets."""
     opts = InstallOptions.from_args(args)
-    targets = _dedupe(opts.targets or [])
+    targets = dedupe_targets(opts.targets or [])
     if not targets:
         if opts.dry_run:
             _show_available_targets()
             return 0
-        return _emit_install_error(
+        return emit_install_error(
             "No --target specified. Pass --target DEST (e.g. --target claude-local).",
         )
 
@@ -183,7 +166,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         if unsupported := [target for target in targets if target not in target_map]:
             available = ", ".join(sorted(target_map))
             joined = ", ".join(unsupported)
-            return _emit_install_error(
+            return emit_install_error(
                 f"{surface} does not support target(s): {joined}. Available: {available}.",
             )
 

@@ -45,18 +45,20 @@ JSON format.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
-import sys
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from sysconfig import get_path
 from typing import Any, cast
 
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
+from repo_release_tools.commands._install_shared import (
+    dedupe_targets,
+    display_path,
+    emit_install_error,
+)
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
-from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
+from repo_release_tools.ui import DryRunPrinter
 
 HOOK_TARGET_PATHS = {
     "claude-global": lambda cwd, home: home / ".claude" / "hooks",
@@ -137,33 +139,6 @@ def _list_hook_files() -> list[tuple[str, str]]:
     raise FileNotFoundError(f"Could not locate bundled hook scripts. Searched: {searched}")
 
 
-def _dedupe_targets(targets: Iterable[str]) -> list[str]:
-    """Return targets in first-seen order without duplicates."""
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for target in targets:
-        if target in seen:
-            continue
-        seen.add(target)
-        ordered.append(target)
-    return ordered
-
-
-def _display_path(path: Path, *, cwd: Path, home: Path) -> str:
-    """Render *path* relative to cwd or home when possible."""
-    with contextlib.suppress(ValueError):
-        return str(path.relative_to(cwd))
-    with contextlib.suppress(ValueError):
-        return f"~/{path.relative_to(home)}"
-    return str(path)
-
-
-def _emit_install_error(message: str) -> int:
-    p = VerbosePrinter()
-    p.line(message, ok=False, stream=sys.stderr)
-    return 1
-
-
 def _resolve_install_plan(
     targets: list[str],
     *,
@@ -173,7 +148,7 @@ def _resolve_install_plan(
     """Resolve target names into (target, hooks_dir, hook_files) triples."""
     hook_files = _list_hook_files()
     result = []
-    for target in _dedupe_targets(targets):
+    for target in dedupe_targets(targets):
         hooks_dir = HOOK_TARGET_PATHS[target](cwd, home)
         result.append((target, hooks_dir, hook_files))
     return result
@@ -502,10 +477,10 @@ def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
             # Skip targets that don't have hook files packaged
             continue
         for filename, _ in hook_files:
-            location = _display_path(hooks_dir / filename, cwd=cwd, home=home)
+            location = display_path(hooks_dir / filename, cwd=cwd, home=home)
             p.would_install(filename, target_name, location)
         p.would_write(
-            _display_path(config_path, cwd=cwd, home=home),
+            display_path(config_path, cwd=cwd, home=home),
             f"managed hook registration for {target_name}",
         )
     p.blank_line()
@@ -557,7 +532,7 @@ def cmd_install(args: argparse.Namespace) -> int:
             _show_available_install_targets(cwd=cwd, home=home)
             return 0
         available = ", ".join(sorted(HOOK_TARGET_PATHS))
-        return _emit_install_error(
+        return emit_install_error(
             f"No --target specified. Pass --target DEST (e.g. --target claude-local). Available: {available}.",
         )
 
@@ -581,8 +556,8 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     if conflicts:
         for target_name, filename, destination in conflicts:
-            location = _display_path(destination, cwd=cwd, home=home)
-            return _emit_install_error(
+            location = display_path(destination, cwd=cwd, home=home)
+            return emit_install_error(
                 f"{target_name} already has {filename} at {location}. Use --force to overwrite it.",
             )
 
@@ -590,11 +565,11 @@ def cmd_install(args: argparse.Namespace) -> int:
         for target_name, hooks_dir, hook_files in install_plan:
             for filename, _ in hook_files:
                 destination = hooks_dir / filename
-                location = _display_path(destination, cwd=cwd, home=home)
+                location = display_path(destination, cwd=cwd, home=home)
                 p.would_install(filename, target_name, location)
             config_path = _config_path_for_target(target_name, cwd=cwd, home=home)
             p.would_write(
-                _display_path(config_path, cwd=cwd, home=home),
+                display_path(config_path, cwd=cwd, home=home),
                 f"managed hook registration for {target_name}",
             )
         p.blank_line()
@@ -608,11 +583,11 @@ def cmd_install(args: argparse.Namespace) -> int:
             try:
                 destination.write_text(content.rstrip() + "\n", encoding="utf-8")
             except OSError as exc:
-                location = _display_path(destination, cwd=cwd, home=home)
-                return _emit_install_error(
+                location = display_path(destination, cwd=cwd, home=home)
+                return emit_install_error(
                     f"Could not install {filename} to {target_name} ({location}): {exc}",
                 )
-            location = _display_path(destination, cwd=cwd, home=home)
+            location = display_path(destination, cwd=cwd, home=home)
             p.ok(f"Installed {filename} to {target_name}: {location}")
 
         config_path = _config_path_for_target(target_name, cwd=cwd, home=home)
@@ -622,11 +597,11 @@ def cmd_install(args: argparse.Namespace) -> int:
             merged = _merge_managed_registration(target_name, existing, managed)
             _write_registration_file(config_path, merged)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
-            location = _display_path(config_path, cwd=cwd, home=home)
-            return _emit_install_error(
+            location = display_path(config_path, cwd=cwd, home=home)
+            return emit_install_error(
                 f"Could not update hook registration for {target_name} ({location}): {exc}",
             )
-        location = _display_path(config_path, cwd=cwd, home=home)
+        location = display_path(config_path, cwd=cwd, home=home)
         p.ok(f"Updated hook registration for {target_name}: {location}")
     return 0
 

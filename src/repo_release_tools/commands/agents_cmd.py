@@ -43,16 +43,19 @@ Each target receives one flat `.agent.md` file per bundled user agent.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import sys
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
+from repo_release_tools.commands._install_shared import (
+    display_path,
+    emit_install_error,
+    resolve_install_plan,
+)
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.integrations.agent_assets import BUNDLED_AGENTS, BundledAgent
-from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
+from repo_release_tools.ui import DryRunPrinter
 
 AGENT_TARGET_PATHS = {
     "claude-global": lambda cwd, home: home / ".claude" / "agents",
@@ -79,38 +82,6 @@ AGENTS_INSTALL_EXAMPLES = (
     "  $ rrt agents install --target claude-global --force --dry-run\n"
     "  $ rrt agents install --target copilot-global"
 )
-
-
-def _dedupe_targets(targets: Iterable[str]) -> list[str]:
-    """Return targets in first-seen order without duplicates."""
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for target in targets:
-        if target in seen:
-            continue
-        seen.add(target)
-        ordered.append(target)
-    return ordered
-
-
-def _display_path(path: Path, *, cwd: Path, home: Path) -> str:
-    """Render *path* relative to cwd or home when possible."""
-    with contextlib.suppress(ValueError):
-        return str(path.relative_to(cwd))
-    with contextlib.suppress(ValueError):
-        return f"~/{path.relative_to(home)}"
-    return str(path)
-
-
-def _emit_install_error(message: str) -> int:
-    p = VerbosePrinter()
-    p.line(message, ok=False, stream=sys.stderr)
-    return 1
-
-
-def _resolve_install_plan(targets: list[str], *, cwd: Path, home: Path) -> list[tuple[str, Path]]:
-    """Resolve target names into base agent directories."""
-    return [(target, AGENT_TARGET_PATHS[target](cwd, home)) for target in _dedupe_targets(targets)]
 
 
 def _select_install_agents(
@@ -173,7 +144,7 @@ def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
     p.section("Available targets")
     for target_name, resolver in sorted(AGENT_TARGET_PATHS.items()):
         for agent in BUNDLED_AGENTS:
-            location = _display_path(
+            location = display_path(
                 resolver(cwd, home) / f"{agent.name}.agent.md",
                 cwd=cwd,
                 home=home,
@@ -240,16 +211,16 @@ def cmd_install(args: argparse.Namespace) -> int:
             _show_available_install_targets(cwd=cwd, home=home)
             return 0
         available = ", ".join(sorted(AGENT_TARGET_PATHS))
-        return _emit_install_error(
+        return emit_install_error(
             f"No --target specified. Pass --target DEST (e.g. --target claude-local). Available: {available}.",
         )
 
-    install_plan = _resolve_install_plan(opts.targets, cwd=cwd, home=home)
+    install_plan = resolve_install_plan(opts.targets, AGENT_TARGET_PATHS, cwd=cwd, home=home)
 
     # Determine selected agents based on optional --agent flags.
     selected_agents, agent_error = _select_install_agents(opts.agents)
     if agent_error is not None:
-        return _emit_install_error(agent_error)
+        return emit_install_error(agent_error)
     if selected_agents is None:
         selected_agents = list(BUNDLED_AGENTS)
 
@@ -265,8 +236,8 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     if conflicts:
         for target_name, agent_name, destination in conflicts:
-            location = _display_path(destination, cwd=cwd, home=home)
-            return _emit_install_error(
+            location = display_path(destination, cwd=cwd, home=home)
+            return emit_install_error(
                 f"{target_name} already has {agent_name} at {location}. Use --force to overwrite it.",
             )
 
@@ -274,7 +245,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         for target_name, agents_dir in install_plan:
             for agent in selected_agents:
                 destination = agents_dir / f"{agent.name}.agent.md"
-                location = _display_path(destination, cwd=cwd, home=home)
+                location = display_path(destination, cwd=cwd, home=home)
                 p.would_install(agent.name, target_name, location)
         p.blank_line()
         p.footer("no files were modified")
@@ -287,11 +258,11 @@ def cmd_install(args: argparse.Namespace) -> int:
             try:
                 destination.write_text(agent.markdown.rstrip() + "\n", encoding="utf-8")
             except OSError as exc:
-                location = _display_path(destination, cwd=cwd, home=home)
-                return _emit_install_error(
+                location = display_path(destination, cwd=cwd, home=home)
+                return emit_install_error(
                     f"Could not install {agent.name} to {target_name} ({location}): {exc}",
                 )
-            location = _display_path(destination, cwd=cwd, home=home)
+            location = display_path(destination, cwd=cwd, home=home)
             p.ok(f"Installed {agent.name} to {target_name}: {location}")
     return 0
 

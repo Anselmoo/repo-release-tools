@@ -6,10 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from repo_release_tools.commands._install_shared import resolve_install_plan
 from repo_release_tools.commands.skill import (
-    _dedupe_targets,
-    _display_path,
-    _resolve_install_plan,
+    TARGET_PATHS,
     cmd_install,
     register,
 )
@@ -239,34 +238,15 @@ def test_cmd_install_aborts_all_targets_when_one_conflicts(
     assert not (tmp_path / ".codex" / "skills" / "rrt-user-bootstrap").exists()
 
 
-def test_dedupe_targets_preserves_order_and_drops_duplicates() -> None:
-    result = _dedupe_targets(["copilot-local", "claude-local", "copilot-local", "codex-local"])
-    assert result == ["copilot-local", "claude-local", "codex-local"]
-
-
-def test_display_path_uses_cwd_home_and_absolute(tmp_path: Path) -> None:
+def test_resolve_install_plan_uses_skill_target_mappings(tmp_path: Path) -> None:
     cwd = tmp_path / "repo"
     home = tmp_path / "home"
     cwd.mkdir()
     home.mkdir()
 
-    assert _display_path(cwd / "file.txt", cwd=cwd, home=home) == "file.txt"
-    assert (
-        _display_path(home / ".copilot" / "skills" / "rrt-user-bootstrap", cwd=cwd, home=home)
-        == "~/.copilot/skills/rrt-user-bootstrap"
-    )
-    absolute = Path("/tmp") / "outside"
-    assert _display_path(absolute, cwd=cwd, home=home) == str(absolute)
-
-
-def test_resolve_install_plan_uses_target_mappings(tmp_path: Path) -> None:
-    cwd = tmp_path / "repo"
-    home = tmp_path / "home"
-    cwd.mkdir()
-    home.mkdir()
-
-    plan = _resolve_install_plan(
+    plan = resolve_install_plan(
         ["copilot-local", "claude-global", "copilot-local"],
+        TARGET_PATHS,
         cwd=cwd,
         home=home,
     )
