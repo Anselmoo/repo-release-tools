@@ -9,6 +9,9 @@
 ### Fixed
 - resolve PR review findings in agent templates
 
+### Changed
+- consolidate dry-run flag into shared helper (#207)
+
 ## [1.14.1] - 2026-07-30
 
 ### Added

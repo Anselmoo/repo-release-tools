@@ -58,6 +58,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import __version__
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter, highlight_terminal
 
@@ -179,11 +180,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         description="Write a starter .github/workflows/rrt.yml workflow for repo-release-tools CI.",
         epilog=ACTION_INIT_EXAMPLES,
     )
-    init_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview without writing files.",
-    )
+    add_dry_run_flag(init_parser)
     init_parser.add_argument(
         "--force",
         action="store_true",

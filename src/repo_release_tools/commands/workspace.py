@@ -49,6 +49,7 @@ from repo_release_tools.changelog import (
     has_unreleased_section,
     promote_unreleased,
 )
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands._version_render import render_version_write_events
@@ -291,11 +292,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="PATHS",
         help="Comma-separated list of package directories to bump.",
     )
-    bump_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview changes without writing to disk.",
-    )
+    add_dry_run_flag(bump_parser, verb="writing to disk")
     bump_parser.add_argument(
         "--no-changelog",
         action="store_true",

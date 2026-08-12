@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag as _add_dry_run_flag
 from repo_release_tools.ui import GLYPHS
 from repo_release_tools.workflow import git
 
@@ -66,5 +67,5 @@ def load_status_lines(root: Path) -> list[str]:
 
 
 def add_dry_run_flag(parser: argparse.ArgumentParser) -> None:
-    """Register a shared dry-run flag."""
-    parser.add_argument("--dry-run", action="store_true", help="Preview without changing git.")
+    """Register a shared dry-run flag scoped to git operations."""
+    _add_dry_run_flag(parser, verb="changing git")

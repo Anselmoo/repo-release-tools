@@ -54,6 +54,7 @@ from pathlib import Path
 from sysconfig import get_path
 from typing import Any, cast
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
@@ -665,11 +666,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "copilot-local, copilot-global, gemini-local, gemini-global."
         ),
     )
-    install_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview without writing files.",
-    )
+    add_dry_run_flag(install_parser)
     install_parser.add_argument(
         "--force",
         action="store_true",

@@ -47,6 +47,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.tools.inject import (
     ANCHOR_END_TOKEN,
@@ -222,10 +223,7 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
         metavar="N",
         help="Deepest heading level to include (default: 6 = ######).",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print the result instead of writing (only effective with --inject).",
+    add_dry_run_flag(
+        parser, help_text="Print the result instead of writing (only effective with --inject)."
     )
     parser.set_defaults(handler=cmd_toc)

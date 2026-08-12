@@ -63,6 +63,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.state import (
     DRIFT_LOCK_NAME,
@@ -203,11 +204,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         epilog=DRIFT_LOCK_EXAMPLES,
     )
     _add_drift_lock_arguments(generate_parser)
-    generate_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview without writing files.",
-    )
+    add_dry_run_flag(generate_parser)
     generate_parser.set_defaults(handler=cmd_generate)
 
     check_parser = drift_sub.add_parser(

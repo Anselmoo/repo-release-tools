@@ -78,6 +78,7 @@ from repo_release_tools.changelog import (
     insert_generated_section,
     promote_unreleased,
 )
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._common import (
     describe_config_load_error,
     find_duplicate_group_names,
@@ -899,11 +900,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
 
     release_grp = parser.add_argument_group("Release control")
-    release_grp.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview changes without writing to disk.",
-    )
+    add_dry_run_flag(release_grp, verb="writing to disk")
     release_grp.add_argument(
         "--force",
         action="store_true",
