@@ -51,8 +51,7 @@ CLAUDE: fill the three fields above first — every other section below depends 
      (.claude/hooks/coverage_non_regression.py) allows a small margin during iteration so it
      doesn't false-block on stale/partial state — that leniency is NOT proof of anything.
      `git push` (check_push_coverage.py) and CI always re-verify fresh at a hard 100%. Verify
-     against that number, not against the Stop hook having stayed quiet. If possible, mentioned
-     the fixed issue or issues via GitHub notation -->
+     against that number, not against the Stop hook having stayed quiet. If possible, mention the fixed issue(s) via GitHub notation (e.g. Fixes #123). -->
 
 - [ ] `uv run pytest -q -m "not runtime"` passes with no `Missing:` lines (`--cov-fail-under=100` in `pyproject.toml`)
 - [ ] Changelog: per `SECTION_MAP`, `feat/fix/refactor/perf/docs` need a `[Unreleased]` bullet; `chore/ci/build/test/deps` are exempt — confirm with `git diff "$BASE"...HEAD -- CHANGELOG.md`, or N/A
