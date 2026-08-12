@@ -28,5 +28,5 @@ def add_dry_run_flag(
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help=help_text or f"Preview without {verb}.",
+        help=help_text if help_text is not None else f"Preview without {verb}.",
     )

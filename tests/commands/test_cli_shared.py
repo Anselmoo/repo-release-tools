@@ -34,6 +34,13 @@ def test_add_dry_run_flag_help_text_override() -> None:
     assert _dry_run_help(parser) == "With --reference: print without writing."
 
 
+def test_add_dry_run_flag_honors_empty_string_help_text() -> None:
+    """An explicit empty-string help_text is honored, not treated as unset."""
+    parser = argparse.ArgumentParser()
+    add_dry_run_flag(parser, verb="ignored", help_text="")
+    assert _dry_run_help(parser) == ""
+
+
 def test_add_dry_run_flag_accepts_argument_group() -> None:
     """Works on an argument group, not just a top-level parser."""
     parser = argparse.ArgumentParser()
