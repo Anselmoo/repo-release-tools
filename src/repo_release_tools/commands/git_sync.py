@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
 
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._git_shared import (
     STATUS_MAX,
     add_dry_run_flag,
@@ -664,7 +665,13 @@ def cmd_publish_snapshot(args: argparse.Namespace) -> int:
     message = opts.message
     exclude_patterns = opts.exclude
     if opts.target:
-        config = load_or_autodetect_config(root)
+        try:
+            config = load_or_autodetect_config(root)
+        except (FileNotFoundError, ValueError, RuntimeError) as exc:
+            err = describe_config_load_error(exc, root)
+            p = VerbosePrinter(verbose=verbose)
+            p.line(err.text, ok=False, stream=sys.stderr)
+            return 1
         target = config.publish_targets.get(opts.target)
         if target is None:
             p = VerbosePrinter(verbose=verbose)

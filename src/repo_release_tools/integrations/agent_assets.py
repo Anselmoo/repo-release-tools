@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from sysconfig import get_path
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -14,7 +13,7 @@ class BundledAgent:
 
     name: str
     markdown: str
-    family: Optional[str] = None
+    family: str | None = None
 
 
 # Names of all user-facing agents bundled in the package assets.
@@ -32,7 +31,7 @@ _AGENT_NAMES: tuple[str, ...] = (
 )
 
 
-def _parse_family(markdown: str) -> Optional[str]:
+def _parse_family(markdown: str) -> str | None:
     r"""Extract a family name from agent markdown.
 
     Supports YAML frontmatter (---\nkey: val\n---) or a top-of-file

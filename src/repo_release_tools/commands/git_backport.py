@@ -15,6 +15,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._git_shared import add_dry_run_flag
 from repo_release_tools.config import load_or_autodetect_config
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
@@ -77,7 +78,14 @@ def cmd_backport_from_target(args: argparse.Namespace) -> int:
         p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
         return 1
 
-    config = load_or_autodetect_config(root)
+    try:
+        config = load_or_autodetect_config(root)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        p = VerbosePrinter(verbose=verbose)
+        p.line(err.text, ok=False, stream=sys.stderr)
+        return 1
+
     target = config.publish_targets.get(opts.target)
     if target is None:
         p = VerbosePrinter(verbose=verbose)

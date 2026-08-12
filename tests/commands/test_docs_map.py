@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from repo_fixtures import make_repo as _make_repo
 
 from repo_release_tools.commands.docs_map import (
     MAP_ANCHOR_ID,
@@ -19,16 +20,6 @@ from repo_release_tools.commands.docs_map import (
     iter_target_directories,
 )
 from repo_release_tools.config import MapConfig
-
-
-def _make_repo(tmp_path: Path, layout: dict[str, str]) -> Path:
-    """Build a synthetic project under tmp_path; return repo root."""
-    for rel, contents in layout.items():
-        p = tmp_path / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(contents, encoding="utf-8")
-    return tmp_path
-
 
 # ---------------------------------------------------------------------------
 # iter_target_directories

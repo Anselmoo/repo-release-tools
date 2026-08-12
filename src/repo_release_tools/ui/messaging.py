@@ -307,6 +307,10 @@ class DryRunPrinter(BasePrinter):
         suffix = f": {detail}" if detail else ""
         print(_c_subtle(f"{GLYPHS.bullet.skip} [dry-run] Would update {underline(path)}{suffix}"))
 
+    def would(self, message: str) -> None:
+        """Print a generic dry-run 'would-do' line for actions with no dedicated method."""
+        print(_c_subtle(f"{GLYPHS.bullet.skip} [dry-run] {message}"))
+
     def would_install(self, name: str, target: str, location: str) -> None:
         """Print a dry-run 'Would install <name> to <target>' line with location underlined."""
         from repo_release_tools.ui.font import underline

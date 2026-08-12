@@ -65,6 +65,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.changelog import ChangelogFormat, detect_changelog_format
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.config import (
     RrtConfig,
     VersionGroup,
@@ -202,8 +203,9 @@ def cmd_changelog_compare(args: argparse.Namespace) -> int:
     root = find_repo_root(Path.cwd())
     try:
         config: RrtConfig = load_or_autodetect_config(root)
-    except Exception as exc:
-        sys.stderr.write(error(f"Could not load rrt config: {exc}") + "\n")
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        sys.stderr.write(error(f"Could not load rrt config: {err.text}") + "\n")
         return 1
 
     try:

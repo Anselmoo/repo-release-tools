@@ -91,6 +91,7 @@ from pathlib import Path
 
 from repo_release_tools import config as cfg
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config.reference import render_reference_toml
 from repo_release_tools.ui import (
@@ -160,16 +161,13 @@ def _cmd_validate(root: Path) -> int:
 
     try:
         conf = cfg.load_or_autodetect_config(root)
-    except FileNotFoundError:
-        p.line("No config file found.", ok=False, stream=sys.stderr)
-        p.line(
-            cfg.format_missing_tool_rrt_guidance(root, cfg.iter_config_files(root)),
-            ok=False,
-            stream=sys.stderr,
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(
+            exc, root, no_config_file_checked=cfg.iter_config_files(root)
         )
-        return 1
-    except (ValueError, cfg.MissingRrtConfigError) as exc:
-        p.line(str(exc), ok=False, stream=sys.stderr)
+        if err.kind == "no_config_file":
+            p.line("No config file found.", ok=False, stream=sys.stderr)
+        p.line(err.text, ok=False, stream=sys.stderr)
         return 1
 
     source = "(auto-detected)" if conf.autodetected else str(conf.config_file.relative_to(root))
@@ -349,14 +347,12 @@ def cmd_config(args: argparse.Namespace) -> int:
 
     try:
         conf = cfg.load_or_autodetect_config(root)
-    except FileNotFoundError:
-        checked = cfg.iter_config_files(root)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(
+            exc, root, no_config_file_checked=cfg.iter_config_files(root)
+        )
         p = VerbosePrinter(verbose=verbose)
-        p.line(cfg.format_missing_tool_rrt_guidance(root, checked), ok=False, stream=sys.stderr)
-        return 1
-    except (ValueError, cfg.MissingRrtConfigError) as exc:
-        p = VerbosePrinter(verbose=verbose)
-        p.line(str(exc), ok=False, stream=sys.stderr)
+        p.line(err.text, ok=False, stream=sys.stderr)
         return 1
 
     # --raw: syntax-highlighted view of the raw config file

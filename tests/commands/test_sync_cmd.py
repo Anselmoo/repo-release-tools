@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from repo_fixtures import init_git_repo
 
 from repo_release_tools.commands import sync_cmd
 
@@ -56,19 +57,7 @@ def _ns(**kwargs: object) -> argparse.Namespace:
 
 def _init_git(path: Path) -> None:
     """Initialise a minimal git repository so git commit/tag work."""
-    subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@example.com"],
-        cwd=path,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"], cwd=path, check=True, capture_output=True
-    )
-    subprocess.run(
-        ["git", "config", "commit.gpgsign", "false"], cwd=path, check=True, capture_output=True
-    )
+    init_git_repo(path, branch="main")
 
 
 def _git_log_subjects(path: Path) -> list[str]:
@@ -169,6 +158,17 @@ def test_cmd_sync_json_output(
 # ---------------------------------------------------------------------------
 # Test 3: no upstream_package configured → returns 1
 # ---------------------------------------------------------------------------
+
+
+def test_cmd_sync_config_load_error_returns_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failed config load is classified and reported, not left to raise."""
+    monkeypatch.chdir(tmp_path)
+    assert sync_cmd.cmd_sync(_ns()) == 1
+    assert capsys.readouterr().err
 
 
 def test_cmd_sync_errors_without_upstream(
