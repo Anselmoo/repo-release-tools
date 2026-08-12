@@ -87,6 +87,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands.docs_suggest import cmd_docs_suggest
 from repo_release_tools.config import (
@@ -1223,12 +1224,7 @@ def _add_docs_generate_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="PATH",
         help="Project root directory (default: current directory).",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print what would be done without writing files.",
-    )
+    add_dry_run_flag(parser)
 
 
 def _add_docs_publish_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1250,12 +1246,7 @@ def _add_docs_publish_arguments(parser: argparse.ArgumentParser) -> None:
         default=False,
         help="Exit 1 after writing (for pre-commit hook workflows).",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print which files would be written without doing so.",
-    )
+    add_dry_run_flag(parser)
 
 
 def _add_docs_inject_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1277,12 +1268,7 @@ def _add_docs_inject_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="PATH",
         help="Project root directory (default: current directory).",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print which files would be updated without writing.",
-    )
+    add_dry_run_flag(parser, verb="updating files")
     parser.add_argument(
         "--add-anchors",
         action="store_true",
@@ -1312,12 +1298,7 @@ def _add_docs_map_arguments(parser: argparse.ArgumentParser) -> None:
         metavar="PATH",
         help="Project root directory (default: current directory).",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Preview changes without writing files or the lockfile.",
-    )
+    add_dry_run_flag(parser, verb="writing files or the lockfile")
 
 
 @register_command(name="docs", category=CommandCategory.READ, group=CommandGroup.REPO_HEALTH)
@@ -1339,12 +1320,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="PATH",
         help="Project root directory (default: current directory).",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print what would be done without writing files.",
-    )
+    add_dry_run_flag(parser)
 
     sub = parser.add_subparsers(dest="docs_action")
 
@@ -1460,12 +1436,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="PATH",
         help="Project root directory (default: current directory).",
     )
-    bdg_p.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print which files would be written without doing so.",
-    )
+    add_dry_run_flag(bdg_p)
     bdg_p.add_argument(
         "--variant",
         default=None,
@@ -1497,12 +1468,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="PATH",
         help="Project root directory (default: current directory).",
     )
-    api_p.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print what would be written without writing files.",
-    )
+    add_dry_run_flag(api_p)
     api_p.set_defaults(handler=cmd_docs)
 
     # ── map ───────────────────────────────────────────────────────────────

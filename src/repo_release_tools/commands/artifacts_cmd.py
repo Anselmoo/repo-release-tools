@@ -51,6 +51,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     RrtConfig,
@@ -400,11 +401,9 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
         default=False,
         help="Run each target's command to regenerate outputs, then re-snapshot.",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Show what --regenerate would do without running commands or writing the lock.",
+    add_dry_run_flag(
+        parser,
+        help_text="Show what --regenerate would do without running commands or writing the lock.",
     )
     _add_artifacts_strict_argument(parser, default=False)
     parser.set_defaults(handler=cmd_artifacts)

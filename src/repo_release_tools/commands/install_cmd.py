@@ -67,6 +67,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
 from repo_release_tools.commands import agents_cmd, hooks_cmd, skill
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
@@ -238,6 +239,6 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "Use --dry-run with no targets to inspect supported values."
         ),
     )
-    parser.add_argument("--dry-run", action="store_true", help="Preview without writing files.")
+    add_dry_run_flag(parser)
     parser.add_argument("--force", action="store_true", help="Overwrite existing installed files.")
     parser.set_defaults(handler=cmd_install)

@@ -31,6 +31,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     RrtConfig,
@@ -366,12 +367,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         default=False,
         help="Overwrite existing scaffold-managed files.",
     )
-    scaffold_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Preview scaffold actions without writing files.",
-    )
+    add_dry_run_flag(scaffold_parser)
     scaffold_parser.set_defaults(handler=cmd_folder_scaffold)
 
     design_parser = folder_sub.add_parser(

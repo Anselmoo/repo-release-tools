@@ -16,6 +16,7 @@ from repo_release_tools.changelog import (
     get_unreleased_entries,
     parse_conventional_commit,
 )
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands.artifacts_cmd import _add_artifacts_strict_argument, cmd_artifacts
 from repo_release_tools.commands.branch import (
     BRANCH_SLUG_RE,
@@ -1209,10 +1210,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Emit a JSON array of newer version strings instead of one-per-line output.",
     )
-    sync_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview without side effects (informational; sync is read-only).",
+    add_dry_run_flag(
+        sync_parser, help_text="Preview without side effects (informational; sync is read-only)."
     )
 
     publish_snapshot_parser = subparsers.add_parser(

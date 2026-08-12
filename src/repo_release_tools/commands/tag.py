@@ -66,6 +66,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._common import (
     describe_config_load_error,
     find_duplicate_group_names,
@@ -574,11 +575,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         help="Delete and recreate the tag if it already exists.",
     )
-    create_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview what would happen without making changes.",
-    )
+    add_dry_run_flag(create_parser, help_text="Preview what would happen without making changes.")
     create_parser.add_argument(
         "--group",
         default=None,

@@ -55,6 +55,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands._version_render import render_version_write_events
@@ -542,11 +543,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "version",
         help="Version string to apply (e.g. 0.2.0.dev12345601).",
     )
-    apply_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview without writing changes.",
-    )
+    add_dry_run_flag(apply_parser, verb="writing changes")
     apply_parser.add_argument(
         "--group",
         default=None,
@@ -563,9 +560,5 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         epilog=CI_VERSION_SYNC_EXAMPLES,
     )
     _add_compute_args(sync_parser)
-    sync_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview without writing changes.",
-    )
+    add_dry_run_flag(sync_parser, verb="writing changes")
     sync_parser.set_defaults(handler=cmd_ci_version_sync)

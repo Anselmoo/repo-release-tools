@@ -18,6 +18,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands.bump import apply_version
 from repo_release_tools.commands.tag import cmd_tag_create
@@ -328,11 +329,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         help="Emit a JSON array of newer version strings instead of one-per-line output.",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview without side effects.",
-    )
+    add_dry_run_flag(parser, verb="side effects")
 
     # ── Mirror-orchestration flags ──────────────────────────────────────────
     mirror_grp = parser.add_argument_group("Mirror orchestration")

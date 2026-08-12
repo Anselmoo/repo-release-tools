@@ -98,6 +98,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     RrtConfig,
@@ -623,11 +624,6 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
         default=False,
         help="Display all configured field mappings and their current match status.",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Show what --sync would do without writing any files.",
-    )
+    add_dry_run_flag(parser, help_text="Show what --sync would do without writing any files.")
     _add_fields_strict_argument(parser, default=False)
     parser.set_defaults(handler=cmd_fields)

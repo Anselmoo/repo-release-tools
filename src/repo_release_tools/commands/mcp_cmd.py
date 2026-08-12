@@ -26,6 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import DryRunPrinter
 
@@ -231,11 +232,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "(default: src/repo_release_tools/mcp/tools/<name>_tools.py)."
         ),
     )
-    new_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print the scaffold to stdout instead of writing the file.",
+    add_dry_run_flag(
+        new_parser, help_text="Print the scaffold to stdout instead of writing the file."
     )
     new_parser.add_argument(
         "--force",

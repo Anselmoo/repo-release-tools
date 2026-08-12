@@ -118,6 +118,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeAlias
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.state import (
     build_tree_lock,
@@ -1255,11 +1256,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             f"<!-- {ANCHOR_END_TOKEN}<ID> --> markers in the target file."
         ),
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print planned actions instead of writing (with --inject or --fix-empty-dirs).",
+    add_dry_run_flag(
+        parser,
+        help_text="Print planned actions instead of writing (with --inject or --fix-empty-dirs).",
     )
     snapshot_group = parser.add_mutually_exclusive_group()
     snapshot_group.add_argument(

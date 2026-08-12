@@ -78,6 +78,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.workflow import git
@@ -162,7 +163,7 @@ def add_common_branch_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("type", type=normalize_commit_type, metavar="TYPE")
     parser.add_argument("description", nargs="+", help="Short branch description.")
     parser.add_argument("--scope", metavar="SCOPE", default=None, help="Optional scope.")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without touching git.")
+    add_dry_run_flag(parser, verb="touching git")
 
 
 def _count_status_changes(status_lines: list[str]) -> tuple[int, int]:
@@ -663,9 +664,5 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         nargs="*",
         help="New branch description words (replaces the current description).",
     )
-    rename_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview the rename without touching git.",
-    )
+    add_dry_run_flag(rename_parser, verb="touching git")
     rename_parser.set_defaults(handler=cmd_rename)

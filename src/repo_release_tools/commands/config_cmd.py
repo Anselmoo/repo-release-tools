@@ -90,6 +90,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools import config as cfg
+from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config.reference import render_reference_toml
 from repo_release_tools.ui import (
@@ -435,10 +436,5 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         default=False,
         help="With --reference: verify docs/rrt-config-reference.toml is current; exit 1 on drift.",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="With --reference: print without writing.",
-    )
+    add_dry_run_flag(parser, help_text="With --reference: print without writing.")
     parser.set_defaults(handler=cmd_config)

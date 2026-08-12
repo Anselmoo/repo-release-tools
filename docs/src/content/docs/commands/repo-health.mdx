@@ -401,7 +401,7 @@ Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help   Show this message and exit.
   --root PATH  Project root directory (default: current directory).
-  --dry-run    Print what would be done without writing files.
+  --dry-run    Preview without writing files.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
@@ -433,7 +433,7 @@ Options
   --format      Output format (default: first format in config, usually md).
   --lang LANGS  Comma-separated language filter, e.g. python,go (overrides config).
   --root PATH   Project root directory (default: current directory).
-  --dry-run     Print what would be done without writing files.
+  --dry-run     Preview without writing files.
 ```
 
 ### `rrt docs check`
@@ -468,7 +468,7 @@ Options
   -h, --help        Show this message and exit.
   --check           Fail if any generated file is stale; do not write.
   --fail-on-change  Exit 1 after writing (for pre-commit hook workflows).
-  --dry-run         Print which files would be written without doing so.
+  --dry-run         Preview without writing files.
 ```
 
 ### `rrt docs inject`
@@ -486,7 +486,7 @@ Options
   -h, --help     Show this message and exit.
   --check        Fail if any anchor block is stale; do not write.
   --root PATH    Project root directory (default: current directory).
-  --dry-run      Print which files would be updated without writing.
+  --dry-run      Preview without updating files.
   --add-anchors  Prepend missing anchor stubs to target files (first-time setup).
 ```
 
@@ -527,7 +527,7 @@ Options
   --output-dir PATH    Override output directory (default: badge_assets_dir from config).
   --check              Fail if any badge file is stale; do not write.
   --root PATH          Project root directory (default: current directory).
-  --dry-run            Print which files would be written without doing so.
+  --dry-run            Preview without writing files.
   --variant            Generate only one visual variant (default: all available).
 ```
 
@@ -547,7 +547,7 @@ Options
   --format       Output format for the API index (default: md).
   --output FILE  Write output to FILE instead of stdout.
   --root PATH    Project root directory (default: current directory).
-  --dry-run      Print what would be written without writing files.
+  --dry-run      Preview without writing files.
 ```
 
 ### `rrt docs map`
@@ -565,7 +565,7 @@ Options
   -h, --help   Show this message and exit.
   --check      Fail if any directory's purpose doc disagrees with the lockfile.
   --root PATH  Project root directory (default: current directory).
-  --dry-run    Preview changes without writing files or the lockfile.
+  --dry-run    Preview without writing files or the lockfile.
 ```
 
 ## `rrt doctor`
@@ -1229,7 +1229,7 @@ Options
   --root PATH  Root to scaffold.
   --template   Built-in or custom template name to apply at the root.
   --force      Overwrite existing scaffold-managed files.
-  --dry-run    Preview scaffold actions without writing files.
+  --dry-run    Preview without writing files.
 ```
 
 ### `rrt folder design`
