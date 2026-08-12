@@ -34,7 +34,7 @@ CLAUDE: fill the three fields above first — every other section below depends 
 
 ## Traceability
 
-- Related issue/task: <!-- CLAUDE: search the branch name and commit subjects for `#<number>`; N/A if none — don't invent one -->
+- Related issue/task: <!-- CLAUDE: search the branch name and commit subjects for `#<number>`; N/A if none — don't invent one. If this PR fixes that issue, use a GitHub closing keyword (e.g. `Fixes #123`) so it auto-closes on merge. -->
 - Modules touched: <!-- CLAUDE: paste the file list from `git diff --stat "$BASE"...HEAD` verbatim -->
 
 ## Breaking changes

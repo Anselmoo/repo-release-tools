@@ -2,7 +2,7 @@
 
 <!-- What changed, and why. -->
 
-Related issue/task: <!-- #123, or N/A -->
+Related issue/task: <!-- #123, or N/A. If this PR fixes that issue, use a closing keyword (e.g. "Fixes #123") so it auto-closes on merge. -->
 
 ## Checklist
 
