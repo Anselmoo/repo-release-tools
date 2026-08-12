@@ -37,7 +37,7 @@ AGENT: fill the three fields above first — every other section below depends o
 
 ## Traceability
 
-- Related issue/task: <!-- AGENT: search the branch name and commit subjects for `#<number>`; if none is found, write N/A — do not invent one -->
+- Related issue/task: <!-- AGENT: search the branch name and commit subjects for `#<number>`; if none is found, write N/A — do not invent one. If this PR fixes that issue, use a GitHub closing keyword (e.g. `Fixes #123`) so it auto-closes on merge. -->
 - Modules touched: <!-- AGENT: paste the file list from `git diff --stat "$BASE"...HEAD` verbatim -->
 
 ## Breaking changes
