@@ -1268,6 +1268,29 @@ def test_publish_snapshot_requires_git_repository(
     assert "is not inside a Git work tree" in capsys.readouterr().err
 
 
+def test_publish_snapshot_config_load_error_returns_1(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A failed config load is classified and reported, not left to raise."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_sync.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_sync,
+        "load_or_autodetect_config",
+        lambda root: (_ for _ in ()).throw(FileNotFoundError("no config")),
+    )
+    args = argparse.Namespace(
+        target="demo",
+        remote=None,
+        branch=None,
+        message=None,
+        yes_i_know_this_overwrites_remote_history=False,
+        dry_run=False,
+    )
+    assert git_sync.cmd_publish_snapshot(args) == 1
+    assert capsys.readouterr().err
+
+
 def test_publish_snapshot_rejects_unknown_config_target(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

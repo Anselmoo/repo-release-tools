@@ -7,15 +7,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from repo_fixtures import init_git_repo as _init_repo
 
 from repo_release_tools.workflow import git
-
-
-def _init_repo(root: Path) -> None:
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.name", "Tester"], cwd=root, check=True)
-    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=root, check=True)
 
 
 def test_run_dry_run_skips_subprocess(

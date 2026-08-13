@@ -600,6 +600,15 @@ class TestDryRunPrinter:
         assert "git commit" in out
         assert "[dry-run]" in out
 
+    def test_would_shows_message_and_dry_run_marker(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        p = DryRunPrinter(dry_run=True)
+        p.would("bump → 1.2.3 (files: pyproject.toml)")
+        out = capsys.readouterr().out
+        assert "bump → 1.2.3 (files: pyproject.toml)" in out
+        assert "[dry-run]" in out
+
     def test_would_write_shows_path(self, capsys: pytest.CaptureFixture[str]) -> None:
         p = DryRunPrinter(dry_run=True)
         p.would_write("CHANGELOG.md", "add entry")

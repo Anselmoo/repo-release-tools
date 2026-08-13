@@ -4,10 +4,12 @@ empty-list early return)."""
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
+from repo_fixtures import init_git_repo as _init_git_repo
 
 from repo_release_tools.commands import _tree_fix
 from repo_release_tools.ui.messaging import DryRunPrinter
@@ -210,19 +212,8 @@ def test_choose_action_recognises_git_rm(
     assert _tree_fix._choose_action("rel", assume_yes=False) == expected
 
 
-def _init_git_repo(root: Path) -> None:
-    import subprocess
-
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.name", "Tester"], cwd=root, check=True)
-    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=root, check=True)
-
-
 def test_fix_empty_dirs_git_rm_real(tmp_path: Path) -> None:
     """`git-rm` action runs `git rm -rf` and stages the removal."""
-    import subprocess
-
     _init_git_repo(tmp_path)
     tracked = tmp_path / "stale"
     tracked.mkdir()

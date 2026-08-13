@@ -11,8 +11,6 @@ from repo_release_tools.commands.hooks_cmd import (
     COPILOT_MANAGED_HOOKS_FILE,
     HOOK_TARGET_PATHS,
     _config_path_for_target,
-    _dedupe_targets,
-    _display_path,
     _list_hook_files,
     _managed_registration_payload,
     _merge_copilot_hooks,
@@ -430,27 +428,6 @@ def test_cmd_install_handles_missing_hook_files_and_registration_write_failure(
         _raise_registration_write,
     )
     assert cmd_install(Namespace(targets=["claude-local"], dry_run=False, force=False)) == 1
-
-
-def test_dedupe_targets_preserves_order_and_drops_duplicates() -> None:
-    result = _dedupe_targets(["claude-local", "codex-local", "claude-local"])
-    assert result == ["claude-local", "codex-local"]
-
-
-def test_display_path_uses_cwd_home_and_absolute(tmp_path: Path) -> None:
-    cwd = tmp_path / "project"
-    home = tmp_path / "home"
-    local_path = cwd / ".claude" / "hooks" / "rrt_user_branch_policy.py"
-    home_path = home / ".claude" / "hooks" / "rrt_user_branch_policy.py"
-    abs_path = tmp_path / "other" / "rrt_user_branch_policy.py"
-
-    assert (
-        _display_path(local_path, cwd=cwd, home=home) == ".claude/hooks/rrt_user_branch_policy.py"
-    )
-    assert (
-        _display_path(home_path, cwd=cwd, home=home) == "~/.claude/hooks/rrt_user_branch_policy.py"
-    )
-    assert _display_path(abs_path, cwd=cwd, home=home) == str(abs_path)
 
 
 def test_resolve_install_plan_includes_hook_files(tmp_path: Path) -> None:

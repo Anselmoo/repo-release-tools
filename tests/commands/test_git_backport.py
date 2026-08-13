@@ -35,6 +35,22 @@ def test_backport_requires_git_repository(
     assert "is not inside a Git work tree" in capsys.readouterr().err
 
 
+def test_backport_config_load_error_returns_1(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A failed config load is classified and reported, not left to raise."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(git_backport.git, "is_git_repository", lambda root: True)
+    monkeypatch.setattr(
+        git_backport,
+        "load_or_autodetect_config",
+        lambda root: (_ for _ in ()).throw(FileNotFoundError("no config")),
+    )
+    args = argparse.Namespace(target="demo", remote=None, branch=None, base_ref=None, dry_run=False)
+    assert git_backport.cmd_backport_from_target(args) == 1
+    assert capsys.readouterr().err
+
+
 def test_backport_rejects_unknown_config_target(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

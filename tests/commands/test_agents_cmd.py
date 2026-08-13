@@ -6,11 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from repo_release_tools.commands._install_shared import resolve_install_plan
 from repo_release_tools.commands.agents_cmd import (
-    _dedupe_targets,
-    _display_path,
+    AGENT_TARGET_PATHS,
     _find_install_conflicts,
-    _resolve_install_plan,
     _select_install_agents,
     cmd_install,
     main,
@@ -186,28 +185,12 @@ def test_cmd_install_returns_one_for_os_error(
     assert result == 1
 
 
-def test_dedupe_targets_preserves_order_and_drops_duplicates() -> None:
-    result = _dedupe_targets(["claude-local", "codex-local", "claude-local"])
-    assert result == ["claude-local", "codex-local"]
-
-
-def test_display_path_uses_cwd_home_and_absolute(tmp_path: Path) -> None:
+def test_resolve_install_plan_uses_agent_target_mappings(tmp_path: Path) -> None:
     cwd = tmp_path / "project"
     home = tmp_path / "home"
-    local_path = cwd / ".claude" / "agents" / "foo.agent.md"
-    home_path = home / ".claude" / "agents" / "foo.agent.md"
-    abs_path = tmp_path / "other" / "foo.agent.md"
-
-    assert _display_path(local_path, cwd=cwd, home=home) == ".claude/agents/foo.agent.md"
-    assert _display_path(home_path, cwd=cwd, home=home) == "~/.claude/agents/foo.agent.md"
-    assert _display_path(abs_path, cwd=cwd, home=home) == str(abs_path)
-
-
-def test_resolve_install_plan_uses_target_mappings(tmp_path: Path) -> None:
-    cwd = tmp_path / "project"
-    home = tmp_path / "home"
-    plan = _resolve_install_plan(
+    plan = resolve_install_plan(
         ["claude-local", "codex-global", "copilot-local", "gemini-global"],
+        AGENT_TARGET_PATHS,
         cwd=cwd,
         home=home,
     )

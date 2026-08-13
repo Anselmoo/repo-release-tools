@@ -99,6 +99,7 @@ from pathlib import Path
 from typing import Any
 
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
     RrtConfig,
@@ -542,8 +543,9 @@ def cmd_fields(args: argparse.Namespace) -> int:
 
     try:
         config: RrtConfig = load_or_autodetect_config(root)
-    except Exception as exc:
-        p.line(str(exc), ok=False, stream=sys.stderr)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        p.line(err.text, ok=False, stream=sys.stderr)
         return 1
 
     field_targets = config.field_targets

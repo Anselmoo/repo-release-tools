@@ -57,17 +57,19 @@ Each target receives one directory per bundled skill, each containing a
 from __future__ import annotations
 
 import argparse
-import contextlib
 import shutil
-import sys
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
+from repo_release_tools.commands._install_shared import (
+    display_path,
+    emit_install_error,
+    resolve_install_plan,
+)
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.integrations.skill_assets import BUNDLED_SKILLS
-from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
+from repo_release_tools.ui import DryRunPrinter
 
 TARGET_PATHS = {
     "claude-global": lambda cwd, home: home / ".claude" / "skills",
@@ -98,38 +100,6 @@ SKILL_INSTALL_EXAMPLES = (
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("skill", __doc__ or ""),)
 
 
-def _dedupe_targets(targets: Iterable[str]) -> list[str]:
-    """Return targets in first-seen order without duplicates."""
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for target in targets:
-        if target in seen:
-            continue
-        seen.add(target)
-        ordered.append(target)
-    return ordered
-
-
-def _display_path(path: Path, *, cwd: Path, home: Path) -> str:
-    """Render *path* relative to cwd or home when possible."""
-    with contextlib.suppress(ValueError):
-        return str(path.relative_to(cwd))
-    with contextlib.suppress(ValueError):
-        return f"~/{path.relative_to(home)}"
-    return str(path)
-
-
-def _emit_install_error(message: str) -> int:
-    p = VerbosePrinter()
-    p.line(message, ok=False, stream=sys.stderr)
-    return 1
-
-
-def _resolve_install_plan(targets: list[str], *, cwd: Path, home: Path) -> list[tuple[str, Path]]:
-    """Resolve target names into base skill directories."""
-    return [(target, TARGET_PATHS[target](cwd, home)) for target in _dedupe_targets(targets)]
-
-
 def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
     p = DryRunPrinter(True)
     p.blank_line()
@@ -137,7 +107,7 @@ def _show_available_install_targets(*, cwd: Path, home: Path) -> None:
     p.section("Available targets")
     for target_name, resolver in sorted(TARGET_PATHS.items()):
         for skill in BUNDLED_SKILLS:
-            location = _display_path(
+            location = display_path(
                 resolver(cwd, home) / skill.name / "SKILL.md",
                 cwd=cwd,
                 home=home,
@@ -192,11 +162,11 @@ def cmd_install(args: argparse.Namespace) -> int:
             _show_available_install_targets(cwd=cwd, home=home)
             return 0
         available = ", ".join(sorted(TARGET_PATHS))
-        return _emit_install_error(
+        return emit_install_error(
             f"No --target specified. Pass --target DEST (e.g. --target claude-local). Available: {available}.",
         )
 
-    install_plan = _resolve_install_plan(opts.targets, cwd=cwd, home=home)
+    install_plan = resolve_install_plan(opts.targets, TARGET_PATHS, cwd=cwd, home=home)
 
     p = DryRunPrinter(opts.dry_run, verbose=verbose)
     p.blank_line()
@@ -215,8 +185,8 @@ def cmd_install(args: argparse.Namespace) -> int:
 
     if conflicts:
         for target_name, skill_name, destination in conflicts:
-            location = _display_path(destination, cwd=cwd, home=home)
-            return _emit_install_error(
+            location = display_path(destination, cwd=cwd, home=home)
+            return emit_install_error(
                 f"{target_name} already has {skill_name} at {location}. Use --force to overwrite it.",
             )
 
@@ -224,7 +194,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         for target_name, skills_dir in install_plan:
             for skill in BUNDLED_SKILLS:
                 destination = skills_dir / skill.name / "SKILL.md"
-                location = _display_path(destination, cwd=cwd, home=home)
+                location = display_path(destination, cwd=cwd, home=home)
                 p.would_install(skill.name, target_name, location)
         p.blank_line()
         p.footer("no files were modified")
@@ -242,11 +212,11 @@ def cmd_install(args: argparse.Namespace) -> int:
                 destination_dir.mkdir(parents=True, exist_ok=True)
                 destination_file.write_text(skill.markdown.rstrip() + "\n", encoding="utf-8")
             except OSError as exc:
-                location = _display_path(destination_file, cwd=cwd, home=home)
-                return _emit_install_error(
+                location = display_path(destination_file, cwd=cwd, home=home)
+                return emit_install_error(
                     f"Could not install {skill.name} to {target_name} ({location}): {exc}",
                 )
-            location = _display_path(destination_file, cwd=cwd, home=home)
+            location = display_path(destination_file, cwd=cwd, home=home)
             p.ok(f"Installed {skill.name} to {target_name}: {location}")
     return 0
 

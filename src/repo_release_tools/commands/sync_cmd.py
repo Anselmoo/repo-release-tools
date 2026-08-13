@@ -19,21 +19,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
+from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands.bump import apply_version
 from repo_release_tools.commands.tag import cmd_tag_create
 from repo_release_tools.config import load_or_autodetect_config
 from repo_release_tools.config.model import RrtConfig, VersionGroup
 from repo_release_tools.sync.providers import fetch_versions
-from repo_release_tools.ui import (
-    DryRunPrinter,
-    VerbosePrinter,
-    info,
-    rule,
-    subtle,
-    success,
-    terminal_width,
-)
+from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.semver import Version, newer_versions
 from repo_release_tools.version.targets import read_group_current_version
 from repo_release_tools.workflow import git
@@ -87,6 +80,7 @@ def _stage_and_commit(
 
 
 def _render_sync_bump_plan(
+    printer: DryRunPrinter,
     group: VersionGroup,
     current: Version,
     fresh: list[Version],
@@ -102,30 +96,27 @@ def _render_sync_bump_plan(
     dry_run=True)`` only computes which paths *would* change so the plan can
     list file names.
     """
-    sys.stdout.write(
-        success(f"✓ [DRY RUN] Mirror upstream {group.upstream_package} ({group.upstream_provider})")
-        + "\n"
+    printer.header(
+        f"Mirror upstream {group.upstream_package} ({group.upstream_provider})",
+        Current=str(current),
     )
-    sys.stdout.write(info(f"→ Current: {current}") + "\n")
-    sys.stdout.write("\n")
-    sys.stdout.write(rule("Plan", width=terminal_width()) + "\n")
+    printer.section("Plan")
 
     if not fresh:
-        sys.stdout.write(subtle("⊙ [dry-run] No newer versions — nothing to do.") + "\n")
+        printer.would("No newer versions — nothing to do.")
     else:
         for v in fresh:
             # Compute changed paths without writing (dry_run=True)
             changed = apply_version(group, str(v), cfg, dry_run=True)
             file_names = ", ".join(p.name for p in dict.fromkeys(changed))
-            sys.stdout.write(subtle(f"⊙ [dry-run] Would bump → {v} (files: {file_names})") + "\n")
+            printer.would(f"Would bump → {v} (files: {file_names})")
             if do_commit:
                 msg = _render_commit_message(tmpl, str(v))
-                sys.stdout.write(subtle(f'⊙ [dry-run] Would commit: "{msg}"') + "\n")
+                printer.would(f'Would commit: "{msg}"')
             if do_tag:
-                sys.stdout.write(subtle(f"⊙ [dry-run] Would tag: v{v}") + "\n")
+                printer.would(f"Would tag: v{v}")
 
-    sys.stdout.write("\n")
-    sys.stdout.write(subtle("⊙ [dry-run] complete – no changes made") + "\n")
+    printer.footer("Done.")
 
 
 def _apply_sync_bump_live(
@@ -234,7 +225,14 @@ def cmd_sync(args: argparse.Namespace) -> int:
     opts = Options.from_args(args)
     dry_run: bool = opts.dry_run
     p = DryRunPrinter(dry_run, verbose=opts.verbose)
-    cfg = load_or_autodetect_config(Path.cwd())
+    root = Path.cwd()
+    try:
+        cfg = load_or_autodetect_config(root)
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        err = describe_config_load_error(exc, root)
+        p = VerbosePrinter(verbose=opts.verbose)
+        p.line(err.text, ok=False, stream=sys.stderr)
+        return 1
     try:
         group = cfg.resolve_group(opts.group)
     except ValueError as exc:
@@ -278,7 +276,9 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
     if dry_run:
         # ── Dry-run: print plan, write/commit/tag nothing ──────────────────
-        _render_sync_bump_plan(group, current, fresh, cfg, tmpl, do_commit=do_commit, do_tag=do_tag)
+        _render_sync_bump_plan(
+            p, group, current, fresh, cfg, tmpl, do_commit=do_commit, do_tag=do_tag
+        )
         return 0
 
     # ── Live mode: apply each version in ascending order ───────────────────
