@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.15.0] - 2026-08-13
 ### Added
 - add content assertions to folder check templates (#198)
 - add AI-agent-optimized PR and issue templates
