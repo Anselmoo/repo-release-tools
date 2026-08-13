@@ -35,6 +35,47 @@ GEMSPEC_VERSION_PATTERN = re.compile(r'(?m)^(\s*\w+\.version\s*=\s*)(["\'])([^"\
 CSPROJ_VERSION_PATTERN = re.compile(r"(<Version>)([^<]+)(</Version>)")
 
 
+@dataclass(frozen=True)
+class _RegexVersionKind:
+    """One regex-shaped version target: read group, write template, error label."""
+
+    pattern: re.Pattern[str]
+    read_group: int
+    write_template: str
+    label: str
+
+
+_REGEX_KINDS: dict[str, _RegexVersionKind] = {
+    "pep621": _RegexVersionKind(PEP621_PATTERN, 2, r"\g<1>{version}\g<3>", "[project].version"),
+    "python_version": _RegexVersionKind(
+        PYTHON_VERSION_PATTERN,
+        3,
+        r"\g<1>\g<2>{version}\g<2>",
+        "__version__",
+    ),
+    "go_version": _RegexVersionKind(
+        GO_VERSION_PATTERN,
+        2,
+        r"\g<1>{version}\g<3>",
+        "Version constant/variable",
+    ),
+    "cargo_toml": _RegexVersionKind(
+        CARGO_TOML_PATTERN,
+        2,
+        r"\g<1>{version}\g<3>",
+        "[package].version",
+    ),
+    "maven_pom": _RegexVersionKind(MAVEN_POM_PATTERN, 2, r"\g<1>{version}\g<3>", "<version>"),
+    "gemspec": _RegexVersionKind(
+        GEMSPEC_VERSION_PATTERN,
+        3,
+        r"\g<1>\g<2>{version}\g<2>",
+        ".version",
+    ),
+    "csproj": _RegexVersionKind(CSPROJ_VERSION_PATTERN, 2, r"\g<1>{version}\g<3>", "<Version>"),
+}
+
+
 @dataclass(frozen=True, slots=True)
 class VersionWriteEvent:
     """One version-target write, actual or dry-run-previewed.
@@ -52,26 +93,13 @@ class VersionWriteEvent:
 
 def _compute_updated_content(target: VersionTarget, text: str, new_version: str) -> str:
     """Compute the updated file content for a version target without writing to disk."""
-    match target.kind:
-        case "pep621":
-            return PEP621_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-        case "package_json":
-            return replace_package_json_version(text, new_version)
-        case "python_version":
-            return PYTHON_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
-        case "go_version":
-            return GO_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-        case "cargo_toml":
-            return CARGO_TOML_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-        case "maven_pom":
-            return MAVEN_POM_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-        case "gemspec":
-            return GEMSPEC_VERSION_PATTERN.sub(rf"\g<1>\g<2>{new_version}\g<2>", text, count=1)
-        case "csproj":
-            return CSPROJ_VERSION_PATTERN.sub(rf"\g<1>{new_version}\g<3>", text, count=1)
-        case "pattern":
-            assert target.pattern is not None
-            return replace_kind_pattern_version(text, target.pattern, new_version)
+    if target.kind == "package_json":
+        return replace_package_json_version(text, new_version)
+    if target.kind == "pattern":
+        assert target.pattern is not None
+        return replace_kind_pattern_version(text, target.pattern, new_version)
+    if target.kind is not None and (spec := _REGEX_KINDS.get(target.kind)):
+        return spec.pattern.sub(spec.write_template.format(version=new_version), text, count=1)
     if target.pattern:
         return replace_pattern_version(text, target.pattern, new_version)
     return replace_toml_field(
@@ -210,50 +238,19 @@ def read_version_string(target: VersionTarget) -> str:
     """Read the current version string from a target."""
     text = target.path.read_text(encoding="utf-8")
 
-    match target.kind:
-        case "pep621":
-            m = PEP621_PATTERN.search(text)
-            if m is None:
-                raise RuntimeError(f"Could not find [project].version in {target.path}")
-            return m.group(2)
-        case "package_json":
-            return read_package_json_version(target.path)
-        case "python_version":
-            m = PYTHON_VERSION_PATTERN.search(text)
-            if m is None:
-                raise RuntimeError(f"Could not find __version__ in {target.path}")
-            return m.group(3)
-        case "go_version":
-            m = GO_VERSION_PATTERN.search(text)
-            if m is None:
-                raise RuntimeError(f"Could not find Version constant/variable in {target.path}")
-            return m.group(2)
-        case "cargo_toml":
-            m = CARGO_TOML_PATTERN.search(text)
-            if m is None:
-                raise RuntimeError(f"Could not find [package].version in {target.path}")
-            return m.group(2)
-        case "maven_pom":
-            m = MAVEN_POM_PATTERN.search(text)
-            if m is None:
-                raise RuntimeError(f"Could not find <version> in {target.path}")
-            return m.group(2)
-        case "gemspec":
-            m = GEMSPEC_VERSION_PATTERN.search(text)
-            if m is None:
-                raise RuntimeError(f"Could not find .version in {target.path}")
-            return m.group(3)
-        case "csproj":
-            m = CSPROJ_VERSION_PATTERN.search(text)
-            if m is None:
-                raise RuntimeError(f"Could not find <Version> in {target.path}")
-            return m.group(2)
-        case "pattern":
-            assert target.pattern is not None
-            m = search_pattern(text, target.pattern)
-            if m is None:
-                raise RuntimeError(f"Could not match configured pattern in {target.path}")
-            return m.group(1)
+    if target.kind == "package_json":
+        return read_package_json_version(target.path)
+    if target.kind == "pattern":
+        assert target.pattern is not None
+        m = search_pattern(text, target.pattern)
+        if m is None:
+            raise RuntimeError(f"Could not match configured pattern in {target.path}")
+        return m.group(1)
+    if target.kind is not None and (spec := _REGEX_KINDS.get(target.kind)):
+        m = spec.pattern.search(text)
+        if m is None:
+            raise RuntimeError(f"Could not find {spec.label} in {target.path}")
+        return m.group(spec.read_group)
 
     if target.pattern:
         m = search_pattern(text, target.pattern)
