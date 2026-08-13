@@ -657,6 +657,36 @@ class FolderScaffoldFile:
 
 
 @dataclass(frozen=True)
+class FolderContentCheck:
+    """A content assertion against one file matched by a folder template/rule."""
+
+    path: str
+    must_match: str | None = None
+    must_not_match: str | None = None
+    message: str = ""
+
+    def validate(self) -> None:
+        """Validate the content check shape."""
+        _validate_relative_folder_path(self.path, label="folder content check path")
+        if self.must_match is None and self.must_not_match is None:
+            raise ValueError(
+                f"folder content check {self.path!r} needs must_match or must_not_match",
+            )
+        for check_label, expr in (
+            ("must_match", self.must_match),
+            ("must_not_match", self.must_not_match),
+        ):
+            if expr is None:
+                continue
+            try:
+                re.compile(expr)
+            except re.error as exc:
+                raise ValueError(
+                    f"folder content check {self.path!r} {check_label} is not a valid regex: {exc}",
+                ) from exc
+
+
+@dataclass(frozen=True)
 class FolderTemplate:
     """A reusable folder supervision and scaffold template."""
 
@@ -671,6 +701,7 @@ class FolderTemplate:
     allow_patterns: tuple[str, ...] = ()
     scaffold_dirs: tuple[str, ...] = ()
     scaffold_files: tuple[FolderScaffoldFile, ...] = ()
+    content: tuple[FolderContentCheck, ...] = ()
 
     def validate(self) -> None:
         """Validate the folder template."""
@@ -698,6 +729,9 @@ class FolderTemplate:
         for scaffold_file in self.scaffold_files:
             scaffold_file.validate()
 
+        for content_check in self.content:
+            content_check.validate()
+
 
 @dataclass(frozen=True)
 class FolderRule:
@@ -715,6 +749,7 @@ class FolderRule:
     allow_patterns: tuple[str, ...] = ()
     scaffold_dirs: tuple[str, ...] = ()
     scaffold_files: tuple[FolderScaffoldFile, ...] = ()
+    content: tuple[FolderContentCheck, ...] = ()
 
     def validate(self) -> None:
         """Validate the rule shape."""
@@ -740,6 +775,9 @@ class FolderRule:
 
         for scaffold_file in self.scaffold_files:
             scaffold_file.validate()
+
+        for content_check in self.content:
+            content_check.validate()
 
 
 @dataclass(frozen=True)

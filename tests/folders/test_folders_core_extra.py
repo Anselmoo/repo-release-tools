@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from repo_release_tools.config import (
+    FolderContentCheck,
     FolderPolicyConfig,
     FolderRule,
     FolderScaffoldFile,
@@ -26,6 +27,7 @@ def _rule(
     allow_patterns: tuple[str, ...] = (),
     scaffold_dirs: tuple[str, ...] = (),
     scaffold_files: tuple[FolderScaffoldFile, ...] = (),
+    content_checks: tuple[FolderContentCheck, ...] = (),
 ) -> core._EffectiveRule:
     return core._EffectiveRule(
         name=name,
@@ -39,6 +41,7 @@ def _rule(
         allow_patterns=allow_patterns,
         scaffold_dirs=scaffold_dirs,
         scaffold_files=scaffold_files,
+        content_checks=content_checks,
     )
 
 
@@ -95,6 +98,79 @@ def test_check_one_target_allows_entries_matching_patterns(tmp_path: Path) -> No
     report = core._check_one_target(base_path=base, root=tmp_path, rule=rule)
 
     assert report.ok is True
+
+
+def test_check_one_target_emits_content_mismatch(tmp_path: Path) -> None:
+    base = tmp_path / "project"
+    base.mkdir()
+    (base / "Cargo.toml").write_text('[package]\nname = "x"\n', encoding="utf-8")
+    check = FolderContentCheck(path="Cargo.toml", must_match=r"workspace\s*=\s*true")
+    rule = _rule(selector="project", content_checks=(check,))
+
+    report = core._check_one_target(base_path=base, root=tmp_path, rule=rule)
+
+    assert report.ok is False
+    violation = report.violations[0]
+    assert violation.code == "content-mismatch"
+    assert violation.path == "project/Cargo.toml"
+    assert "does not match required pattern" in violation.message
+
+
+def test_check_one_target_emits_content_forbidden(tmp_path: Path) -> None:
+    base = tmp_path / "project"
+    base.mkdir()
+    (base / "lib.rs").write_text("pub mod internal;\n", encoding="utf-8")
+    check = FolderContentCheck(
+        path="lib.rs",
+        must_not_match=r"^pub mod ",
+        message="keep modules private",
+    )
+    rule = _rule(selector="project", content_checks=(check,))
+
+    report = core._check_one_target(base_path=base, root=tmp_path, rule=rule)
+
+    assert report.ok is False
+    violation = report.violations[0]
+    assert violation.code == "content-forbidden"
+    assert violation.message == "keep modules private"
+
+
+def test_check_one_target_skips_content_check_for_missing_file(tmp_path: Path) -> None:
+    base = tmp_path / "project"
+    base.mkdir()
+    check = FolderContentCheck(path="Cargo.toml", must_match="workspace")
+    rule = _rule(selector="project", content_checks=(check,))
+
+    report = core._check_one_target(base_path=base, root=tmp_path, rule=rule)
+
+    # No required_files configured, so the only possible violation is
+    # missing-file (not raised, since Cargo.toml isn't required) or a
+    # content violation (also not raised, since content checks skip
+    # missing paths entirely).
+    assert report.ok is True
+
+
+def test_check_one_target_passes_content_check_when_satisfied(tmp_path: Path) -> None:
+    base = tmp_path / "project"
+    base.mkdir()
+    (base / "Cargo.toml").write_text("[lints]\nworkspace = true\n", encoding="utf-8")
+    check = FolderContentCheck(path="Cargo.toml", must_match=r"workspace\s*=\s*true")
+    rule = _rule(selector="project", content_checks=(check,))
+
+    report = core._check_one_target(base_path=base, root=tmp_path, rule=rule)
+
+    assert report.ok is True
+
+
+def test_merge_rule_concatenates_template_and_rule_content_checks() -> None:
+    template_check = FolderContentCheck(path="a.txt", must_match="a")
+    rule_check = FolderContentCheck(path="b.txt", must_match="b")
+    template = FolderTemplate(name="t", content=(template_check,))
+    rule = FolderRule(name="r", templates=("t",), content=(rule_check,))
+
+    effective = core._merge_rule(rule, policy=None, catalog={"t": template}, mode_override=None)
+
+    assert effective.content_checks == (template_check, rule_check)
 
 
 def test_scaffold_one_target_skips_existing_without_force(tmp_path: Path) -> None:

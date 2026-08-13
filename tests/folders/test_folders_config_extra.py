@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from repo_release_tools.config import (
+    FolderContentCheck,
     FolderPolicyConfig,
     FolderRule,
     FolderScaffoldFile,
@@ -41,6 +42,66 @@ def test_load_folder_templates_parses_scaffold_entries() -> None:
     assert template.name == "x"
     assert template.exact is True
     assert template.scaffold_files[0].path == "src/main.py"
+
+
+def test_load_folder_templates_parses_content_entries() -> None:
+    templates = fc._load_folder_templates(
+        [
+            {
+                "name": "x",
+                "content": [
+                    {"path": "Cargo.toml", "must_match": r"workspace\s*=\s*true"},
+                    {
+                        "path": "src/lib.rs",
+                        "must_not_match": r"^pub mod ",
+                        "message": "keep modules private",
+                    },
+                ],
+            },
+        ],
+    )
+
+    assert len(templates) == 1
+    checks = templates[0].content
+    assert len(checks) == 2
+    assert checks[0].path == "Cargo.toml"
+    assert checks[0].must_match == r"workspace\s*=\s*true"
+    assert checks[1].message == "keep modules private"
+
+
+def test_load_folder_rules_parses_content_entries() -> None:
+    rules = fc._load_folder_rules(
+        [
+            {
+                "name": "x",
+                "content": [{"path": "Cargo.toml", "must_match": "workspace"}],
+            },
+        ],
+    )
+
+    assert len(rules) == 1
+    assert rules[0].content[0].path == "Cargo.toml"
+
+
+def test_load_content_checks_rejects_invalid_shapes() -> None:
+    assert fc._load_content_checks(None, label="x") == ()
+
+    with pytest.raises(ValueError, match="must be a list of tables"):
+        fc._load_content_checks("oops", label="x")
+
+    with pytest.raises(ValueError, match=r"x\[0\] must be a table"):
+        fc._load_content_checks(["oops"], label="x")
+
+
+def test_optional_string_or_none_helper() -> None:
+    assert fc._optional_string_or_none(None, label="must_match") is None
+    assert fc._optional_string_or_none(" foo ", label="must_match") == "foo"
+
+    with pytest.raises(ValueError, match="must be a non-empty string"):
+        fc._optional_string_or_none("   ", label="must_match")
+
+    with pytest.raises(ValueError, match="must be a non-empty string"):
+        fc._optional_string_or_none(1, label="must_match")
 
 
 def test_load_folder_templates_rejects_invalid_shapes_and_strictness() -> None:
@@ -165,3 +226,28 @@ def test_folder_scaffold_file_validate_requires_string_content() -> None:
     object.__setattr__(invalid, "content", 123)
     with pytest.raises(ValueError, match="content must be a string"):
         invalid.validate()
+
+
+def test_folder_content_check_validate() -> None:
+    FolderContentCheck(path="Cargo.toml", must_match="workspace").validate()
+    FolderContentCheck(path="src/lib.rs", must_not_match="^pub mod ").validate()
+
+    with pytest.raises(ValueError, match="must be a non-empty string"):
+        FolderContentCheck(path="", must_match="x").validate()
+
+    with pytest.raises(ValueError, match="needs must_match or must_not_match"):
+        FolderContentCheck(path="Cargo.toml").validate()
+
+    with pytest.raises(ValueError, match="must_match is not a valid regex"):
+        FolderContentCheck(path="Cargo.toml", must_match="(unclosed").validate()
+
+    with pytest.raises(ValueError, match="must_not_match is not a valid regex"):
+        FolderContentCheck(path="Cargo.toml", must_not_match="(unclosed").validate()
+
+
+def test_folder_template_and_rule_validate_content_checks() -> None:
+    with pytest.raises(ValueError, match="needs must_match or must_not_match"):
+        FolderTemplate(name="x", content=(FolderContentCheck(path="Cargo.toml"),)).validate()
+
+    with pytest.raises(ValueError, match="needs must_match or must_not_match"):
+        FolderRule(name="x", content=(FolderContentCheck(path="Cargo.toml"),)).validate()
