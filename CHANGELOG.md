@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- add content assertions to folder check templates (#198)
 - add AI-agent-optimized PR and issue templates
 
 ### Documentation
@@ -10,6 +11,7 @@
 - resolve PR review findings in agent templates
 
 ### Changed
+- collapse version target read/write dispatch into a shared table (#210)
 - consolidate dry-run flag into shared helper (#207)
 - extract shared install-family logic into `_install_shared.py` (#208)
 - harmonize config-load error handling, dedupe test repo fixtures, and route `sync_cmd.py` dry-run output through `DryRunPrinter`

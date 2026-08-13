@@ -7,6 +7,7 @@ from typing import cast
 from .model import (
     VALID_FOLDER_MODES,
     VALID_TEMPLATE_STRICTNESS,
+    FolderContentCheck,
     FolderPolicyConfig,
     FolderRule,
     FolderScaffoldFile,
@@ -78,6 +79,10 @@ def _load_folder_templates(raw: object) -> tuple[FolderTemplate, ...]:
                     item.get("scaffold_files"),
                     label=f"tool.rrt.folders.templates[{index}].scaffold_files",
                 ),
+                content=_load_content_checks(
+                    item.get("content"),
+                    label=f"tool.rrt.folders.templates[{index}].content",
+                ),
             ),
         )
     return tuple(templates)
@@ -116,6 +121,10 @@ def _load_folder_rules(raw: object) -> tuple[FolderRule, ...]:
                     item.get("scaffold_files"),
                     label=f"tool.rrt.folders.rules[{index}].scaffold_files",
                 ),
+                content=_load_content_checks(
+                    item.get("content"),
+                    label=f"tool.rrt.folders.rules[{index}].content",
+                ),
             ),
         )
     return tuple(rules)
@@ -145,6 +154,32 @@ def _load_scaffold_files(raw: object, *, label: str) -> tuple[FolderScaffoldFile
             ),
         )
     return tuple(scaffold_files)
+
+
+def _load_content_checks(raw: object, *, label: str) -> tuple[FolderContentCheck, ...]:
+    """Parse content assertion entries."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError(f"{label} must be a list of tables")
+
+    checks: list[FolderContentCheck] = []
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValueError(f"{label}[{index}] must be a table")
+        item = cast("dict[str, object]", entry)
+        checks.append(
+            FolderContentCheck(
+                path=_required_string(item.get("path"), label=f"{label}[{index}].path"),
+                must_match=_optional_string_or_none(item.get("must_match"), label="must_match"),
+                must_not_match=_optional_string_or_none(
+                    item.get("must_not_match"),
+                    label="must_not_match",
+                ),
+                message=_optional_string(item.get("message"), default="", label="message"),
+            ),
+        )
+    return tuple(checks)
 
 
 def _string_tuple(raw: object, *, label: str) -> tuple[str, ...]:
@@ -179,6 +214,15 @@ def _optional_string(raw: object, *, default: str, label: str) -> str:
     if not isinstance(raw, str):
         raise ValueError(f"tool.rrt.folders.{label} must be a string")
     return raw.strip() or default
+
+
+def _optional_string_or_none(raw: object, *, label: str) -> str | None:
+    """Return an optional string, preserving ``None`` when absent."""
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f"tool.rrt.folders.{label} must be a non-empty string")
+    return raw.strip()
 
 
 def _optional_bool(raw: object, *, default: bool, label: str) -> bool:

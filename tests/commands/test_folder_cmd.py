@@ -165,6 +165,111 @@ exact = true
     assert "Unexpected entry 'rogue.txt'" in capsys.readouterr().err
 
 
+def test_folder_check_fails_on_content_mismatch_and_forbidden(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_file = tmp_path / ".rrt.toml"
+    config_file.write_text(
+        """
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[tool.rrt.folders]
+mode = "strict"
+
+[[tool.rrt.folders.templates]]
+name = "crate-baseline"
+required_files = ["Cargo.toml", "src/lib.rs"]
+
+  [[tool.rrt.folders.templates.content]]
+  path = "Cargo.toml"
+  must_match = 'workspace\\s*=\\s*true'
+  message = "crate does not opt into [workspace.lints]"
+
+  [[tool.rrt.folders.templates.content]]
+  path = "src/lib.rs"
+  must_not_match = '^pub mod '
+  message = "modules must stay private"
+
+[[tool.rrt.folders.rules]]
+name = "crates"
+selector = "."
+templates = ["crate-baseline"]
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "Cargo.toml").write_text('[package]\nname = "x"\n', encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "lib.rs").write_text("pub mod internal;\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    rc_text = folder.cmd_folder_check(_args(root=str(tmp_path)))
+    assert rc_text == 1
+    err = capsys.readouterr().err
+    assert "crate does not opt into [workspace.lints]" in err
+    assert "modules must stay private" in err
+
+    rc_json = folder.cmd_folder_check(_args(root=str(tmp_path), format="json"))
+    assert rc_json == 1
+    payload = json.loads(capsys.readouterr().out)
+    codes = {
+        violation["code"] for target in payload["targets"] for violation in target["violations"]
+    }
+    assert codes == {"content-mismatch", "content-forbidden"}
+
+
+def test_folder_check_content_check_skips_missing_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_file = tmp_path / ".rrt.toml"
+    config_file.write_text(
+        """
+[tool.rrt]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[tool.rrt.folders]
+mode = "strict"
+
+[[tool.rrt.folders.templates]]
+name = "optional-content"
+
+  [[tool.rrt.folders.templates.content]]
+  path = "Cargo.toml"
+  must_match = "workspace"
+
+[[tool.rrt.folders.rules]]
+name = "root"
+selector = "."
+templates = ["optional-content"]
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    rc = folder.cmd_folder_check(_args(root=str(tmp_path), format="json"))
+
+    assert rc == 0
+
+
 def test_folder_check_report_only_downgrades_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

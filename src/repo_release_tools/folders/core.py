@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import fnmatch
+import re
 import stat
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.config import (
+    FolderContentCheck,
     FolderPolicyConfig,
     FolderRule,
     FolderScaffoldFile,
@@ -39,6 +41,7 @@ class _EffectiveRule:
     allow_patterns: tuple[str, ...]
     scaffold_dirs: tuple[str, ...]
     scaffold_files: tuple[FolderScaffoldFile, ...]
+    content_checks: tuple[FolderContentCheck, ...]
 
 
 def resolve_template_catalog(policy: FolderPolicyConfig | None = None) -> dict[str, FolderTemplate]:
@@ -213,6 +216,10 @@ def _merge_rule(
             *(template.scaffold_files for template in resolved_templates),
             rule.scaffold_files,
         ),
+        content_checks=(
+            *(check for template in resolved_templates for check in template.content),
+            *rule.content,
+        ),
     )
 
 
@@ -281,6 +288,33 @@ def _check_one_target(*, base_path: Path, root: Path, rule: _EffectiveRule) -> F
                     code="missing-file",
                     path=_relative_text(path, root),
                     message=f"Missing required file {required_file!r}.",
+                    severity=_severity_for_mode(rule.mode),
+                ),
+            )
+
+    for check in rule.content_checks:
+        target_path = base_path / check.path
+        if not target_path.is_file():
+            # Missing file is missing-file's job, not a content violation.
+            continue
+        text = target_path.read_text(encoding="utf-8")
+        if check.must_match and not re.search(check.must_match, text):
+            violations.append(
+                FolderViolation(
+                    code="content-mismatch",
+                    path=_relative_text(target_path, root),
+                    message=check.message
+                    or f"{check.path!r} does not match required pattern {check.must_match!r}.",
+                    severity=_severity_for_mode(rule.mode),
+                ),
+            )
+        if check.must_not_match and re.search(check.must_not_match, text):
+            violations.append(
+                FolderViolation(
+                    code="content-forbidden",
+                    path=_relative_text(target_path, root),
+                    message=check.message
+                    or f"{check.path!r} matches forbidden pattern {check.must_not_match!r}.",
                     severity=_severity_for_mode(rule.mode),
                 ),
             )

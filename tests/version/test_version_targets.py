@@ -7,8 +7,9 @@ from unittest.mock import patch
 
 import pytest
 
-from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.config import VALID_TARGET_KINDS, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.version.targets import (
+    _REGEX_KINDS,
     VersionWriteEvent,
     _detect_json_indent,
     check_autodetected_version_consistency,
@@ -771,6 +772,16 @@ def test_validate_gemspec_kind() -> None:
 def test_validate_csproj_kind() -> None:
     target = VersionTarget(path=Path("MyApp.csproj"), kind="csproj")
     target.validate()
+
+
+def test_regex_kinds_cover_all_regex_shaped_target_kinds() -> None:
+    """Guard against #210: the two match blocks silently drifting apart.
+
+    ``_REGEX_KINDS`` is the single source of truth for every regex-shaped
+    kind; it must cover exactly every valid kind except ``package_json``
+    (JSON-shaped) and ``pattern`` (user-supplied, not in VALID_TARGET_KINDS).
+    """
+    assert set(_REGEX_KINDS) == VALID_TARGET_KINDS - {"package_json"}
 
 
 # ---------------------------------------------------------------------------

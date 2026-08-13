@@ -176,6 +176,7 @@ def test_scaffold_sets_executable(tmp_path: Any) -> None:
         scaffold_files=(
             FolderScaffoldFile(path="bin/script.sh", content="#/bin/sh\necho hi", executable=True),
         ),
+        content_checks=(),
     )
 
     base = tmp_path / "repo"
