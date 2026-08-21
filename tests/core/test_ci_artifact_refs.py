@@ -195,3 +195,27 @@ jobs:
     assert len(fetches) == 1
     assert fetches[0].job == "output"
     assert fetches[0].ref == "999"
+
+
+def test_github_yaml_workflow_support(tmp_path: Path) -> None:
+    """GitHub workflows with .yaml extension are scanned."""
+    github_snippet = """
+name: Build
+on: push
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiled-artifacts
+          run-id: 54321
+"""
+    (tmp_path / ".github").mkdir()
+    (tmp_path / ".github" / "workflows").mkdir()
+    (tmp_path / ".github" / "workflows" / "build.yaml").write_text(github_snippet)
+    fetches = scan_ci_config(tmp_path)
+    assert len(fetches) == 1
+    assert fetches[0].job == "compiled-artifacts"
+    assert fetches[0].ref == "54321"
+    assert fetches[0].source_file.endswith("build.yaml")

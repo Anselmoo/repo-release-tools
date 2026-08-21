@@ -12,7 +12,12 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-CI_GLOBS = (".gitlab-ci.yml", ".gitlab/*.yml", ".github/workflows/*.yml")
+CI_GLOBS = (
+    ".gitlab-ci.yml",
+    ".gitlab/*.yml",
+    ".github/workflows/*.yml",
+    ".github/workflows/*.yaml",
+)
 
 # GitLab: .../jobs/artifacts/<ref>/raw/<path>?job=<name>
 _GITLAB_FETCH = re.compile(
@@ -49,59 +54,63 @@ def _scan_github(root: Path) -> list[ArtifactFetch]:
     """
     found: list[ArtifactFetch] = []
 
-    for path in root.glob(".github/workflows/*.yml"):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
+    # Iterate over GitHub workflow patterns from CI_GLOBS, sorted
+    gh_patterns = [p for p in CI_GLOBS if p.startswith(".github/workflows/")]
+    for pattern in gh_patterns:
+        for path in sorted(root.glob(pattern)):
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
 
-        rel = str(path.relative_to(root))
-        lines = text.splitlines()
+            rel = str(path.relative_to(root))
+            lines = text.splitlines()
 
-        # Find download-artifact steps
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            if _GH_DOWNLOAD.search(line):
-                # This is a download-artifact action line. Now look for run-id
-                # and name in the following indented block.
-                step_block_start = i
-                run_id_match = None
-                name_match = None
+            # Find download-artifact steps
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+                if _GH_DOWNLOAD.search(line):
+                    # This is a download-artifact action line. Now look for run-id
+                    # and name in the following indented block.
+                    step_block_start = i
+                    run_id_match = None
+                    name_match = None
 
-                # Look ahead for run-id and name in the step block
-                j = i + 1
-                base_indent = len(line) - len(line.lstrip())
-                while j < len(lines):
-                    next_line = lines[j]
-                    # Stop if we hit a line that's not indented more than the action line
-                    # (indicates end of step block)
-                    if (
-                        next_line.strip()
-                        and (len(next_line) - len(next_line.lstrip())) <= base_indent
-                    ):
-                        break
+                    # Look ahead for run-id and name in the step block
+                    j = i + 1
+                    base_indent = len(line) - len(line.lstrip())
+                    while j < len(lines):
+                        next_line = lines[j]
+                        # Stop if we hit a line that's not indented more than the action line
+                        # (indicates end of step block)
+                        if (
+                            next_line.strip()
+                            and (len(next_line) - len(next_line.lstrip()))
+                            <= base_indent
+                        ):
+                            break
 
-                    # Check for run-id or name
-                    if not run_id_match:
-                        run_id_match = _GH_RUN_ID.search(next_line)
-                    if not name_match:
-                        name_match = _GH_NAME.search(next_line)
+                        # Check for run-id or name
+                        if not run_id_match:
+                            run_id_match = _GH_RUN_ID.search(next_line)
+                        if not name_match:
+                            name_match = _GH_NAME.search(next_line)
 
-                    j += 1
+                        j += 1
 
-                # Only record if run-id is present (cross-pipeline)
-                if run_id_match and name_match:
-                    found.append(
-                        ArtifactFetch(
-                            job=name_match["name"],
-                            ref=run_id_match["run"],
-                            path=None,
-                            source_file=rel,
-                            line=step_block_start + 1,
+                    # Only record if run-id is present (cross-pipeline)
+                    if run_id_match and name_match:
+                        found.append(
+                            ArtifactFetch(
+                                job=name_match["name"],
+                                ref=run_id_match["run"],
+                                path=None,
+                                source_file=rel,
+                                line=step_block_start + 1,
+                            )
                         )
-                    )
-            i += 1
+                i += 1
 
     return found
 
