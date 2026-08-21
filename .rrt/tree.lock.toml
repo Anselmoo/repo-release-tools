@@ -1,10 +1,10 @@
 [meta]
-generated_at = "2026-08-12T06:25:43+00:00"
-rrt_version = "1.14.1"
+generated_at = "2026-08-21T20:39:21+00:00"
+rrt_version = "1.15.0"
 
 [snapshot]
-entry_count = 424
-tree_hash = "sha256:16b2f25dfb477b06807b35028c093b7f514a6749b36d1eec51066e1205ffd961"
-updated_at = "2026-08-12T06:25:43+00:00"
-ignored_count = 34
+entry_count = 426
+tree_hash = "sha256:997c0ac2859bd76b32f2cc0a61e81323fe59c65d20cd677997f4040ba5f10328"
+updated_at = "2026-08-21T20:39:21+00:00"
+ignored_count = 20
 phantom_empty_dirs = []

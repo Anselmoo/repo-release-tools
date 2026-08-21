@@ -1,0 +1,131 @@
+"""Find CI call sites that fetch a build artifact from another pipeline.
+
+These are the artifacts a storage cleanup must never delete: the dependency is
+declared in the *consuming* job's config, not on the artifact, so nothing on the
+forge side can infer it.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+
+CI_GLOBS = (".gitlab-ci.yml", ".gitlab/*.yml", ".github/workflows/*.yml")
+
+# GitLab: .../jobs/artifacts/<ref>/raw/<path>?job=<name>
+_GITLAB_FETCH = re.compile(
+    r"jobs/artifacts/(?P<ref>[^/\s]+)/raw/(?P<path>[^\s\"'?]+)\?job=(?P<job>[^\s\"'&]+)"
+)
+# GitHub: download-artifact pointed at another run
+_GH_DOWNLOAD = re.compile(r"actions/download-artifact@")
+_GH_RUN_ID = re.compile(r"run-id:\s*(?P<run>\S+)")
+_GH_NAME = re.compile(r"name:\s*(?P<name>\S+)")
+
+
+@dataclass(frozen=True)
+class ArtifactFetch:
+    """Record of a cross-pipeline artifact fetch in CI configuration."""
+
+    job: str
+    ref: str | None
+    path: str | None
+    source_file: str
+    line: int
+
+
+def _iter_ci_files(root: Path) -> Iterator[Path]:
+    for pattern in CI_GLOBS:
+        yield from sorted(root.glob(pattern))
+
+
+def _scan_github(root: Path) -> list[ArtifactFetch]:
+    """Scan GitHub Actions workflows for cross-pipeline artifact downloads.
+
+    A download-artifact action only crosses pipelines when it carries run-id,
+    so we inspect the step block rather than single lines. Returns [] when
+    run-id is absent (same-pipeline case).
+    """
+    found: list[ArtifactFetch] = []
+
+    for path in root.glob(".github/workflows/*.yml"):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+
+        rel = str(path.relative_to(root))
+        lines = text.splitlines()
+
+        # Find download-artifact steps
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if _GH_DOWNLOAD.search(line):
+                # This is a download-artifact action line. Now look for run-id
+                # and name in the following indented block.
+                step_block_start = i
+                run_id_match = None
+                name_match = None
+
+                # Look ahead for run-id and name in the step block
+                j = i + 1
+                base_indent = len(line) - len(line.lstrip())
+                while j < len(lines):
+                    next_line = lines[j]
+                    # Stop if we hit a line that's not indented more than the action line
+                    # (indicates end of step block)
+                    if (
+                        next_line.strip()
+                        and (len(next_line) - len(next_line.lstrip())) <= base_indent
+                    ):
+                        break
+
+                    # Check for run-id or name
+                    if not run_id_match:
+                        run_id_match = _GH_RUN_ID.search(next_line)
+                    if not name_match:
+                        name_match = _GH_NAME.search(next_line)
+
+                    j += 1
+
+                # Only record if run-id is present (cross-pipeline)
+                if run_id_match and name_match:
+                    found.append(
+                        ArtifactFetch(
+                            job=name_match["name"],
+                            ref=run_id_match["run"],
+                            path=None,
+                            source_file=rel,
+                            line=step_block_start + 1,
+                        )
+                    )
+            i += 1
+
+    return found
+
+
+def scan_ci_config(root: Path) -> list[ArtifactFetch]:
+    """Return every cross-pipeline artifact fetch declared under *root*."""
+    found: list[ArtifactFetch] = []
+    for path in _iter_ci_files(root):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        rel = str(path.relative_to(root))
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            match = _GITLAB_FETCH.search(line)
+            if match:
+                found.append(
+                    ArtifactFetch(
+                        job=match["job"],
+                        ref=match["ref"],
+                        path=match["path"],
+                        source_file=rel,
+                        line=lineno,
+                    )
+                )
+    found.extend(_scan_github(root))
+    return found
