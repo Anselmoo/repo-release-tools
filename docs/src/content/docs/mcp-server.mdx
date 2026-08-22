@@ -19,24 +19,30 @@ or `.rrt/*.lock.toml` state. If you were about to shell out to `rrt ...`, check 
 
 Three concrete reasons to prefer it over the CLI:
 
-- **Typed responses.** Tools return Pydantic models serialised to JSON. `rrt_doctor`
+- **Typed responses.** Most tools return Pydantic models serialised to JSON. `rrt_doctor`
   gives one `CheckResult` per component with `ok` and `severity`; the CLI gives
-  ANSI-formatted prose you have to parse.
+  ANSI-formatted prose you have to parse. The four lock readers and `rrt_config` return
+  raw dicts instead, and `rrt_init_run` returns captured text — not every tool is typed.
 - **No shell quoting.** `rrt_validate_commit(subject=...)` takes the subject as an
   argument. Backticks, quotes, `!`, `$`, and newlines in a commit message cannot be
   mangled on the way in.
-- **Preview by default.** `rrt_bump`, `rrt_branch_new`, `rrt_init_run`, and
-  `rrt_publish_snapshot` all default to `dry_run=True`; `rrt_publish_snapshot` also
-  requires `confirm=True`. On the CLI, safety is a flag you must remember. Here it is
-  the default and destruction is the opt-in.
+- **Preview by default.** `rrt_bump`, `rrt_branch_new`, and `rrt_publish_snapshot` all
+  default to `dry_run=True`; `rrt_publish_snapshot` also requires `confirm=True`. On the
+  CLI, safety is a flag you must remember. Here it is the default and destruction is the
+  opt-in. (`rrt_init_run` also defaults to `dry_run=True`, but it exists to serve the
+  `rrt_init` form's submit button — an agent working from a shell gains nothing from it
+  over running `rrt init` directly.)
 
 ### When to use the CLI instead
 
 The MCP surface deliberately does not mirror every command. Use the CLI for:
 
 - `rrt docs map` / `rrt docs map --check`
-- `rrt tree --check` and every `--snapshot` write (`rrt drift --snapshot`,
-  `rrt artifacts --snapshot`, `rrt tree --snapshot`)
+- `rrt docs generate`, `rrt docs publish`, `rrt docs inject`
+- `rrt tree --check` and every `--snapshot` write (`rrt artifacts --snapshot`,
+  `rrt tree --snapshot`); `rrt drift` has no `--snapshot` flag — use `rrt drift generate`
+  / `rrt drift check`
+- `rrt artifacts --check`
 - `rrt toc`, `rrt changelog lint`, `rrt changelog compare`
 - every `rrt-hooks` subcommand
 - ordinary git, tests, and linters
@@ -166,8 +172,11 @@ for a person to look at.
 
 These four are thin `read_lock()` wrappers around a small, readable TOML file at a fixed
 path — if your client can read files directly, `Read .rrt/<name>.lock.toml` is
-equivalent, and each reflects the *last* `--snapshot`, not current state (they do not run
-the corresponding `--check`).
+equivalent, and each reflects the *last* snapshot-writing operation (`--snapshot` for
+health/tree/artifacts, `rrt drift generate` for drift), not current state — they do not
+run the corresponding `--check`. `.rrt/health.lock.toml` specifically can also carry EOL
+and folder results merged in by `rrt eol --snapshot` / `rrt folder --snapshot`, not only
+`rrt doctor --snapshot`.
 
 | Tool | Tags | Description |
 |---|---|---|

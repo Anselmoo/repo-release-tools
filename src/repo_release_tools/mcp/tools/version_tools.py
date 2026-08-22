@@ -65,7 +65,8 @@ def register(mcp: FastMCP) -> None:
         This is the same pipeline as `rrt bump` (version targets, pins, changelog
         promotion, lockfile and generated-asset refresh, release branch + commit), so a
         partial hand-edit will diverge. dry_run=True previews everything and writes
-        nothing.
+        nothing. Each result's `changed_paths` lists every file the bump touched (or
+        would touch under dry_run), relative to the repo root.
 
         level: major | minor | patch | alpha | beta | rc. dry_run=True by default.
         group: restrict the bump to one ``[tool.rrt]`` version group; omit to bump every
@@ -196,6 +197,7 @@ def register(mcp: FastMCP) -> None:
                     new=new_ver,
                     dry_run=dry_run,
                     applied=not dry_run,
+                    changed_paths=[str(p.relative_to(root)) for p in changed_paths],
                 )
             )
             if total > 0:

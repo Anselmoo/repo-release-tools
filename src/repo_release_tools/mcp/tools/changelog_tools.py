@@ -27,7 +27,8 @@ def register(mcp: FastMCP) -> None:
         Use before adding an entry, so you do not duplicate one that is already there,
         and before a bump, to see what will be promoted. section='unreleased' (default)
         returns parsed pending entries; section='full' returns the raw file. Read-only —
-        writing an entry needs the CLI or a direct file edit.
+        writing an entry needs the CLI or hook workflow (`rrt-hooks update-unreleased`);
+        do not hand-edit the `[Unreleased]` section while that hook is active.
         """
         from repo_release_tools.changelog import get_unreleased_entries
 

@@ -15,7 +15,7 @@ def register(mcp: FastMCP) -> None:
     """Register release-check tools on *mcp*."""
 
     @mcp.tool(
-        title="Is this repo safe to release right now?",
+        title="Are version, pin, and changelog targets consistent for release?",
         tags={"release", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),

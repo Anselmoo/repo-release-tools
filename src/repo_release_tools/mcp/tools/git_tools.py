@@ -30,8 +30,8 @@ def register(mcp: FastMCP) -> None:
         """Derive a compliant branch name from a type + description.
 
         When dry_run=False, checks it out. Use instead of `git checkout -b` with a
-        hand-written name — it also returns the matching Conventional Commit title, so
-        the branch and the first commit cannot disagree.
+        hand-written name — it also returns a matching Conventional Commit title to use
+        for the first commit, though nothing enforces that the caller actually uses it.
 
         commit_type: feat|fix|chore|docs|refactor|test|ci|perf|style|build. dry_run=True by default.
         """

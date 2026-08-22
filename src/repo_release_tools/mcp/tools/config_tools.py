@@ -39,9 +39,11 @@ def register(mcp: FastMCP) -> None:
 
         Version targets, pin targets, changelog file, release branch pattern, folder
         rules. Call this before proposing any release-related change so you act on
-        configured policy rather than assumptions. Equivalent to `rrt config --validate`
-        but returns structured data; a config error comes back as a typed ConfigError
-        rather than a nonzero exit.
+        configured policy rather than assumptions. This returns the resolved config as
+        structured data — a config-load error comes back as a typed ConfigError rather
+        than a nonzero exit — but it does NOT run the per-target checks `rrt config
+        --validate` does (target/pin/docs/folder `.validate()`); use rrt_release_check,
+        rrt_folder_check, or rrt_docs_check for those.
         """
         config_error = ctx.lifespan_context.get("config_error")
         if config_error is not None:

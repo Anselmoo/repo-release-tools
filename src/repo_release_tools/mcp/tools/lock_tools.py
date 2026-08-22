@@ -19,7 +19,8 @@ def register(mcp: FastMCP) -> None:
     (e.g. an agent with a ``Read`` tool) gets nothing from calling these that it
     could not get from reading ``.rrt/<name>.lock.toml`` itself. They exist for
     clients that cannot read the filesystem (e.g. Claude Desktop). Each reflects
-    the last ``--snapshot``, not current state.
+    the last snapshot-writing operation (``--snapshot`` for health/tree/artifacts,
+    ``rrt drift generate`` for drift), not current state.
     """
 
     @mcp.tool(
@@ -32,10 +33,13 @@ def register(mcp: FastMCP) -> None:
     def rrt_health(ctx: Context) -> dict[str, Any]:
         """Return the health check results from .rrt/health.lock.toml.
 
-        Reflects the last `rrt doctor --snapshot`, not current state; run the CLI
-        check to compare against the working tree. If your client can read files
-        directly, `Read .rrt/health.lock.toml` is equivalent — prefer rrt_doctor
-        for a live check instead.
+        Reflects the last snapshot-writing run, not current state; run the CLI check
+        to compare against the working tree. If your client can read files directly,
+        `Read .rrt/health.lock.toml` is equivalent. This lock can hold results from
+        three separate commands — `rrt doctor --snapshot` (pre-commit/lefthook/husky/
+        workflows), `rrt eol --snapshot`, and `rrt folder --snapshot` — so prefer
+        rrt_doctor, rrt_eol, or rrt_folder_check for a live check of the part you
+        actually need, not rrt_doctor alone.
         """
         from repo_release_tools.state import health_lock_path, read_lock
 
@@ -55,16 +59,16 @@ def register(mcp: FastMCP) -> None:
     def rrt_drift(ctx: Context) -> dict[str, Any]:
         """Return source drift state from .rrt/drift.lock.toml (file hashes and symbols).
 
-        Reflects the last `rrt drift --snapshot`, not current state; run the CLI
-        check to compare against the working tree. If your client can read files
-        directly, `Read .rrt/drift.lock.toml` is equivalent.
+        Reflects the last `rrt drift generate`, not current state; run `rrt drift check`
+        to compare against the working tree. If your client can read files directly,
+        `Read .rrt/drift.lock.toml` is equivalent.
         """
         from repo_release_tools.state import drift_lock_path, read_lock
 
         root: Path = ctx.lifespan_context.get("root", Path.cwd())
         data = read_lock(drift_lock_path(root))
         if not data:
-            return {"error": "No drift lock found. Run: rrt drift --snapshot"}
+            return {"error": "No drift lock found. Run: rrt drift generate"}
         return data
 
     @mcp.tool(

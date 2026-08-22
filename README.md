@@ -190,15 +190,18 @@ Then add `.mcp.json` at the repository root — Claude Code picks it up on next 
 }
 ```
 
-With the server connected, the agent gets typed JSON instead of terminal output it has to
-parse, passes commit subjects as arguments instead of through shell quoting, and gets a
-dry-run preview by default on every mutating operation. See the
+With the server connected, most tools give the agent typed JSON instead of terminal
+output it has to parse (the four lock readers and `rrt_config` return raw dicts instead),
+commit subjects and branch names are passed as arguments instead of through shell
+quoting, and mutating operations default to a dry-run preview. See the
 [MCP Server guide](https://anselmoo.github.io/repo-release-tools/mcp-server/) for
 Claude Desktop, global install, and HTTP transport with bearer auth.
 
-The MCP server does not cover everything. `rrt docs map`, `rrt tree --check`, `rrt toc`,
-`rrt changelog lint`, all `--snapshot` writes, and every `rrt-hooks` subcommand are
-CLI-only — a mixed session is expected, not a fallback.
+The MCP server does not cover everything. `rrt docs map`, `rrt docs generate`,
+`rrt docs publish`, `rrt docs inject`, `rrt tree --check`, `rrt toc`, `rrt changelog lint`,
+`rrt changelog compare`, `rrt drift generate`/`check`, `rrt artifacts --check`, every other
+`--snapshot` write, and every `rrt-hooks` subcommand are CLI-only — a mixed session is
+expected, not a fallback.
 
 ### Prompt phrasings that work
 
@@ -228,8 +231,8 @@ Before you act, use `rrt`:
 
 | When you are about to… | Use |
 |---|---|
-| create a branch | `rrt branch new <type> "<desc>"` — or validate first with `rrt-hooks pre-commit` |
-| write a commit message | `rrt git commit "<subject>"`, which validates before committing |
+| create a branch | `rrt branch new <type> "<desc>"` — or validate the name first with `rrt-hooks check-branch-name --branch <candidate>` |
+| write a commit message | `rrt git commit --type <type> "<description>"`, which builds and validates the subject before committing |
 | change a version number anywhere | `rrt bump <level> --dry-run` first — never edit version strings by hand; pins and the changelog move with it |
 | add a changelog entry | read the existing `[Unreleased]` first; it is hook-managed |
 | open a PR | `rrt release check` and `rrt doctor` |
@@ -240,9 +243,11 @@ Rules:
 - Never edit a version string by hand in more than one file — that is what `rrt bump` is for.
 - Never hand-edit the `[Unreleased]` changelog section while the rrt hooks are active.
 - If `rrt` is connected over MCP, prefer the `mcp__rrt__*` tools over shelling out:
-  typed responses, no shell quoting of commit subjects, and dry-run is the default.
-  Shell out for anything with no MCP tool (`rrt docs map`, `rrt tree --check`,
-  `rrt toc`, `rrt changelog lint`, `--snapshot` writes, `rrt-hooks *`).
+  typed responses for most tools, no shell quoting of commit subjects, and dry-run is
+  the default. Shell out for anything with no MCP tool (`rrt docs map`, `rrt docs
+  generate`, `rrt docs publish`, `rrt docs inject`, `rrt tree --check`, `rrt toc`,
+  `rrt changelog lint`, `rrt changelog compare`, `rrt drift generate`/`check`,
+  `rrt artifacts --check`, other `--snapshot` writes, `rrt-hooks *`).
 - `rrt --help` lists every command. Check it before concluding rrt cannot do something.
 ```
 

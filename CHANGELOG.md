@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **mcp**: correct CLI invocations and overclaims flagged by code review
 - **mcp**: make the MCP server instructions and tool metadata trigger-shaped
 
 ### Documentation

@@ -15,7 +15,7 @@ def register(mcp: FastMCP) -> None:
     """Register docs-check tools on *mcp*."""
 
     @mcp.tool(
-        title="Are the generated docs stale?",
+        title="Is the docs lockfile stale?",
         tags={"docs", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),

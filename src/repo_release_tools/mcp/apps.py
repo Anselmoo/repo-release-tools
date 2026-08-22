@@ -364,8 +364,10 @@ def register_apps(mcp: FastMCP) -> None:
     def rrt_version_overview(ctx: Context) -> PrefabApp:
         """Version target map: each configured file, kind, and current version.
 
-        Renders a UI widget for a human to look at — if you need the values to reason
-        over, call rrt_version instead.
+        Renders a UI widget for a human to look at — if you need the primary-target
+        values to reason over, call rrt_version instead. Unlike this dashboard, which
+        reads every configured target, rrt_version returns only each group's primary
+        target; for secondary/pin target consistency use rrt_release_check.
         """
         from repo_release_tools.version.targets import read_version_string
 
@@ -601,7 +603,7 @@ def register_apps(mcp: FastMCP) -> None:
         tags={"init", "config"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(destructiveHint=True),
-        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "human-ui"},
     )
     async def rrt_init_run(
         ctx: Context,

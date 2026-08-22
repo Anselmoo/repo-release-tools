@@ -177,6 +177,7 @@ class BumpGroupResult(BaseModel):
     new: str | None = None
     dry_run: bool = True
     applied: bool = False
+    changed_paths: list[str] = []
     error: str | None = None
 
 
