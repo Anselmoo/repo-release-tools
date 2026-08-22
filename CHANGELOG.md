@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Fixed
+- **mcp**: correct CLI invocations and overclaims flagged by code review
+- **mcp**: make the MCP server instructions and tool metadata trigger-shaped
+
+### Documentation
+- **mcp**: document when to reach for the MCP server over the CLI
+
 ## [1.15.0] - 2026-08-13
 ### Added
 - add content assertions to folder check templates (#198)

@@ -15,16 +15,17 @@ def register(mcp: FastMCP) -> None:
     """Register release-check tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Release Check",
+        title="Are version, pin, and changelog targets consistent for release?",
         tags={"release", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_release_check(ctx: Context) -> ReleaseCheckResponse:
-        """Validate version, pin, and changelog targets for every version group.
+        """Verify every version target, pin target, and changelog file resolves and agrees, per version group.
 
-        Read-only — never modifies files.
+        Use as the pre-release gate and after any edit that touches a version string in
+        docs or config — pin drift is silent otherwise. Read-only — never modifies files.
         """
         from repo_release_tools.commands.release_cmd import (
             _check_pin_target,

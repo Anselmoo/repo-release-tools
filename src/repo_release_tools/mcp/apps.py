@@ -183,10 +183,14 @@ def register_apps(mcp: FastMCP) -> None:
         tags={"ui", "dashboard"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "human-ui"},
     )
     def rrt_health_dashboard(ctx: Context) -> PrefabApp:
-        """Health overview: Metric summary, health Ring, per-lock status chart, check cards, and detail table."""
+        """Health overview: Metric summary, health Ring, per-lock status chart, check cards, and detail table.
+
+        Renders a UI widget for a human to look at — if you need the values to reason
+        over, call rrt_health / rrt_doctor instead.
+        """
         from pathlib import Path
 
         from repo_release_tools.state import (
@@ -355,10 +359,16 @@ def register_apps(mcp: FastMCP) -> None:
         tags={"ui", "dashboard", "versioning"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "human-ui"},
     )
     def rrt_version_overview(ctx: Context) -> PrefabApp:
-        """Version target map: each configured file, kind, and current version."""
+        """Version target map: each configured file, kind, and current version.
+
+        Renders a UI widget for a human to look at — if you need the primary-target
+        values to reason over, call rrt_version instead. Unlike this dashboard, which
+        reads every configured target, rrt_version returns only each group's primary
+        target; for secondary/pin target consistency use rrt_release_check.
+        """
         from repo_release_tools.version.targets import read_version_string
 
         config = ctx.lifespan_context.get("config")
@@ -404,10 +414,14 @@ def register_apps(mcp: FastMCP) -> None:
         tags={"ui", "dashboard", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "human-ui"},
     )
     def rrt_doctor_dashboard(ctx: Context) -> PrefabApp:
-        """Doctor check results: pass-rate Ring, per-check Metrics, status cards, and detail table."""
+        """Doctor check results: pass-rate Ring, per-check Metrics, status cards, and detail table.
+
+        Renders a UI widget for a human to look at — if you need the values to reason
+        over, call rrt_doctor instead.
+        """
         from pathlib import Path
 
         from repo_release_tools.state import health_lock_path, read_lock
@@ -482,10 +496,14 @@ def register_apps(mcp: FastMCP) -> None:
         tags={"ui", "dashboard", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "human-ui"},
     )
     def rrt_tree_dashboard(ctx: Context) -> PrefabApp:
-        """Repository tree: snapshot Metric cards, per-directory bar chart, and clean file table."""
+        """Repository tree: snapshot Metric cards, per-directory bar chart, and clean file table.
+
+        Renders a UI widget for a human to look at — if you need the values to reason
+        over, call rrt_tree instead (it is still a snapshot, not a live check).
+        """
         import subprocess
         from collections import Counter
         from pathlib import Path
@@ -563,25 +581,29 @@ def register_apps(mcp: FastMCP) -> None:
 
     @mcp.tool(
         app=True,
-        title="RRT Init",
+        title="Set up rrt in this repo (interactive form)",
         tags={"ui", "init", "config"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "human-ui"},
     )
     def rrt_init(ctx: Context) -> PrefabApp:
-        """Form to initialize rrt configuration — pick target format, preview, then apply."""
+        """Form to initialize rrt configuration — pick target format, preview, then apply.
+
+        Renders a UI widget for a human to fill in — if you are an agent working from a
+        shell, run `rrt init` directly instead.
+        """
         with Column(gap=4, css_class="p-6") as view:
             Heading("Initialize rrt Configuration")
             Form.from_model(RrtInitForm, on_submit=CallTool("rrt_init_run"))
         return PrefabApp(view=view)
 
     @mcp.tool(
-        title="RRT Init Run",
+        title="Apply rrt init (submitted by the init form)",
         tags={"init", "config"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(destructiveHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "human-ui"},
     )
     async def rrt_init_run(
         ctx: Context,
@@ -589,7 +611,13 @@ def register_apps(mcp: FastMCP) -> None:
         dry_run: bool = True,
         force: bool = False,
     ) -> str:
-        """Run rrt init with the given target format. Defaults to dry_run=True for safety."""
+        """Run rrt init with the given target format. Defaults to dry_run=True for safety.
+
+        This is the submit target of the rrt_init form — it shells out to
+        `python -m repo_release_tools.cli init` and returns the captured output. If you
+        are an agent working from a shell, run `rrt init` directly instead; you gain
+        nothing by going through this tool.
+        """
         import asyncio
         import sys
         from pathlib import Path
@@ -636,10 +664,14 @@ def register_apps(mcp: FastMCP) -> None:
         tags={"ui", "dashboard", "locks"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "human-ui"},
     )
     def rrt_locks_overview(ctx: Context) -> PrefabApp:
-        """All lock files at a glance: status donut chart, Carousel of lock summaries, and full detail table."""
+        """All lock files at a glance: status donut chart, Carousel of lock summaries, and full detail table.
+
+        Renders a UI widget for a human to look at — if you need the values to reason
+        over, call rrt_health / rrt_tree / rrt_artifacts / rrt_drift instead.
+        """
         from pathlib import Path
 
         from repo_release_tools.state import (

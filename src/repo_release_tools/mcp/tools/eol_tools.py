@@ -15,21 +15,23 @@ def register(mcp: FastMCP) -> None:
     """Register EOL tracking tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT EOL Check",
+        title="Is a runtime this repo supports going end-of-life?",
         tags={"eol", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_eol(
         ctx: Context,
         language: str | None = None,
         fetch_live: bool = False,
     ) -> EolResponse:
-        """Check host runtime and project minimum versions against EOL policy.
+        """Check the host runtime and project minimum versions against EOL policy.
 
-        Read-only — never writes to .rrt/health.lock.toml. Set fetch_live=True
-        to refresh EOL data from endoflife.date instead of the bundled snapshot.
+        Use before raising or lowering a minimum supported version, and when deciding
+        whether to drop a version from a CI matrix. Read-only — never writes to
+        .rrt/health.lock.toml. Set fetch_live=True to refresh EOL data from
+        endoflife.date instead of the bundled snapshot.
         """
         import contextlib
         import io

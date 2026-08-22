@@ -13,12 +13,12 @@ def register(mcp: FastMCP) -> None:
     """Register git workflow tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Branch New",
+        title="Create a policy-compliant branch for this task",
         tags={"git", "branching"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(destructiveHint=True),
         timeout=10.0,
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     async def rrt_branch_new(
         ctx: Context,
@@ -27,7 +27,14 @@ def register(mcp: FastMCP) -> None:
         scope: str | None = None,
         dry_run: bool = True,
     ) -> BranchResult:
-        """Create a new conventionally-named branch. commit_type: feat|fix|chore|docs|refactor|test|ci|perf|style|build. dry_run=True by default."""
+        """Derive a compliant branch name from a type + description.
+
+        When dry_run=False, checks it out. Use instead of `git checkout -b` with a
+        hand-written name — it also returns a matching Conventional Commit title to use
+        for the first commit, though nothing enforces that the caller actually uses it.
+
+        commit_type: feat|fix|chore|docs|refactor|test|ci|perf|style|build. dry_run=True by default.
+        """
         from pathlib import Path
 
         from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, BranchName

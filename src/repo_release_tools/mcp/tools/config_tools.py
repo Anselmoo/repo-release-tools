@@ -28,14 +28,23 @@ def register(mcp: FastMCP) -> None:
     """Register config and doctor tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Config Inspector",
+        title="What release policy does this repo enforce?",
         tags={"config", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_config(ctx: Context) -> dict[str, Any] | ConfigError:
-        """Return the resolved rrt configuration as a JSON-serialisable dict."""
+        """Read the repo's resolved [tool.rrt] policy.
+
+        Version targets, pin targets, changelog file, release branch pattern, folder
+        rules. Call this before proposing any release-related change so you act on
+        configured policy rather than assumptions. This returns the resolved config as
+        structured data — a config-load error comes back as a typed ConfigError rather
+        than a nonzero exit — but it does NOT run the per-target checks `rrt config
+        --validate` does (target/pin/docs/folder `.validate()`); use rrt_release_check,
+        rrt_folder_check, or rrt_docs_check for those.
+        """
         config_error = ctx.lifespan_context.get("config_error")
         if config_error is not None:
             return ConfigError(error=f"Invalid rrt configuration: {config_error}")
@@ -48,14 +57,19 @@ def register(mcp: FastMCP) -> None:
             return ConfigError(error=str(exc))
 
     @mcp.tool(
-        title="RRT Doctor",
+        title="Is this repo's release automation actually wired up?",
         tags={"config", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_doctor(ctx: Context) -> DoctorResponse | ConfigError:
-        """Run rrt health checks (pre-commit, lefthook, husky, workflows) and return structured results."""
+        """Check whether pre-commit, lefthook, husky, and GitHub Actions workflows are correctly wired.
+
+        Use before recommending a hook or workflow change, and when a hook did not fire
+        as expected. Returns one CheckResult per component with ok + severity — no
+        output parsing.
+        """
         from repo_release_tools.commands.doctor import (
             _check_github_workflows,
             _check_hook_integrations,

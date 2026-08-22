@@ -134,6 +134,37 @@ def test_create_server_returns_fastmcp() -> None:
     assert isinstance(server, FastMCP)
 
 
+def test_server_instructions_trigger_and_cli_boundary() -> None:
+    """Regression guard for the trigger/CLI-boundary wording (fix(mcp) discoverability).
+
+    ``_CaptureMCP`` in test_tools.py discards decorator kwargs, so nothing else in the
+    suite would catch a regression to this string.
+    """
+    instructions = create_server().instructions
+    assert instructions is not None
+    assert "check here first" in instructions
+    assert "Do NOT use it for" in instructions
+    assert "rrt drift generate" in instructions
+    assert "rrt drift --snapshot" not in instructions
+    assert "Safety: rrt_bump, rrt_branch_new, and rrt_publish_snapshot mutate" in instructions
+    assert "rrt_init_run also mutates but is the submit target" in instructions
+
+
+def test_representative_tool_metadata() -> None:
+    """Guard the rrt_init_run audience and rrt_drift description against regressing."""
+
+    async def _get() -> tuple[Any, Any]:
+        server = create_server()
+        init_run = await server.get_tool("rrt_init_run")
+        drift = await server.get_tool("rrt_drift")
+        return init_run, drift
+
+    init_run, drift = asyncio.run(_get())
+    assert init_run.meta["audience"] == "human-ui"
+    assert "rrt drift generate" in (drift.description or "")
+    assert "rrt drift --snapshot" not in (drift.description or "")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 

@@ -19,20 +19,20 @@ def register(mcp: FastMCP) -> None:
     """Register folder-check tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Folder Check",
+        title="Does this repo's layout violate its own folder policy?",
         tags={"folders", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_folder_check(
         ctx: Context,
         template: list[str] | None = None,
     ) -> FolderCheckResponse:
-        """Validate the repository folder structure.
+        """Check the repo layout against [tool.rrt.folders] policy or named built-in templates.
 
-        Checks against [tool.rrt.folders] policy or named built-in templates.
-        Read-only — never scaffolds files.
+        Use before creating a new top-level directory or moving a module, so you place
+        it where policy expects. Read-only — never scaffolds files.
         """
         from repo_release_tools.commands.folder import _load_folder_policy_config
         from repo_release_tools.folders import check_folders

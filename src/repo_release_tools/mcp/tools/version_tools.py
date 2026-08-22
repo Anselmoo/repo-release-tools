@@ -16,14 +16,19 @@ def register(mcp: FastMCP) -> None:
     """Register version read/bump tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Version Reader",
+        title="What version is this repo at right now?",
         tags={"versioning"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_version(ctx: Context) -> list[VersionGroupResult] | ConfigError:
-        """Return the current version from each version group's primary target."""
+        """Read the current version of every configured version group from its primary target.
+
+        Use whenever a version number is about to appear in a commit message, changelog
+        heading, docs string, or release note — this is the authoritative value, not
+        whatever a file happened to say. Read-only.
+        """
         from repo_release_tools.version.targets import read_version_string
 
         config_error = ctx.lifespan_context.get("config_error")
@@ -42,12 +47,12 @@ def register(mcp: FastMCP) -> None:
         return results
 
     @mcp.tool(
-        title="RRT Version Bump",
+        title="Preview or apply a release version bump",
         tags={"versioning"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(destructiveHint=True),
         timeout=30.0,
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     async def rrt_bump(
         ctx: Context,
@@ -55,7 +60,13 @@ def register(mcp: FastMCP) -> None:
         dry_run: bool = True,
         group: str | None = None,
     ) -> list[BumpGroupResult] | dict[str, Any]:
-        """Preview or apply a version bump.
+        """Preview or apply a version bump — use instead of editing version strings by hand.
+
+        This is the same pipeline as `rrt bump` (version targets, pins, changelog
+        promotion, lockfile and generated-asset refresh, release branch + commit), so a
+        partial hand-edit will diverge. dry_run=True previews everything and writes
+        nothing. Each result's `changed_paths` lists every file the bump touched (or
+        would touch under dry_run), relative to the repo root.
 
         level: major | minor | patch | alpha | beta | rc. dry_run=True by default.
         group: restrict the bump to one ``[tool.rrt]`` version group; omit to bump every
@@ -186,6 +197,7 @@ def register(mcp: FastMCP) -> None:
                     new=new_ver,
                     dry_run=dry_run,
                     applied=not dry_run,
+                    changed_paths=[str(p.relative_to(root)) for p in changed_paths],
                 )
             )
             if total > 0:

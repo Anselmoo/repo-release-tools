@@ -15,17 +15,19 @@ def register(mcp: FastMCP) -> None:
     """Register docs-check tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Docs Check",
+        title="Is the docs lockfile stale?",
         tags={"docs", "inspection"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_docs_check(ctx: Context) -> DocsCheckResponse:
         """Check whether .rrt/docs.lock.toml is current against source-owned docs.
 
-        Read-only — never regenerates or writes files. If stale, run
-        `rrt docs generate --format toml` to refresh.
+        Use after editing any source docstring that feeds generated documentation,
+        before opening a PR — CI fails on this drift. Read-only — never regenerates or
+        writes files. If stale, run `rrt docs generate --format toml` to refresh. Covers
+        .rrt/docs.lock.toml only; `rrt docs map --check` has no tool here — use the CLI.
         """
         from repo_release_tools.commands.docs_cmd import _build_docs_lock_sources
         from repo_release_tools.config import DocsConfig

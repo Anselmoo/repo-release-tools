@@ -421,6 +421,7 @@ def test_rrt_bump_dry_run(tmp_path: Path) -> None:
     assert result[0].new == "1.0.1"
     assert result[0].dry_run is True
     assert result[0].applied is False
+    assert result[0].changed_paths == ["pyproject.toml"]
     assert ctx.report_progress.await_count >= 1
 
     # dry-run must not touch disk at all (D9 fix: preflight + apply_bump_files both
