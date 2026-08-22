@@ -133,8 +133,16 @@ def _scan_github(root: Path) -> list[ArtifactFetch]:
     return found
 
 
-def scan_ci_config(root: Path) -> list[ArtifactFetch]:
-    """Return every cross-pipeline artifact fetch declared under *root*."""
+def _scan_gitlab(root: Path) -> list[ArtifactFetch]:
+    """Scan CI config for GitLab artifact-fetch-by-API call sites.
+
+    Deliberately scans *every* file in :data:`CI_GLOBS`, not only the GitLab
+    ones: a job running on GitHub Actions can still ``curl`` an artifact out of
+    a GitLab instance, and narrowing this to the ``.gitlab*`` patterns would
+    make that fetch invisible — a false negative, which is the failure mode
+    this module exists to prevent. Contrast :func:`_scan_github`, which is
+    necessarily pattern-scoped because it parses Actions step blocks.
+    """
     found: list[ArtifactFetch] = []
     for path in _iter_ci_files(root):
         try:
@@ -155,5 +163,9 @@ def scan_ci_config(root: Path) -> list[ArtifactFetch]:
                         line=lineno,
                     )
                 )
-    found.extend(_scan_github(root))
     return found
+
+
+def scan_ci_config(root: Path) -> list[ArtifactFetch]:
+    """Return every cross-pipeline artifact fetch declared under *root*."""
+    return [*_scan_gitlab(root), *_scan_github(root)]
