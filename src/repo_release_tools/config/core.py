@@ -10,6 +10,7 @@ from glob import has_magic
 from pathlib import Path
 from typing import cast
 
+from .artifact_protection import _load_artifact_protection
 from .docs_config import _VALID_LANGUAGES, _load_docs_config, _load_eol_config
 from .folders_config import _load_folders_config
 from .model import (
@@ -36,8 +37,10 @@ from .model import (
     VALID_PIN_TARGET_MISSING,
     VALID_TARGET_KINDS,
     VALID_UPSTREAM_PROVIDERS,
+    ArtifactProtection,
     ArtifactTarget,
     CommandGroupEntry,
+    ConsumedArtifact,
     DocsConfig,
     EolConfig,
     EolOverride,
@@ -743,6 +746,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         eol=_load_eol_config(raw.get("eol")),
         docs=_load_docs_config(raw.get("docs"), root=root),
         folders=_load_folders_config(raw.get("folders")),
+        artifact_protection=_load_artifact_protection(raw.get("artifact_protection")),
         artifact_targets=_load_artifact_targets(raw.get("artifact_targets", [])),
         field_targets=_load_field_targets(raw.get("field_targets", [])),
         pin_target_missing=_load_pin_target_missing(raw.get("pin_target_missing")),
@@ -1496,6 +1500,8 @@ __all__ = [
     "VALID_TARGET_KINDS",
     "VALID_UPSTREAM_PROVIDERS",
     "_VALID_LANGUAGES",
+    "ArtifactProtection",
+    "ConsumedArtifact",
     "DocsConfig",
     "EolConfig",
     "CommandGroupEntry",

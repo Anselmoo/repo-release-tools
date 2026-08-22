@@ -86,8 +86,7 @@ def _scan_github(root: Path) -> list[ArtifactFetch]:
                         # (indicates end of step block)
                         if (
                             next_line.strip()
-                            and (len(next_line) - len(next_line.lstrip()))
-                            <= base_indent
+                            and (len(next_line) - len(next_line.lstrip())) <= base_indent
                         ):
                             break
 

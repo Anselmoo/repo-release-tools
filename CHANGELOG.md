@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- **config**: add [tool.rrt.artifact_protection]
 - **tools**: scan CI config for cross-pipeline artifact fetches
 
 ### Fixed

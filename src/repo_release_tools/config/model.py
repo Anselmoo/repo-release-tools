@@ -809,6 +809,60 @@ class FolderPolicyConfig:
             seen_rule_names.add(rule.name)
 
 
+@dataclass(frozen=True)
+class ConsumedArtifact:
+    """A single declared-consumed-artifact entry under [[tool.rrt.artifact_protection.consumed]].
+
+    ``job`` is matched by exact string equality against a scanned
+    :class:`~repo_release_tools.tools.ci_artifact_refs.ArtifactFetch`'s ``job``
+    field elsewhere (job names may legitimately contain colons, e.g.
+    ``build:report_html:bundle``) — it must never be split, normalized, or
+    otherwise transformed.
+    """
+
+    job: str
+    ref: str
+    artifacts: tuple[str, ...] = ()
+    consumed_by: tuple[str, ...] = ()
+    reason: str = ""
+
+    def validate(self) -> None:
+        """Validate the consumed-artifact entry."""
+        if not self.job or not self.job.strip():
+            raise ValueError("artifact_protection consumed entry job must be a non-empty string")
+        if not self.ref or not self.ref.strip():
+            raise ValueError(
+                f"artifact_protection consumed entry {self.job!r} ref must be a non-empty string",
+            )
+        if not self.artifacts:
+            raise ValueError(
+                f"artifact_protection consumed entry {self.job!r} must declare at least one artifact",
+            )
+        if not self.consumed_by:
+            raise ValueError(
+                f"artifact_protection consumed entry {self.job!r} "
+                "must declare at least one consumed_by entry",
+            )
+
+
+@dataclass(frozen=True)
+class ArtifactProtection:
+    """Artifact protection policy under [tool.rrt.artifact_protection].
+
+    Declares refs whose build artifacts must never be considered disposable,
+    plus explicit declarations of artifacts consumed by something else so a
+    storage cleanup does not silently delete an artifact another job depends on.
+    """
+
+    protected_refs: tuple[str, ...] = ()
+    consumed: tuple[ConsumedArtifact, ...] = ()
+
+    def validate(self) -> None:
+        """Validate the artifact protection policy."""
+        for entry in self.consumed:
+            entry.validate()
+
+
 VALID_PIN_TARGET_MISSING = frozenset({"warn", "error"})
 
 
@@ -828,6 +882,7 @@ class RrtConfig:
     eol: EolConfig | None = None
     docs: DocsConfig | None = None
     folders: FolderPolicyConfig | None = None
+    artifact_protection: ArtifactProtection | None = None
     artifact_targets: list[ArtifactTarget] = field(default_factory=list)
     field_targets: list[FieldTarget] = field(default_factory=list)
     pin_target_missing: str = "error"
