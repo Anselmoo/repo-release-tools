@@ -84,6 +84,7 @@ from repo_release_tools.changelog import (
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
+    ConsumedArtifact,
     RrtConfig,
     find_repo_root,
     format_autodetected_config_notice,
@@ -96,6 +97,7 @@ from repo_release_tools.state import (
     health_lock_path,
     write_lock,
 )
+from repo_release_tools.tools.ci_artifact_refs import ArtifactFetch, scan_ci_config
 from repo_release_tools.ui import VerbosePrinter
 
 DOCTOR_EPILOG = "  $ rrt doctor\n  $ rrt release check\n  $ rrt docs check"
@@ -247,6 +249,109 @@ def _check_hook_integrations(root: Path) -> dict[str, tuple[str, bool, str]]:
         )
         for name, (message, ok, severity) in checks.items()
     }
+
+
+_ARTIFACT_PROTECTION_NOT_CONFIGURED = (
+    "No cross-pipeline artifact fetches found in CI config; "
+    "[tool.rrt.artifact_protection] not configured"
+)
+
+
+def _consumed_entry_toml(fetch: ArtifactFetch) -> str:
+    """Render the ``[[tool.rrt.artifact_protection.consumed]]`` block to add for *fetch*.
+
+    ``fetch.job`` is used verbatim (never split/normalized) — on GitLab it is the
+    real job name from ``?job=``, on GitHub it is the artifact's ``name:`` (see
+    :mod:`repo_release_tools.tools.ci_artifact_refs`) — either way it is exactly
+    the string a ``consumed`` entry must declare to match.
+    """
+    artifacts = f'["{fetch.path}"]' if fetch.path else "[]"
+    return (
+        "[[tool.rrt.artifact_protection.consumed]]\n"
+        f'job = "{fetch.job}"\n'
+        f'ref = "{fetch.ref or ""}"\n'
+        f"artifacts = {artifacts}\n"
+        f'consumed_by = ["{fetch.source_file}"]\n'
+        'reason = "TODO: explain why this artifact must be protected"'
+    )
+
+
+def _undeclared_fetch_report(fetches: list[ArtifactFetch], *, configured: bool) -> str:
+    """Render the failure detail naming each undeclared fetch's file:line and its fix."""
+    plural = "es" if len(fetches) != 1 else ""
+    if configured:
+        header = (
+            f"{len(fetches)} cross-pipeline artifact fetch{plural} not declared in "
+            "[tool.rrt.artifact_protection.consumed]:"
+        )
+    else:
+        header = (
+            "[tool.rrt.artifact_protection] is not configured, but "
+            f"{len(fetches)} cross-pipeline artifact fetch{plural} were found in CI config:"
+        )
+    entries = "\n\n".join(
+        f"{fetch.source_file}:{fetch.line} fetches job {fetch.job!r} — not declared. Add:\n"
+        f"{_consumed_entry_toml(fetch)}"
+        for fetch in fetches
+    )
+    return f"{header}\n\n{entries}"
+
+
+def _stale_consumed_report(stale: list[ConsumedArtifact]) -> str:
+    """Render the warning detail for consumed entries matching no scanned fetch."""
+    plural = "ies" if len(stale) != 1 else "y"
+    names = ", ".join(repr(entry.job) for entry in stale)
+    return (
+        f"[tool.rrt.artifact_protection.consumed] has {len(stale)} entr{plural} matching no "
+        f"scanned CI fetch: {names}. Remove the entry or confirm the fetch was not renamed."
+    )
+
+
+def _check_artifact_protection(root: Path, config: RrtConfig | None) -> tuple[str, bool, str]:
+    """Join scanned CI artifact fetches against the declared artifact-protection policy.
+
+    Fails when a cross-pipeline fetch (found by
+    :func:`~repo_release_tools.tools.ci_artifact_refs.scan_ci_config`) has no
+    matching ``[[tool.rrt.artifact_protection.consumed]]`` entry — matched by
+    exact string equality on ``job``, never split/normalized/lowercased, since
+    job names may legitimately contain colons. Warns (without failing) when a
+    ``consumed`` entry matches no scanned fetch, since a protection list that
+    silently over-protects rots and trains people to ignore it.
+    """
+    fetches = scan_ci_config(root)
+    protection = config.artifact_protection if config is not None else None
+
+    if not fetches and protection is None:
+        return _ARTIFACT_PROTECTION_NOT_CONFIGURED, True, "warning"
+
+    consumed = protection.consumed if protection is not None else ()
+    declared_jobs = {entry.job for entry in consumed}
+    fetch_jobs = {fetch.job for fetch in fetches}
+
+    undeclared = [fetch for fetch in fetches if fetch.job not in declared_jobs]
+    if undeclared:
+        report = _undeclared_fetch_report(undeclared, configured=protection is not None)
+        return report, False, "error"
+
+    stale = [entry for entry in consumed if entry.job not in fetch_jobs]
+    if stale:
+        return _stale_consumed_report(stale), True, "warning"
+
+    if not fetches:
+        return (
+            "[tool.rrt.artifact_protection] declares no consumed artifacts to check "
+            "(no cross-pipeline fetches found in CI config)",
+            True,
+            "ok",
+        )
+
+    plural = "es" if len(fetches) != 1 else ""
+    return (
+        f"All {len(fetches)} cross-pipeline artifact fetch{plural} declared in "
+        "[tool.rrt.artifact_protection.consumed]",
+        True,
+        "ok",
+    )
 
 
 def _fix_missing_unreleased(root: Path, config: object, *, dry_run: bool) -> list[str]:
@@ -412,6 +517,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         ("lefthook", hook_checks["lefthook"]),
         ("husky", hook_checks["husky"]),
         ("workflows", _check_github_workflows(root)),
+        ("artifact_protection", _check_artifact_protection(root, config)),
     ]
 
     # Structured results for snapshot/check
