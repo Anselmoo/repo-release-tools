@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- **mcp**: mirror the artifact-protection lens
 - **doctor**: add artifact-protection lens
 - **config**: add [tool.rrt.artifact_protection]
 - **tools**: scan CI config for cross-pipeline artifact fetches

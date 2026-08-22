@@ -15,6 +15,7 @@ import pytest
 pytest.importorskip("fastmcp", reason="[mcp] extra not installed")
 
 from repo_release_tools.config import (
+    ArtifactProtection,
     EolConfig,
     PinTarget,
     RrtConfig,
@@ -188,10 +189,94 @@ def test_rrt_doctor(tmp_path: Path) -> None:
             "repo_release_tools.commands.doctor._check_hook_integrations", return_value=hook_checks
         ),
         patch("repo_release_tools.commands.doctor._check_github_workflows", return_value=ok_check),
+        patch(
+            "repo_release_tools.commands.doctor._check_artifact_protection", return_value=ok_check
+        ),
     ):
         result = mcp._tools["rrt_doctor"](ctx)
     assert isinstance(result, DoctorResponse)
     assert result.pre_commit.ok
+    assert result.artifact_protection.ok
+
+
+def test_rrt_doctor_artifact_protection_fail(tmp_path: Path) -> None:
+    """`rrt_doctor` surfaces a failing artifact-protection lens, not just a passing one."""
+    mcp = _CaptureMCP()
+    register_config(mcp)  # ty: ignore[invalid-argument-type]
+    ctx = _ctx(tmp_path)
+    ok_check = ("all good", True, "ok")
+    hook_checks = {"pre_commit": ok_check, "lefthook": ok_check, "husky": ok_check}
+    fail_check = ("undeclared fetch: .gitlab-ci.yml:3", False, "error")
+    with (
+        patch(
+            "repo_release_tools.commands.doctor._check_hook_integrations", return_value=hook_checks
+        ),
+        patch("repo_release_tools.commands.doctor._check_github_workflows", return_value=ok_check),
+        patch(
+            "repo_release_tools.commands.doctor._check_artifact_protection",
+            return_value=fail_check,
+        ),
+    ):
+        result = mcp._tools["rrt_doctor"](ctx)
+    assert isinstance(result, DoctorResponse)
+    assert result.artifact_protection.ok is False
+    assert result.artifact_protection.severity == "error"
+    assert "gitlab-ci.yml:3" in result.artifact_protection.message
+
+
+def test_rrt_doctor_config_error(tmp_path: Path) -> None:
+    """An invalid `[tool.rrt]` config returns `ConfigError`, matching `rrt_config`'s convention."""
+    mcp = _CaptureMCP()
+    register_config(mcp)  # ty: ignore[invalid-argument-type]
+    ctx = _ctx(tmp_path, config=None)
+    ctx.lifespan_context["config_error"] = "bad TOML"
+    result = mcp._tools["rrt_doctor"](ctx)
+    assert isinstance(result, ConfigError)
+    assert "bad TOML" in result.error
+
+
+def test_rrt_doctor_reuses_cli_artifact_protection_lens(tmp_path: Path) -> None:
+    """`rrt_doctor` calls the real CLI lens rather than reimplementing the join logic.
+
+    Exercises `_check_artifact_protection` end-to-end (unmocked): an undeclared
+    cross-pipeline CI fetch with no matching `[tool.rrt.artifact_protection.consumed]`
+    entry must surface through the MCP surface exactly as it does on the CLI, including
+    the file:line evidence and the ready-to-paste TOML block.
+    """
+    (tmp_path / ".gitlab-ci.yml").write_text(
+        "build:docs:\n"
+        "  script:\n"
+        '    - curl "https://example.com/api/v4/projects/1/jobs/artifacts/main/raw/'
+        'artifacts/manifest.json?job=build:report_html:bundle" --output out.json\n',
+        encoding="utf-8",
+    )
+    target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / "pyproject.toml",
+        version_groups=[group],
+        default_group_name="default",
+        artifact_protection=ArtifactProtection(consumed=()),
+    )
+    mcp = _CaptureMCP()
+    register_config(mcp)  # ty: ignore[invalid-argument-type]
+    ctx = _ctx(tmp_path, config=config)
+
+    result = mcp._tools["rrt_doctor"](ctx)
+
+    assert isinstance(result, DoctorResponse)
+    assert result.artifact_protection.ok is False
+    assert result.artifact_protection.severity == "error"
+    assert ".gitlab-ci.yml:3" in result.artifact_protection.message
+    assert "[[tool.rrt.artifact_protection.consumed]]" in result.artifact_protection.message
 
 
 # ── lock tools ────────────────────────────────────────────────────────────────

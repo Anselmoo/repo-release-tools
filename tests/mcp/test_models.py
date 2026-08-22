@@ -6,6 +6,8 @@ import pytest
 
 pytest.importorskip("fastmcp", reason="[mcp] extra not installed")
 
+from pydantic import ValidationError
+
 from repo_release_tools.mcp.models import (
     BranchResult,
     BranchValidationResult,
@@ -38,8 +40,21 @@ class TestCheckResult:
 class TestDoctorResponse:
     def test_all_ok(self) -> None:
         ok = CheckResult(message="ok", ok=True, severity="ok")
-        dr = DoctorResponse(pre_commit=ok, lefthook=ok, husky=ok, workflows=ok)
+        dr = DoctorResponse(
+            pre_commit=ok, lefthook=ok, husky=ok, workflows=ok, artifact_protection=ok
+        )
         assert dr.pre_commit.ok
+        assert dr.artifact_protection.ok
+
+    def test_artifact_protection_is_required(self) -> None:
+        """`artifact_protection` must be a mandatory field, like the other three lenses.
+
+        Mirrors the CLI's `_check_artifact_protection` lens (commands/doctor.py) —
+        an MCP client should never see a `DoctorResponse` missing it.
+        """
+        ok = CheckResult(message="ok", ok=True, severity="ok")
+        with pytest.raises(ValidationError):
+            DoctorResponse(pre_commit=ok, lefthook=ok, husky=ok, workflows=ok)  # ty: ignore[missing-argument]
 
 
 class TestVersionGroupResult:

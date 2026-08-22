@@ -26,13 +26,17 @@ Fields:
 
 ### `DoctorResponse`
 Aggregated result of `rrt_doctor`, which checks whether a project's automation tooling
-(pre-commit hooks, lefthook, husky, and GitHub Actions workflows) is correctly wired.
+(pre-commit hooks, lefthook, husky, GitHub Actions workflows, and CI artifact-protection
+policy) is correctly wired.
 
 Fields — one `CheckResult` per toolchain component:
 - `pre_commit`
 - `lefthook`
 - `husky`
 - `workflows`
+- `artifact_protection` — mirrors the CLI's `_check_artifact_protection` lens
+  (`commands/doctor.py`), joining scanned CI artifact fetches against the declared
+  `[tool.rrt.artifact_protection.consumed]` policy
 
 ### `VersionGroupResult`
 Reports the current version string for one version group as defined in `[tool.rrt]`.
@@ -159,6 +163,7 @@ class DoctorResponse(BaseModel):
     lefthook: CheckResult
     husky: CheckResult
     workflows: CheckResult
+    artifact_protection: CheckResult
 
 
 class VersionGroupResult(BaseModel):
