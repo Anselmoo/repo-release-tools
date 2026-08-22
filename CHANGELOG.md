@@ -16,6 +16,7 @@
 - **mcp**: document when to reach for the MCP server over the CLI
 
 ### Documentation
+- **doctor**: correct artifact-protection scan scope and lead with the failure
 - document the artifact-protection lens
 
 ## [1.15.0] - 2026-08-13
