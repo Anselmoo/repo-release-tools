@@ -264,8 +264,19 @@ def _consumed_entry_toml(fetch: ArtifactFetch) -> str:
     real job name from ``?job=``, on GitHub it is the artifact's ``name:`` (see
     :mod:`repo_release_tools.tools.ci_artifact_refs`) — either way it is exactly
     the string a ``consumed`` entry must declare to match.
+
+    ``artifacts`` must always come out non-empty: :meth:`ConsumedArtifact.validate`
+    requires at least one entry, and GitHub-provenance fetches never carry a
+    ``path`` (``download-artifact`` exposes no per-file path, only ``name:``).
+    When the real path is unknown, emit an unmistakable placeholder — marked the
+    same way ``reason`` is — rather than an empty list a user could paste
+    straight into a config that then fails to load.
     """
-    artifacts = f'["{fetch.path}"]' if fetch.path else "[]"
+    artifacts = (
+        f'["{fetch.path}"]'
+        if fetch.path
+        else '["TODO: list the artifact-relative path(s) this job consumes"]'
+    )
     return (
         "[[tool.rrt.artifact_protection.consumed]]\n"
         f'job = "{fetch.job}"\n'
@@ -285,9 +296,10 @@ def _undeclared_fetch_report(fetches: list[ArtifactFetch], *, configured: bool) 
             "[tool.rrt.artifact_protection.consumed]:"
         )
     else:
+        verb = "were" if len(fetches) != 1 else "was"
         header = (
             "[tool.rrt.artifact_protection] is not configured, but "
-            f"{len(fetches)} cross-pipeline artifact fetch{plural} were found in CI config:"
+            f"{len(fetches)} cross-pipeline artifact fetch{plural} {verb} found in CI config:"
         )
     entries = "\n\n".join(
         f"{fetch.source_file}:{fetch.line} fetches job {fetch.job!r} — not declared. Add:\n"
@@ -329,11 +341,18 @@ def _check_artifact_protection(root: Path, config: RrtConfig | None) -> tuple[st
     fetch_jobs = {fetch.job for fetch in fetches}
 
     undeclared = [fetch for fetch in fetches if fetch.job not in declared_jobs]
+    stale = [entry for entry in consumed if entry.job not in fetch_jobs]
+
     if undeclared:
+        # The failure dominates the returned severity, but a concurrent stale
+        # entry must not go invisible behind it — appended so both directions
+        # stay visible in the same report instead of one masking the other
+        # across however many `rrt doctor` runs it takes to clear the failure.
         report = _undeclared_fetch_report(undeclared, configured=protection is not None)
+        if stale:
+            report = f"{report}\n\n{_stale_consumed_report(stale)}"
         return report, False, "error"
 
-    stale = [entry for entry in consumed if entry.job not in fetch_jobs]
     if stale:
         return _stale_consumed_report(stale), True, "warning"
 

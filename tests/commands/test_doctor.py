@@ -1000,6 +1000,8 @@ def test_check_artifact_protection_undeclared_fetch_when_section_entirely_absent
 
     assert ok is False
     assert severity == "error"
+    # Subject/verb agreement for the singular case: "1 ... fetch was found", not "were found".
+    assert "1 cross-pipeline artifact fetch was found in CI config" in message
     assert "[tool.rrt.artifact_protection] is not configured, but" in message
     assert ".gitlab-ci.yml:3" in message
     assert "[[tool.rrt.artifact_protection.consumed]]" in message
@@ -1033,6 +1035,95 @@ def test_check_artifact_protection_multiple_undeclared_fetches_lists_each(
     assert ".github/workflows/ci.yml:4" in message
     assert 'job = "build:report_html:bundle"' in message
     assert 'job = "benchmark-report"' in message
+    # GitHub-sourced fetches never carry a `path` (download-artifact exposes no
+    # per-file path), so `artifacts` must still come out non-empty — never `[]`,
+    # which would fail ConsumedArtifact.validate() if pasted verbatim — and the
+    # placeholder must be unmistakably marked for human completion, like `reason`.
+    assert 'artifacts = ["TODO: list the artifact-relative path(s) this job consumes"]' in message
+    assert "artifacts = []" not in message
+
+
+def test_check_artifact_protection_github_sourced_toml_block_is_valid_when_parsed(
+    tmp_path: Path,
+) -> None:
+    """The emitted block for a GitHub-sourced fetch parses into a valid ConsumedArtifact.
+
+    Regression test for a block that looked plausible but silently failed
+    `ConsumedArtifact.validate()` once pasted (empty `artifacts`).
+    """
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "ci.yml").write_text(
+        "jobs:\n"
+        "  publish:\n"
+        "    steps:\n"
+        "      - uses: actions/download-artifact@v4\n"
+        "        with:\n"
+        "          name: benchmark-report\n"
+        "          run-id: 12345\n",
+        encoding="utf-8",
+    )
+    conf = _make_config(tmp_path, artifact_protection=ArtifactProtection(consumed=()))
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+    assert ok is False
+
+    # Extract the emitted TOML block from the message and confirm it round-trips
+    # through the real config loader path: parse -> construct -> validate.
+    toml_start = message.index("[[tool.rrt.artifact_protection.consumed]]")
+    block = message[toml_start:]
+    import tomllib
+
+    parsed = tomllib.loads(block)
+    entry = parsed["tool"]["rrt"]["artifact_protection"]["consumed"][0]
+    consumed = ConsumedArtifact(
+        job=entry["job"],
+        ref=entry["ref"],
+        artifacts=tuple(entry["artifacts"]),
+        consumed_by=tuple(entry["consumed_by"]),
+        reason=entry["reason"],
+    )
+
+    consumed.validate()  # must not raise
+
+    assert entry["job"] == "benchmark-report"
+    assert entry["artifacts"] == ["TODO: list the artifact-relative path(s) this job consumes"]
+
+
+def test_check_artifact_protection_undeclared_and_stale_both_surface_together(
+    tmp_path: Path,
+) -> None:
+    """An undeclared fetch and a stale `consumed` entry are both visible in one report.
+
+    Direction 1 (fail) must not silently mask direction 2 (warn) — a stale entry
+    should not go unseen for however many `rrt doctor` runs it takes to clear an
+    unrelated failure.
+    """
+    (tmp_path / ".gitlab-ci.yml").write_text(_GITLAB_FETCH_SNIPPET, encoding="utf-8")
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="ghost-job",
+                    ref="main",
+                    artifacts=("a",),
+                    consumed_by=("b",),
+                ),
+            )
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    # Direction 1: the undeclared fetch is reported, with its file:line and fix.
+    assert ".gitlab-ci.yml:3" in message
+    assert "build:report_html:bundle" in message
+    # Direction 2: the stale entry is reported too, in the same message.
+    assert "ghost-job" in message
+    assert "matching no scanned CI fetch" in message
 
 
 def test_check_artifact_protection_stale_consumed_entry_warns(tmp_path: Path) -> None:
