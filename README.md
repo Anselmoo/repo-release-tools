@@ -35,6 +35,11 @@ local CLI, hook integration, version bumps, and release-branch automation.
   - [Use the Python package for local workflow automation](#use-the-python-package-for-local-workflow-automation)
 - [Changelog workflows](#changelog-workflows)
 - [What the project includes](#what-the-project-includes)
+- [Get your AI agent to actually use rrt](#get-your-ai-agent-to-actually-use-rrt)
+  - [1. Tell your agent, once, in its instruction file](#1-tell-your-agent-once-in-its-instruction-file)
+  - [2. Connect the MCP server (optional, but better for anything that writes)](#2-connect-the-mcp-server-optional-but-better-for-anything-that-writes)
+  - [Prompt phrasings that work](#prompt-phrasings-that-work)
+  - [Agent instruction snippet](#agent-instruction-snippet)
 - [Start with the doc that matches your task](#start-with-the-doc-that-matches-your-task)
 - [License](#license)
 <!-- rrt:auto:end:readme-toc -->
@@ -151,6 +156,95 @@ should use `.rrt.toml` or `.config/rrt.toml`.
 - a reusable GitHub Action in `action.yml`
 - bundled agent skills for `uvx` and installed-CLI workflows
 - docs for branch policy, hook setup, and release workflows
+
+## Get your AI agent to actually use rrt
+
+If you use Claude Code, Copilot, Cursor, or Codex on a repository that has `rrt`
+configured, the agent will happily reimplement what `rrt` already does — hand-editing a
+version string in three files, inventing a branch name the pre-commit hook then rejects,
+or writing a changelog entry in the wrong section. Not because it lacks the tools, but
+because nothing told it these are the tools for this job.
+
+Two things fix that. Do both.
+
+### 1. Tell your agent, once, in its instruction file
+
+Paste the block from [Agent instruction snippet](#agent-instruction-snippet) below into
+your repository's `CLAUDE.md`, `AGENTS.md`, or `.github/copilot-instructions.md`. This is
+the highest-leverage step by a wide margin: it is read on every session, before the agent
+has formed a plan, and it costs nothing at runtime.
+
+### 2. Connect the MCP server (optional, but better for anything that writes)
+
+```bash
+uv add "repo-release-tools[mcp]"
+```
+
+Then add `.mcp.json` at the repository root — Claude Code picks it up on next start:
+
+```json
+{
+  "mcpServers": {
+    "rrt": { "type": "stdio", "command": "uv", "args": ["run", "rrt-mcp"] }
+  }
+}
+```
+
+With the server connected, the agent gets typed JSON instead of terminal output it has to
+parse, passes commit subjects as arguments instead of through shell quoting, and gets a
+dry-run preview by default on every mutating operation. See the
+[MCP Server guide](https://anselmoo.github.io/repo-release-tools/mcp-server/) for
+Claude Desktop, global install, and HTTP transport with bearer auth.
+
+The MCP server does not cover everything. `rrt docs map`, `rrt tree --check`, `rrt toc`,
+`rrt changelog lint`, all `--snapshot` writes, and every `rrt-hooks` subcommand are
+CLI-only — a mixed session is expected, not a fallback.
+
+### Prompt phrasings that work
+
+These reliably route to `rrt` rather than to hand-editing:
+
+- "Check with rrt whether this branch name will pass the hooks before you create it."
+- "Use rrt to preview a minor bump — dry run — and show me every file it would touch."
+- "Read the Unreleased changelog with rrt before adding an entry, so you don't duplicate one."
+- "Run rrt doctor and tell me which hook integrations are missing."
+- "Before you write that commit message, validate the subject with rrt."
+- "What version is this repo at according to rrt?" — not "what's the version", which
+  invites reading a random file.
+- "Run rrt release check before you open the PR."
+
+The pattern: name `rrt` explicitly, and name the *moment* ("before you create it",
+"before you open the PR"). Agents route on triggers, not on capabilities.
+
+### Agent instruction snippet
+
+```markdown
+## Use `rrt` for release policy
+
+This repo uses `repo-release-tools` (`rrt`) to enforce branch naming, Conventional
+Commits, changelog format, and version consistency. Do not hand-roll any of it.
+
+Before you act, use `rrt`:
+
+| When you are about to… | Use |
+|---|---|
+| create a branch | `rrt branch new <type> "<desc>"` — or validate first with `rrt-hooks pre-commit` |
+| write a commit message | `rrt git commit "<subject>"`, which validates before committing |
+| change a version number anywhere | `rrt bump <level> --dry-run` first — never edit version strings by hand; pins and the changelog move with it |
+| add a changelog entry | read the existing `[Unreleased]` first; it is hook-managed |
+| open a PR | `rrt release check` and `rrt doctor` |
+
+Rules:
+- Every mutating `rrt` command takes `--dry-run`. Use it first, show the user the
+  preview, and only apply after they confirm.
+- Never edit a version string by hand in more than one file — that is what `rrt bump` is for.
+- Never hand-edit the `[Unreleased]` changelog section while the rrt hooks are active.
+- If `rrt` is connected over MCP, prefer the `mcp__rrt__*` tools over shelling out:
+  typed responses, no shell quoting of commit subjects, and dry-run is the default.
+  Shell out for anything with no MCP tool (`rrt docs map`, `rrt tree --check`,
+  `rrt toc`, `rrt changelog lint`, `--snapshot` writes, `rrt-hooks *`).
+- `rrt --help` lists every command. Check it before concluding rrt cannot do something.
+```
 
 ## Start with the doc that matches your task
 

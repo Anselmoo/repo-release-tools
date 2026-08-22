@@ -19,6 +19,46 @@ drift / tree / artifact lock inspection, branch and commit validation, config
 introspection, and interactive dashboards as MCP tools, resources, and Prefab
 UI apps.
 
+## When to use it
+
+Use the MCP server whenever a task in an rrt-configured repository touches release
+policy — version numbers, the changelog, branch or commit naming, `[tool.rrt]` config,
+or `.rrt/*.lock.toml` state. If you were about to shell out to `rrt ...`, check here first.
+
+Three concrete reasons to prefer it over the CLI:
+
+- **Typed responses.** Tools return Pydantic models serialised to JSON. `rrt_doctor`
+  gives one `CheckResult` per component with `ok` and `severity`; the CLI gives
+  ANSI-formatted prose you have to parse.
+- **No shell quoting.** `rrt_validate_commit(subject=...)` takes the subject as an
+  argument. Backticks, quotes, `!`, `$`, and newlines in a commit message cannot be
+  mangled on the way in.
+- **Preview by default.** `rrt_bump`, `rrt_branch_new`, `rrt_init_run`, and
+  `rrt_publish_snapshot` all default to `dry_run=True`; `rrt_publish_snapshot` also
+  requires `confirm=True`. On the CLI, safety is a flag you must remember. Here it is
+  the default and destruction is the opt-in.
+
+### When to use the CLI instead
+
+The MCP surface deliberately does not mirror every command. Use the CLI for:
+
+- `rrt docs map` / `rrt docs map --check`
+- `rrt tree --check` and every `--snapshot` write (`rrt drift --snapshot`,
+  `rrt artifacts --snapshot`, `rrt tree --snapshot`)
+- `rrt toc`, `rrt changelog lint`, `rrt changelog compare`
+- every `rrt-hooks` subcommand
+- ordinary git, tests, and linters
+
+A session that mixes both surfaces is the expected shape, not a workaround.
+
+### Getting your agent to reach for it
+
+The server's `instructions` tell a connected assistant when to prefer these tools, but
+the most reliable lever is your own repository instruction file. See
+[Get your AI agent to actually use rrt](https://github.com/Anselmoo/repo-release-tools#get-your-ai-agent-to-actually-use-rrt)
+in the README for a copyable block for `CLAUDE.md` / `AGENTS.md` /
+`.github/copilot-instructions.md`.
+
 ## Install
 
 ```bash
@@ -101,16 +141,16 @@ no token is required or checked.
 
 ## Tools
 
-### Read-only inspection tools
+Tools are split by audience: **agent-facing** tools return typed JSON a program can
+reason over directly; **human-facing UI** tools (below) render a Prefab UI widget meant
+for a person to look at.
+
+### Agent-facing tools — read-only
 
 | Tool | Tags | Description |
 |---|---|---|
 | `rrt_config` | config, inspection | Resolved rrt config as JSON |
 | `rrt_doctor` | config, inspection | Pre-commit / lefthook / husky / workflow checks |
-| `rrt_health` | locks, inspection | `.rrt/health.lock.toml` contents |
-| `rrt_drift` | locks, inspection | `.rrt/drift.lock.toml` contents |
-| `rrt_tree` | locks, inspection | `.rrt/tree.lock.toml` contents |
-| `rrt_artifacts` | locks, inspection | `.rrt/artifacts.lock.toml` contents |
 | `rrt_version` | versioning | Current version per configured group |
 | `rrt_validate_branch` | validation | Conventional branch naming check |
 | `rrt_validate_commit` | validation | Conventional commit subject check |
@@ -121,7 +161,7 @@ no token is required or checked.
 | `rrt_folder_check` | folders, inspection | Folder structure policy violations |
 | `rrt_docs_check` | docs, inspection | `.rrt/docs.lock.toml` drift status |
 
-### Mutating tools (default dry_run=True)
+### Agent-facing tools — mutating (default dry_run=True)
 
 | Tool | Tags | Description |
 |---|---|---|
@@ -130,12 +170,28 @@ no token is required or checked.
 | `rrt_init_run` | init, config | Run `rrt init` with selected target |
 | `rrt_publish_snapshot` | git, publishing | Force-push a single-commit snapshot of tracked content to a secondary remote; `exclude` drops specific glob patterns from the snapshot |
 
+### Agent-facing tools — lock-snapshot readers
+
+These four are thin `read_lock()` wrappers around a small, readable TOML file at a fixed
+path — if your client can read files directly, `Read .rrt/<name>.lock.toml` is
+equivalent, and each reflects the *last* `--snapshot`, not current state (they do not run
+the corresponding `--check`).
+
+| Tool | Tags | Description |
+|---|---|---|
+| `rrt_health` | locks, inspection | `.rrt/health.lock.toml` contents |
+| `rrt_drift` | locks, inspection | `.rrt/drift.lock.toml` contents |
+| `rrt_tree` | locks, inspection | `.rrt/tree.lock.toml` contents |
+| `rrt_artifacts` | locks, inspection | `.rrt/artifacts.lock.toml` contents |
+
 ---
 
-## App Dashboards
+## Human-facing UI
 
 Interactive [Prefab UI](https://prefab.prefect.io) apps rendered in
-MCP-capable clients (Claude Code, Claude Desktop). All are read-only.
+MCP-capable clients (Claude Code, Claude Desktop). All are read-only. If you are a
+headless agent that needs the underlying values to reason over, call the matching
+agent-facing tool above instead of one of these.
 
 | App tool | Description |
 |---|---|
@@ -152,7 +208,9 @@ The server registers FastMCP's `GenerativeUI` provider, which adds
 `generate_prefab_ui` and `search_prefab_components` tools. This lets the
 LLM write custom [Prefab Python code](https://gofastmcp.com/apps/generative)
 executed in a Pyodide sandbox — the LLM can build any visualization it
-chooses from data exposed by `rrt://locks/{name}` or other resources.
+chooses from data exposed by `rrt://locks/{name}` or other resources. These two tools
+are registered by the third-party `GenerativeUI` provider, not by rrt itself, and sit
+outside the agent-facing / human-facing split above.
 
 ---
 
@@ -184,26 +242,38 @@ Seven reusable prompts guide AI-assisted workflows:
 
 ---
 
-## Example session
+## Prompt phrasings that work
+
+Agents route on triggers, not on capabilities. These reliably route to the MCP tools
+rather than to hand-editing or shelling out — name `rrt` explicitly, and name the
+*moment* ("before you create it", "before you open the PR"):
 
 ```
-# From inside Claude Code with rrt MCP connected:
+"Check with rrt whether this branch name will pass the hooks before you create it."
+→ calls rrt_validate_branch
 
-"Show me the health dashboard"
-→ calls rrt_health_dashboard — renders Metric cards, Ring, BarChart
+"Use rrt to preview a minor bump — dry run — and show me every file it would touch."
+→ calls rrt_bump with level="minor", dry_run=True
 
-"What version is the project at?"
-→ calls rrt_version or rrt_version_overview
+"Read the Unreleased changelog with rrt before adding an entry, so you don't duplicate one."
+→ calls rrt_changelog
 
-"Bump the patch version (dry run)"
-→ calls rrt_bump with dry_run=True, shows preview
+"Run rrt doctor and tell me which hook integrations are missing."
+→ calls rrt_doctor
 
-"Open the init form"
-→ calls rrt_init — renders target/dry_run/force form
+"Before you write that commit message, validate the subject with rrt."
+→ calls rrt_validate_commit
 
-"Give me a custom chart of the lock file data"
-→ LLM uses generate_prefab_ui + rrt://locks/{name} resources
+"What version is this repo at according to rrt?"
+→ calls rrt_version — not "what's the version", which invites reading a random file
+
+"Run rrt release check before you open the PR."
+→ calls rrt_release_check
 ```
+
+See [Get your AI agent to actually use rrt](https://github.com/Anselmoo/repo-release-tools#get-your-ai-agent-to-actually-use-rrt)
+in the README for a copyable instruction-file snippet that biases your own agent toward
+these phrasings automatically.
 """
 
 # Ordered source-owned topic docs for docs generation.
