@@ -343,6 +343,60 @@
           "type": "array"
         }
       }
+    },
+    "artifact_protection": {
+      "type": "object",
+      "description": "Cross-pipeline artifact protection policy checked by the `rrt doctor` artifact-protection lens.",
+      "properties": {
+        "protected_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Refs whose build artifacts must never be considered disposable."
+        },
+        "consumed": {
+          "type": "array",
+          "description": "Explicit declarations of artifacts consumed by another CI job, so a storage cleanup does not delete an artifact a different pipeline still depends on.",
+          "items": {
+            "type": "object",
+            "required": [
+              "job",
+              "ref",
+              "artifacts",
+              "consumed_by"
+            ],
+            "properties": {
+              "job": {
+                "type": "string",
+                "description": "Exact join key matched against a scanned CI fetch's job, by string equality (never split/normalized). On GitLab this is the real job name from the fetch URL's `?job=` parameter. On GitHub Actions, `actions/download-artifact` exposes no job identifier, so this must be the artifact's `name:` value instead."
+              },
+              "ref": {
+                "type": "string",
+                "description": "Ref (branch/tag) the artifact is fetched from."
+              },
+              "artifacts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Artifact-relative path(s) this job consumes. Must be replaced with real paths — the literal 'rrt doctor'-suggested TODO placeholder loads successfully but protects nothing, since the check matches on `job` only and never inspects `artifacts` content."
+              },
+              "consumed_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "CI config file(s) that perform the fetch."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why this artifact must be protected."
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

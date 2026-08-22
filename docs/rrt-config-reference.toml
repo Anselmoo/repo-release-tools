@@ -31,6 +31,39 @@ pin_target_missing = "error"
 # Release branch name template. Use {version} as a placeholder.
 release_branch = "..."
 
+# Cross-pipeline artifact protection policy checked by the `rrt doctor`
+# artifact-protection lens.
+[tool.rrt.artifact_protection]
+
+# Refs whose build artifacts must never be considered disposable.
+protected_refs = []
+
+# Explicit declarations of artifacts consumed by another CI job, so a storage
+# cleanup does not delete an artifact a different pipeline still depends on.
+[[tool.rrt.artifact_protection.consumed]]
+
+# Artifact-relative path(s) this job consumes. Must be replaced with real
+# paths — the literal 'rrt doctor'-suggested TODO placeholder loads
+# successfully but protects nothing, since the check matches on `job` only and
+# never inspects `artifacts` content.
+artifacts = []
+
+# CI config file(s) that perform the fetch.
+consumed_by = []
+
+# Exact join key matched against a scanned CI fetch's job, by string equality
+# (never split/normalized). On GitLab this is the real job name from the fetch
+# URL's `?job=` parameter. On GitHub Actions, `actions/download-artifact`
+# exposes no job identifier, so this must be the artifact's `name:` value
+# instead.
+job = "..."
+
+# Why this artifact must be protected.
+reason = "..."
+
+# Ref (branch/tag) the artifact is fetched from.
+ref = "..."
+
 # Documentation tree injection configuration.
 [tool.rrt.docs]
 

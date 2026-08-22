@@ -23,10 +23,95 @@ basics are wired correctly:
 - `lefthook.yml` when present
 - `.husky/*` hook scripts when present
 - `.github/workflows/*.yml` / `.yaml` when present
+- CI config for cross-pipeline artifact fetches, cross-checked against
+  `[tool.rrt.artifact_protection]` — see [Artifact protection](#artifact-protection)
+  below
 
 The checks are intentionally light-touch: they verify presence, readability,
 and whether the file appears to reference repo-release-tools policy checks.
 They do **not** replace the deeper feature validators.
+
+## Artifact protection
+
+`rrt doctor` also scans CI config for **cross-pipeline artifact fetches** —
+steps that download a build artifact produced by a *different* pipeline run —
+and cross-checks them against an optional `[tool.rrt.artifact_protection]`
+declaration. This closes a gap a storage cleanup cannot see on its own:
+nothing on the producing side records that another job still depends on one
+of its artifacts, so the dependency has to be declared explicitly.
+
+The scanner recognizes two forms:
+
+- GitLab `.../jobs/artifacts/<ref>/raw/<path>?job=<name>` URLs in
+  `.gitlab-ci.yml` and `.gitlab/*.yml`
+- GitHub Actions `actions/download-artifact@…` steps that carry `run-id:`
+  in `.github/workflows/*.yml` / `*.yaml` (same-pipeline downloads without
+  `run-id` are ignored — they are not cross-pipeline)
+
+Declare what each fetch is allowed to depend on:
+
+```toml
+[tool.rrt.artifact_protection]
+protected_refs = ["main"]
+
+[[tool.rrt.artifact_protection.consumed]]
+job = "build:report_html"
+ref = "main"
+artifacts = ["public/report.html"]
+consumed_by = [".gitlab/65-docs.yml"]
+reason = "Docs pipeline embeds the report built by this job."
+```
+
+The check fails (error) when a scanned fetch has no matching `consumed`
+entry — the failure message names the CI file and line and prints a
+ready-to-paste `[[tool.rrt.artifact_protection.consumed]]` block. It warns
+(without failing) when a `consumed` entry matches no scanned fetch, since a
+stale declaration that protects nothing real trains people to ignore the
+check; both directions can be reported together in the same run. When no
+cross-pipeline fetches are found in CI config and no
+`[tool.rrt.artifact_protection]` block is configured, the check is a soft
+warning rather than a failure — there is nothing to protect yet.
+
+Matching is exact string equality on `job`, never split, lowercased, or
+otherwise normalized — job names may legitimately contain colons (for
+example `build:report_html:bundle`, which is a distinct job from
+`build:report_html`).
+
+### GitHub vs. GitLab: `job` means different things
+
+`job` is the join key, but what it identifies depends on the provider:
+
+- **GitLab** — the real job name, taken from the fetch URL's `?job=`
+  parameter.
+- **GitHub Actions** — `actions/download-artifact` exposes no job identifier
+  at all, so the scanner records the artifact's `name:` field instead.
+
+When you write a `consumed` entry for a GitHub Actions fetch, put the
+**artifact name** in `job`, not a job or workflow name — otherwise the entry
+will never match, and `rrt doctor` will keep reporting the fetch as
+undeclared no matter what you write in `job`.
+
+### Unedited TODO placeholders mean fictional protection
+
+When `rrt doctor` finds an undeclared fetch, it prints a ready-to-paste
+`[[tool.rrt.artifact_protection.consumed]]` block. For GitHub Actions
+fetches, the artifact-relative path cannot be inferred from
+`download-artifact` alone, so the suggested `artifacts` value is a
+placeholder:
+
+```toml
+artifacts = ["TODO: list the artifact-relative path(s) this job consumes"]
+```
+
+**This block loads successfully as written.** Nothing in config loading
+requires `artifacts` entries to point at real paths, and the check matches
+on `job` only — it never inspects what `artifacts` contains. If you paste
+the suggested block without replacing the placeholder, the very next
+`rrt doctor` run will report that fetch as satisfied, even though the
+declared artifact does not exist and nothing is actually protected. Always
+replace both the `artifacts` TODO and the `reason` TODO with real values
+before trusting a green result — an unedited placeholder is fictional
+protection, not real protection.
 
 ## Output and severity
 
@@ -38,6 +123,8 @@ overall status at the end.
 - missing optional integration surfaces are warnings when no equivalent surface is active
 - surfaces that exist but do not appear to reference repo-release-tools are warnings
 - readable, recognized surfaces are reported as OK
+- undeclared cross-pipeline artifact fetches are errors; stale `consumed`
+  entries are warnings (see [Artifact protection](#artifact-protection))
 
 At the end, `rrt doctor` also points you to the feature-specific commands that
 own deeper validation, such as `rrt release check`, `rrt docs check`, and

@@ -14,6 +14,9 @@
 ### Documentation
 - **mcp**: document when to reach for the MCP server over the CLI
 
+### Documentation
+- document the artifact-protection lens
+
 ## [1.15.0] - 2026-08-13
 ### Added
 - add content assertions to folder check templates (#198)
