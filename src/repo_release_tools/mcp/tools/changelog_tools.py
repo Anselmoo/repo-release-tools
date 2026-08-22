@@ -15,14 +15,20 @@ def register(mcp: FastMCP) -> None:
     """Register changelog tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Changelog Reader",
+        title="What is already in the Unreleased changelog?",
         tags={"changelog"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_changelog(ctx: Context, section: str = "unreleased") -> ChangelogResponse | LockError:
-        """Read changelog content. section: 'unreleased' (default) returns pending entries only; 'full' returns everything."""
+        """Read the changelog.
+
+        Use before adding an entry, so you do not duplicate one that is already there,
+        and before a bump, to see what will be promoted. section='unreleased' (default)
+        returns parsed pending entries; section='full' returns the raw file. Read-only —
+        writing an entry needs the CLI or a direct file edit.
+        """
         from repo_release_tools.changelog import get_unreleased_entries
 
         config = ctx.lifespan_context.get("config")

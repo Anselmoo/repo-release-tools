@@ -17,12 +17,12 @@ def register(mcp: FastMCP) -> None:
     """Register publish-snapshot tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Publish Snapshot",
+        title="Force-push a squashed snapshot to a mirror remote (destructive)",
         tags={"git", "publishing"},
         version=_PKG_VERSION,
         annotations=ToolAnnotations(destructiveHint=True),
         timeout=15.0,
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     async def rrt_publish_snapshot(
         ctx: Context,

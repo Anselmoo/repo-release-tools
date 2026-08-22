@@ -13,14 +13,14 @@ def register(mcp: FastMCP) -> None:
     """Register sync-check tools on *mcp*."""
 
     @mcp.tool(
-        title="RRT Sync Check",
+        title="Has upstream released a newer version than we track?",
         tags={"sync", "inspection"},
         version=_PKG_VERSION,
         # Deliberately not idempotent: a newer upstream release can appear
         # between calls, so results can legitimately change.
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=False),
         timeout=15.0,
-        meta={"domain": "rrt", "surface": "mcp"},
+        meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_sync_check(ctx: Context, group: str | None = None) -> SyncCheckResponse:
         """List upstream package versions newer than the current project version.
