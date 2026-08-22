@@ -50,10 +50,10 @@ protected_refs = []
 # placeholder is caught. GitHub fetches never carry a path, so there the check
 # cannot verify this field's contents and an unedited TODO placeholder loads
 # successfully but protects nothing.
-artifacts = []
+artifacts = ["..."]
 
 # CI config file(s) that perform the fetch.
-consumed_by = []
+consumed_by = ["..."]
 
 # Part of the join key matched against a scanned CI fetch's (job, ref) — never
 # job alone — by string equality (never split/normalized). On GitLab this is
@@ -86,7 +86,7 @@ docs_dir = "..."
 # one of: both, explicit, implicit
 extraction_mode = "both"
 
-formats = []
+formats = ["..."]
 
 languages = []
 

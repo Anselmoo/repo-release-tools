@@ -289,7 +289,8 @@
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "minItems": 1
         },
         "source_repo_url": {
           "type": "string"
@@ -380,6 +381,7 @@
                 "items": {
                   "type": "string"
                 },
+                "minItems": 1,
                 "description": "Artifact-relative path(s) this job consumes. Must be replaced with real paths. When the scanned fetch's path is known (GitLab always sets it), the check requires that exact path to appear here, so an unedited TODO placeholder is caught. GitHub fetches never carry a path, so there the check cannot verify this field's contents and an unedited TODO placeholder loads successfully but protects nothing."
               },
               "consumed_by": {
@@ -387,6 +389,7 @@
                 "items": {
                   "type": "string"
                 },
+                "minItems": 1,
                 "description": "CI config file(s) that perform the fetch."
               },
               "reason": {

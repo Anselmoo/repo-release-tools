@@ -3,9 +3,11 @@
 Parses ``[tool.rrt.artifact_protection]`` — the declaration half of the
 artifact-protection lens. The scanner half (which finds artifact fetches in
 CI config) lives in ``repo_release_tools.tools.ci_artifact_refs`` and is not
-touched here; a later task joins the two by matching a scanned fetch's
-``job`` string against a declared :class:`ConsumedArtifact.job` by exact
-equality.
+touched here; the two are joined in ``commands/doctor.py`` by matching a
+scanned fetch's ``(job, ref)`` pair — never ``job`` alone — against a
+declared :class:`ConsumedArtifact`'s ``job`` and ``ref`` by exact string
+equality, plus ``path`` membership in ``artifacts`` when the fetch's path is
+known (see :func:`repo_release_tools.commands.doctor._fetch_is_declared`).
 """
 
 from __future__ import annotations

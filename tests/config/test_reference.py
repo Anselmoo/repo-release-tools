@@ -181,10 +181,36 @@ def test_round_trip_minimal_schema() -> None:
 
 
 def test_round_trip_array_of_scalars() -> None:
-    """Array-of-scalars renders as empty list and parses cleanly."""
+    """Array-of-scalars with no `minItems` renders as empty list and parses cleanly."""
     rendered = render_reference_toml(_ARRAY_OF_SCALARS_SCHEMA)
     parsed = tomllib.loads(rendered)
     assert parsed["tool"]["rrt"]["tags"] == []
+
+
+def test_scalar_array_with_min_items_emits_non_empty_placeholder() -> None:
+    """A scalar array declaring `minItems: 1` must not render as `[]`.
+
+    Regression: a schema property with `minItems: 1` signals that the loader
+    rejects an empty list for this field (e.g.
+    `tool.rrt.artifact_protection.consumed[].artifacts`); rendering it as
+    `[]` produces a reference snippet that fails to load the moment a user
+    copies it verbatim. The generator must emit a non-empty placeholder
+    entry instead.
+    """
+    schema: dict = {
+        "properties": {
+            "artifacts": {
+                "type": "array",
+                "description": "Artifact-relative paths.",
+                "items": {"type": "string"},
+                "minItems": 1,
+            }
+        }
+    }
+    rendered = render_reference_toml(schema)
+    assert "artifacts = []" not in rendered
+    parsed = tomllib.loads(rendered)
+    assert parsed["tool"]["rrt"]["artifacts"] != []
 
 
 def test_round_trip_enum_schema() -> None:
@@ -212,6 +238,19 @@ def test_round_trip_real_bundled_schema() -> None:
     parsed = tomllib.loads(rendered)
     assert "tool" in parsed
     assert "rrt" in parsed["tool"]
+
+
+def test_real_schema_minitems_fields_never_render_empty() -> None:
+    """`consumed[].artifacts`/`consumed_by` (loader-rejects-empty) never render as `[]`.
+
+    These fields carry `minItems: 1` in the bundled schema precisely because
+    `config/artifact_protection.py` raises on an empty list; rendering `[]`
+    here would hand a user a reference snippet that fails to load unedited.
+    """
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    rendered = render_reference_toml(schema)
+    assert "artifacts = []" not in rendered
+    assert "consumed_by = []" not in rendered
 
 
 def test_real_schema_keys_land_at_correct_depth() -> None:

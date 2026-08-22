@@ -33,10 +33,65 @@ DOWNLOAD_ALL_MARKER = "*"
 _GITLAB_FETCH = re.compile(
     r"jobs/artifacts/(?P<ref>[^/\s]+)/raw/(?P<path>[^\s\"'?]+)\?job=(?P<job>[^\s\"'&]+)"
 )
-# GitHub: download-artifact pointed at another run
-_GH_DOWNLOAD = re.compile(r"actions/download-artifact@")
+# GitHub: a step's `uses:` key naming the download-artifact action —
+# anchored on the YAML key itself (optionally preceded by the `- ` sequence
+# marker for a `- uses:`-first step) so a `run:` command or a comment that
+# merely *mentions* the action string is never mistaken for a real step.
+_GH_DOWNLOAD = re.compile(r"^\s*(?:-\s+)?uses:\s*actions/download-artifact@")
+# The step's own list-item marker (`- `), used to find the true start/indent
+# of the step a `uses:` line belongs to — see `_step_item_indent`.
+_GH_STEP_ITEM = re.compile(r"^\s*-\s")
+# The `with:` mapping opener. Only lines nested *under* `with:` (indent
+# strictly greater than `with:`'s own indent) are eligible to match
+# `_GH_RUN_ID`/`_GH_NAME` — this keeps a step's own human-readable
+# `- name:` label from ever being mistaken for the artifact's `name:` input.
+_GH_WITH = re.compile(r"^\s*with:\s*(?:#.*)?$")
 _GH_RUN_ID = re.compile(r"run-id:\s*(?P<run>\S+)")
-_GH_NAME = re.compile(r"name:\s*(?P<name>\S+)")
+# Captures to end-of-line (minus a trailing comment), not `\S+`, so artifact
+# names containing spaces (quoted or not) are captured in full rather than
+# truncated at the first space.
+_GH_NAME = re.compile(r"name:\s*(?P<name>.+?)\s*(?:#.*)?$")
+
+
+def _strip_quotes(value: str) -> str:
+    """Strip one matching pair of surrounding quotes from *value*, if present.
+
+    YAML scalars are frequently quoted (``name: "build-output"``); without
+    this, the quotes end up embedded in the recorded `job`/`ref`, which both
+    breaks matching against a `consumed` declaration (whose TOML value never
+    carries the YAML quoting) and, worse, round-trips into invalid TOML when
+    rendered back out (``job = ""build-output""``).
+    """
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        return value[1:-1]
+    return value
+
+
+def _step_item_indent(lines: list[str], uses_index: int) -> int:
+    """Return the indent (leading whitespace count) of the step's `- ` marker.
+
+    Scans backward from *uses_index* for the nearest preceding line that
+    opens a YAML sequence item (`- `) — the true boundary of "this step" —
+    skipping over any other step-level keys (`id:`, `if:`,
+    `continue-on-error:`, a `- name:` step label already consumed by the
+    marker itself, comments, blank lines) that may precede `uses:` in the
+    idiomatic ``- name:`` / ``uses:`` / ``with:`` step layout.
+
+    Anchoring on `uses:`'s own indent instead (as this module previously
+    did) breaks: in that idiomatic form `with:` sits at the *same* indent as
+    `uses:` (both are sibling keys of the step mapping), so the step-block
+    look-ahead would terminate before ever reading `with:`'s children,
+    silently dropping the fetch.
+    """
+    for k in range(uses_index, -1, -1):
+        candidate = lines[k]
+        if _GH_STEP_ITEM.match(candidate):
+            return len(candidate) - len(candidate.lstrip())
+    # Defensive fallback for a `uses:` line with no preceding `- ` marker at
+    # all (malformed/non-standard input) — behave as before rather than
+    # raising.
+    first = lines[uses_index]
+    return len(first) - len(first.lstrip())
 
 
 @dataclass(frozen=True)
@@ -88,28 +143,38 @@ def _scan_github(root: Path) -> list[ArtifactFetch]:
                 if _GH_DOWNLOAD.search(line):
                     # This is a download-artifact action line. Now look for run-id
                     # and name in the following indented block.
-                    step_block_start = i
+                    uses_index = i
+                    # Anchor the step block on the step's own `- ` list-item
+                    # indent, not on `uses:`'s indent — see `_step_item_indent`.
+                    step_indent = _step_item_indent(lines, uses_index)
                     run_id_match = None
                     name_match = None
+                    with_indent: int | None = None
 
                     # Look ahead for run-id and name in the step block
                     j = i + 1
-                    base_indent = len(line) - len(line.lstrip())
                     while j < len(lines):
                         next_line = lines[j]
-                        # Stop if we hit a line that's not indented more than the action line
-                        # (indicates end of step block)
-                        if (
-                            next_line.strip()
-                            and (len(next_line) - len(next_line.lstrip())) <= base_indent
-                        ):
-                            break
+                        if next_line.strip():
+                            next_indent = len(next_line) - len(next_line.lstrip())
+                            # Stop if we hit a line at or above the step's own
+                            # indent (indicates end of step block).
+                            if next_indent <= step_indent:
+                                break
 
-                        # Check for run-id or name
-                        if not run_id_match:
-                            run_id_match = _GH_RUN_ID.search(next_line)
-                        if not name_match:
-                            name_match = _GH_NAME.search(next_line)
+                            if with_indent is None:
+                                if _GH_WITH.match(next_line):
+                                    with_indent = next_indent
+                            elif next_indent > with_indent:
+                                # Only match inside the `with:` mapping — a
+                                # step-level key (e.g. the step's own
+                                # `- name:` label) sits at or above `with:`'s
+                                # indent and must never be mistaken for the
+                                # artifact's `name:` input.
+                                if not run_id_match:
+                                    run_id_match = _GH_RUN_ID.search(next_line)
+                                if not name_match:
+                                    name_match = _GH_NAME.search(next_line)
 
                         j += 1
 
@@ -118,14 +183,16 @@ def _scan_github(root: Path) -> list[ArtifactFetch]:
                     # this run", not "no fetch"; record it under the sentinel
                     # DOWNLOAD_ALL_MARKER rather than dropping it silently.
                     if run_id_match:
-                        job = name_match["name"] if name_match else DOWNLOAD_ALL_MARKER
+                        job = (
+                            _strip_quotes(name_match["name"]) if name_match else DOWNLOAD_ALL_MARKER
+                        )
                         found.append(
                             ArtifactFetch(
                                 job=job,
-                                ref=run_id_match["run"],
+                                ref=_strip_quotes(run_id_match["run"]),
                                 path=None,
                                 source_file=rel,
-                                line=step_block_start + 1,
+                                line=uses_index + 1,
                             )
                         )
                 i += 1

@@ -1090,6 +1090,53 @@ def test_check_artifact_protection_github_sourced_toml_block_is_valid_when_parse
     assert entry["artifacts"] == ["TODO: list the artifact-relative path(s) this job consumes"]
 
 
+def test_check_artifact_protection_quoted_github_values_declare_and_parse_cleanly(
+    tmp_path: Path,
+) -> None:
+    """A quoted `name:`/`run-id:` fetch matches a correctly declared entry and
+    round-trips through valid TOML end-to-end.
+
+    Regression: before the quote-stripping fix, the scanner recorded
+    `job='"build-output"'` / `ref='"12345"'` (quotes embedded), which made
+    this check *fail* against a config declaring the correct, unquoted
+    `job = "build-output"` / `ref = "12345"` — a loud false positive against
+    a correct declaration, not a silent all-clear — and the fix-it snippet it
+    printed contained invalid TOML (`job = ""build-output""`) that
+    `tomllib.loads` cannot parse.
+    """
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "ci.yml").write_text(
+        "jobs:\n"
+        "  publish:\n"
+        "    steps:\n"
+        "      - uses: actions/download-artifact@v4\n"
+        "        with:\n"
+        '          name: "build-output"\n'
+        '          run-id: "12345"\n',
+        encoding="utf-8",
+    )
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="build-output",
+                    ref="12345",
+                    artifacts=("dist/build-output.whl",),
+                    consumed_by=(".github/workflows/ci.yml",),
+                ),
+            ),
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is True
+    assert severity == "ok"
+    assert 'job = ""build-output""' not in message
+
+
 def test_check_artifact_protection_undeclared_and_stale_both_surface_together(
     tmp_path: Path,
 ) -> None:
