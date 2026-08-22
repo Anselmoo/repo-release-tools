@@ -7,6 +7,7 @@
 - **tools**: scan CI config for cross-pipeline artifact fetches
 
 ### Fixed
+- **doctor**: close artifact-protection false negatives found in final review
 - **doctor**: emit valid TOML for GitHub fetches and surface stale entries alongside failures
 - **mcp**: correct CLI invocations and overclaims flagged by code review
 - **mcp**: make the MCP server instructions and tool metadata trigger-shaped

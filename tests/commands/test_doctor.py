@@ -1188,6 +1188,146 @@ def test_check_artifact_protection_configured_with_no_fetches_is_ok(tmp_path: Pa
     assert "declares no consumed artifacts to check" in message
 
 
+# ---------------------------------------------------------------------------
+# Regression: the join key is (job, ref) [+ path when known], never job alone
+# ---------------------------------------------------------------------------
+
+
+def test_check_artifact_protection_same_job_different_ref_is_still_undeclared(
+    tmp_path: Path,
+) -> None:
+    """A declared (job, ref) entry must not mask an undeclared fetch of the same
+    job at a DIFFERENT ref.
+
+    Regression for the job-collision false negative: before the fix, matching
+    was on `job` alone, so a fetch at `ref=staging` of a different path was
+    reported as declared merely because some other, unrelated fetch at
+    `ref=main` shares the job string.
+    """
+    (tmp_path / ".gitlab-ci.yml").write_text(
+        "build:report_html:\n"
+        "  script:\n"
+        '    - curl ".../jobs/artifacts/main/raw/manifest.json?job=build:report_html"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".gitlab").mkdir()
+    (tmp_path / ".gitlab" / "other.yml").write_text(
+        "other:job:\n"
+        "  script:\n"
+        '    - curl ".../jobs/artifacts/staging/raw/secret-config.json?job=build:report_html"\n',
+        encoding="utf-8",
+    )
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="build:report_html",
+                    ref="main",
+                    artifacts=("manifest.json",),
+                    consumed_by=(".gitlab-ci.yml",),
+                ),
+            )
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    # The ref=main fetch is properly declared and must not appear as undeclared.
+    assert ".gitlab-ci.yml:3" not in message
+    # The ref=staging fetch of a DIFFERENT path is not covered by the ref=main
+    # entry and must be reported.
+    assert ".gitlab/other.yml:3" in message
+    assert 'ref = "staging"' in message
+    assert 'artifacts = ["secret-config.json"]' in message
+
+
+def test_check_artifact_protection_same_job_ref_different_path_is_still_undeclared(
+    tmp_path: Path,
+) -> None:
+    """A declared entry whose `artifacts` does not include the fetched path must
+    not cover that fetch, even when `job` and `ref` both match.
+
+    Regression: declaring "job X at ref Y protects artifacts [a, b]" must not
+    silently protect a fetch of a different artifact `c` from that same job
+    and ref.
+    """
+    (tmp_path / ".gitlab-ci.yml").write_text(
+        "build:report_html:\n"
+        "  script:\n"
+        '    - curl ".../jobs/artifacts/main/raw/other-path.json?job=build:report_html"\n',
+        encoding="utf-8",
+    )
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="build:report_html",
+                    ref="main",
+                    artifacts=("manifest.json",),  # does NOT include other-path.json
+                    consumed_by=(".gitlab-ci.yml",),
+                ),
+            )
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    assert ".gitlab-ci.yml:3" in message
+    assert 'artifacts = ["other-path.json"]' in message
+
+
+def test_check_artifact_protection_github_download_all_marker_is_declarable(
+    tmp_path: Path,
+) -> None:
+    """A `run-id`-without-`name` fetch (job == '*') is visible when undeclared
+    and can be declared with `job = "*"` to clear the check — closing the loop
+    on the scanner-level regression that this fetch is recorded at all.
+    """
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    workflow_dir_content = (
+        "jobs:\n"
+        "  publish:\n"
+        "    steps:\n"
+        "      - uses: actions/download-artifact@v4\n"
+        "        with:\n"
+        "          run-id: 999\n"
+    )
+    (workflow_dir / "ci.yml").write_text(workflow_dir_content, encoding="utf-8")
+
+    # Undeclared: visible as an error naming the download-all marker.
+    undeclared_conf = _make_config(tmp_path, artifact_protection=ArtifactProtection(consumed=()))
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, undeclared_conf)
+    assert ok is False
+    assert severity == "error"
+    assert "'*'" in message
+    assert 'job = "*"' in message
+
+    # Declared with job = "*": the check clears.
+    declared_conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="*",
+                    ref="999",
+                    artifacts=("all artifacts from run 999",),
+                    consumed_by=(".github/workflows/ci.yml",),
+                ),
+            )
+        ),
+    )
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, declared_conf)
+    assert ok is True
+    assert severity == "ok"
+
+
 def test_doctor_artifact_protection_undeclared_fetch_fails_doctor(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

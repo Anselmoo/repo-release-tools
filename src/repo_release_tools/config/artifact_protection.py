@@ -70,10 +70,13 @@ def _load_consumed(raw: object) -> tuple[ConsumedArtifact, ...]:
 def _required_job(raw: object, *, label: str) -> str:
     """Return the job value exactly as declared.
 
-    Job names are matched by exact string equality elsewhere and may
-    legitimately contain colons (e.g. ``build:report_html:bundle``), so this
-    helper validates non-emptiness only — it must never split, strip, or
-    otherwise transform the value.
+    ``job`` is matched together with ``ref`` (never ``job`` alone) by exact
+    string equality elsewhere, and may legitimately contain colons (e.g.
+    ``build:report_html:bundle``), so this helper validates non-emptiness
+    only — it must never split, strip, or otherwise transform the value. For
+    a GitHub ``run-id:``-without-``name:`` fetch (download every artifact
+    from the run), the scanner records the literal marker ``"*"`` as its
+    ``job``; that value is not special-cased here — it is just a string.
     """
     if raw is None:
         raise ValueError(f"tool.rrt.artifact_protection.{label} is required")

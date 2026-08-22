@@ -813,10 +813,11 @@ class FolderPolicyConfig:
 class ConsumedArtifact:
     """A single declared-consumed-artifact entry under [[tool.rrt.artifact_protection.consumed]].
 
-    ``job`` is matched by exact string equality against a scanned
-    :class:`~repo_release_tools.tools.ci_artifact_refs.ArtifactFetch`'s ``job``
-    field elsewhere (job names may legitimately contain colons, e.g.
-    ``build:report_html:bundle``) — it must never be split, normalized, or
+    ``(job, ref)`` — never ``job`` alone — is matched by exact string equality
+    against a scanned :class:`~repo_release_tools.tools.ci_artifact_refs.ArtifactFetch`
+    elsewhere, plus ``artifacts`` membership when the fetch's ``path`` is known
+    (job names may legitimately contain colons, e.g.
+    ``build:report_html:bundle``) — neither field is ever split, normalized, or
     otherwise transformed.
     """
 
@@ -849,9 +850,11 @@ class ConsumedArtifact:
 class ArtifactProtection:
     """Artifact protection policy under [tool.rrt.artifact_protection].
 
-    Declares refs whose build artifacts must never be considered disposable,
-    plus explicit declarations of artifacts consumed by something else so a
-    storage cleanup does not silently delete an artifact another job depends on.
+    ``protected_refs`` is RESERVED and NOT YET ENFORCED — no check currently
+    reads it; it records intent only. ``consumed`` holds explicit declarations
+    of artifacts consumed by something else so a storage cleanup does not
+    silently delete an artifact another job depends on; that direction is the
+    one actually checked, by :func:`repo_release_tools.commands.doctor._check_artifact_protection`.
     """
 
     protected_refs: tuple[str, ...] = ()

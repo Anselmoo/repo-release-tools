@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from repo_release_tools.tools.ci_artifact_refs import scan_ci_config
+from repo_release_tools.tools.ci_artifact_refs import DOWNLOAD_ALL_MARKER, scan_ci_config
 
 GITLAB_SNIPPET = """
 build:docs:
@@ -91,6 +91,87 @@ jobs:
     (tmp_path / ".github" / "workflows" / "ci.yml").write_text(github_snippet)
     fetches = scan_ci_config(tmp_path)
     assert fetches == []
+
+
+def test_github_download_artifact_run_id_without_name_is_recorded(tmp_path: Path) -> None:
+    """Regression: `run-id:` without `name:` means "download every artifact from
+    the run" — standard GitHub usage, not "no fetch". Before the fix this was
+    silently dropped (`scan_ci_config` returned []), making the fetch invisible
+    to the artifact-protection lens.
+    """
+    github_snippet = """
+name: Build
+on: push
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 999
+"""
+    (tmp_path / ".github").mkdir()
+    (tmp_path / ".github" / "workflows").mkdir()
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(github_snippet)
+    fetches = scan_ci_config(tmp_path)
+    assert len(fetches) == 1
+    assert fetches[0].job == DOWNLOAD_ALL_MARKER
+    assert fetches[0].job == "*"
+    assert fetches[0].ref == "999"
+    assert fetches[0].path is None
+
+
+def test_gitlab_two_fetches_on_one_physical_line_both_found(tmp_path: Path) -> None:
+    """Regression: chained shell commands (`curl ... && curl ...`) on one line
+    are ordinary style. Before the fix `_GITLAB_FETCH.search()` found only the
+    first match per line, silently dropping the second fetch.
+    """
+    chained = (
+        "build:docs:\n"
+        "  script:\n"
+        '    - curl ".../jobs/artifacts/main/raw/a.txt?job=job-a" '
+        '&& curl ".../jobs/artifacts/main/raw/b.txt?job=job-b"\n'
+    )
+    (tmp_path / ".gitlab").mkdir()
+    (tmp_path / ".gitlab" / "ci.yml").write_text(chained)
+    fetches = scan_ci_config(tmp_path)
+    assert len(fetches) == 2
+    assert fetches[0].job == "job-a"
+    assert fetches[0].path == "a.txt"
+    assert fetches[1].job == "job-b"
+    assert fetches[1].path == "b.txt"
+    # Both fetches are on the same physical line.
+    assert fetches[0].line == fetches[1].line == 3
+
+
+def test_gitlab_yaml_extension_at_top_level_is_scanned(tmp_path: Path) -> None:
+    """Regression: `.gitlab/*.yaml` (not just `.yml`) was never scanned.
+
+    GitLab's `include: local:` accepts any filename.
+    """
+    (tmp_path / ".gitlab").mkdir()
+    (tmp_path / ".gitlab" / "inc.yaml").write_text(
+        'build:docs:\n  script:\n    - curl ".../jobs/artifacts/main/raw/a.txt?job=job-a"\n'
+    )
+    fetches = scan_ci_config(tmp_path)
+    assert len(fetches) == 1
+    assert fetches[0].job == "job-a"
+    assert fetches[0].source_file.endswith("inc.yaml")
+
+
+def test_gitlab_nested_subdirectory_is_scanned(tmp_path: Path) -> None:
+    """Regression: the `.gitlab/` scan was single-level (non-recursive).
+
+    Nested subdirectories under `.gitlab/` are ordinary GitLab CI layout.
+    """
+    (tmp_path / ".gitlab" / "includes").mkdir(parents=True)
+    (tmp_path / ".gitlab" / "includes" / "nested.yml").write_text(
+        'build:docs:\n  script:\n    - curl ".../jobs/artifacts/main/raw/a.txt?job=job-a"\n'
+    )
+    fetches = scan_ci_config(tmp_path)
+    assert len(fetches) == 1
+    assert fetches[0].job == "job-a"
+    assert fetches[0].source_file.endswith("includes/nested.yml")
 
 
 def test_gitlab_file_read_error_handled(tmp_path: Path) -> None:

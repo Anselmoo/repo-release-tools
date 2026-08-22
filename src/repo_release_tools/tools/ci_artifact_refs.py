@@ -14,10 +14,20 @@ from pathlib import Path
 
 CI_GLOBS = (
     ".gitlab-ci.yml",
-    ".gitlab/*.yml",
+    ".gitlab/**/*.yml",
+    ".gitlab/**/*.yaml",
     ".github/workflows/*.yml",
     ".github/workflows/*.yaml",
 )
+
+#: Sentinel ``job`` value recorded for a GitHub ``download-artifact`` step that
+#: carries ``run-id:`` but no ``name:`` — standard usage meaning "download every
+#: artifact from that run" (common in publish/release jobs). GitHub forbids
+#: ``"``, ``:``, ``<``, ``>``, ``|``, ``*``, ``?``, CR, and LF in real artifact
+#: names, so ``"*"`` can never collide with an actual artifact and is safe to
+#: use as an unambiguous marker. Declare it with ``job = "*"`` in a `consumed`
+#: entry to protect it.
+DOWNLOAD_ALL_MARKER = "*"
 
 # GitLab: .../jobs/artifacts/<ref>/raw/<path>?job=<name>
 _GITLAB_FETCH = re.compile(
@@ -51,6 +61,11 @@ def _scan_github(root: Path) -> list[ArtifactFetch]:
     A download-artifact action only crosses pipelines when it carries run-id,
     so we inspect the step block rather than single lines. Returns [] when
     run-id is absent (same-pipeline case).
+
+    When run-id is present but name is absent — standard GitHub usage meaning
+    "download every artifact from this run" — the fetch is still recorded, with
+    ``job`` set to :data:`DOWNLOAD_ALL_MARKER` (``"*"``) rather than being
+    silently dropped.
     """
     found: list[ArtifactFetch] = []
 
@@ -98,11 +113,15 @@ def _scan_github(root: Path) -> list[ArtifactFetch]:
 
                         j += 1
 
-                    # Only record if run-id is present (cross-pipeline)
-                    if run_id_match and name_match:
+                    # Only record if run-id is present (cross-pipeline). name is
+                    # optional — its absence means "download every artifact from
+                    # this run", not "no fetch"; record it under the sentinel
+                    # DOWNLOAD_ALL_MARKER rather than dropping it silently.
+                    if run_id_match:
+                        job = name_match["name"] if name_match else DOWNLOAD_ALL_MARKER
                         found.append(
                             ArtifactFetch(
-                                job=name_match["name"],
+                                job=job,
                                 ref=run_id_match["run"],
                                 path=None,
                                 source_file=rel,
@@ -124,8 +143,9 @@ def scan_ci_config(root: Path) -> list[ArtifactFetch]:
             continue
         rel = str(path.relative_to(root))
         for lineno, line in enumerate(text.splitlines(), start=1):
-            match = _GITLAB_FETCH.search(line)
-            if match:
+            # finditer, not search: chained shell commands (e.g. `curl ... &&
+            # curl ...`) can put more than one fetch on a single physical line.
+            for match in _GITLAB_FETCH.finditer(line):
                 found.append(
                     ArtifactFetch(
                         job=match["job"],

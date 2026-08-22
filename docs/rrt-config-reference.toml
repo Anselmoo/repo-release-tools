@@ -35,7 +35,9 @@ release_branch = "..."
 # artifact-protection lens.
 [tool.rrt.artifact_protection]
 
-# Refs whose build artifacts must never be considered disposable.
+# RESERVED, NOT YET ENFORCED: no check in `rrt doctor` currently reads this
+# field. Setting it records intent only; it does not block anything from being
+# deleted or flag any ref as protected.
 protected_refs = []
 
 # Explicit declarations of artifacts consumed by another CI job, so a storage
@@ -43,25 +45,29 @@ protected_refs = []
 [[tool.rrt.artifact_protection.consumed]]
 
 # Artifact-relative path(s) this job consumes. Must be replaced with real
-# paths — the literal 'rrt doctor'-suggested TODO placeholder loads
-# successfully but protects nothing, since the check matches on `job` only and
-# never inspects `artifacts` content.
+# paths. When the scanned fetch's path is known (GitLab always sets it), the
+# check requires that exact path to appear here, so an unedited TODO
+# placeholder is caught. GitHub fetches never carry a path, so there the check
+# cannot verify this field's contents and an unedited TODO placeholder loads
+# successfully but protects nothing.
 artifacts = []
 
 # CI config file(s) that perform the fetch.
 consumed_by = []
 
-# Exact join key matched against a scanned CI fetch's job, by string equality
-# (never split/normalized). On GitLab this is the real job name from the fetch
-# URL's `?job=` parameter. On GitHub Actions, `actions/download-artifact`
-# exposes no job identifier, so this must be the artifact's `name:` value
-# instead.
+# Part of the join key matched against a scanned CI fetch's (job, ref) — never
+# job alone — by string equality (never split/normalized). On GitLab this is
+# the real job name from the fetch URL's `?job=` parameter. On GitHub Actions,
+# `actions/download-artifact` exposes no job identifier, so this must be the
+# artifact's `name:` value instead; for a `run-id:`-without-`name:` fetch
+# (download every artifact from the run), use the literal marker "*".
 job = "..."
 
 # Why this artifact must be protected.
 reason = "..."
 
-# Ref (branch/tag) the artifact is fetched from.
+# Ref (branch/tag/run-id) the artifact is fetched from. Matched together with
+# `job` as the join key — a match on `job` alone is not sufficient.
 ref = "..."
 
 # Documentation tree injection configuration.

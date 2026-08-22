@@ -353,7 +353,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Refs whose build artifacts must never be considered disposable."
+          "description": "RESERVED, NOT YET ENFORCED: no check in `rrt doctor` currently reads this field. Setting it records intent only; it does not block anything from being deleted or flag any ref as protected."
         },
         "consumed": {
           "type": "array",
@@ -369,18 +369,18 @@
             "properties": {
               "job": {
                 "type": "string",
-                "description": "Exact join key matched against a scanned CI fetch's job, by string equality (never split/normalized). On GitLab this is the real job name from the fetch URL's `?job=` parameter. On GitHub Actions, `actions/download-artifact` exposes no job identifier, so this must be the artifact's `name:` value instead."
+                "description": "Part of the join key matched against a scanned CI fetch's (job, ref) — never job alone — by string equality (never split/normalized). On GitLab this is the real job name from the fetch URL's `?job=` parameter. On GitHub Actions, `actions/download-artifact` exposes no job identifier, so this must be the artifact's `name:` value instead; for a `run-id:`-without-`name:` fetch (download every artifact from the run), use the literal marker \"*\"."
               },
               "ref": {
                 "type": "string",
-                "description": "Ref (branch/tag) the artifact is fetched from."
+                "description": "Ref (branch/tag/run-id) the artifact is fetched from. Matched together with `job` as the join key — a match on `job` alone is not sufficient."
               },
               "artifacts": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 },
-                "description": "Artifact-relative path(s) this job consumes. Must be replaced with real paths — the literal 'rrt doctor'-suggested TODO placeholder loads successfully but protects nothing, since the check matches on `job` only and never inspects `artifacts` content."
+                "description": "Artifact-relative path(s) this job consumes. Must be replaced with real paths. When the scanned fetch's path is known (GitLab always sets it), the check requires that exact path to appear here, so an unedited TODO placeholder is caught. GitHub fetches never carry a path, so there the check cannot verify this field's contents and an unedited TODO placeholder loads successfully but protects nothing."
               },
               "consumed_by": {
                 "type": "array",
