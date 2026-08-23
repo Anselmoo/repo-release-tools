@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.16.0] - 2026-08-23
 ### Added
 - **mcp**: mirror the artifact-protection lens
 - **doctor**: add artifact-protection lens
