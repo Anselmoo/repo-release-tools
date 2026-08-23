@@ -16,10 +16,179 @@ basics are wired correctly:
 - `lefthook.yml` when present
 - `.husky/*` hook scripts when present
 - `.github/workflows/*.yml` / `.yaml` when present
+- CI config for cross-pipeline artifact fetches, cross-checked against
+  `[tool.rrt.artifact_protection]` — see [Artifact protection](#artifact-protection)
+  below
 
 The checks are intentionally light-touch: they verify presence, readability,
 and whether the file appears to reference repo-release-tools policy checks.
 They do **not** replace the deeper feature validators.
+
+## Artifact protection
+
+Some CI jobs fetch a build artifact produced by a *different* pipeline run —
+for example, a docs job that pulls a report built by an earlier release
+pipeline. That dependency lives only in the *consuming* job's config, never
+on the artifact itself, so nothing on the forge side (GitLab, GitHub) can
+infer it exists — a storage cleanup or retention policy has no way to know
+the artifact is still needed. When the artifact expires, the consuming job
+breaks. A consumer that instead degrades gracefully — skips the missing
+artifact and carries on rather than failing loudly — is not the safer
+outcome: it hides the same broken dependency instead of surfacing it, so
+graceful degradation and silent breakage are the same failure underneath,
+just harder to notice.
+
+`rrt doctor` closes this gap by scanning CI config for **cross-pipeline
+artifact fetches** — steps that download a build artifact produced by a
+*different* pipeline run — and cross-checking each one against an optional
+`[tool.rrt.artifact_protection]` declaration, where `consumed_by` records the
+CI file that performs the fetch. (This is unrelated to `rrt artifacts`, which
+tracks content-addressed integrity of generated files you keep in the repo —
+a different feature that happens to share a name fragment.)
+
+The scanner recognizes two forms:
+
+- GitLab `.../jobs/artifacts/<ref>/raw/<path>?job=<name>` URLs, matched in
+  **every** CI file the scanner reads — `.gitlab-ci.yml`, any
+  `.gitlab/**/*.yml` / `*.yaml` file (scanned recursively, since GitLab's
+  `include: local:` accepts any filename in any subdirectory), and also
+  `.github/workflows/*.yml` / `*.yaml`. This is deliberate: a job running on
+  GitHub Actions can still `curl` an artifact out of a GitLab instance, and
+  scoping the check to `.gitlab*` files would make that fetch invisible. A
+  single physical line can carry more than one fetch (for example chained
+  shell commands, `curl ... && curl ...`) — every fetch on the line is found,
+  not just the first.
+- GitHub Actions `actions/download-artifact@…` steps that carry `run-id:`
+  in `.github/workflows/*.yml` / `*.yaml` (same-pipeline downloads without
+  `run-id` are ignored — they are not cross-pipeline). A step that carries
+  `run-id:` but no `name:` — standard GitHub usage meaning "download every
+  artifact from this run", common in publish/release jobs — is still
+  recorded, not dropped: see "Download-all fetches" below. GitLab's
+  same-pipeline equivalent — a job declaring `needs: [other_job]` with
+  `artifacts: true` to pull that job's output within the *same* pipeline — is
+  out of scope for the same reason: those artifacts come from the same
+  pipeline run and are never at risk from a retention cleanup of *other*
+  pipelines, so the scanner does not look for `needs:` at all.
+
+Declare what each fetch is allowed to depend on:
+
+```toml
+[tool.rrt.artifact_protection]
+protected_refs = ["main"]  # reserved: parsed but not yet enforced, see below
+
+[[tool.rrt.artifact_protection.consumed]]
+job = "build:report_html"
+ref = "main"
+artifacts = ["public/report.html"]
+consumed_by = [".gitlab/65-docs.yml"]
+reason = "Docs pipeline embeds the report built by this job."
+```
+
+`protected_refs` above is shown for illustration only — it is parsed and
+validated but not read by any check yet (see "`protected_refs` is reserved,
+not yet enforced" below); do not rely on it to protect `main`. Each
+`consumed` entry: `job` and `ref` identify the fetch (see "Matching" below
+for exactly how); `artifacts` lists the paths the fetch may pull;
+`consumed_by` names the CI file(s) that perform the fetch; `reason` records
+why the dependency exists. `consumed_by` and `reason` are documentation
+only — nothing in the check validates or enforces them; matching uses only
+`job`, `ref`, and (when known) `path`.
+
+The check fails (error) when a scanned fetch has no matching `consumed`
+entry — the failure message names the CI file and line and prints a
+ready-to-paste `[[tool.rrt.artifact_protection.consumed]]` block. It warns
+(without failing) when a `consumed` entry matches no scanned fetch, since a
+stale declaration that protects nothing real trains people to ignore the
+check; both directions can be reported together in the same run. When no
+cross-pipeline fetches are found in CI config and no
+`[tool.rrt.artifact_protection]` block is configured, the check is a soft
+warning rather than a failure — there is nothing to protect yet.
+
+### Matching: `(job, ref)`, plus `path` when known
+
+A fetch is declared only when a `consumed` entry matches on **both** `job`
+and `ref` — never `job` alone. Matching on `job` alone would let one
+correctly-filled entry mask an unrelated, undeclared fetch anywhere else in
+CI config that merely happens to share its job string (generic names like
+`build`, `report`, `dist`, `coverage` are common, and GitLab's `job` holds a
+job name while GitHub's holds an artifact name — two namespaces sharing one
+match field). Neither `job` nor `ref` is ever split, lowercased, or otherwise
+normalized — job names may legitimately contain colons (for example
+`build:report_html:bundle`, which is a distinct job from `build:report_html`).
+
+When the fetch's `path` is known — GitLab always sets it — the matched
+entry's `artifacts` list must additionally contain that exact path, or the
+fetch still counts as undeclared. Declaring "job X at ref Y protects
+artifacts `[a, b]`" must not silently cover a fetch of a *different* artifact
+`c` from that same job and ref. GitHub Actions `download-artifact` exposes no
+per-file path (`path` is always `None`), so for GitHub fetches the check
+necessarily degrades to `(job, ref)` only — the best available for that
+provider.
+
+### GitHub vs. GitLab: `job` means different things
+
+`job` is part of the join key, but what it identifies depends on the
+provider:
+
+- **GitLab** — the real job name, taken from the fetch URL's `?job=`
+  parameter.
+- **GitHub Actions** — `actions/download-artifact` exposes no job identifier
+  at all, so the scanner records the artifact's `name:` field instead.
+
+When you write a `consumed` entry for a GitHub Actions fetch, put the
+**artifact name** in `job`, not a job or workflow name — otherwise the entry
+will never match, and `rrt doctor` will keep reporting the fetch as
+undeclared no matter what you write in `job`.
+
+### Download-all fetches (no `name:`)
+
+`actions/download-artifact` with `run-id:` but no `name:` downloads **every**
+artifact produced by that run — a common pattern in publish/release jobs. The
+scanner cannot name a single artifact for it, so it records the fetch with
+`job` set to the literal marker `"*"` (GitHub forbids `"`, `:`, `<`, `>`,
+`|`, `*`, `?`, CR, and LF in real artifact names, so `"*"` can never collide
+with one). Declare it the same way as any other GitHub fetch, using the
+marker verbatim:
+
+```toml
+[[tool.rrt.artifact_protection.consumed]]
+job = "*"
+ref = "12345"
+artifacts = ["TODO: list the artifact-relative path(s) this job consumes"]
+consumed_by = [".github/workflows/publish.yml"]
+reason = "Publish job downloads every artifact from the referenced run."
+```
+
+### Unedited TODO placeholders mean fictional protection
+
+When `rrt doctor` finds an undeclared fetch, it prints a ready-to-paste
+`[[tool.rrt.artifact_protection.consumed]]` block. For GitHub Actions
+fetches, the artifact-relative path cannot be inferred from
+`download-artifact` alone, so the suggested `artifacts` value is a
+placeholder:
+
+```toml
+artifacts = ["TODO: list the artifact-relative path(s) this job consumes"]
+```
+
+**This block loads successfully as written.** Nothing in config loading
+requires `artifacts` entries to point at real paths. For GitLab fetches the
+check verifies the declared `path` appears in `artifacts` (see the matching
+rules above), so a GitLab TODO placeholder is caught immediately. For GitHub
+fetches `path` is always unknown, so the check cannot verify it — an
+unedited GitHub TODO placeholder loads cleanly and the very next `rrt doctor`
+run will report that fetch as satisfied, even though nothing is actually
+protected. Always replace both the `artifacts` TODO and the `reason` TODO
+with real values before trusting a green result — an unedited placeholder
+is fictional protection, not real protection.
+
+### `protected_refs` is reserved, not yet enforced
+
+`protected_refs` is parsed, validated, and schema-checked, but **no check in
+`rrt doctor` currently reads it.** Setting `protected_refs = ["main"]` records
+your intent but enforces nothing today — it does not, by itself, block
+anything from being deleted or flag any ref as protected. Treat it as
+reserved for a future check; do not rely on it to harden anything yet.
 
 ## Output and severity
 
@@ -31,6 +200,8 @@ overall status at the end.
 - missing optional integration surfaces are warnings when no equivalent surface is active
 - surfaces that exist but do not appear to reference repo-release-tools are warnings
 - readable, recognized surfaces are reported as OK
+- undeclared cross-pipeline artifact fetches are errors; stale `consumed`
+  entries are warnings (see [Artifact protection](#artifact-protection))
 
 At the end, `rrt doctor` also points you to the feature-specific commands that
 own deeper validation, such as `rrt release check`, `rrt docs check`, and
@@ -84,6 +255,7 @@ from repo_release_tools.changelog import (
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config import (
+    ConsumedArtifact,
     RrtConfig,
     find_repo_root,
     format_autodetected_config_notice,
@@ -96,6 +268,7 @@ from repo_release_tools.state import (
     health_lock_path,
     write_lock,
 )
+from repo_release_tools.tools.ci_artifact_refs import ArtifactFetch, scan_ci_config
 from repo_release_tools.ui import VerbosePrinter
 
 DOCTOR_EPILOG = "  $ rrt doctor\n  $ rrt release check\n  $ rrt docs check"
@@ -247,6 +420,153 @@ def _check_hook_integrations(root: Path) -> dict[str, tuple[str, bool, str]]:
         )
         for name, (message, ok, severity) in checks.items()
     }
+
+
+_ARTIFACT_PROTECTION_NOT_CONFIGURED = (
+    "No cross-pipeline artifact fetches found in CI config; "
+    "[tool.rrt.artifact_protection] not configured"
+)
+
+
+def _consumed_entry_toml(fetch: ArtifactFetch) -> str:
+    """Render the ``[[tool.rrt.artifact_protection.consumed]]`` block to add for *fetch*.
+
+    ``fetch.job`` is used verbatim (never split/normalized) — on GitLab it is the
+    real job name from ``?job=``, on GitHub it is the artifact's ``name:`` (see
+    :mod:`repo_release_tools.tools.ci_artifact_refs`) — either way it is exactly
+    the string a ``consumed`` entry must declare to match.
+
+    ``artifacts`` must always come out non-empty: :meth:`ConsumedArtifact.validate`
+    requires at least one entry, and GitHub-provenance fetches never carry a
+    ``path`` (``download-artifact`` exposes no per-file path, only ``name:``).
+    When the real path is unknown, emit an unmistakable placeholder — marked the
+    same way ``reason`` is — rather than an empty list a user could paste
+    straight into a config that then fails to load.
+    """
+    artifacts = (
+        f'["{fetch.path}"]'
+        if fetch.path
+        else '["TODO: list the artifact-relative path(s) this job consumes"]'
+    )
+    return (
+        "[[tool.rrt.artifact_protection.consumed]]\n"
+        f'job = "{fetch.job}"\n'
+        f'ref = "{fetch.ref or ""}"\n'
+        f"artifacts = {artifacts}\n"
+        f'consumed_by = ["{fetch.source_file}"]\n'
+        'reason = "TODO: explain why this artifact must be protected"'
+    )
+
+
+def _undeclared_fetch_report(fetches: list[ArtifactFetch], *, configured: bool) -> str:
+    """Render the failure detail naming each undeclared fetch's file:line and its fix."""
+    plural = "es" if len(fetches) != 1 else ""
+    if configured:
+        header = (
+            f"{len(fetches)} cross-pipeline artifact fetch{plural} not declared in "
+            "[tool.rrt.artifact_protection.consumed]:"
+        )
+    else:
+        verb = "were" if len(fetches) != 1 else "was"
+        header = (
+            "[tool.rrt.artifact_protection] is not configured, but "
+            f"{len(fetches)} cross-pipeline artifact fetch{plural} {verb} found in CI config:"
+        )
+    entries = "\n\n".join(
+        f"{fetch.source_file}:{fetch.line} fetches job {fetch.job!r} — not declared. Add:\n"
+        f"{_consumed_entry_toml(fetch)}"
+        for fetch in fetches
+    )
+    return f"{header}\n\n{entries}"
+
+
+def _stale_consumed_report(stale: list[ConsumedArtifact]) -> str:
+    """Render the warning detail for consumed entries matching no scanned fetch."""
+    plural = "ies" if len(stale) != 1 else "y"
+    names = ", ".join(repr(entry.job) for entry in stale)
+    return (
+        f"[tool.rrt.artifact_protection.consumed] has {len(stale)} entr{plural} matching no "
+        f"scanned CI fetch: {names}. Remove the entry or confirm the fetch was not renamed."
+    )
+
+
+def _fetch_is_declared(entry: ConsumedArtifact, fetch: ArtifactFetch) -> bool:
+    """Return True if *entry* declares *fetch* as protected.
+
+    Matches on ``(job, ref)`` — both are required, non-empty fields on
+    ``ConsumedArtifact`` — never ``job`` alone: a bare-``job`` match lets one
+    declared entry mask an unrelated undeclared fetch that merely shares a
+    (common) job name at a different ref, and GitLab's ``job`` is a job name
+    while GitHub's is an artifact name, two namespaces sharing one field.
+
+    When ``fetch.path`` is known (GitLab always sets it), the matched entry's
+    ``artifacts`` must additionally contain that path — declaring "job X at
+    ref Y protects artifacts [a, b]" must not silently cover a fetch of a
+    *different* artifact ``c`` from that same job and ref. GitHub fetches never
+    carry a path (``download-artifact`` exposes no per-file path), so there the
+    check degrades to ``(job, ref)`` — the best available for that provider.
+    """
+    if entry.job != fetch.job or entry.ref != fetch.ref:
+        return False
+    if fetch.path is not None and fetch.path not in entry.artifacts:
+        return False
+    return True
+
+
+def _check_artifact_protection(root: Path, config: RrtConfig | None) -> tuple[str, bool, str]:
+    """Join scanned CI artifact fetches against the declared artifact-protection policy.
+
+    Fails when a cross-pipeline fetch (found by
+    :func:`~repo_release_tools.tools.ci_artifact_refs.scan_ci_config`) has no
+    matching ``[[tool.rrt.artifact_protection.consumed]]`` entry — matched on
+    ``(job, ref)`` and, when known, ``path`` membership in ``artifacts`` (see
+    :func:`_fetch_is_declared`); never on ``job`` alone, and never
+    split/normalized/lowercased, since job names may legitimately contain
+    colons. Warns (without failing) when a ``consumed`` entry matches no
+    scanned fetch, since a protection list that silently over-protects rots
+    and trains people to ignore it.
+    """
+    fetches = scan_ci_config(root)
+    protection = config.artifact_protection if config is not None else None
+
+    if not fetches and protection is None:
+        return _ARTIFACT_PROTECTION_NOT_CONFIGURED, True, "warning"
+
+    consumed = protection.consumed if protection is not None else ()
+
+    undeclared = [
+        fetch for fetch in fetches if not any(_fetch_is_declared(e, fetch) for e in consumed)
+    ]
+    stale = [entry for entry in consumed if not any(_fetch_is_declared(entry, f) for f in fetches)]
+
+    if undeclared:
+        # The failure dominates the returned severity, but a concurrent stale
+        # entry must not go invisible behind it — appended so both directions
+        # stay visible in the same report instead of one masking the other
+        # across however many `rrt doctor` runs it takes to clear the failure.
+        report = _undeclared_fetch_report(undeclared, configured=protection is not None)
+        if stale:
+            report = f"{report}\n\n{_stale_consumed_report(stale)}"
+        return report, False, "error"
+
+    if stale:
+        return _stale_consumed_report(stale), True, "warning"
+
+    if not fetches:
+        return (
+            "[tool.rrt.artifact_protection] declares no consumed artifacts to check "
+            "(no cross-pipeline fetches found in CI config)",
+            True,
+            "ok",
+        )
+
+    plural = "es" if len(fetches) != 1 else ""
+    return (
+        f"All {len(fetches)} cross-pipeline artifact fetch{plural} declared in "
+        "[tool.rrt.artifact_protection.consumed]",
+        True,
+        "ok",
+    )
 
 
 def _fix_missing_unreleased(root: Path, config: object, *, dry_run: bool) -> list[str]:
@@ -412,6 +732,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         ("lefthook", hook_checks["lefthook"]),
         ("husky", hook_checks["husky"]),
         ("workflows", _check_github_workflows(root)),
+        ("artifact_protection", _check_artifact_protection(root, config)),
     ]
 
     # Structured results for snapshot/check

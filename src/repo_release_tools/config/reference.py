@@ -161,6 +161,12 @@ def _render_property(
             for sub_name in sub_ordered:
                 sub_prop = sub_props[sub_name]
                 lines.extend(_render_property(sub_name, sub_prop, parent=qualified))
+        elif prop.get("minItems"):
+            # A loader rejects an empty list for this field (e.g.
+            # `consumed[].artifacts`) — emitting `[]` would hand the reader
+            # a snippet that fails to load unedited, so emit one placeholder
+            # entry instead.
+            lines.append(f"{name} = [{_placeholder(items)}]")
         else:
             # scalar array — emit as empty list
             lines.append(f"{name} = []")

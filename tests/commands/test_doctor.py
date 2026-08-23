@@ -9,6 +9,8 @@ import pytest
 
 from repo_release_tools.commands import doctor
 from repo_release_tools.config import (
+    ArtifactProtection,
+    ConsumedArtifact,
     DocsConfig,
     EolConfig,
     RrtConfig,
@@ -26,6 +28,7 @@ def _make_config(
     autodetected: bool = False,
     docs: DocsConfig | None = None,
     eol: EolConfig | None = None,
+    artifact_protection: ArtifactProtection | None = None,
 ) -> RrtConfig:
     target = VersionTarget(
         path=tmp_path / "src" / "pkg" / "__init__.py",
@@ -49,6 +52,7 @@ def _make_config(
         global_pin_targets=[],
         docs=docs,
         eol=eol,
+        artifact_protection=artifact_protection,
     )
 
 
@@ -926,3 +930,495 @@ def test_render_doctor_report_failure_returns_false_and_gates_feature_hints(
     assert "One or more core automation checks failed." in out
     assert "rrt docs check" not in out
     assert "rrt eol" not in out
+
+
+# ---------------------------------------------------------------------------
+# _check_artifact_protection: the artifact-protection lens
+# ---------------------------------------------------------------------------
+
+# `?job=` value carries colons on purpose — mirrors the real motivating case
+# (`build:report_html:bundle`) and pins that the scanner/lens never
+# split/normalize `job`.
+_GITLAB_FETCH_SNIPPET = (
+    "build:docs:\n"
+    "  script:\n"
+    '    - curl "https://example.com/api/v4/projects/1/jobs/artifacts/main/raw/'
+    'artifacts/manifest.json?job=build:report_html:bundle" --output out.json\n'
+)
+
+
+def test_check_artifact_protection_no_fetches_no_config_object_warns(tmp_path: Path) -> None:
+    """No CI fetches and config=None (not just an absent section) warns 'not configured'."""
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, None)
+
+    assert ok is True
+    assert severity == "warning"
+    assert message == doctor._ARTIFACT_PROTECTION_NOT_CONFIGURED
+
+
+def test_check_artifact_protection_no_fetches_section_absent_warns(tmp_path: Path) -> None:
+    """No CI fetches and a resolved config with no [tool.rrt.artifact_protection] warns."""
+    conf = _make_config(tmp_path)
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is True
+    assert severity == "warning"
+    assert "not configured" in message
+
+
+def test_check_artifact_protection_undeclared_fetch_fails_with_file_and_line(
+    tmp_path: Path,
+) -> None:
+    """A fetch with no matching `consumed` entry fails and names the fetch's file:line."""
+    (tmp_path / ".gitlab-ci.yml").write_text(_GITLAB_FETCH_SNIPPET, encoding="utf-8")
+    conf = _make_config(tmp_path, artifact_protection=ArtifactProtection(consumed=()))
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    # Load-bearing: the file and line of the offending fetch, not just the job name.
+    assert ".gitlab-ci.yml:3" in message
+    assert "build:report_html:bundle" in message
+    # The exact TOML block to add.
+    assert "[[tool.rrt.artifact_protection.consumed]]" in message
+    assert 'job = "build:report_html:bundle"' in message
+    assert 'ref = "main"' in message
+    assert 'artifacts = ["artifacts/manifest.json"]' in message
+    assert 'consumed_by = [".gitlab-ci.yml"]' in message
+
+
+def test_check_artifact_protection_undeclared_fetch_when_section_entirely_absent(
+    tmp_path: Path,
+) -> None:
+    """A fetch found with no [tool.rrt.artifact_protection] section at all still fails."""
+    (tmp_path / ".gitlab-ci.yml").write_text(_GITLAB_FETCH_SNIPPET, encoding="utf-8")
+    conf = _make_config(tmp_path)
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    # Subject/verb agreement for the singular case: "1 ... fetch was found", not "were found".
+    assert "1 cross-pipeline artifact fetch was found in CI config" in message
+    assert "[tool.rrt.artifact_protection] is not configured, but" in message
+    assert ".gitlab-ci.yml:3" in message
+    assert "[[tool.rrt.artifact_protection.consumed]]" in message
+
+
+def test_check_artifact_protection_multiple_undeclared_fetches_lists_each(
+    tmp_path: Path,
+) -> None:
+    """Two undeclared fetches both appear, each with its own file:line and TOML block."""
+    (tmp_path / ".gitlab-ci.yml").write_text(_GITLAB_FETCH_SNIPPET, encoding="utf-8")
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "ci.yml").write_text(
+        "jobs:\n"
+        "  publish:\n"
+        "    steps:\n"
+        "      - uses: actions/download-artifact@v4\n"
+        "        with:\n"
+        "          name: benchmark-report\n"
+        "          run-id: 12345\n",
+        encoding="utf-8",
+    )
+    conf = _make_config(tmp_path, artifact_protection=ArtifactProtection(consumed=()))
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    assert "2 cross-pipeline artifact fetches not declared" in message
+    assert ".gitlab-ci.yml:3" in message
+    assert ".github/workflows/ci.yml:4" in message
+    assert 'job = "build:report_html:bundle"' in message
+    assert 'job = "benchmark-report"' in message
+    # GitHub-sourced fetches never carry a `path` (download-artifact exposes no
+    # per-file path), so `artifacts` must still come out non-empty — never `[]`,
+    # which would fail ConsumedArtifact.validate() if pasted verbatim — and the
+    # placeholder must be unmistakably marked for human completion, like `reason`.
+    assert 'artifacts = ["TODO: list the artifact-relative path(s) this job consumes"]' in message
+    assert "artifacts = []" not in message
+
+
+def test_check_artifact_protection_github_sourced_toml_block_is_valid_when_parsed(
+    tmp_path: Path,
+) -> None:
+    """The emitted block for a GitHub-sourced fetch parses into a valid ConsumedArtifact.
+
+    Regression test for a block that looked plausible but silently failed
+    `ConsumedArtifact.validate()` once pasted (empty `artifacts`).
+    """
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "ci.yml").write_text(
+        "jobs:\n"
+        "  publish:\n"
+        "    steps:\n"
+        "      - uses: actions/download-artifact@v4\n"
+        "        with:\n"
+        "          name: benchmark-report\n"
+        "          run-id: 12345\n",
+        encoding="utf-8",
+    )
+    conf = _make_config(tmp_path, artifact_protection=ArtifactProtection(consumed=()))
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+    assert ok is False
+
+    # Extract the emitted TOML block from the message and confirm it round-trips
+    # through the real config loader path: parse -> construct -> validate.
+    toml_start = message.index("[[tool.rrt.artifact_protection.consumed]]")
+    block = message[toml_start:]
+    import tomllib
+
+    parsed = tomllib.loads(block)
+    entry = parsed["tool"]["rrt"]["artifact_protection"]["consumed"][0]
+    consumed = ConsumedArtifact(
+        job=entry["job"],
+        ref=entry["ref"],
+        artifacts=tuple(entry["artifacts"]),
+        consumed_by=tuple(entry["consumed_by"]),
+        reason=entry["reason"],
+    )
+
+    consumed.validate()  # must not raise
+
+    assert entry["job"] == "benchmark-report"
+    assert entry["artifacts"] == ["TODO: list the artifact-relative path(s) this job consumes"]
+
+
+def test_check_artifact_protection_quoted_github_values_declare_and_parse_cleanly(
+    tmp_path: Path,
+) -> None:
+    """A quoted `name:`/`run-id:` fetch matches a correctly declared entry and
+    round-trips through valid TOML end-to-end.
+
+    Regression: before the quote-stripping fix, the scanner recorded
+    `job='"build-output"'` / `ref='"12345"'` (quotes embedded), which made
+    this check *fail* against a config declaring the correct, unquoted
+    `job = "build-output"` / `ref = "12345"` — a loud false positive against
+    a correct declaration, not a silent all-clear — and the fix-it snippet it
+    printed contained invalid TOML (`job = ""build-output""`) that
+    `tomllib.loads` cannot parse.
+    """
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "ci.yml").write_text(
+        "jobs:\n"
+        "  publish:\n"
+        "    steps:\n"
+        "      - uses: actions/download-artifact@v4\n"
+        "        with:\n"
+        '          name: "build-output"\n'
+        '          run-id: "12345"\n',
+        encoding="utf-8",
+    )
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="build-output",
+                    ref="12345",
+                    artifacts=("dist/build-output.whl",),
+                    consumed_by=(".github/workflows/ci.yml",),
+                ),
+            ),
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is True
+    assert severity == "ok"
+    assert 'job = ""build-output""' not in message
+
+
+def test_check_artifact_protection_undeclared_and_stale_both_surface_together(
+    tmp_path: Path,
+) -> None:
+    """An undeclared fetch and a stale `consumed` entry are both visible in one report.
+
+    Direction 1 (fail) must not silently mask direction 2 (warn) — a stale entry
+    should not go unseen for however many `rrt doctor` runs it takes to clear an
+    unrelated failure.
+    """
+    (tmp_path / ".gitlab-ci.yml").write_text(_GITLAB_FETCH_SNIPPET, encoding="utf-8")
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="ghost-job",
+                    ref="main",
+                    artifacts=("a",),
+                    consumed_by=("b",),
+                ),
+            )
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    # Direction 1: the undeclared fetch is reported, with its file:line and fix.
+    assert ".gitlab-ci.yml:3" in message
+    assert "build:report_html:bundle" in message
+    # Direction 2: the stale entry is reported too, in the same message.
+    assert "ghost-job" in message
+    assert "matching no scanned CI fetch" in message
+
+
+def test_check_artifact_protection_stale_consumed_entry_warns(tmp_path: Path) -> None:
+    """A `consumed` entry matching no scanned fetch warns rather than passing silently."""
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="build:report_html",
+                    ref="main",
+                    artifacts=("artifacts/manifest.json",),
+                    consumed_by=(".gitlab/65-docs.yml",),
+                ),
+            )
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is True
+    assert severity == "warning"
+    assert "build:report_html" in message
+    assert "matching no scanned CI fetch" in message
+
+
+def test_check_artifact_protection_all_declared_clean_pass(tmp_path: Path) -> None:
+    """Every scanned fetch has a matching `consumed` entry: a clean, ok pass."""
+    (tmp_path / ".gitlab-ci.yml").write_text(_GITLAB_FETCH_SNIPPET, encoding="utf-8")
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="build:report_html:bundle",
+                    ref="main",
+                    artifacts=("artifacts/manifest.json",),
+                    consumed_by=(".gitlab-ci.yml",),
+                ),
+            )
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is True
+    assert severity == "ok"
+    assert "All 1 cross-pipeline artifact fetch declared" in message
+
+
+def test_check_artifact_protection_configured_with_no_fetches_is_ok(tmp_path: Path) -> None:
+    """A configured section with nothing to declare and nothing scanned is a clean ok."""
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(protected_refs=("main",)),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is True
+    assert severity == "ok"
+    assert "declares no consumed artifacts to check" in message
+
+
+# ---------------------------------------------------------------------------
+# Regression: the join key is (job, ref) [+ path when known], never job alone
+# ---------------------------------------------------------------------------
+
+
+def test_check_artifact_protection_same_job_different_ref_is_still_undeclared(
+    tmp_path: Path,
+) -> None:
+    """A declared (job, ref) entry must not mask an undeclared fetch of the same
+    job at a DIFFERENT ref.
+
+    Regression for the job-collision false negative: before the fix, matching
+    was on `job` alone, so a fetch at `ref=staging` of a different path was
+    reported as declared merely because some other, unrelated fetch at
+    `ref=main` shares the job string.
+    """
+    (tmp_path / ".gitlab-ci.yml").write_text(
+        "build:report_html:\n"
+        "  script:\n"
+        '    - curl ".../jobs/artifacts/main/raw/manifest.json?job=build:report_html"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".gitlab").mkdir()
+    (tmp_path / ".gitlab" / "other.yml").write_text(
+        "other:job:\n"
+        "  script:\n"
+        '    - curl ".../jobs/artifacts/staging/raw/secret-config.json?job=build:report_html"\n',
+        encoding="utf-8",
+    )
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="build:report_html",
+                    ref="main",
+                    artifacts=("manifest.json",),
+                    consumed_by=(".gitlab-ci.yml",),
+                ),
+            )
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    # The ref=main fetch is properly declared and must not appear as undeclared.
+    assert ".gitlab-ci.yml:3" not in message
+    # The ref=staging fetch of a DIFFERENT path is not covered by the ref=main
+    # entry and must be reported.
+    assert ".gitlab/other.yml:3" in message
+    assert 'ref = "staging"' in message
+    assert 'artifacts = ["secret-config.json"]' in message
+
+
+def test_check_artifact_protection_same_job_ref_different_path_is_still_undeclared(
+    tmp_path: Path,
+) -> None:
+    """A declared entry whose `artifacts` does not include the fetched path must
+    not cover that fetch, even when `job` and `ref` both match.
+
+    Regression: declaring "job X at ref Y protects artifacts [a, b]" must not
+    silently protect a fetch of a different artifact `c` from that same job
+    and ref.
+    """
+    (tmp_path / ".gitlab-ci.yml").write_text(
+        "build:report_html:\n"
+        "  script:\n"
+        '    - curl ".../jobs/artifacts/main/raw/other-path.json?job=build:report_html"\n',
+        encoding="utf-8",
+    )
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="build:report_html",
+                    ref="main",
+                    artifacts=("manifest.json",),  # does NOT include other-path.json
+                    consumed_by=(".gitlab-ci.yml",),
+                ),
+            )
+        ),
+    )
+
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, conf)
+
+    assert ok is False
+    assert severity == "error"
+    assert ".gitlab-ci.yml:3" in message
+    assert 'artifacts = ["other-path.json"]' in message
+
+
+def test_check_artifact_protection_github_download_all_marker_is_declarable(
+    tmp_path: Path,
+) -> None:
+    """A `run-id`-without-`name` fetch (job == '*') is visible when undeclared
+    and can be declared with `job = "*"` to clear the check — closing the loop
+    on the scanner-level regression that this fetch is recorded at all.
+    """
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    workflow_dir_content = (
+        "jobs:\n"
+        "  publish:\n"
+        "    steps:\n"
+        "      - uses: actions/download-artifact@v4\n"
+        "        with:\n"
+        "          run-id: 999\n"
+    )
+    (workflow_dir / "ci.yml").write_text(workflow_dir_content, encoding="utf-8")
+
+    # Undeclared: visible as an error naming the download-all marker.
+    undeclared_conf = _make_config(tmp_path, artifact_protection=ArtifactProtection(consumed=()))
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, undeclared_conf)
+    assert ok is False
+    assert severity == "error"
+    assert "'*'" in message
+    assert 'job = "*"' in message
+
+    # Declared with job = "*": the check clears.
+    declared_conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="*",
+                    ref="999",
+                    artifacts=("all artifacts from run 999",),
+                    consumed_by=(".github/workflows/ci.yml",),
+                ),
+            )
+        ),
+    )
+    message, ok, severity = doctor._check_artifact_protection(tmp_path, declared_conf)
+    assert ok is True
+    assert severity == "ok"
+
+
+def test_doctor_artifact_protection_undeclared_fetch_fails_doctor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An undeclared cross-pipeline fetch makes `rrt doctor` fail end-to-end."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".gitlab-ci.yml").write_text(_GITLAB_FETCH_SNIPPET, encoding="utf-8")
+    conf = _make_config(tmp_path, artifact_protection=ArtifactProtection(consumed=()))
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert ".gitlab-ci.yml:3" in out
+    assert "[[tool.rrt.artifact_protection.consumed]]" in out
+
+
+def test_doctor_artifact_protection_stale_entry_warns_doctor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A stale `consumed` entry warns but does not fail `rrt doctor`."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_config(
+        tmp_path,
+        artifact_protection=ArtifactProtection(
+            consumed=(
+                ConsumedArtifact(
+                    job="ghost-job",
+                    ref="main",
+                    artifacts=("a",),
+                    consumed_by=("b",),
+                ),
+            )
+        ),
+    )
+    monkeypatch.setattr(doctor, "load_or_autodetect_config", lambda _: conf)
+
+    rc = doctor.cmd_doctor(_ARGS)
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ghost-job" in out
+    assert "matching no scanned CI fetch" in out

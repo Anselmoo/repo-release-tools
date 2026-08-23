@@ -1,11 +1,24 @@
 ## [Unreleased]
 
+### Added
+- **mcp**: mirror the artifact-protection lens
+- **doctor**: add artifact-protection lens
+- **config**: add [tool.rrt.artifact_protection]
+- **tools**: scan CI config for cross-pipeline artifact fetches
+
 ### Fixed
+- **tools**: anchor GitHub artifact-fetch scan to the step's list-item boundary
+- **doctor**: close artifact-protection false negatives found in final review
+- **doctor**: emit valid TOML for GitHub fetches and surface stale entries alongside failures
 - **mcp**: correct CLI invocations and overclaims flagged by code review
 - **mcp**: make the MCP server instructions and tool metadata trigger-shaped
 
 ### Documentation
 - **mcp**: document when to reach for the MCP server over the CLI
+
+### Documentation
+- **doctor**: correct artifact-protection scan scope and lead with the failure
+- document the artifact-protection lens
 
 ## [1.15.0] - 2026-08-13
 ### Added

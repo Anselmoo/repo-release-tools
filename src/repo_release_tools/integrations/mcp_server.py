@@ -156,7 +156,7 @@ for a person to look at.
 | Tool | Tags | Description |
 |---|---|---|
 | `rrt_config` | config, inspection | Resolved rrt config as JSON |
-| `rrt_doctor` | config, inspection | Pre-commit / lefthook / husky / workflow checks |
+| `rrt_doctor` | config, inspection | Pre-commit / lefthook / husky / workflow / CI artifact-protection checks |
 | `rrt_version` | versioning | Current version per configured group |
 | `rrt_validate_branch` | validation | Conventional branch naming check |
 | `rrt_validate_commit` | validation | Conventional commit subject check |

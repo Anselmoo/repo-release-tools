@@ -64,19 +64,30 @@ def register(mcp: FastMCP) -> None:
         meta={"domain": "rrt", "surface": "mcp", "audience": "agent"},
     )
     def rrt_doctor(ctx: Context) -> DoctorResponse | ConfigError:
-        """Check whether pre-commit, lefthook, husky, and GitHub Actions workflows are correctly wired.
+        """Check whether hooks, workflows, and the artifact-protection lens are wired correctly.
 
-        Use before recommending a hook or workflow change, and when a hook did not fire
-        as expected. Returns one CheckResult per component with ok + severity — no
-        output parsing.
+        Covers pre-commit, lefthook, husky, GitHub Actions workflows, and CI
+        artifact-protection. Use before recommending a hook or workflow change, and when
+        a hook did not fire as expected. Returns one CheckResult per component with
+        ok + severity — no output parsing.
         """
         from repo_release_tools.commands.doctor import (
+            _check_artifact_protection,
             _check_github_workflows,
             _check_hook_integrations,
         )
 
+        config_error = ctx.lifespan_context.get("config_error")
+        if config_error is not None:
+            return ConfigError(error=f"Invalid rrt configuration: {config_error}")
+
         root: Path = ctx.lifespan_context.get("root", Path.cwd())
-        raw = {**_check_hook_integrations(root), "workflows": _check_github_workflows(root)}
+        config = ctx.lifespan_context.get("config")
+        raw = {
+            **_check_hook_integrations(root),
+            "workflows": _check_github_workflows(root),
+            "artifact_protection": _check_artifact_protection(root, config),
+        }
         return DoctorResponse(
             **{
                 name: CheckResult(message=msg, ok=ok, severity=sev)
