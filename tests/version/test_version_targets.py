@@ -554,6 +554,75 @@ def test_replace_all_versions_atomic_kind_pattern(tmp_path: Path) -> None:
     assert f.read_text(encoding="utf-8") == 'dependencies = ["ruff==1.0.0"]\n'
 
 
+# ---------------------------------------------------------------------------
+# PEP 440 write validation (issue #229) -- applies to kind='pep621' and
+# ci_format='pep440' targets, both via replace_version_in_file (ci-version
+# apply) and replace_all_versions_atomic (bump).
+# ---------------------------------------------------------------------------
+
+
+def _pep621_target(path: Path) -> VersionTarget:
+    path.write_text('[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8")
+    return VersionTarget(path=path, kind="pep621")
+
+
+def test_replace_version_in_file_pep621_accepts_plain_release(tmp_path: Path) -> None:
+    target = _pep621_target(tmp_path / "pyproject.toml")
+    replace_version_in_file(target, "2.0.0", dry_run=False)
+    assert 'version = "2.0.0"' in target.path.read_text(encoding="utf-8")
+
+
+def test_replace_version_in_file_pep621_accepts_alpha_beta_rc(tmp_path: Path) -> None:
+    target = _pep621_target(tmp_path / "pyproject.toml")
+    replace_version_in_file(target, "2.0.0-beta.2", dry_run=False)
+    assert 'version = "2.0.0-beta.2"' in target.path.read_text(encoding="utf-8")
+
+
+def test_replace_version_in_file_pep621_rejects_local_segment(tmp_path: Path) -> None:
+    target = _pep621_target(tmp_path / "pyproject.toml")
+    with pytest.raises(RuntimeError, match="local-version segment"):
+        replace_version_in_file(target, "2.0.0+build.5", dry_run=False)
+    # File must be untouched: the guard fires before any content is computed/written.
+    assert 'version = "1.0.0"' in target.path.read_text(encoding="utf-8")
+
+
+def test_replace_version_in_file_pep621_rejects_invalid_pep440(tmp_path: Path) -> None:
+    target = _pep621_target(tmp_path / "pyproject.toml")
+    with pytest.raises(RuntimeError, match="not a valid PEP 440 version identifier"):
+        replace_version_in_file(target, "not-a-version", dry_run=False)
+
+
+def test_replace_version_in_file_ci_format_pep440_rejects_local_segment(tmp_path: Path) -> None:
+    f = tmp_path / "version.py"
+    f.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="python_version", ci_format="pep440")
+    with pytest.raises(RuntimeError, match="local-version segment"):
+        replace_version_in_file(target, "1.0.0+build.5", dry_run=False)
+
+
+def test_replace_version_in_file_non_pep440_target_ignores_local_segment(tmp_path: Path) -> None:
+    """A target that isn't kind='pep621' or ci_format='pep440' is unguarded."""
+    f = tmp_path / "version.py"
+    f.write_text('__version__ = "1.0.0"\n', encoding="utf-8")
+    target = VersionTarget(path=f, kind="python_version")
+    replace_version_in_file(target, "1.0.0+build.5", dry_run=False)
+    assert '__version__ = "1.0.0+build.5"' in f.read_text(encoding="utf-8")
+
+
+def test_replace_all_versions_atomic_pep621_rejects_local_segment(tmp_path: Path) -> None:
+    target = _pep621_target(tmp_path / "pyproject.toml")
+    with pytest.raises(RuntimeError, match="local-version segment"):
+        replace_all_versions_atomic([target], "1.0.0+build.5", dry_run=False)
+    assert 'version = "1.0.0"' in target.path.read_text(encoding="utf-8")
+
+
+def test_replace_all_versions_atomic_pep621_dry_run_rejects_local_segment(tmp_path: Path) -> None:
+    """Validation fires in dry-run mode too, so a preview surfaces the same error."""
+    target = _pep621_target(tmp_path / "pyproject.toml")
+    with pytest.raises(RuntimeError, match="local-version segment"):
+        replace_all_versions_atomic([target], "1.0.0+build.5", dry_run=True)
+
+
 def test_read_toml_field_missing_section_missing_field_and_non_string(tmp_path: Path) -> None:
     f = tmp_path / "x.toml"
     f.write_text("[project]\nname='x'\n", encoding="utf-8")

@@ -50,7 +50,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,16 +73,12 @@ from repo_release_tools.ui import (
     subtle,
     terminal_width,
 )
+from repo_release_tools.version.pep440 import pep440_dev_to_semver
 from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
     read_group_current_version,
     replace_version_in_file,
 )
-
-# Regex that matches the PEP 440 dev-release suffix so it can be converted
-# to a Cargo-compatible SemVer prerelease identifier.
-_SEMVER_DEV_RE = re.compile(r"\.dev(?P<build>\d+)$")
-
 
 # ---------------------------------------------------------------------------
 # GitHub Actions context
@@ -108,21 +103,6 @@ class GitHubContext:
             run_id=os.environ.get("GITHUB_RUN_ID", "0"),
             run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", "1"),
         )
-
-
-# ---------------------------------------------------------------------------
-# Pure version helpers
-# ---------------------------------------------------------------------------
-
-
-def to_semver(version: str) -> str:
-    """Convert a PEP 440 dev-release string to a Cargo-compatible SemVer prerelease.
-
-    ``0.2.0.dev12345601`` → ``0.2.0-dev.12345601``
-
-    Release versions (no ``.dev`` suffix) are returned unchanged.
-    """
-    return _SEMVER_DEV_RE.sub(r"-dev.\g<build>", version)
 
 
 def compute_published_version(base_version: str, context: GitHubContext) -> str:
@@ -363,9 +343,9 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
     total = len(ci_targets)
     for i, target in enumerate(ci_targets, 1):
         if target.ci_format == "semver_pre":
-            version_str = to_semver(version)
-            # If the version contains a PEP 440 dev marker but to_semver() made
-            # no change, the suffix pattern was not a plain `.devN`. Fail fast
+            version_str = pep440_dev_to_semver(version)
+            # If the version contains a PEP 440 dev marker but pep440_dev_to_semver()
+            # made no change, the suffix pattern was not a plain `.devN`. Fail fast
             # rather than writing an invalid Cargo SemVer string.
             if version_str == version and ".dev" in version:
                 progress.clear()
