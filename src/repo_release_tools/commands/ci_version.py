@@ -300,7 +300,7 @@ def cmd_ci_version_apply(args: argparse.Namespace) -> int:
 
     Python targets (``ci_format = "pep440"``) receive the version as-is.
     Cargo / TOML targets (``ci_format = "semver_pre"``) receive the version
-    after conversion via :func:`to_semver`.
+    after conversion via :func:`~repo_release_tools.version.pep440.pep440_dev_to_semver`.
     """
     opts = ApplyOptions.from_args(args)
     root = find_repo_root(Path.cwd())

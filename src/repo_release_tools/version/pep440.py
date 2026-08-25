@@ -3,10 +3,13 @@
 Kept separate from :mod:`repo_release_tools.version.semver` deliberately: SemVer
 2.0 and PEP 440 are different grammars with different precedence rules (see
 PEP 440), and rrt's canonical ``Version`` type stays plain SemVer. This module
-holds the PEP 440-specific concerns -- validating that a string is a
-publishable PEP 440 identifier, and converting a PEP 440 dev-release into the
-SemVer shape a ``ci_format = "semver_pre"`` target expects -- so nothing else
-in the codebase has to know PEP 440 grammar.
+holds the PEP 440-specific concerns -- checking that a string is syntactically
+valid PEP 440 (:func:`is_valid`; this does *not* imply it's publishable -- a
+local-version segment is syntactically valid PEP 440 but rejected by PyPI on
+upload, which is what :func:`has_local_segment` exists to flag separately),
+and converting a PEP 440 dev-release into the SemVer shape a
+``ci_format = "semver_pre"`` target expects -- so nothing else in the
+codebase has to know PEP 440 grammar.
 """
 
 from __future__ import annotations
@@ -84,6 +87,16 @@ def pep440_dev_to_semver(version: str) -> str:
 
     ``0.2.0.dev12345601`` -> ``0.2.0-dev.12345601``
 
-    Release versions (no ``.dev`` suffix) are returned unchanged.
+    Release versions (no ``.dev`` suffix) are returned unchanged. When *version*
+    already carries a SemVer prerelease segment before the dev suffix (e.g.
+    ``1.2.3-beta.1.dev42``), ``dev.N`` is appended to that same segment
+    (``1.2.3-beta.1.dev.42``) rather than introducing a second ``-``, which
+    rrt's SemVer grammar (one ``-`` introduces the whole prerelease identifier
+    list) would reject.
     """
-    return _DEV_SUFFIX_RE.sub(r"-dev.\g<build>", version)
+    match = _DEV_SUFFIX_RE.search(version)
+    if match is None:
+        return version
+    prefix = version[: match.start()]
+    separator = "." if "-" in prefix else "-"
+    return f"{prefix}{separator}dev.{match.group('build')}"

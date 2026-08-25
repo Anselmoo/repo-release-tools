@@ -175,7 +175,10 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
         else:
             new = str(current_calver.bump())
     elif opts.bump in _BUMP_KINDS:
-        new = current.bump(opts.bump)  # type: ignore[assignment]
+        try:
+            new = current.bump(opts.bump)  # type: ignore[assignment]
+        except ValueError as exc:
+            raise BumpResolutionError(str(exc)) from exc
     else:
         try:
             new = Version.parse(opts.bump)

@@ -7,6 +7,7 @@
 - **tools**: scan CI config for cross-pipeline artifact fetches
 
 ### Fixed
+- **version**: address Copilot review findings on PR #233
 - **version**: reconcile SemVer bump semantics with PEP 440 publishability
 - **tools**: anchor GitHub artifact-fetch scan to the step's list-item boundary
 - **doctor**: close artifact-protection false negatives found in final review

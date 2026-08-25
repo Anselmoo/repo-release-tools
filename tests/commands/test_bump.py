@@ -159,6 +159,60 @@ def test_resolve_bump_target_invalid_bump_value_raises(tmp_path: Path) -> None:
         resolve_bump_target(config, opts)
 
 
+def test_resolve_bump_target_release_kind_on_stable_raises_resolution_error(
+    tmp_path: Path,
+) -> None:
+    """'release' on an already-stable version must surface as BumpResolutionError,
+
+    not an uncaught ValueError from Version.bump() -- cmd_bump only catches the
+    former, so an uncaught ValueError would otherwise crash the CLI (see #233 review).
+    """
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    opts = _options(bump="release")
+
+    with pytest.raises(BumpResolutionError, match="Cannot finalize a version"):
+        resolve_bump_target(config, opts)
+
+
+def test_resolve_bump_target_pre_release_kind_on_stable_raises_resolution_error(
+    tmp_path: Path,
+) -> None:
+    """Same guard applies to the pre-existing 'pre-release' kind on a stable version."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    opts = _options(bump="pre-release")
+
+    with pytest.raises(BumpResolutionError, match="Cannot bump pre-release"):
+        resolve_bump_target(config, opts)
+
+
+def test_cmd_bump_release_on_stable_exits_cleanly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """End-to-end: `rrt bump release` on a stable project exits 1 with a message,
+
+    not an uncaught traceback.
+    """
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.rrt]\nrelease_branch = "release/v{version}"\nlock_command = []\n\n'
+        '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n\n'
+        '[project]\nname = "x"\nversion = "1.2.3"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    args = argparse.Namespace(**vars(_options(bump="release", dry_run=True)))
+
+    result = cmd_bump(args)
+
+    assert result == 1
+    assert "Cannot finalize a version" in capsys.readouterr().err
+
+
 def test_apply_bump_files_writes_new_version(tmp_path: Path) -> None:
     """apply_bump_files writes the new version into the group's version target."""
     group, config = _default_group_config(tmp_path)

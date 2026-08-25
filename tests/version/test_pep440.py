@@ -7,6 +7,7 @@ from repo_release_tools.version.pep440 import (
     is_valid,
     pep440_dev_to_semver,
 )
+from repo_release_tools.version.semver import Version
 
 # ---------------------------------------------------------------------------
 # is_valid
@@ -85,3 +86,20 @@ def test_pep440_dev_to_semver_release_unchanged() -> None:
 
 def test_pep440_dev_to_semver_large_run_id() -> None:
     assert pep440_dev_to_semver("0.2.0.dev9999999901") == "0.2.0-dev.9999999901"
+
+
+def test_pep440_dev_to_semver_prerelease_base_appends_to_same_segment() -> None:
+    """A dev suffix on a version that already has a prerelease must not introduce
+    a second '-' -- rrt's SemVer grammar treats a single '-' as introducing the
+    whole prerelease identifier list (see PR #233 review).
+    """
+    assert pep440_dev_to_semver("1.2.3-beta.1.dev42") == "1.2.3-beta.1.dev.42"
+
+
+def test_pep440_dev_to_semver_prerelease_base_result_is_valid_semver() -> None:
+    # Would previously raise ValueError: "Invalid semver" on the double-hyphen output.
+    Version.parse(pep440_dev_to_semver("1.2.3-beta.1.dev42"))
+
+
+def test_pep440_dev_to_semver_no_dev_suffix_returns_unchanged() -> None:
+    assert pep440_dev_to_semver("1.2.3-beta.1") == "1.2.3-beta.1"

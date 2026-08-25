@@ -24,7 +24,7 @@ from repo_release_tools.config import MissingRrtConfigError, RrtConfig, VersionG
 # NOTE: `pep440_dev_to_semver` (formerly this module's own `to_semver`) now
 # lives in and is tested by tests/version/test_pep440.py -- it moved to
 # repo_release_tools.version.pep440 so every PEP 440 <-> SemVer conversion
-# rrt does lives in one place (see issue #229).
+# rrt does live in one place (see issue #229).
 
 
 # ---------------------------------------------------------------------------
