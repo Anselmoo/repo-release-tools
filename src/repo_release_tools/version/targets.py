@@ -10,6 +10,7 @@ from pathlib import Path
 
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
+from repo_release_tools.version import pep440
 from repo_release_tools.version.semver import Version
 
 PEP621_PATTERN = re.compile(r'(?ms)(^\[project\]\s.*?^version\s*=\s*")([^"]+)(")')
@@ -91,6 +92,31 @@ class VersionWriteEvent:
     dry_run: bool
 
 
+def _validate_pep440_target(target: VersionTarget, new_version: str) -> None:
+    """Reject writes that would put a non-publishable version into a PyPI-facing field.
+
+    Applies to ``kind='pep621'`` targets (the ``[project].version`` field PyPI
+    reads) and any target with ``ci_format='pep440'``. SemVer build metadata
+    (``+build.N``) and PEP 440's local-version segment (``+local``) look
+    similar but are not interchangeable: PyPI and most public indexes reject
+    a local-version upload outright, so a version reaching one of these
+    targets must be valid, local-segment-free PEP 440 before it reaches disk.
+    """
+    if target.kind != "pep621" and target.ci_format != "pep440":
+        return
+    if not pep440.is_valid(new_version):
+        raise RuntimeError(
+            f"{target.path}: {new_version!r} is not a valid PEP 440 version identifier "
+            "(required for kind='pep621' / ci_format='pep440' targets)."
+        )
+    if pep440.has_local_segment(new_version):
+        raise RuntimeError(
+            f"{target.path}: {new_version!r} carries a PEP 440 local-version segment "
+            "('+...'), which PyPI and other public indexes reject on upload. Remove "
+            "the build-metadata suffix before writing to a pep621/pep440 target."
+        )
+
+
 def _compute_updated_content(target: VersionTarget, text: str, new_version: str) -> str:
     """Compute the updated file content for a version target without writing to disk."""
     if target.kind == "package_json":
@@ -123,6 +149,7 @@ def replace_version_in_file(
     rendering — callers are responsible for printing.
     """
     path = target.path
+    _validate_pep440_target(target, new_version)
     text = path.read_text(encoding="utf-8")
     current_version = read_version_string(target)
 
@@ -153,6 +180,9 @@ def replace_all_versions_atomic(
     in dry-run mode, every write that would happen), in target order. This
     function performs no rendering — callers are responsible for printing.
     """
+    for target in targets:
+        _validate_pep440_target(target, new_version)
+
     if dry_run:
         return [
             VersionWriteEvent(path=target.path, new_version=new_version, dry_run=True)

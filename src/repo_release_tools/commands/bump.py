@@ -118,7 +118,7 @@ from repo_release_tools.workflow import git
 
 PREVIEW_LINES = 8
 
-_BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
+_BUMP_KINDS = {"major", "minor", "patch", "release", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
 
 # Pre-commit's fixed status line for a hook that auto-regenerated files and
 # thereby failed its own pass even though the fix is now correct on disk.
@@ -175,7 +175,10 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
         else:
             new = str(current_calver.bump())
     elif opts.bump in _BUMP_KINDS:
-        new = current.bump(opts.bump)  # type: ignore[assignment]
+        try:
+            new = current.bump(opts.bump)  # type: ignore[assignment]
+        except ValueError as exc:
+            raise BumpResolutionError(str(exc)) from exc
     else:
         try:
             new = Version.parse(opts.bump)
@@ -870,6 +873,7 @@ _BUMP_EXAMPLES = (
     "  $ rrt bump minor --dry-run\n"
     "  $ rrt bump 2.1.0 --no-changelog --no-commit\n"
     "  $ rrt bump major --base-branch develop\n"
+    "  $ rrt bump release --dry-run\n"
     "  $ rrt bump patch --group self-assess,cupertino,confab"
 )
 
@@ -887,8 +891,8 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "bump",
         metavar="<bump>",
         help=(
-            "major | minor | patch | alpha | beta | rc | pre-release | calver | <version>  "
-            "\u2014 bump kind or explicit version"
+            "major | minor | patch | release | alpha | beta | rc | pre-release | calver | "
+            "<version>  \u2014 bump kind or explicit version"
         ),
     )
     parser.add_argument(

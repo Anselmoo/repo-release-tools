@@ -98,6 +98,60 @@ def test_stable_drops_pre_and_build() -> None:
     assert str(v.stable()) == "2.0.0"
 
 
+# ---------------------------------------------------------------------------
+# major/minor/patch finalize-in-place vs. skip-ahead (issue #229)
+# ---------------------------------------------------------------------------
+
+
+def test_bump_major_on_prerelease_at_boundary_finalizes() -> None:
+    """2.0.0-beta.2 is already targeting 2.0.0 -- bumping major must not overshoot."""
+    assert str(Version.parse("2.0.0-beta.2").bump("major")) == "2.0.0"
+
+
+def test_bump_major_on_prerelease_with_nonzero_minor_skips_ahead() -> None:
+    """2.1.0-beta.2 isn't at a major boundary -- bumping major still skips ahead."""
+    assert str(Version.parse("2.1.0-beta.2").bump("major")) == "3.0.0"
+
+
+def test_bump_major_on_prerelease_with_nonzero_patch_skips_ahead() -> None:
+    assert str(Version.parse("2.0.1-beta.2").bump("major")) == "3.0.0"
+
+
+def test_bump_minor_on_prerelease_at_boundary_finalizes() -> None:
+    """2.1.0-beta.2 is already targeting 2.1.0 -- bumping minor must not overshoot."""
+    assert str(Version.parse("2.1.0-beta.2").bump("minor")) == "2.1.0"
+
+
+def test_bump_minor_on_prerelease_with_nonzero_patch_skips_ahead() -> None:
+    assert str(Version.parse("2.1.1-beta.2").bump("minor")) == "2.2.0"
+
+
+def test_bump_patch_on_prerelease_finalizes() -> None:
+    """Patch has nothing below it to check -- any pre-release always finalizes in place."""
+    assert str(Version.parse("2.1.3-beta.2").bump("patch")) == "2.1.3"
+
+
+# ---------------------------------------------------------------------------
+# release bump kind
+# ---------------------------------------------------------------------------
+
+
+def test_bump_release_finalizes_pre_release() -> None:
+    v = Version.parse("2.1.3-beta.2")
+    assert str(v.bump("release")) == "2.1.3"
+
+
+def test_bump_release_drops_build_metadata_too() -> None:
+    v = Version.parse("2.1.3-rc.1+build.7")
+    assert str(v.bump("release")) == "2.1.3"
+
+
+def test_bump_release_on_stable_raises() -> None:
+    v = Version.parse("1.2.3")
+    with pytest.raises(ValueError, match="Cannot finalize a version"):
+        v.bump("release")
+
+
 def test_is_pre_release_true() -> None:
     assert Version.parse("1.0.0-alpha.1").is_pre_release() is True
 

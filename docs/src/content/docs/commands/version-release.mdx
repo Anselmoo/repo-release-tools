@@ -192,7 +192,7 @@ Bump project version using [tool.rrt] config.
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  <bump>                  major | minor | patch | alpha | beta | rc | pre-release | calver | <version>  — bump kind or explicit version
+  <bump>                  major | minor | patch | release | alpha | beta | rc | pre-release | calver | <version>  — bump kind or explicit version
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -230,6 +230,7 @@ Examples
   $ rrt bump minor --dry-run
   $ rrt bump 2.1.0 --no-changelog --no-commit
   $ rrt bump major --base-branch develop
+  $ rrt bump release --dry-run
   $ rrt bump patch --group self-assess,cupertino,confab
 ```
 

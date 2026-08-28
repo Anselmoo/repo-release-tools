@@ -18,25 +18,13 @@ from repo_release_tools.commands.ci_version import (
     cmd_ci_version_sync,
     compute_published_version,
     register,
-    to_semver,
 )
 from repo_release_tools.config import MissingRrtConfigError, RrtConfig, VersionGroup, VersionTarget
 
-# ---------------------------------------------------------------------------
-# Unit – to_semver
-# ---------------------------------------------------------------------------
-
-
-def test_to_semver_dev_release() -> None:
-    assert to_semver("0.2.0.dev12345601") == "0.2.0-dev.12345601"
-
-
-def test_to_semver_release_unchanged() -> None:
-    assert to_semver("1.2.3") == "1.2.3"
-
-
-def test_to_semver_large_run_id() -> None:
-    assert to_semver("0.2.0.dev9999999901") == "0.2.0-dev.9999999901"
+# NOTE: `pep440_dev_to_semver` (formerly this module's own `to_semver`) now
+# lives in and is tested by tests/version/test_pep440.py -- it moved to
+# repo_release_tools.version.pep440 so every PEP 440 <-> SemVer conversion
+# rrt does live in one place (see issue #229).
 
 
 # ---------------------------------------------------------------------------
@@ -716,12 +704,31 @@ def test_cmd_apply_nonstandard_dev_suffix_rejected(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Versions like '0.2.0.dev1.post2' must be rejected for semver_pre targets."""
+    """A dev suffix with no build number ('0.2.0.dev') is valid PEP 440 (so the
+    pep440 target accepts it), but has no digits for the semver_pre target to
+    convert -- it must be rejected there instead.
+    """
+    monkeypatch.chdir(mixed_project)
+    result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0.dev", dry_run=False))
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Cannot convert" in captured.err
+
+
+def test_cmd_apply_invalid_pep440_order_rejected_before_semver_conversion(
+    mixed_project: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """'0.2.0.dev1.post2' has its .dev and .post segments in the wrong PEP 440
+    order (post must precede dev) -- the pep440 target's write validation
+    catches it before the semver_pre target's conversion is ever attempted.
+    """
     monkeypatch.chdir(mixed_project)
     result = cmd_ci_version_apply(argparse.Namespace(version="0.2.0.dev1.post2", dry_run=False))
     captured = capsys.readouterr()
     assert result == 1
-    assert "Cannot convert" in captured.err
+    assert "not a valid PEP 440 version identifier" in captured.err
 
 
 def test_cmd_apply_package_json_updates_top_level_version_only(

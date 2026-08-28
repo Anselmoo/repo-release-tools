@@ -48,18 +48,32 @@ class Version:
         """Return a new :class:`Version` bumped by *kind*.
 
         Accepted kinds:
-        - ``major``, ``minor``, ``patch`` — standard semver increments (clears pre/build)
+        - ``major``, ``minor``, ``patch`` — standard semver increments (clears pre/build).
+          When the version is already a pre-release whose trailing components are at
+          the target boundary (e.g. ``2.0.0-beta.2`` bumping ``major``), this finalizes
+          the pre-release in place instead of skipping past it -- the same rule
+          node-semver's ``inc()`` uses.
+        - ``release`` — finalize the current pre-release to its stable target version,
+          unconditionally (requires the version to already carry a pre-release identifier)
         - ``pre-release`` — increment the numeric suffix of the current pre-release label
           (requires the version to already carry a pre-release identifier)
         - ``alpha``, ``beta``, ``rc`` — start or advance a named pre-release channel
         """
         match kind:
             case "major":
-                return Version(self.major + 1, 0, 0)
+                if self.minor != 0 or self.patch != 0 or self.pre is None:
+                    return Version(self.major + 1, 0, 0)
+                return Version(self.major, 0, 0)
             case "minor":
-                return Version(self.major, self.minor + 1, 0)
+                if self.patch != 0 or self.pre is None:
+                    return Version(self.major, self.minor + 1, 0)
+                return Version(self.major, self.minor, 0)
             case "patch":
-                return Version(self.major, self.minor, self.patch + 1)
+                if self.pre is None:
+                    return Version(self.major, self.minor, self.patch + 1)
+                return Version(self.major, self.minor, self.patch)
+            case "release":
+                return self._finalize_release()
             case "pre-release":
                 return self._bump_pre_release()
             case _ if kind in PRE_RELEASE_CHANNELS:
@@ -96,6 +110,15 @@ class Version:
     def stable(self) -> Version:
         """Return the stable release for this version (drop pre and build metadata)."""
         return Version(self.major, self.minor, self.patch)
+
+    def _finalize_release(self) -> Version:
+        """Finalize the current pre-release to its stable target version."""
+        if self.pre is None:
+            raise ValueError(
+                "Cannot finalize a version that has no pre-release. "
+                "Use 'major', 'minor', or 'patch' to start a new release cycle."
+            )
+        return self.stable()
 
     def is_pre_release(self) -> bool:
         """Return True when this version carries a pre-release label."""
