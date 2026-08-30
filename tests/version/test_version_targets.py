@@ -16,11 +16,13 @@ from repo_release_tools.version.targets import (
     read_current_version,
     read_group_current_version,
     read_group_version_strings,
+    read_mcp_server_json_version,
     read_package_json_version,
     read_toml_field,
     read_version_string,
     replace_all_versions_atomic,
     replace_kind_pattern_version,
+    replace_mcp_server_json_version,
     replace_package_json_version,
     replace_pattern_version,
     replace_version_in_file,
@@ -667,6 +669,106 @@ def test_replace_package_json_version_error_paths_and_newline_behavior() -> None
     assert updated.endswith("\n")
 
 
+def test_read_mcp_server_json_version_error_paths(tmp_path: Path) -> None:
+    f = tmp_path / "server.json"
+    f.write_text("[]", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="top-level object"):
+        read_mcp_server_json_version(f)
+
+    f.write_text('{"name":"x"}', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Could not find top-level version"):
+        read_mcp_server_json_version(f)
+
+    f.write_text('{"version":1}', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="is not a string"):
+        read_mcp_server_json_version(f)
+
+    f.write_text('{"version":"1.0.0"}', encoding="utf-8")
+    assert read_mcp_server_json_version(f) == "1.0.0"
+
+
+def test_replace_mcp_server_json_version_error_paths() -> None:
+    with pytest.raises(RuntimeError, match="top-level object"):
+        replace_mcp_server_json_version("[]", "1.2.3")
+
+    with pytest.raises(RuntimeError, match="Could not find top-level version"):
+        replace_mcp_server_json_version('{"name":"x"}', "1.2.3")
+
+    with pytest.raises(RuntimeError, match="must be a string"):
+        replace_mcp_server_json_version('{"version":1}', "1.2.3")
+
+
+def test_replace_mcp_server_json_version_updates_all_package_shapes() -> None:
+    """Top-level version, pypi package version, and an oci image tag all move together."""
+    text = (
+        "{\n"
+        '  "version": "1.0.0",\n'
+        '  "packages": [\n'
+        '    {"registryType": "pypi", "identifier": "acme-tool", "version": "1.0.0"},\n'
+        '    {"registryType": "oci", "identifier": "ghcr.io/acme/tool:1.0.0"}\n'
+        "  ]\n"
+        "}\n"
+    )
+    updated = replace_mcp_server_json_version(text, "1.2.3")
+    import json as _json
+
+    data = _json.loads(updated)
+    assert data["version"] == "1.2.3"
+    assert data["packages"][0]["version"] == "1.2.3"
+    assert data["packages"][0]["identifier"] == "acme-tool"
+    assert "version" not in data["packages"][1]
+    assert data["packages"][1]["identifier"] == "ghcr.io/acme/tool:1.2.3"
+    assert updated.endswith("\n")
+
+
+def test_replace_mcp_server_json_version_skips_non_object_package_entries() -> None:
+    """A malformed (non-object) packages[] entry is skipped rather than crashing."""
+    text = '{"version": "1.0.0", "packages": ["not-an-object", {"registryType": "pypi", "identifier": "acme-tool", "version": "1.0.0"}]}'
+    updated = replace_mcp_server_json_version(text, "1.2.3")
+    import json as _json
+
+    data = _json.loads(updated)
+    assert data["packages"][0] == "not-an-object"
+    assert data["packages"][1]["version"] == "1.2.3"
+
+
+def test_replace_mcp_server_json_version_ignores_oci_identifier_not_ending_in_old_version() -> None:
+    """An oci identifier whose tag doesn't match the old version is left untouched."""
+    text = '{"version": "1.0.0", "packages": [{"registryType": "oci", "identifier": "ghcr.io/acme/tool:latest"}]}'
+    updated = replace_mcp_server_json_version(text, "1.2.3")
+    import json as _json
+
+    data = _json.loads(updated)
+    assert data["packages"][0]["identifier"] == "ghcr.io/acme/tool:latest"
+
+
+def test_mcp_server_json_target_round_trips_through_read_and_replace_version_in_file(
+    tmp_path: Path,
+) -> None:
+    f = tmp_path / "server.json"
+    f.write_text(
+        "{\n"
+        '  "version": "0.1.0",\n'
+        '  "packages": [\n'
+        '    {"registryType": "pypi", "identifier": "acme-tool", "version": "0.1.0"},\n'
+        '    {"registryType": "oci", "identifier": "ghcr.io/acme/tool:0.1.0"}\n'
+        "  ]\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    target = VersionTarget(path=f, kind="mcp_server_json")
+    assert read_version_string(target) == "0.1.0"
+
+    replace_version_in_file(target, "0.2.0", dry_run=False)
+
+    import json as _json
+
+    data = _json.loads(f.read_text(encoding="utf-8"))
+    assert data["version"] == "0.2.0"
+    assert data["packages"][0]["version"] == "0.2.0"
+    assert data["packages"][1]["identifier"] == "ghcr.io/acme/tool:0.2.0"
+
+
 def test_replace_pattern_version_no_match_raises() -> None:
     with pytest.raises(RuntimeError, match="Configured pattern did not match"):
         replace_pattern_version("x", r"^(v)(\d+\.\d+\.\d+)()$", "1.2.3")
@@ -843,14 +945,20 @@ def test_validate_csproj_kind() -> None:
     target.validate()
 
 
+def test_validate_mcp_server_json_kind() -> None:
+    target = VersionTarget(path=Path("server.json"), kind="mcp_server_json")
+    target.validate()
+
+
 def test_regex_kinds_cover_all_regex_shaped_target_kinds() -> None:
     """Guard against #210: the two match blocks silently drifting apart.
 
     ``_REGEX_KINDS`` is the single source of truth for every regex-shaped
-    kind; it must cover exactly every valid kind except ``package_json``
-    (JSON-shaped) and ``pattern`` (user-supplied, not in VALID_TARGET_KINDS).
+    kind; it must cover exactly every valid kind except ``package_json`` and
+    ``mcp_server_json`` (JSON-shaped) and ``pattern`` (user-supplied, not in
+    VALID_TARGET_KINDS).
     """
-    assert set(_REGEX_KINDS) == VALID_TARGET_KINDS - {"package_json"}
+    assert set(_REGEX_KINDS) == VALID_TARGET_KINDS - {"package_json", "mcp_server_json"}
 
 
 # ---------------------------------------------------------------------------

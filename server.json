@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.anselmoo/repo-release-tools",
+  "description": "Config-driven branch and release helpers for Git repositories",
+  "version": "1.16.0",
+  "repository": {
+    "url": "https://github.com/Anselmoo/repo-release-tools",
+    "source": "github",
+    "id": "1196330847"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "repo-release-tools",
+      "version": "1.16.0",
+      "runtimeHint": "uvx",
+      "transport": { "type": "stdio" },
+      "runtimeArguments": [
+        { "type": "named", "name": "--from", "value": "repo-release-tools[mcp]" },
+        { "type": "positional", "value": "rrt-mcp" }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/anselmoo/repo-release-tools:1.16.0",
+      "runtimeHint": "docker",
+      "transport": { "type": "stdio" },
+      "runtimeArguments": [
+        { "type": "named", "name": "--entrypoint", "value": "rrt-mcp" }
+      ]
+    }
+  ]
+}

@@ -415,6 +415,8 @@ def _describe_version_target(target: VersionTarget, *, root: Path) -> str:
             return f"{relative} ([project].version)"
         case "package_json":
             return f"{relative} (version)"
+        case "mcp_server_json":
+            return f"{relative} (version)"
         case "python_version":
             return f"{relative} (__version__)"
         case "go_version":

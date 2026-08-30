@@ -94,6 +94,7 @@
             "enum": [
               "pep621",
               "package_json",
+              "mcp_server_json",
               "python_version",
               "go_version",
               "cargo_toml",

@@ -54,6 +54,7 @@ VALID_TARGET_KINDS = frozenset(
     {
         "pep621",
         "package_json",
+        "mcp_server_json",
         "python_version",
         "go_version",
         "cargo_toml",

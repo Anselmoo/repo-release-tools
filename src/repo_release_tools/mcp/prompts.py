@@ -327,7 +327,7 @@ def register_prompts(mcp: FastMCP) -> None:
             "**Key config options:**\n"
             "- `release_branch` — branch name template; `{version}` is replaced on bump\n"
             "- `changelog_file` — path to your CHANGELOG.md\n"
-            "- `version_targets` — files to update on `rrt bump`; kinds: `pep621`, `package_json`, `go_version`, `python_version`, or custom `pattern`\n"
+            "- `version_targets` — files to update on `rrt bump`; kinds: `pep621`, `package_json`, `mcp_server_json`, `go_version`, `python_version`, or custom `pattern`\n"
             "- `pin_targets` — extra files kept in sync (e.g. CI action version pins)\n"
             "- `extra_branch_types` — add custom branch prefixes beyond the built-in set\n"
             "- `lock_command` — run after bump (e.g. `['uv', 'lock', '-U']`)\n\n"

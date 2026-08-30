@@ -121,6 +121,8 @@ def _compute_updated_content(target: VersionTarget, text: str, new_version: str)
     """Compute the updated file content for a version target without writing to disk."""
     if target.kind == "package_json":
         return replace_package_json_version(text, new_version)
+    if target.kind == "mcp_server_json":
+        return replace_mcp_server_json_version(text, new_version)
     if target.kind == "pattern":
         assert target.pattern is not None
         return replace_kind_pattern_version(text, target.pattern, new_version)
@@ -270,6 +272,8 @@ def read_version_string(target: VersionTarget) -> str:
 
     if target.kind == "package_json":
         return read_package_json_version(target.path)
+    if target.kind == "mcp_server_json":
+        return read_mcp_server_json_version(target.path)
     if target.kind == "pattern":
         assert target.pattern is not None
         m = search_pattern(text, target.pattern)
@@ -341,6 +345,59 @@ def replace_package_json_version(text: str, new_version: str) -> str:
         raise RuntimeError("Top-level version in package.json must be a string")
 
     current["version"] = new_version
+    indent = _detect_json_indent(text)
+    updated = json.dumps(current, indent=indent, ensure_ascii=False)
+    if indent is not None or text.endswith("\n"):
+        updated += "\n"
+    return updated
+
+
+def read_mcp_server_json_version(path: Path) -> str:
+    """Read the top-level version string from an MCP registry server.json."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{path} must contain a top-level object")
+    if "version" not in data:
+        raise RuntimeError(f"Could not find top-level version in {path}")
+    version = data["version"]
+    if not isinstance(version, str):
+        raise RuntimeError(f"Top-level version in {path} is not a string")
+    return version
+
+
+def replace_mcp_server_json_version(text: str, new_version: str) -> str:
+    """Replace the version everywhere it appears in an MCP registry server.json.
+
+    Updates the top-level ``version`` field, the ``version`` field of every
+    entry in ``packages[]`` that has one (e.g. ``pypi``/``npm`` entries), and
+    the trailing ``:<version>`` tag of any ``oci`` package's ``identifier``
+    (e.g. ``ghcr.io/org/image:1.2.3``) — the three places a server.json
+    documents its own release version, per the MCP Registry server.json
+    schema (https://modelcontextprotocol.io/registry).
+    """
+    current = json.loads(text)
+    if not isinstance(current, dict):
+        raise RuntimeError("server.json must contain a top-level object")
+    if "version" not in current:
+        raise RuntimeError("Could not find top-level version in server.json")
+    old_version = current["version"]
+    if not isinstance(old_version, str):
+        raise RuntimeError("Top-level version in server.json must be a string")
+
+    current["version"] = new_version
+    for pkg in current.get("packages") or []:
+        if not isinstance(pkg, dict):
+            continue
+        if isinstance(pkg.get("version"), str):
+            pkg["version"] = new_version
+        identifier = pkg.get("identifier")
+        if (
+            pkg.get("registryType") == "oci"
+            and isinstance(identifier, str)
+            and identifier.endswith(f":{old_version}")
+        ):
+            pkg["identifier"] = identifier[: -len(old_version)] + new_version
+
     indent = _detect_json_indent(text)
     updated = json.dumps(current, indent=indent, ensure_ascii=False)
     if indent is not None or text.endswith("\n"):

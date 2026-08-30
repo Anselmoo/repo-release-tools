@@ -1,5 +1,7 @@
 # repo-release-tools
 
+<!-- mcp-name: io.github.anselmoo/repo-release-tools -->
+
 <!-- rrt:auto:start:readme-header -->
 <p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/Anselmoo/repo-release-tools/blob/main/docs/assets/readme-badges/github-reto-dark.svg?raw=true">
@@ -116,7 +118,9 @@ lock commands, generated files, and custom patterns.
 Version targets also support common language/project files such as Python
 (`pep621`, `python_version`), Node/JS/TS (`package_json`), Go (`go_version`),
 Rust (`cargo_toml`), and .NET (`csproj`) so multi-language repositories can
-keep their release versions aligned.
+keep their release versions aligned. A `mcp_server_json` target keeps an MCP
+Registry `server.json` (top-level `version`, each package's `version`, and
+any `oci` package's image tag) in sync alongside a project's primary target.
 
 ## Changelog workflows
 

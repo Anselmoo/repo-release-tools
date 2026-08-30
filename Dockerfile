@@ -1,5 +1,7 @@
 FROM python:3.14-slim
 
+LABEL io.modelcontextprotocol.server.name="io.github.anselmoo/repo-release-tools"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
@@ -12,7 +14,7 @@ COPY .github/hooks ./.github/hooks
 COPY src ./src
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir .
+    && python -m pip install --no-cache-dir ".[mcp]"
 
 ENTRYPOINT ["rrt"]
 CMD ["--help"]
