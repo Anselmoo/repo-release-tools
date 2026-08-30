@@ -214,6 +214,10 @@ kind = "python_version"
 path = "docs/package.json"
 kind = "package_json"
 
+[[tool.rrt.version_targets]]
+path = "server.json"
+kind = "mcp_server_json"
+
 [[tool.rrt.pin_targets]]
 path = "README.md"
 pattern = '(Anselmoo/repo-release-tools(?:/[\w.-]+)*@v)(\d+\.\d+\.\d+)()'

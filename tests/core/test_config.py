@@ -3140,6 +3140,12 @@ def test_describe_version_target_package_json(tmp_path: Path) -> None:
     assert result == "package.json (version)"
 
 
+def test_describe_version_target_mcp_server_json(tmp_path: Path) -> None:
+    target = VersionTarget(path=tmp_path / "server.json", kind="mcp_server_json")
+    result = _describe_version_target(target, root=tmp_path)
+    assert result == "server.json (version)"
+
+
 def test_describe_version_target_python_version(tmp_path: Path) -> None:
     target = VersionTarget(path=tmp_path / "__init__.py", kind="python_version")
     result = _describe_version_target(target, root=tmp_path)

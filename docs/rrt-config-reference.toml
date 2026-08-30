@@ -196,7 +196,7 @@ field = "..."
 # Well-known target type. Use 'pattern' with a 1-capture-group regex to read
 # the version from a dependency pin or arbitrary string. All other kinds are
 # mutually exclusive with 'pattern' and 'section'+'field'.
-# one of: cargo_toml, csproj, gemspec, go_version, maven_pom, package_json, pattern, pep621, python_version
+# one of: cargo_toml, csproj, gemspec, go_version, maven_pom, mcp_server_json, package_json, pattern, pep621, python_version
 kind = "cargo_toml"
 
 # Path to the file containing the version string, relative to the project
