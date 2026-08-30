@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [1.17.0] - 2026-08-30
+
+_No notable changes recorded._
+
 ## [1.16.0] - 2026-08-23
 ### Added
 - **mcp**: mirror the artifact-protection lens
