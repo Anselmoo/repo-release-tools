@@ -1,6 +1,6 @@
 FROM python:3.14-slim
 
-LABEL io.modelcontextprotocol.server.name="io.github.anselmoo/repo-release-tools"
+LABEL io.modelcontextprotocol.server.name="io.github.Anselmoo/repo-release-tools"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

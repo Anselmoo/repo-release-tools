@@ -1,6 +1,6 @@
 # repo-release-tools
 
-<!-- mcp-name: io.github.anselmoo/repo-release-tools -->
+<!-- mcp-name: io.github.Anselmoo/repo-release-tools -->
 
 <!-- rrt:auto:start:readme-header -->
 <p><a href="https://github.com/Anselmoo/repo-release-tools"><picture>
@@ -64,7 +64,7 @@ drifts from your release policy.
   with:
     fetch-depth: 0
 
-- uses: Anselmoo/repo-release-tools@v1.17.0
+- uses: Anselmoo/repo-release-tools@v1.17.1
   with:
     check-branch-name: "true"
     check-commit-subject: "true"
