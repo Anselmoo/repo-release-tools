@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import inspect
 import os
-import re
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -49,7 +48,11 @@ from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.commands._registry import ensure_registered, registry
 from repo_release_tools.config import is_missing_tool_rrt_error
-from repo_release_tools.docs.formats.markdown import heading_level, normalize_markdown_headings
+from repo_release_tools.docs.formats.markdown import (
+    heading_level,
+    normalize_markdown_headings,
+    parse_markdown_lines,
+)
 from repo_release_tools.integrations import action as action_module
 from repo_release_tools.integrations import mcp_server as mcp_server_module
 from repo_release_tools.tools.inject import (
@@ -702,9 +705,20 @@ DESCRIPTION_OVERRIDES: dict[str, str] = {
 
 
 def _extract_first_h1(text: str) -> str | None:
-    """Return the first top-level heading text from *text*, or ``None``."""
-    m = re.search(r"(?m)^\s*#\s+(.+)$", text)
-    return m[1].strip() if m else None
+    """Return the first top-level heading text from *text*, or ``None``.
+
+    Fence-aware: a ``#`` comment inside a fenced code block is not a heading,
+    and treating one as the page title produced titles like "Or via pre-commit
+    (manual stage):" for docs whose examples start with a shell comment.
+    """
+    return next(
+        (
+            line.text
+            for line in parse_markdown_lines(text)
+            if line.kind == "heading" and line.level == 1
+        ),
+        None,
+    )
 
 
 def _wrap_with_frontmatter(
@@ -814,12 +828,19 @@ def _ensure_primary_h1(content: str, title: str) -> str:
 
     If a top-level H1 exists, it is replaced with ``# <title>``.
     If no top-level H1 exists, one is prepended.
+
+    Fence-aware, so a ``#`` comment inside a code block is never mistaken for
+    the page heading and rewritten — that would corrupt the example.
     """
     lines = content.splitlines()
-    for idx, line in enumerate(lines):
-        if re.match(r"^\s*#\s+.+$", line):
-            lines[idx] = f"# {title}"
-            return "\n".join(lines).rstrip() + "\n"
+    parsed = parse_markdown_lines(content)
+    index = next(
+        (i for i, line in enumerate(parsed) if line.kind == "heading" and line.level == 1),
+        None,
+    )
+    if index is not None:
+        lines[index] = f"# {title}"
+        return "\n".join(lines).rstrip() + "\n"
     body = content.lstrip("\n")
     return f"# {title}\n\n{body}".rstrip() + "\n"
 

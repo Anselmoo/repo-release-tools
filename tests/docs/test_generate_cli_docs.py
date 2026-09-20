@@ -433,6 +433,43 @@ def test_extract_first_h1_helper() -> None:
     assert docs._extract_first_h1("No heading here\n") is None
 
 
+def test_extract_first_h1_ignores_comments_in_fenced_code() -> None:
+    """A shell comment in an example is not the page title."""
+    docs = _load_generator_module()
+
+    text = "Intro line.\n\n```bash\n# Or via pre-commit:\nrrt docs publish\n```\n"
+    assert docs._extract_first_h1(text) is None
+
+
+def test_extract_first_h1_prefers_real_heading_after_a_fence() -> None:
+    docs = _load_generator_module()
+
+    text = "```bash\n# not a heading\n```\n\n# Real Title\n\nbody\n"
+    assert docs._extract_first_h1(text) == "Real Title"
+
+
+def test_ensure_primary_h1_does_not_rewrite_fenced_comments() -> None:
+    """Rewriting a `#` line inside a fence would corrupt the code example."""
+    docs = _load_generator_module()
+
+    text = "```bash\n# not a heading\n```\n\n# Real Title\n\nbody\n"
+    result = docs._ensure_primary_h1(text, "Injected")
+
+    assert "# not a heading" in result
+    assert "# Injected" in result
+    assert "# Real Title" not in result
+
+
+def test_ensure_primary_h1_prepends_when_only_fenced_comments_exist() -> None:
+    docs = _load_generator_module()
+
+    text = "```bash\n# not a heading\n```\n"
+    result = docs._ensure_primary_h1(text, "Injected")
+
+    assert result.startswith("# Injected\n")
+    assert "# not a heading" in result
+
+
 def test_cmd_publish_renders_each_target_once(monkeypatch: pytest.MonkeyPatch) -> None:
     docs = _load_generator_module()
     from repo_release_tools.commands import docs_cmd
