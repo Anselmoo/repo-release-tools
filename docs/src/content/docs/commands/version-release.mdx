@@ -9,13 +9,19 @@ description: "Generated command reference for the Version & Release command grou
 
 {/* rrt:auto:start:toc */}
 - [`rrt bump`](#rrt-bump)
+  - [Overview](#overview)
+  - [What the command updates](#what-the-command-updates)
+  - [Release workflow](#release-workflow)
+  - [Changelog behavior](#changelog-behavior)
+  - [Safety notes](#safety-notes)
+  - [Examples](#examples)
   - [Version target configuration reference](#version-target-configuration-reference)
 - [`rrt changelog`](#rrt-changelog)
-  - [Overview](#overview)
+  - [Overview](#overview-1)
   - [Responsibilities](#responsibilities)
   - [Subcommands](#subcommands)
   - [Behavior](#behavior)
-  - [Examples](#examples)
+  - [Examples](#examples-1)
   - [Related Docs](#related-docs)
   - [`rrt changelog compare`](#rrt-changelog-compare)
   - [`rrt changelog lint`](#rrt-changelog-lint)
@@ -25,11 +31,11 @@ description: "Generated command reference for the Version & Release command grou
   - [`rrt ci-version apply`](#rrt-ci-version-apply)
   - [`rrt ci-version sync`](#rrt-ci-version-sync)
 - [`rrt release`](#rrt-release)
-  - [Overview](#overview-1)
+  - [Overview](#overview-2)
   - [What it checks](#what-it-checks)
   - [Output and severity](#output-and-severity)
   - [Config discovery behavior](#config-discovery-behavior)
-  - [Examples](#examples-1)
+  - [Examples](#examples-2)
   - [Related docs](#related-docs-1)
   - [`rrt doctor` vs `rrt release check`](#rrt-doctor-vs-rrt-release-check)
   - [Common failures](#common-failures)
@@ -45,24 +51,86 @@ description: "Generated command reference for the Version & Release command grou
   - [CI mirror loop](#ci-mirror-loop)
   - [Hook](#hook)
 - [`rrt tag`](#rrt-tag)
-  - [Overview](#overview-2)
+  - [Overview](#overview-3)
   - [Responsibilities](#responsibilities-1)
   - [Tag Format](#tag-format)
   - [Behavior](#behavior-1)
-  - [Examples](#examples-2)
+  - [Examples](#examples-3)
   - [Caveats](#caveats)
   - [`rrt tag create`](#rrt-tag-create)
   - [`rrt tag check`](#rrt-tag-check)
 - [`rrt workspace`](#rrt-workspace)
-  - [Overview](#overview-3)
+  - [Overview](#overview-4)
   - [When to use this](#when-to-use-this)
   - [What it does](#what-it-does)
-  - [Safety notes](#safety-notes)
-  - [Examples](#examples-3)
+  - [Safety notes](#safety-notes-1)
+  - [Examples](#examples-4)
   - [`rrt workspace bump`](#rrt-workspace-bump)
 {/* rrt:auto:end:toc */}
 
 ## `rrt bump`
+
+Bump a release version and prepare the associated release branch.
+
+### Overview
+
+This command reads the active ``[tool.rrt]`` configuration, computes a new
+version, updates configured files, and creates the release branch named by the
+selected version group.
+
+The bump value may be one of:
+
+* ``major``, ``minor``, or ``patch`` to increment the current version
+* an explicit version string such as ``2.1.0``
+
+### What the command updates
+
+Depending on the selected version group, the command can update:
+
+* version targets defined in ``[[tool.rrt.version_targets]]``
+* dependency or documentation pins configured for the group
+* the changelog file
+* lockfiles, when the group defines a lock command
+
+### Release workflow
+
+1. Load the repository config from ``[tool.rrt]``.
+2. Resolve the selected version group.
+3. Compute the new version from the current group version or the explicit
+   ``<bump>`` value.
+4. Update version targets and optional pin targets.
+5. Update the changelog unless ``--no-changelog`` is set.
+6. Run the configured lock and generated-asset commands unless
+   ``--no-update`` is set.
+7. Create the release branch and stage or commit the resulting changes.
+
+### Changelog behavior
+
+The changelog update logic supports three modes:
+
+* ``auto`` - promote ``[Unreleased]`` when it has entries, otherwise generate a
+  new section from git history
+* ``promote`` - require a non-empty ``[Unreleased]`` section and rename it to
+  the new version heading
+* ``generate`` - always generate a fresh section from the commit log
+
+When an empty ``[Unreleased]`` placeholder exists, generated content is kept
+below it so the placeholder stays at the top of the file.
+
+### Safety notes
+
+* The working tree must be clean unless ``--dry-run`` is used.
+* Existing release branches are refused unless ``--force`` is set.
+* ``--no-commit`` leaves the branch created with staged changes only.
+* ``--dry-run`` previews the planned file edits and git actions without writing
+  to disk.
+
+### Examples
+
+* ``rrt bump patch``
+* ``rrt bump minor --dry-run``
+* ``rrt bump 2.1.0 --no-changelog --no-commit``
+* ``rrt bump major --base-branch develop``
 
 ### Version target configuration reference
 
@@ -729,6 +797,17 @@ Examples
 ```
 
 ## `rrt sync`
+
+`rrt sync` — discover newer upstream releases for the tracked package.
+
+Reads the current project version from the configured version group, fetches
+all released versions from the configured upstream registry (PyPI, npm, NuGet,
+crates.io, or Packagist), and emits those that are strictly newer than the
+current version — one per line by default, or as a JSON array with ``--json``.
+
+When ``--bump`` is given the command shifts from list-only to mirror-orchestration
+mode: for every newer version (ascending) it applies version targets, optionally
+commits the result, and optionally creates an annotated tag.
 
 ### Configuration
 

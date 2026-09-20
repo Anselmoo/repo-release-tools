@@ -1092,4 +1092,8 @@ default_group_name = "backend"
 ```
 """
 
-SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("bump", _VERSION_TARGET_CONFIG_DOC),)
+# The module docstring is the canonical doc; the reference block above extends
+# it rather than replacing it, so editing __doc__ actually changes the page.
+_BUMP_DOC = (__doc__ or "") + _VERSION_TARGET_CONFIG_DOC
+
+SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("bump", _BUMP_DOC),)

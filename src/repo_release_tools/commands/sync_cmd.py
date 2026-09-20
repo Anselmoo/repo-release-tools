@@ -368,7 +368,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 # Source-owned topic docs
 # ---------------------------------------------------------------------------
 
-_SYNC_DOC = """
+_SYNC_REFERENCE_DOC = """
 ## Configuration
 
 `rrt sync` reads upstream version information using the `[tool.rrt.upstream]`
@@ -457,5 +457,9 @@ repos:
 pre-commit run rrt-sync --hook-stage manual
 ```
 """
+
+# The module docstring is the canonical doc; the reference block above
+# extends it rather than replacing it, so editing __doc__ changes the page.
+_SYNC_DOC = (__doc__ or "") + _SYNC_REFERENCE_DOC
 
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("sync", _SYNC_DOC),)
