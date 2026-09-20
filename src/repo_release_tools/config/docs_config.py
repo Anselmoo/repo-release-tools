@@ -24,10 +24,12 @@ from typing import cast
 from repo_release_tools.state import DOCS_LOCK_DEFAULT, DOCS_MAP_LOCK_DEFAULT
 
 from .model import (
+    DEFAULT_REQUIRED_SECTIONS,
     VALID_BADGE_STYLES,
     VALID_BADGE_VARIANTS,
     CommandGroupEntry,
     DocsConfig,
+    DocsSkeletonConfig,
     EolConfig,
     EolOverride,
     MapConfig,
@@ -164,6 +166,7 @@ def _load_docs_config(raw: object, *, root: Path | None = None) -> DocsConfig | 
         topic_pages=_load_topic_pages(d),
         title_overrides=_load_title_overrides(d),
         map=_load_map_config(d.get("map")),
+        skeleton=_load_skeleton_config(d.get("skeleton")),
     )
 
 
@@ -535,3 +538,96 @@ def _load_map_purpose(d: dict[str, object]) -> dict[str, str]:
             raise ValueError("tool.rrt.docs.map.purpose keys and values must be strings")
         result[k] = v
     return result
+
+
+def _load_skeleton_config(raw: object) -> DocsSkeletonConfig | None:
+    """Parse an optional [tool.rrt.docs.skeleton] table into a DocsSkeletonConfig."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("tool.rrt.docs.skeleton must be a table")
+
+    d: dict[str, object] = cast("dict[str, object]", raw)
+
+    cfg = DocsSkeletonConfig(
+        required_sections=_load_skeleton_string_tuple(
+            d,
+            "required_sections",
+            default=DEFAULT_REQUIRED_SECTIONS,
+        ),
+        opening_section=_load_skeleton_string(d, "opening_section", default="Overview"),
+        closing_sections=_load_skeleton_string_tuple(
+            d,
+            "closing_sections",
+            default=("Caveats", "Related docs"),
+        ),
+        max_heading_depth=_load_skeleton_int(d, "max_heading_depth", default=3),
+        canonical_docstring=_load_skeleton_bool(d, "canonical_docstring", default=True),
+        exempt_slugs=_load_skeleton_string_tuple(d, "exempt_slugs", default=()),
+        max_words_per_sentence=_load_skeleton_float(d, "max_words_per_sentence", default=22.0),
+        max_em_dashes_per_100_words=_load_skeleton_float(
+            d,
+            "max_em_dashes_per_100_words",
+            default=3.5,
+        ),
+        min_sentences_for_register=_load_skeleton_int(
+            d,
+            "min_sentences_for_register",
+            default=4,
+        ),
+    )
+    cfg.validate()
+    return cfg
+
+
+def _load_skeleton_string(d: dict[str, object], key: str, *, default: str) -> str:
+    raw = d.get(key)
+    if raw is None:
+        return default
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f"tool.rrt.docs.skeleton.{key} must be a non-empty string")
+    return raw
+
+
+def _load_skeleton_string_tuple(
+    d: dict[str, object],
+    key: str,
+    *,
+    default: tuple[str, ...],
+) -> tuple[str, ...]:
+    raw = d.get(key)
+    if raw is None:
+        return default
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise ValueError(f"tool.rrt.docs.skeleton.{key} must be a list of strings")
+    values = cast("list[str]", raw)
+    if any(not v.strip() for v in values):
+        raise ValueError(f"tool.rrt.docs.skeleton.{key} must not contain empty entries")
+    return tuple(values)
+
+
+def _load_skeleton_int(d: dict[str, object], key: str, *, default: int) -> int:
+    raw = d.get(key)
+    if raw is None:
+        return default
+    if not isinstance(raw, int) or isinstance(raw, bool):
+        raise ValueError(f"tool.rrt.docs.skeleton.{key} must be an integer")
+    return raw
+
+
+def _load_skeleton_float(d: dict[str, object], key: str, *, default: float) -> float:
+    raw = d.get(key)
+    if raw is None:
+        return default
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ValueError(f"tool.rrt.docs.skeleton.{key} must be a number")
+    return float(raw)
+
+
+def _load_skeleton_bool(d: dict[str, object], key: str, *, default: bool) -> bool:
+    raw = d.get(key)
+    if raw is None:
+        return default
+    if not isinstance(raw, bool):
+        raise ValueError(f"tool.rrt.docs.skeleton.{key} must be a boolean")
+    return raw

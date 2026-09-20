@@ -9,6 +9,9 @@ executes ``mcp/__init__.py``, which eagerly imports ``fastmcp`` and raises
 outside that package to avoid forcing that dependency onto doc generation.
 """
 
+# rrt:docs-exempt — the docstring above is a maintainer note about module
+# placement, not user documentation; MCP_SERVER_DOC below is the published doc.
+
 from __future__ import annotations
 
 MCP_SERVER_DOC = """# MCP Server

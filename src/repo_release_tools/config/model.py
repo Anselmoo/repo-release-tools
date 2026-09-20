@@ -578,6 +578,83 @@ class MapConfig:
             raise ValueError("docs.map.lock_file must be a non-empty string")
 
 
+DEFAULT_REQUIRED_SECTIONS: tuple[str, ...] = (
+    "Overview",
+    "Examples",
+    "Caveats",
+    "Related docs",
+)
+
+
+@dataclass(frozen=True)
+class DocsSkeletonConfig:
+    """Published-docstring shape contract under [tool.rrt.docs.skeleton].
+
+    Absent config means the skeleton is not enforced at all, so a downstream
+    project never inherits a gate it did not opt into. These defaults are
+    repo-release-tools' own contract, which is why a bare table enables it.
+    """
+
+    required_sections: tuple[str, ...] = DEFAULT_REQUIRED_SECTIONS
+    opening_section: str = "Overview"
+    closing_sections: tuple[str, ...] = ("Caveats", "Related docs")
+    max_heading_depth: int = 3
+    canonical_docstring: bool = True
+    exempt_slugs: tuple[str, ...] = ()
+    # Register thresholds, calibrated against this repo's own corpus: the
+    # measured per-section distribution runs median 11.8 / p95 20.5, then jumps
+    # to a single 26.0 outlier. 22.0 sits in that gap.
+    max_words_per_sentence: float = 22.0
+    max_em_dashes_per_100_words: float = 3.5
+    min_sentences_for_register: int = 4
+
+    def validate(self) -> None:
+        """Validate section membership, depth, and register thresholds."""
+        if not self.required_sections:
+            raise ValueError(
+                "docs.skeleton.required_sections must not be empty; omit the "
+                "[tool.rrt.docs.skeleton] table entirely to disable the check",
+            )
+        duplicates = sorted(
+            {s for s in self.required_sections if self.required_sections.count(s) > 1}
+        )
+        if duplicates:
+            raise ValueError(
+                f"docs.skeleton.required_sections contains duplicates: {duplicates}",
+            )
+        if self.opening_section not in self.required_sections:
+            raise ValueError(
+                f"docs.skeleton.opening_section {self.opening_section!r} must be one of "
+                f"required_sections {list(self.required_sections)}",
+            )
+        unknown_closing = [s for s in self.closing_sections if s not in self.required_sections]
+        if unknown_closing:
+            raise ValueError(
+                f"docs.skeleton.closing_sections entries must be in required_sections: "
+                f"{unknown_closing}",
+            )
+        if not 2 <= self.max_heading_depth <= 6:
+            raise ValueError(
+                f"docs.skeleton.max_heading_depth must be between 2 and 6, "
+                f"got {self.max_heading_depth}",
+            )
+        if self.max_words_per_sentence <= 0:
+            raise ValueError(
+                f"docs.skeleton.max_words_per_sentence must be > 0, "
+                f"got {self.max_words_per_sentence}",
+            )
+        if self.max_em_dashes_per_100_words < 0:
+            raise ValueError(
+                f"docs.skeleton.max_em_dashes_per_100_words must be >= 0, "
+                f"got {self.max_em_dashes_per_100_words}",
+            )
+        if self.min_sentences_for_register < 1:
+            raise ValueError(
+                f"docs.skeleton.min_sentences_for_register must be >= 1, "
+                f"got {self.min_sentences_for_register}",
+            )
+
+
 @dataclass(frozen=True)
 class DocsConfig:
     """Documentation tree configuration under [tool.rrt.docs]."""
@@ -615,6 +692,8 @@ class DocsConfig:
     title_overrides: dict[str, str] = field(default_factory=dict)
     # Per-directory purpose-doc generator (rrt docs map)
     map: MapConfig | None = None
+    # Published-docstring shape contract (rrt docs publish / check)
+    skeleton: DocsSkeletonConfig | None = None
 
     def validate(self) -> None:
         """Validate badge_style and badge_variant values."""
