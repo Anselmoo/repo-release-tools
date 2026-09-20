@@ -1,0 +1,50 @@
+---
+title: "rrt artifacts"
+description: "Generated-artifact tracking and drift checks performed by rrt artifacts."
+---
+
+# rrt artifacts
+
+Content-addressed integrity tracking for generated repository artifacts.
+
+## Overview
+
+`rrt artifacts` provides a general-purpose fingerprinting mechanism for any
+set of generated files in the repository. It hashes every file matched by
+configured glob patterns, writes the hashes to `.rrt/artifacts.lock.toml`,
+and can verify that freshly-generated artifacts still match the committed
+fingerprints.
+
+This closes the trust loop for generated assets: the code that produces them
+is version-controlled, the expected hashes are committed, and CI re-generates
+and re-verifies before any artifact reaches users.
+
+## Configuration
+
+Add `[[tool.rrt.artifact_targets]]` entries to `pyproject.toml` (or `.rrt.toml`):
+
+```toml
+[[tool.rrt.artifact_targets]]
+path = "src/repo_release_tools/assets/badges/*.svg"
+description = "Platform badge SVG files"
+
+[[tool.rrt.artifact_targets]]
+path = "docs/assets/banner-*.png"
+description = "Banner PNG renders"
+```
+
+## Subcommands
+
+- `--snapshot` — hash all configured targets, write `.rrt/artifacts.lock.toml`
+- `--check` — verify hashes match (advisory, exits 0 on mismatch by default)
+- `--check --strict` — exits 1 on any hash mismatch (for CI gates)
+- `--list` — display all tracked artifacts and their current hash status
+
+## Examples
+
+```bash
+rrt artifacts --snapshot
+rrt artifacts --check
+rrt artifacts --check --strict
+rrt artifacts --list
+```

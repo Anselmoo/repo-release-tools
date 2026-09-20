@@ -360,11 +360,24 @@ class TestValidateSkeleton:
         )
         assert all(any(k in issue for k in known) for issue in issues)
 
-    def test_collection_coverage_flags_uncollected_modules(self) -> None:
-        issues = skeleton.check_collection_coverage(Path("src"))
-        assert {"artifacts", "docs", "fields"} == {
-            issue.split("slug '")[1].split("'")[0] for issue in issues
-        }
+    def test_every_declaring_module_is_collected(self) -> None:
+        """Regression guard: a declaration publisher never collects is dead prose."""
+        assert skeleton.check_collection_coverage(Path("src")) == []
+
+    def test_collection_coverage_flags_an_uncollected_module(
+        self,
+        synthetic_package: Path,
+    ) -> None:
+        mod = synthetic_package / "synthpkg" / "uncollected.py"
+        mod.write_text(
+            '"""Summary."""\n\n'
+            'DOC = "## Overview\\n\\nbody\\n"\n'
+            'SOURCE_OWNED_TOPIC_DOCS = (("nowhere", DOC),)\n',
+            encoding="utf-8",
+        )
+        issues = skeleton.check_collection_coverage(synthetic_package)
+        assert len(issues) == 1
+        assert "'nowhere'" in issues[0]
 
     def test_entries_are_deduplicated_across_routes(self) -> None:
         entries = skeleton.collect_skeleton_entries(Path("src"))

@@ -36,10 +36,13 @@ from typing import Protocol
 
 import repo_release_tools as rrt_package
 from repo_release_tools import eol as eol_module
+from repo_release_tools.commands import artifacts_cmd as artifacts_module
 from repo_release_tools.commands import branch as branch_module
 from repo_release_tools.commands import bump as bump_module
+from repo_release_tools.commands import docs_cmd as docs_cmd_module
 from repo_release_tools.commands import doctor as doctor_module
 from repo_release_tools.commands import eol_check as eol_check_module
+from repo_release_tools.commands import fields_cmd as fields_module
 from repo_release_tools.commands import install_cmd as install_module
 from repo_release_tools.commands import release_cmd as release_cmd_module
 from repo_release_tools.commands import skill as skill_module
@@ -182,7 +185,10 @@ def _collect_source_owned_topic_docs(modules: Sequence[object]) -> dict[str, str
 
 SOURCE_OWNED_TOPIC_DOCS: dict[str, str] = _collect_source_owned_topic_docs(
     (
+        artifacts_module,
         branch_module,
+        docs_cmd_module,
+        fields_module,
         bump_module,
         git_helpers,
         hooks_module,
@@ -627,7 +633,10 @@ def _get_title_overrides(cfg_docs: object = None) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
+    "artifacts": Path("docs/src/content/docs/commands/artifacts.mdx"),
     "branch": Path("docs/src/content/docs/commands/branch.mdx"),
+    "docs": Path("docs/src/content/docs/commands/docs.mdx"),
+    "fields": Path("docs/src/content/docs/commands/fields.mdx"),
     "git": Path("docs/src/content/docs/commands/git_cmd.mdx"),
     "tree": Path("docs/src/content/docs/commands/tree.mdx"),
     "hooks": Path("docs/src/content/docs/commands/hooks.mdx"),
@@ -648,6 +657,9 @@ TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
 
 TITLE_OVERRIDES: dict[str, str] = {
     "rrt-cli": "rrt CLI",
+    "artifacts": "rrt artifacts",
+    "docs": "rrt docs",
+    "fields": "rrt fields",
     "branch": "rrt branch",
     "git": "rrt git",
     "tree": "rrt tree",
@@ -664,6 +676,9 @@ TITLE_OVERRIDES: dict[str, str] = {
 }
 
 DESCRIPTION_OVERRIDES: dict[str, str] = {
+    "artifacts": ("Generated-artifact tracking and drift checks performed by rrt artifacts."),
+    "docs": ("Documentation extraction, publishing, and per-directory mapping driven by rrt docs."),
+    "fields": ("Arbitrary config-field reads and writes across project files via rrt fields."),
     "rrt-cli": (
         "Generated reference for the full rrt CLI, covering every command group and "
         "argparse option."
