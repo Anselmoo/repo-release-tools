@@ -38,6 +38,12 @@ Each target receives one flat `.agent.md` file per bundled user agent.
 - Without `--target`, the command prints available destinations in dry-run
   mode and otherwise fails.
 - Existing files at the destination are replaced only when `--force` is used.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Setup & tooling commands](/repo-release-tools/commands/setup-tooling/) — install, init, skill, agents, hooks
+- [Agent instructions](/repo-release-tools/agent-instructions/) — how the bundled agent definitions are used
 """
 
 from __future__ import annotations

@@ -51,7 +51,19 @@ summary first, followed by the details needed to act on the result.
 - `rrt git squash-local --base-ref origin/main "ship parser"`
 - `rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run`
 
-## See also
+## Caveats
+
+- `undo-safe` and `rebootstrap` rewrite repository history. `rebootstrap`
+  requires explicit confirmation before it destroys anything.
+- `sync` and `move` stash your local changes automatically and restore them
+  afterwards. The working tree is touched even on a run you expected to be
+  read-only.
+- `rrt git commit` only infers the commit type from the branch when that
+  branch follows the conventional `type/slug` format.
+- These commands refuse to continue in unsafe states, such as unresolved
+  conflicts or an in-progress merge.
+
+## Related docs
 
 - [Conventional branches](/repo-release-tools/commands/branch/)
 - [Generated CLI reference](/repo-release-tools/commands/rrt-cli/)
@@ -69,13 +81,9 @@ from pathlib import Path
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 
 # Ordered source-owned topic docs for future generic docs generation.
-GIT_DOC = (
-    "# rrt git\n\n"
-    "Git workflow helpers for repository status, commit, sync, and history operations.\n\n"
-    f"{(__doc__ or '').split('\n\n', 1)[1]}"
-    if __doc__ and "\n\n" in __doc__
-    else (__doc__ or "")
-)
+# The page renders under docs/.../commands/, where the publisher injects the
+# H1 from TITLE_OVERRIDES, so the docstring ships verbatim.
+GIT_DOC = __doc__ or ""
 
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("git", GIT_DOC),)
 

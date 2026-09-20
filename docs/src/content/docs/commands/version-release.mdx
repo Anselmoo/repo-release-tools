@@ -16,13 +16,16 @@ description: "Generated command reference for the Version & Release command grou
   - [Safety notes](#safety-notes)
   - [Examples](#examples)
   - [Version target configuration reference](#version-target-configuration-reference)
+  - [Caveats](#caveats)
+  - [Related docs](#related-docs)
 - [`rrt changelog`](#rrt-changelog)
   - [Overview](#overview-1)
   - [Responsibilities](#responsibilities)
   - [Subcommands](#subcommands)
   - [Behavior](#behavior)
   - [Examples](#examples-1)
-  - [Related Docs](#related-docs)
+  - [Caveats](#caveats-1)
+  - [Related docs](#related-docs-1)
   - [`rrt changelog compare`](#rrt-changelog-compare)
   - [`rrt changelog lint`](#rrt-changelog-lint)
 - [`rrt ci-version`](#rrt-ci-version)
@@ -36,35 +39,42 @@ description: "Generated command reference for the Version & Release command grou
   - [Output and severity](#output-and-severity)
   - [Config discovery behavior](#config-discovery-behavior)
   - [Examples](#examples-2)
-  - [Related docs](#related-docs-1)
   - [`rrt doctor` vs `rrt release check`](#rrt-doctor-vs-rrt-release-check)
   - [Common failures](#common-failures)
   - [Hook usage](#hook-usage)
+  - [Caveats](#caveats-2)
+  - [Related docs](#related-docs-2)
   - [`rrt release check`](#rrt-release-check)
   - [`rrt release notes`](#rrt-release-notes)
   - [`rrt release repair`](#rrt-release-repair)
 - [`rrt sync`](#rrt-sync)
+  - [Overview](#overview-3)
   - [Configuration](#configuration)
   - [Supported providers](#supported-providers)
-  - [Basic usage](#basic-usage)
+  - [Examples](#examples-3)
   - [Mirror-orchestration mode](#mirror-orchestration-mode)
   - [CI mirror loop](#ci-mirror-loop)
   - [Hook](#hook)
+  - [Caveats](#caveats-3)
+  - [Related docs](#related-docs-3)
 - [`rrt tag`](#rrt-tag)
-  - [Overview](#overview-3)
+  - [Overview](#overview-4)
   - [Responsibilities](#responsibilities-1)
   - [Tag Format](#tag-format)
   - [Behavior](#behavior-1)
-  - [Examples](#examples-3)
-  - [Caveats](#caveats)
+  - [Examples](#examples-4)
+  - [Caveats](#caveats-4)
+  - [Related docs](#related-docs-4)
   - [`rrt tag create`](#rrt-tag-create)
   - [`rrt tag check`](#rrt-tag-check)
 - [`rrt workspace`](#rrt-workspace)
-  - [Overview](#overview-4)
+  - [Overview](#overview-5)
   - [When to use this](#when-to-use-this)
   - [What it does](#what-it-does)
   - [Safety notes](#safety-notes-1)
-  - [Examples](#examples-4)
+  - [Examples](#examples-5)
+  - [Caveats](#caveats-5)
+  - [Related docs](#related-docs-5)
   - [`rrt workspace bump`](#rrt-workspace-bump)
 {/* rrt:auto:end:toc */}
 
@@ -252,6 +262,26 @@ groups, set `default_group_name` to select the default:
 default_group_name = "backend"
 ```
 
+### Caveats
+
+A `kind='pattern'` regex must have exactly one capture group. The legacy
+bare-pattern form still works but needs three groups instead, and the two
+styles cannot be mixed on the same target.
+
+`pin_target_missing` only changes `rrt bump` behavior. `rrt release check`
+always reports a missing pin match as a warning, regardless of this
+setting.
+
+With more than one `version_group` configured, `--group` becomes required
+unless `default_group_name` names a default. Bumping several groups in one
+invocation still creates one release branch and one commit per group.
+
+### Related docs
+
+- [Version release](/repo-release-tools/commands/version-release/)
+- [rrt CLI](/repo-release-tools/commands/rrt-cli/)
+- [Repo health](/repo-release-tools/commands/repo-health/)
+
 ```text
 Usage:  rrt bump [OPTIONS] <bump>
 
@@ -347,11 +377,18 @@ parsing, comparison, and linting of changelog data.
 - `rrt changelog lint --release v1.5.0 --no-fail`
 - `rrt changelog compare v1.0.0 v2.0.0 --format json`
 
-### Related Docs
+### Caveats
 
-- [Changelog Comparison](changelog_compare.py)
-- [Changelog Linting](changelog_lint.py)
-- [rrt bump](bump.py)
+Both subcommands require a changelog file discoverable from the active
+`[tool.rrt]` configuration. Format detection depends on the file extension,
+so a misnamed file is parsed with the wrong rules. This group only
+dispatches; `compare` and `lint` carry their own additional caveats.
+
+### Related docs
+
+- [Version release](/repo-release-tools/commands/version-release/)
+- [rrt CLI](/repo-release-tools/commands/rrt-cli/)
+- [Hooks](/repo-release-tools/commands/hooks/)
 
 ```text
 Usage:  rrt changelog [OPTIONS] <changelog_command>
@@ -426,45 +463,49 @@ Compute and apply CI release versions from ``[tool.rrt]`` config.
 
 #### Overview
 
-The ``rrt ci-version`` command family centralizes deterministic version
-computation and safe application for CI and release automation. It reads the
-repository's ``[tool.rrt]`` configuration, discovers version targets and group
-defaults, and uses the current CI environment (or explicit CLI overrides) to
-produce machine-friendly version identifiers suitable for downstream CI
-targets and release workflows.
+The ``rrt ci-version`` command family computes deterministic CI versions and
+applies them safely. It reads the repository's ``[tool.rrt]`` configuration to
+discover version targets and group defaults. It combines the current CI
+environment, or explicit CLI overrides, with configured rules to produce
+machine-friendly version identifiers. Use it in CI pipelines and release
+workflows that need a computed pre-release version.
 
 Subcommands:
 
-- ``compute`` — deterministically compute the version for this run and emit a
-    single raw line for scripting and capture.
-- ``apply`` — update configured targets that declare a ``ci_format``,
-    transforming values when needed (for example converting PEP 440 dev
-    releases into Cargo-compatible prerelease identifiers).
-- ``sync`` — compute then apply the published version in one operation; both
-    ``apply`` and ``sync`` support ``--dry-run`` for safe previews.
+- ``compute`` — print a single version line for scripting and capture.
+- ``apply`` — write an explicit version string to every target that declares
+    a ``ci_format``, converting the value when the target format requires it.
+- ``sync`` — compute then apply the version in one step. Both ``apply`` and
+    ``sync`` support ``--dry-run`` for safe previews.
 
-Version rules (summary):
+#### Examples
 
-- Tag builds (``refs/tags/v*``) yield the tag name with the leading ``v``
-    removed.
-- Mainline (`refs/heads/main`) builds produce a PEP 440 dev release using
-    ``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``.
-- Other refs return the configured base version unchanged. CLI flags such as
-    ``--ref``, ``--run-id``, or ``--base`` override environment-derived values.
+```bash
+rrt ci-version compute
+rrt ci-version compute --base 1.2.3 --ref refs/heads/main --run-id 42 --run-attempt 3
+rrt ci-version apply 1.2.3.dev42 --group backend --dry-run
+rrt ci-version sync --dry-run
+```
 
-Output formats & safety:
+#### Caveats
 
-- Supported target formats: ``pep440`` and ``semver_pre`` (the latter maps
-    PEP 440 dev suffixes to SemVer prerelease tokens).
-- The command validates conversions and fails fast on incompatible inputs to
-    avoid writing invalid CI data.
-- ``compute`` is machine-friendly (single-line stdout); ``apply``/``sync`` are
-    human-friendly with progress, dry-run previews, and explicit error messages.
+Version rules are fixed and not user-configurable. Tag builds
+(``refs/tags/v*``) yield the tag name with the leading ``v`` removed. Builds
+on ``refs/heads/main`` produce a PEP 440 dev release using
+``{base}.dev{GITHUB_RUN_ID}{GITHUB_RUN_ATTEMPT:02d}``. Any other ref returns
+the configured base version unchanged.
 
-Examples::
+Only ``pep440`` and ``semver_pre`` target formats are supported. Converting to
+``semver_pre`` only works for versions ending in ``.dev<digits>``; other
+suffixes fail fast instead of writing an invalid Cargo SemVer string. ``apply``
+needs at least one version target with ``ci_format`` configured in the
+selected group, or it exits with an error and writes nothing.
 
-        rrt ci-version compute
-        rrt ci-version apply 1.2.3.dev42 --group backend --dry-run
+#### Related docs
+
+- `/repo-release-tools/commands/version-release/`
+- `/repo-release-tools/commands/ci-automation/`
+- `/repo-release-tools/action/`
 
 ```text
 Usage:  rrt ci-version [OPTIONS] <ci_version_cmd>
@@ -635,13 +676,6 @@ from there.
 Version targets may also point at Go, Rust, or .NET-style version files when
 you need to keep multiple language surfaces aligned.
 
-### Related docs
-
-- [rrt doctor](/repo-release-tools/commands/doctor/)
-- [rrt eol (CLI)](/repo-release-tools/commands/rrt-cli/)
-- [pre-commit / lefthook](/repo-release-tools/commands/hooks/)
-- [GitHub Action](/repo-release-tools/action/)
-
 ### `rrt doctor` vs `rrt release check`
 
 | Check | `rrt doctor` | `rrt release check` |
@@ -690,6 +724,23 @@ rrt release check
 # Or via pre-commit (manual stage):
 pre-commit run rrt-release-check --hook-stage manual
 ```
+
+### Caveats
+
+The check only covers targets reachable from `[tool.rrt]`. A version string
+maintained outside any configured target or pin is invisible to it.
+
+Pin target drift and missing matches are always reported as warnings, not
+errors, regardless of the `pin_target_missing` setting that governs
+`rrt bump`. A clean `rrt release check` run can still hide a stale or
+missing pin.
+
+### Related docs
+
+- [rrt doctor](/repo-release-tools/commands/doctor/)
+- [rrt eol (CLI)](/repo-release-tools/commands/rrt-cli/)
+- [pre-commit / lefthook](/repo-release-tools/commands/hooks/)
+- [GitHub Action](/repo-release-tools/action/)
 
 ```text
 Usage:  rrt release [OPTIONS] <release_command>
@@ -800,14 +851,17 @@ Examples
 
 `rrt sync` — discover newer upstream releases for the tracked package.
 
-Reads the current project version from the configured version group, fetches
-all released versions from the configured upstream registry (PyPI, npm, NuGet,
-crates.io, or Packagist), and emits those that are strictly newer than the
-current version — one per line by default, or as a JSON array with ``--json``.
+### Overview
 
-When ``--bump`` is given the command shifts from list-only to mirror-orchestration
-mode: for every newer version (ascending) it applies version targets, optionally
-commits the result, and optionally creates an annotated tag.
+Reads the current project version from the configured version group.
+Fetches all released versions from the configured upstream registry
+(PyPI, npm, NuGet, crates.io, or Packagist). It prints versions that are
+strictly newer than the current one. Output is one version per line by
+default, or a JSON array with `--json`.
+
+With `--bump`, the command shifts to mirror-orchestration mode. For each
+newer version, in ascending order, it applies version targets and
+optionally commits and tags the result.
 
 ### Configuration
 
@@ -836,7 +890,7 @@ replaced with the new version string and used as the git commit message when
 | crates.io | `crates` | Rust crate registry; requires a `User-Agent` header — handled internally |
 | Packagist | `packagist` | PHP package registry; `package` must be in `vendor/name` form |
 
-### Basic usage
+### Examples
 
 ```bash
 # List newer versions one per line (default)
@@ -896,6 +950,19 @@ repos:
 ```bash
 pre-commit run rrt-sync --hook-stage manual
 ```
+
+### Caveats
+
+`rrt sync` skips upstream versions it cannot parse as semver or PEP 440.
+These are silently ignored rather than reported. `--bump` applies newer
+versions strictly in ascending order. It stops at the first failed tag
+creation. The command requires `[tool.rrt.upstream].package` to be
+configured. Without it, `rrt sync` exits with an error.
+
+### Related docs
+
+- [rrt bump](/repo-release-tools/commands/version-release/)
+- [pre-commit / lefthook hooks](/repo-release-tools/commands/hooks/)
 
 ```text
 Usage:  rrt sync [OPTIONS]
@@ -993,6 +1060,11 @@ for many version control and release automation tools.
   correctly captured in the Git history.
 - The `check --strict` mode is recommended for CI pipelines to ensure that a
   tag was correctly created before a release proceeds.
+
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Version & release commands](/repo-release-tools/commands/version-release/) — bump, changelog, ci-version, release, tag, workspace, sync
 
 ```text
 Usage:  rrt tag [OPTIONS] <tag_command>
@@ -1114,6 +1186,26 @@ rrt workspace bump minor --packages api,sdk,docs
 rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
 rrt workspace bump patch --dry-run --packages api,sdk
 ```
+
+### Caveats
+
+Every package needs its own loadable `[tool.rrt]` configuration. A missing
+or invalid config in any package aborts the whole run before any file is
+written.
+
+Config loading is validated up front, but the actual writes still happen
+package by package. Each package's own version-target write is atomic, yet
+if a later package fails mid-run, earlier packages keep their already
+applied changes. There is no cross-package rollback.
+
+Changelog promotion is skipped per package when that package has no
+`[Unreleased]` section or the section has no entries. Use `--no-changelog`
+to skip it everywhere.
+
+### Related docs
+
+- [Version release](/repo-release-tools/commands/version-release/)
+- [rrt CLI](/repo-release-tools/commands/rrt-cli/)
 
 ```text
 Usage:  rrt workspace [OPTIONS] <workspace_command>

@@ -56,6 +56,11 @@ for many version control and release automation tools.
   correctly captured in the Git history.
 - The `check --strict` mode is recommended for CI pipelines to ensure that a
   tag was correctly created before a release proceeds.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Version & release commands](/repo-release-tools/commands/version-release/) — bump, changelog, ci-version, release, tag, workspace, sync
 """
 
 from __future__ import annotations

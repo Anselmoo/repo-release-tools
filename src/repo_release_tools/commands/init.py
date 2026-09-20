@@ -59,6 +59,12 @@ project manifests like `pyproject.toml`, `Cargo.toml`, or `package.json`.
   files; it will not create the manifest if it is missing.
 - Standalone `.rrt.toml` files take precedence over manifest-embedded
   configurations during standard tool discovery.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Setup & tooling commands](/repo-release-tools/commands/setup-tooling/) — install, init, skill, agents, hooks
+- [rrt doctor](/repo-release-tools/commands/doctor/) — run after `rrt init` to verify the new config
 """
 
 from __future__ import annotations

@@ -41,6 +41,29 @@ rrt artifacts --check
 rrt artifacts --check --strict
 rrt artifacts --list
 ```
+
+## Caveats
+
+Nothing is tracked without `[[tool.rrt.artifact_targets]]` entries. With none
+configured, every mode reports zero targets and exits 0.
+
+`--check` is advisory by default: a hash mismatch prints a warning but still
+exits 0. Pass `--strict` to fail the build on drift. The `rrt-hooks
+artifacts-check` CI gate flips this default and requires `--no-strict` to
+downgrade it.
+
+`--regenerate` only runs targets that declare a `command`. Targets without
+one are silently skipped, and a failing command aborts the whole run before
+the snapshot is rewritten. `--dry-run` only affects `--regenerate`; it is
+rejected alongside `--check`, `--snapshot`, or `--list`.
+
+`--snapshot`, `--check`, `--list`, and `--regenerate` are mutually exclusive.
+
+## Related docs
+
+- [Repo health](/repo-release-tools/commands/repo-health/)
+- [Artifacts](/repo-release-tools/commands/artifacts/)
+- [Hooks](/repo-release-tools/commands/hooks/)
 """
 
 from __future__ import annotations

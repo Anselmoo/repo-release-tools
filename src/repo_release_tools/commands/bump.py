@@ -1090,6 +1090,26 @@ groups, set `default_group_name` to select the default:
 [tool.rrt]
 default_group_name = "backend"
 ```
+
+## Caveats
+
+A `kind='pattern'` regex must have exactly one capture group. The legacy
+bare-pattern form still works but needs three groups instead, and the two
+styles cannot be mixed on the same target.
+
+`pin_target_missing` only changes `rrt bump` behavior. `rrt release check`
+always reports a missing pin match as a warning, regardless of this
+setting.
+
+With more than one `version_group` configured, `--group` becomes required
+unless `default_group_name` names a default. Bumping several groups in one
+invocation still creates one release branch and one commit per group.
+
+## Related docs
+
+- [Version release](/repo-release-tools/commands/version-release/)
+- [rrt CLI](/repo-release-tools/commands/rrt-cli/)
+- [Repo health](/repo-release-tools/commands/repo-health/)
 """
 
 # The module docstring is the canonical doc; the reference block above extends

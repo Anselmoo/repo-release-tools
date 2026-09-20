@@ -1,10 +1,13 @@
 """`rrt project info` — surface project metadata from the project manifest.
 
-Reads ``pyproject.toml`` / ``Cargo.toml`` / ``package.json`` and emits
+## Overview
+
+``rrt project info`` surfaces project metadata from the project manifest. It
+reads ``pyproject.toml``, ``Cargo.toml``, or ``package.json`` and emits
 ``name``, ``description``, ``version``, ``authors``, ``license``, and
-``urls`` as text (default) or JSON. Useful for generating README headers,
-populating release-body templates, or scripting CI tasks that need a
-single field via ``--key``.
+``urls`` as text (default) or JSON. Use it to generate README headers,
+populate release-body templates, or script CI tasks that need a single
+field via ``--key``.
 
 ## Examples
 
@@ -12,6 +15,20 @@ single field via ``--key``.
 - ``rrt project info --format json``
 - ``rrt project info --key description``
 - ``rrt project info --format json --output project-info.json``
+
+## Caveats
+
+The command reads only the one manifest file present under ``--root``; it
+never merges fields across multiple manifest types. ``--key`` accepts only
+``name``, ``version``, ``description``, ``authors``, ``license``, ``urls``,
+or ``source``; any other value exits with an error listing the valid keys.
+``--root`` must already exist as a directory, or the command exits before
+reading anything.
+
+## Related docs
+
+- `/repo-release-tools/commands/repo-health/`
+- `/repo-release-tools/commands/rrt-cli/`
 """
 
 from __future__ import annotations

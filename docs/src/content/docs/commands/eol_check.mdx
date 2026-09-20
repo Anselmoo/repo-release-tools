@@ -7,6 +7,8 @@ description: "Runtime end-of-life tracking and warnings surfaced by rrt eol."
 
 Runtime end-of-life (EOL) tracking for repo-release-tools.
 
+## Overview
+
 Supports Python, Go, Node.js, and Rust. Bundled data provides offline
 operation; pass ``fetch_live=True`` to pull fresh data from
 ``https://endoflife.date/api/v1/products/<slug>/``.
@@ -65,6 +67,32 @@ language = "python"
 cycle    = "3.9"
 eol      = "2026-06-01"
 ```
+
+## Examples
+
+### CLI
+
+```bash
+rrt eol --language python --fetch-live
+```
+
+### Library
+
+```python
+from repo_release_tools.eol.core import check_eol_status
+
+status, record = check_eol_status("3.9", "python", fetch_live=False)
+```
+
+## Caveats
+
+`fetch_live_data` swallows network and JSON errors and returns an empty
+list. When live data is unavailable, `get_eol_records` falls back to the
+bundled snapshot. Rust's `RUST_WARN_LAG` and `RUST_ERROR_LAG` thresholds
+are fixed constants and cannot be overridden in `[tool.rrt.eol]`.
+`check_eol_status` returns `("unknown", None)` when the version string
+does not parse into a release cycle. Passing an explicit `records` list
+also requires passing `language`, or the call raises `TypeError`.
 
 ## Related docs
 

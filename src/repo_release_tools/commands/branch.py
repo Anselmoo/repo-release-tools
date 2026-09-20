@@ -68,6 +68,12 @@ Custom prefixes can be added via the `extra_branch_types` config key.
 
 - Branch slugs are limited to 60 characters by default.
 - Custom branch types can be added via configuration.
+
+## Related docs
+
+- [rrt git](/repo-release-tools/commands/git_cmd/)
+- [Git workflow reference](/repo-release-tools/commands/git-workflow/)
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/)
 """
 
 from __future__ import annotations
@@ -83,13 +89,9 @@ from repo_release_tools.commands._registry import CommandCategory, CommandGroup,
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.workflow import git
 
-SEMANTIC_BRANCHES_DOC = (
-    "# rrt branch\n\n"
-    "Branch command helpers and utilities for conventional branches.\n\n"
-    f"{(__doc__ or '').split('\n\n', 1)[1]}"
-    if __doc__ and "\n\n" in __doc__
-    else (__doc__ or "")
-)
+# The page renders under docs/.../commands/, where the publisher injects the
+# H1 from TITLE_OVERRIDES, so the docstring ships verbatim.
+SEMANTIC_BRANCHES_DOC = __doc__ or ""
 
 # Ordered source-owned topic docs for future generic docs generation.
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("branch", SEMANTIC_BRANCHES_DOC),)

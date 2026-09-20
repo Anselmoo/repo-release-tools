@@ -81,6 +81,23 @@ rrt docs check                             # exits 1 if lockfile is stale
 rrt docs api --format json                 # machine-readable API index
 ```
 
+## Caveats
+
+Extraction is regex-based, not AST-based. Unusual formatting around a
+docstring or an explicit `sym:` marker can cause a block to be missed.
+
+In `explicit` mode, the marker comment must directly precede the block it
+names; a stray blank line or unrelated comment breaks the association.
+
+`rrt docs check` only compares against whatever `.rrt/docs.lock.toml` last
+recorded. Run `rrt docs generate --format toml` again after editing
+docstrings, or drift goes undetected until the next regeneration.
+
+`rrt docs publish` renders each reference page from the live CLI parser and
+source docstrings, then overwrites the target file. Manual edits to a
+generated page are lost on the next publish; edit the source docstring
+instead.
+
 ## Related docs
 
 - [CLI reference](/repo-release-tools/commands/rrt-cli/)

@@ -7,6 +7,13 @@ GITHUB_ACTION_DOC = """# GitHub Action
 Use the GitHub Action when you want CI to enforce the same policy that
 `rrt-hooks` can enforce locally.
 
+## Overview
+
+The composite Action runs `rrt-hooks` checks inside a GitHub Actions job. It
+validates branch names, Conventional Commit subjects, and changelog policy.
+Optional inputs add doctor, release-health, folder, and artifact checks. Reach
+for it when CI has to be the gate, not just the contributor's machine.
+
 ## Minimal workflow
 
 ```yaml
@@ -36,14 +43,6 @@ best and misleading at worst — tiny chaos gremlin, large confusion.
 - optional folder structure validation (`check-folder`)
 - optional artifact hash integrity (`check-artifacts`)
 
-## Important behavior
-
-- Tag-triggered workflows skip branch-name validation automatically.
-- The action installs `repo-release-tools` from the action checkout, not from
-  the consumer repository.
-- `changelog-strategy` defaults to `auto`, so CI can follow repository config
-  instead of forcing one changelog policy everywhere.
-
 ## Changelog strategy: use `auto` unless you have a reason not to
 
 `changelog-strategy` controls how CI decides whether a changelog is valid.
@@ -67,7 +66,7 @@ Use an explicit override only when you want CI to be stricter or looser than
 the repo default. A common example is pairing local `rrt-update-unreleased`
 hooks with CI `changelog-strategy: "unreleased"`.
 
-## Common examples
+## Examples
 
 ### Default CI setup
 
@@ -133,6 +132,32 @@ enforce a consistent project structure across contributors and CI environments.
 `check-artifacts` runs `rrt-hooks artifacts-check`, which compares generated
 artifact hashes against the committed `.rrt/artifacts.lock.toml`. It detects
 artifacts that were regenerated but not re-snapshotted, or vice versa.
+
+## Caveats
+
+- `fetch-depth: 0` is required. Shallow checkouts break the changelog and
+  commit-subject checks.
+- Tag-triggered workflows skip branch-name validation automatically.
+- The action installs `repo-release-tools` from the action checkout, not from
+  the consumer repository.
+- `changelog-strategy` defaults to `auto`, so CI can follow repository config
+  instead of forcing one changelog policy everywhere.
+- Only `check-branch-name`, `check-commit-subject` and `check-changelog`
+  default to `"true"`. Every other check is opt-in, including dirty-tree,
+  doctor, release-health, eol, docs, folder and artifacts.
+- The version pin in each example tracks the current release. Pin the tag you
+  actually want.
+
+## Related docs
+
+- [publish-snapshot Action](/repo-release-tools/publish-snapshot-action/) for
+  publishing a snapshot to a mirror remote
+- [Hooks](/repo-release-tools/commands/hooks/) for running the same checks
+  locally
+- [`rrt doctor`](/repo-release-tools/commands/doctor/) for the checks behind
+  `check-doctor`
+- [`rrt branch`](/repo-release-tools/commands/branch/) for the naming
+  convention CI validates
 """
 
 GITHUB_ACTION_PUBLISH_SNAPSHOT_DOC = """# publish-snapshot Action
@@ -141,14 +166,20 @@ A dedicated composite Action for `rrt git publish-snapshot` — force-pushing a
 single-commit, no-history snapshot of tracked content to a secondary remote
 (e.g. a public downstream mirror of a privately developed repository).
 
+## Overview
+
+Use this Action to refresh a public mirror from a private repository. It
+force-pushes one commit with no history to the remote named by `target`.
+Resolve the remote, branch, message, and excludes from a
+`[tool.rrt.publish_targets.<name>]` config entry.
+
 It is deliberately **not** part of the main `repo-release-tools` Action.
 That action is a set of read-only, idempotent policy checks meant to run on
-every PR; `publish-snapshot` is destructive (force-push) and belongs on a
-different trigger (push-to-main, a schedule, or `workflow_dispatch`). Keeping
-it in its own composite action isolates that risk profile instead of mixing
-it into a check that most workflows run unconditionally.
+every PR. `publish-snapshot` is destructive and belongs on a different
+trigger. Use push-to-main, a schedule, or `workflow_dispatch`. Keeping it in
+its own composite action isolates that risk profile.
 
-## Usage
+## Examples
 
 ```yaml
 name: Refresh public mirror
@@ -181,15 +212,22 @@ jobs:
 | `python-version` | `"3.12"` | Python version used to run repo-release-tools |
 | `working-directory` | `"."` | Repository path to install and run repo-release-tools from |
 
-## Safety notes
+## Caveats
 
-Force-pushing does not immediately purge old objects on the remote host —
-they can remain fetchable by direct SHA until the host runs garbage
+Force-pushing does not immediately purge old objects on the remote host.
+They can remain fetchable by direct SHA until the host runs garbage
 collection. If secrets were ever committed, run `git filter-repo` or the BFG
-Repo-Cleaner first; this action only controls what is visible going forward.
+Repo-Cleaner first. This action only controls what is visible going forward.
 Clones or forks made before the force-push retain the old history locally,
 which is outside this tool's control. Always run with `confirm: "false"`
 (the default) first and inspect the dry-run output before flipping it on.
+
+## Related docs
+
+- [GitHub Action](/repo-release-tools/action/) for the read-only policy checks
+  that run on every PR
+- [rrt CLI](/repo-release-tools/commands/rrt-cli/) for the underlying
+  `rrt git publish-snapshot` command
 """
 
 # Ordered source-owned topic docs for docs generation.

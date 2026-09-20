@@ -7,6 +7,13 @@ description: "Reference for hook and Action enforcement points used by agent-dri
 
 *Static context for agents: read this before using any prompt block below.*
 
+## Overview
+
+This page is static context for agents working on `repo-release-tools`. It lists the
+entry points, key files, and verification commands. It then gives ready-to-paste prompt
+blocks for pre-commit and lefthook setup. Read the context first, then use a prompt
+block unchanged.
+
 ## Agent context
 
 **Repo:** [github.com/Anselmoo/repo-release-tools](https://github.com/Anselmoo/repo-release-tools) · Python ≥ 3.12 · `uv_build`
@@ -30,11 +37,12 @@ uv run pytest tests/test_hooks.py -x -q   # fast unit tests
 uvx pre-commit run --all-files             # lint (ruff, line-length 100)
 ```
 
-**Assumptions:** `pre-commit`, `lefthook`, and `uv` are already installed. Do not recommend `brew install`, `pip install pre-commit`, or `apt install` for these tools.
-
 ---
 
-## pre-commit / lefthook
+## Examples
+
+Each block below is a ready-to-paste prompt for pre-commit or lefthook setup. Use one
+verbatim.
 
 ### Activate pre-commit hooks
 
@@ -105,3 +113,18 @@ repos:
       - id: rrt-commit-subject
 ```
 ````
+
+## Caveats
+
+- `rrt-hooks` is an installed binary, not a uvx shortcut. Do not write
+  `uvx --from repo-release-tools rrt-hooks …` in `lefthook.yml`.
+- Commit-msg hooks need `commit-msg` in `default_install_hook_types`. Omitting it
+  silently skips `rrt-update-unreleased` and `rrt-commit-subject`.
+- `pre-commit`, `lefthook`, and `uv` are assumed installed. Do not recommend
+  `brew install`, `pip install pre-commit`, or `apt install` for these tools.
+
+## Related docs
+
+- [Hooks](/repo-release-tools/commands/hooks/) for the full hook catalogue
+- [GitHub Action](/repo-release-tools/action/) for CI-side enforcement
+- [`rrt` CLI](/repo-release-tools/commands/rrt-cli/) for the developer commands

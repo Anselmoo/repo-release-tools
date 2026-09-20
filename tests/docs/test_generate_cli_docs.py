@@ -344,8 +344,10 @@ def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
 
     assert docs.generate_semantic_branches_markdown() == docs.branch_module.SEMANTIC_BRANCHES_DOC
     assert docs.generate_git_markdown() == docs.git_helpers.GIT_DOC
-    assert docs.generate_semantic_branches_markdown().startswith("# rrt branch")
-    assert docs.generate_git_markdown().startswith("# rrt git")
+    # Both pages render under commands/, where _ensure_primary_h1 injects the
+    # H1 from TITLE_OVERRIDES. A source-side H1 would be a skeleton violation.
+    assert not docs.generate_semantic_branches_markdown().startswith("# ")
+    assert not docs.generate_git_markdown().startswith("# ")
     assert docs.GENERATED_DOC_TARGETS[0].output_path.name == "rrt-cli.mdx"
     assert len(docs.GENERATED_DOC_TARGETS) >= 3
     assert "branch" in docs.TOPIC_PAGE_OUTPUTS

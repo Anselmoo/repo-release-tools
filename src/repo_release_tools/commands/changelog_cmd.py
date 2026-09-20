@@ -41,11 +41,18 @@ parsing, comparison, and linting of changelog data.
 - `rrt changelog lint --release v1.5.0 --no-fail`
 - `rrt changelog compare v1.0.0 v2.0.0 --format json`
 
-## Related Docs
+## Caveats
 
-- [Changelog Comparison](changelog_compare.py)
-- [Changelog Linting](changelog_lint.py)
-- [rrt bump](bump.py)
+Both subcommands require a changelog file discoverable from the active
+`[tool.rrt]` configuration. Format detection depends on the file extension,
+so a misnamed file is parsed with the wrong rules. This group only
+dispatches; `compare` and `lint` carry their own additional caveats.
+
+## Related docs
+
+- [Version release](/repo-release-tools/commands/version-release/)
+- [rrt CLI](/repo-release-tools/commands/rrt-cli/)
+- [Hooks](/repo-release-tools/commands/hooks/)
 """
 
 from __future__ import annotations
