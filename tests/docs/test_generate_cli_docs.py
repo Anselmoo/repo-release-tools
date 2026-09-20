@@ -577,6 +577,65 @@ def test_validate_generated_pages_reports_each_invalid_render_shape() -> None:
     assert any("missing top-level H1" in issue for issue in issues)
 
 
+def test_validate_generated_page_covers_pages_outside_commands_dir() -> None:
+    """Topic pages such as action.mdx are no longer exempt from validation."""
+    docs = _load_generator_module()
+
+    target = docs.DocTarget(Path("docs/src/content/docs/action.mdx"), lambda: "no frontmatter\n")
+    issues = docs.validate_generated_page(target, "no frontmatter\n")
+
+    assert any("missing YAML frontmatter" in issue for issue in issues)
+
+
+def test_validate_generated_page_skips_anchor_targets() -> None:
+    """Anchor blocks are fragments of a hand-written page, not whole pages."""
+    docs = _load_generator_module()
+
+    target = docs.DocTarget(
+        Path("docs/src/content/docs/index.mdx"),
+        lambda: "- a link\n",
+        anchor_id="index-topic-links",
+    )
+    assert docs.validate_generated_page(target, "- a link\n") == []
+
+
+def test_validate_generated_page_skips_non_mdx_targets() -> None:
+    docs = _load_generator_module()
+
+    target = docs.DocTarget(Path("README.md"), lambda: "no frontmatter\n")
+    assert docs.validate_generated_page(target, "no frontmatter\n") == []
+
+
+def test_validate_generated_page_reports_duplicate_h1() -> None:
+    docs = _load_generator_module()
+
+    rendered = "---\ntitle: x\n---\n\n# First\n\nbody\n\n# Second\n\nmore\n"
+    target = docs.DocTarget(Path("docs/src/content/docs/commands/dup.mdx"), lambda: rendered)
+    issues = docs.validate_generated_page(target, rendered)
+
+    assert any("2 top-level H1 headings" in issue for issue in issues)
+
+
+def test_validate_generated_page_ignores_fenced_hash_lines_for_h1_count() -> None:
+    docs = _load_generator_module()
+
+    rendered = "---\ntitle: x\n---\n\n# Only\n\n```bash\n# not a heading\n```\n"
+    target = docs.DocTarget(Path("docs/src/content/docs/commands/fenced.mdx"), lambda: rendered)
+
+    assert docs.validate_generated_page(target, rendered) == []
+
+
+def test_validate_generated_page_reports_headings_clipped_at_h6() -> None:
+    """A heading shifted onto H6 has lost its real nesting level."""
+    docs = _load_generator_module()
+
+    rendered = "---\ntitle: x\n---\n\n# Top\n\n###### Clipped\n\nbody\n"
+    target = docs.DocTarget(Path("docs/src/content/docs/commands/deep.mdx"), lambda: rendered)
+    issues = docs.validate_generated_page(target, rendered)
+
+    assert any("clipped at H6" in issue for issue in issues)
+
+
 def test_generate_readme_links_markdown_contains_all_doc_entries() -> None:
     docs = _load_generator_module()
 

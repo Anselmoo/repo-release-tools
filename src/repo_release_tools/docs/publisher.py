@@ -846,11 +846,12 @@ def _ensure_primary_h1(content: str, title: str) -> str:
 
 
 def validate_generated_pages() -> list[str]:
-    """Return consistency issues for generated command pages.
+    """Return consistency issues for every generated full-page target.
 
     Rules:
-    - top-level generated command pages must include frontmatter
-    - top-level generated command pages must include a top-level H1
+    - generated pages must include frontmatter
+    - generated pages must open with exactly one top-level H1
+    - no heading may be clipped by the level-6 cap when shifted
     """
     issues: list[str] = []
     for target in GENERATED_DOC_TARGETS:
@@ -859,13 +860,34 @@ def validate_generated_pages() -> list[str]:
     return issues
 
 
+def _clipped_headings(body: str) -> list[str]:
+    """Return headings that hit the H6 cap, which hides their real depth.
+
+    ``normalize_markdown_headings`` shifts by ``min(level + offset, 6)``, so a
+    doc nested deeply enough silently flattens distinct levels onto H6.
+    """
+    return [
+        line.text
+        for line in parse_markdown_lines(body)
+        if line.kind == "heading" and line.level == 6
+    ]
+
+
 def validate_generated_page(target: DocTarget, rendered: str) -> list[str]:
-    """Return consistency issues for one generated command page rendering."""
+    """Return consistency issues for one generated page rendering.
+
+    Anchor-block targets are skipped: they are fragments spliced into a
+    hand-written page, so page-level rules about frontmatter and H1 do not
+    apply to them.
+
+    This deliberately checks only page-level invariants. Section structure
+    belongs to :mod:`repo_release_tools.docs.skeleton`, which reads the source
+    docstring before headings are re-levelled and can therefore name the module
+    a contributor has to edit.
+    """
     if target.anchor_id is not None:
         return []
-    if not (
-        target.output_path.suffix.lower() == ".mdx" and target.output_path.parent.name == "commands"
-    ):
+    if target.output_path.suffix.lower() != ".mdx":
         return []
 
     issues: list[str] = []
@@ -881,6 +903,21 @@ def validate_generated_page(target: DocTarget, rendered: str) -> list[str]:
     body = rendered[fm_close + len("\n---\n") :].lstrip("\n")
     if not body.startswith("# "):
         issues.append(f"{target.output_path}: missing top-level H1")
+
+    h1_count = sum(
+        1 for line in parse_markdown_lines(body) if line.kind == "heading" and line.level == 1
+    )
+    if h1_count > 1:
+        issues.append(
+            f"{target.output_path}: has {h1_count} top-level H1 headings; expected exactly one",
+        )
+
+    clipped = _clipped_headings(body)
+    if clipped:
+        issues.append(
+            f"{target.output_path}: {len(clipped)} heading(s) clipped at H6 when shifted, "
+            f"flattening their nesting: {', '.join(repr(t) for t in clipped[:3])}",
+        )
 
     return issues
 
