@@ -1,15 +1,99 @@
 [meta]
-generated_at = "2026-09-20T20:15:55+00:00"
+generated_at = "2026-09-20T20:52:10+00:00"
 rrt_version = "1.17.1"
+
+[sources."src/repo_release_tools/commands/artifacts_cmd.py"]
+hash = "sha256:8fbc8fa4ec66c788f066003ee9bc525472056942599a68d171246433a33180f1"
+symbols = ["__doc__"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/branch.py"]
+hash = "sha256:f0fb72f01540be55020217a067697c9525d082347bc4834ca670ef005aff6f5e"
+symbols = ["SEMANTIC_BRANCHES_DOC"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/bump.py"]
+hash = "sha256:b8c44b4a4e1121d3a44f4808a532da4e45d7d435c49dd2bdb7357e44696a24d0"
+symbols = ["_VERSION_TARGET_CONFIG_DOC"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/docs_cmd.py"]
+hash = "sha256:d2cf9a83e1c60a6b5cb6927ff8ea5012851ad84333278218b0ae9354cb9c3548"
+symbols = ["__doc__"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/doctor.py"]
+hash = "sha256:45c080732716918d2bf93a73b474c285fdd0e5d5f6c526bfd564b1ccd75139b8"
+symbols = ["__doc__"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/fields_cmd.py"]
+hash = "sha256:86c9cb0088f87661fae531c11bfc089db4f77804fb97a54295819174916dc90e"
+symbols = ["__doc__"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/install_cmd.py"]
+hash = "sha256:0e0ca7853c503fc03a213e750559fdf4060ef7715498ac43fccdfdb5341cdc96"
+symbols = ["__doc__"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/release_cmd.py"]
+hash = "sha256:98a23c7dd9bb0e85ce5f15d31f16cc70f812c78fa807ea4f6c2044c810200100"
+symbols = ["_RELEASE_CHECK_EXTENDED_DOC"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/skill.py"]
+hash = "sha256:a3f48bf479d5b213c772c5db254fabe64ca7e5fb6a7095e37ba130714aa2f831"
+symbols = ["__doc__"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/sync_cmd.py"]
+hash = "sha256:307b253dc1b34d270a659216929b5709bc48627733ea413bf98ff1b033fefeef"
+symbols = ["_SYNC_DOC"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/commands/tree.py"]
+hash = "sha256:d5275e461e0318683406dd88bc492f038c26c64e60ca8da14c7eed62285bbf35"
+symbols = ["__doc__"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/eol/core.py"]
+hash = "sha256:24ffebad91f272562d28357d1baa69a7602c103cca5fe37528a9f63de64f9a54"
+symbols = ["__doc__"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
 
 [sources."src/repo_release_tools/integrations/action.py"]
 hash = "sha256:3d1cd26b0f2c0da0c062fb9eabc0642d4bf61a9e18178eb2d5d25519095a8d2b"
 symbols = ["GITHUB_ACTION_DOC", "GITHUB_ACTION_PUBLISH_SNAPSHOT_DOC"]
 lang = "python"
-updated_at = "2026-09-20T20:15:55+00:00"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/integrations/mcp_server.py"]
+hash = "sha256:6000586aa086e59a64070b15b2f229f655438578826fc0fd7e870133d69f9fe3"
+symbols = ["MCP_SERVER_DOC"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
+
+[sources."src/repo_release_tools/workflow/git.py"]
+hash = "sha256:769ba9ac8c0b25aafa9c9a0bfdc9e18b4983587f952e1273706a6da7abfb7187"
+symbols = ["GIT_DOC"]
+lang = "python"
+updated_at = "2026-09-20T20:52:10+00:00"
 
 [sources."src/repo_release_tools/workflow/hooks.py"]
 hash = "sha256:97277f2d71446274711df6a5660b1b77650e1db5330c6a9bf64c649334728d06"
 symbols = ["PRE_COMMIT_DOC", "AGENT_INSTRUCTIONS_DOC"]
 lang = "python"
-updated_at = "2026-09-20T20:15:55+00:00"
+updated_at = "2026-09-20T20:52:10+00:00"
