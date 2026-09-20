@@ -182,7 +182,6 @@ def _collect_source_owned_topic_docs(modules: Sequence[object]) -> dict[str, str
 
 SOURCE_OWNED_TOPIC_DOCS: dict[str, str] = _collect_source_owned_topic_docs(
     (
-        rrt_package,
         branch_module,
         bump_module,
         git_helpers,
