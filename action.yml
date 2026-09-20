@@ -58,9 +58,11 @@ inputs:
     default: "false"
   check-docs:
     description: >-
-      Whether to fail if source-owned docs have drifted from the lockfile.
-      Detects source files added, modified, or deleted without regenerating
-      .rrt/docs.lock.toml.
+      Whether to fail if source-owned docs have drifted from the lockfile, or
+      violate the published-docstring skeleton. Detects source files added,
+      modified, or deleted without regenerating .rrt/docs.lock.toml, and
+      reports missing or misordered required sections when the project
+      configures [tool.rrt.docs.skeleton].
     default: "false"
   check-folder:
     description: >-

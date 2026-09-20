@@ -211,3 +211,78 @@ emit_failure(...)` directly; only `run_changelog_check` and a few other
 without going through `emit_failure`. There is no equivalent single helper
 on the CLI side — CLI commands build their failure output ad hoc using the
 same `ui/` primitives.
+
+## 6. Published-docstring skeleton
+
+**Some docstrings are the product.** Module docstrings and module-level doc
+constants in this package are not internal comments. `docs/publisher.py`
+renders them into published pages under `docs/src/content/docs/`, so editing
+one changes the website. A doc reaches publication by one of two routes:
+
+1. an explicit `SOURCE_OWNED_TOPIC_DOCS` tuple exported by the module, whose
+   slug is then wired into `TOPIC_PAGE_OUTPUTS` or `COMMAND_DOC_SOURCES`
+2. the `inspect.getdoc()` fallback in `render_command_docs`, which picks up
+   any command module that has no explicit entry
+
+Both routes are governed. 19 declared entries plus 20 fallback modules cover
+34 distinct documents, because five docs (`artifacts`, `docs`, `fields`,
+`install`, `skill`) are reachable both ways and are validated once.
+
+**The skeleton.** `docs/skeleton.py` enforces these rules whenever
+`[tool.rrt.docs.skeleton]` is configured:
+
+| Rule | Detail |
+|---|---|
+| Required sections | `## Overview`, `## Examples`, `## Caveats`, `## Related docs`, spelled exactly |
+| Opening | `## Overview` is the first H2 |
+| Closing | `## Caveats` then `## Related docs` are the last two H2s |
+| Optional sections | permitted only between Overview and Caveats |
+| Non-emptiness | every required section needs content; a fenced code block counts |
+| Heading depth | H3 maximum |
+| H1 ownership | forbidden for slugs whose page lives under `commands/`, where `_ensure_primary_h1` injects one from `TITLE_OVERRIDES`; required elsewhere |
+| Canonical source | a substantive `__doc__` may be extended or re-titled by a constant, never replaced |
+| Collection coverage | every module declaring `SOURCE_OWNED_TOPIC_DOCS` must appear in publisher's collection tuple |
+| Register | per-section mean ≤ 22 words/sentence, ≤ 3.5 em-dashes per 100 words |
+
+**Errors surface in layers.** Missing-section errors are reported first, and
+ordering is only checked once all four sections exist. Adding the last missing
+section can therefore reveal a new ordering error on the same file.
+
+**"Substantive" means more than one paragraph.** A one-line summary docstring
+is a summary, not documentation, so a constant may replace it freely. Anything
+that continues into a second paragraph is an explanation, and an explanation
+that never reaches the page is content no reader will see. A module whose
+docstring is deliberately internal opts out with the `rrt:docs-exempt` marker,
+the same marker `tests/commands/test_commands_docstrings.py` uses.
+`integrations/mcp_server.py` is the current example: its docstring explains
+module placement and import discipline, and `MCP_SERVER_DOC` is the published
+text.
+
+**Register measurement is deliberately narrow.** Only narrative paragraphs
+count. Headings, fenced code, tables, blockquotes and list items are excluded,
+because they are routinely sentence fragments and averaging them alongside
+prose is what makes naive readability metrics meaningless on reference
+documentation. Sections with fewer than four prose sentences are skipped
+entirely, since a mean over three fragments is noise. The 22-word ceiling was
+calibrated against this repo's own corpus, whose per-section distribution runs
+median 11.8 and p95 20.5, with one outlier at 26.0.
+
+**Two validators, different jobs.** `skeleton.validate_skeleton` reads the
+*source* doc before headings are re-levelled, so it can name the module and
+line a contributor must edit. `publisher.validate_generated_page` reads the
+*rendered* page and owns only page-level invariants: frontmatter, exactly one
+H1, and headings clipped at the H6 cap. It deliberately does not look for
+sections, because `generate_group_reference_markdown` splices several commands
+into one page and the renderer no longer knows where one module's block ends.
+
+**Where it runs.** Both feed `_cmd_publish`'s `consistency_issues` list, which
+writes to stderr and returns `1` before any file is written. `rrt docs publish
+--check` is already a CI gate in `cicd.yml` and `pages.yml`, so the skeleton is
+enforced in CI with no workflow changes. There is no `rrt-hooks` subcommand and
+no `action.yml` input for it; `rrt-docs-publish` already covers it.
+
+**Unconfigured means off.** `validate_skeleton` returns `[]` when
+`DocsConfig.skeleton` is `None`. This repo opts in with a bare
+`[tool.rrt.docs.skeleton]` table, since the dataclass defaults are its own
+contract. Expressing "off" as an empty `required_sections` tuple is wrong — it
+conflates an absent table with a deliberately disabled one.
