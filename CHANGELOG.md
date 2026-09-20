@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Added
+- Per-group `tag_prefix` and `changelog_paths` settings, also used as the default for `rrt tag create/check --prefix`
+
+### Fixed
+- Bump `--group` now derives the changelog range from the group's own latest tag, not the newest repo-wide tag
+
 ## [1.17.1] - 2026-08-30
 
 ### Fixed
