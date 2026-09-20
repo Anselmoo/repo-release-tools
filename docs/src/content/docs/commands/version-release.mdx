@@ -151,6 +151,8 @@ changelog_file = "backend/CHANGELOG.md"
 name = "sdk"
 release_branch = "release/sdk/v{version}"
 changelog_file = "sdk/CHANGELOG.md"
+tag_prefix = "sdk-v"
+changelog_paths = ["sdk/"]
 
   [[tool.rrt.version_groups.version_targets]]
   path = "sdk/package.json"
@@ -158,8 +160,17 @@ changelog_file = "sdk/CHANGELOG.md"
 ```
 
 Each group supports: `release_branch`, `changelog_file`,
-`changelog_workflow`, `lock_command`, `generated_files`,
-`version_targets`, and `pin_targets`.
+`changelog_workflow`, `tag_prefix`, `changelog_paths`, `lock_command`,
+`generated_files`, `version_targets`, and `pin_targets`.
+
+`tag_prefix` (default `"v"`) names the group's release tags. It is the
+default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is
+what anchors a generated changelog section to the group's *own* latest tag —
+without it, a repository holding both `v*` and `sdk-v*` tags would start
+every group's range at whichever tag sorts first overall.
+
+`changelog_paths` optionally restricts generated entries to commits touching
+the group's own files, so one group's section cannot pick up another's work.
 
 Bump a specific group:
 
@@ -881,7 +892,10 @@ CI pipelines, helping to maintain a clean and reliable release record.
 By default, tags are created with a `v` prefix (e.g., `v1.2.3`) as is standard
 for many version control and release automation tools.
 
-- The prefix can be customized using `--prefix <string>`.
+- The prefix comes from the resolved group's `tag_prefix` setting, which is
+  itself `v` unless configured. Setting it per group (e.g. `sdk-v`) is what
+  lets `rrt bump` anchor that group's changelog range to its own tags.
+- The prefix can be overridden for one invocation using `--prefix <string>`.
 - The prefix can be removed entirely using `--prefix ""`.
 - Tag names are derived directly from the current version read from the
   active `[tool.rrt]` configuration group.
@@ -947,7 +961,7 @@ Arguments
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help       Show this message and exit.
-  --prefix PREFIX  Tag prefix (default: 'v'). Pass empty string for no prefix. Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
+  --prefix PREFIX  Tag prefix. Defaults to the group's configured 'tag_prefix' (itself 'v' unless set). Pass empty string for no prefix. Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
   --message MSG    Annotation message. Defaults to 'Release <tag>'.
   --push           Push the tag to origin after creating it.
   --force          Delete and recreate the tag if it already exists.
@@ -981,7 +995,7 @@ Arguments
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help       Show this message and exit.
-  --prefix PREFIX  Expected tag prefix (default: 'v'). Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
+  --prefix PREFIX  Expected tag prefix. Defaults to the group's configured 'tag_prefix' (itself 'v' unless set). Include the '{group}' token to render each group's name when --group lists multiple groups (e.g. '{group}-v').
   --strict         Fail if the expected tag for the current version is missing.
   --group GROUP    Version group to read when multiple groups are configured. Pass a comma-separated list (e.g. 'a,b,c') to check several groups in one invocation; --prefix must then include the '{group}' token.
 

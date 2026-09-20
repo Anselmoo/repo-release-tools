@@ -69,6 +69,7 @@ import dataclasses
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from repo_release_tools.changelog import (
     build_changelog_section,
@@ -87,6 +88,7 @@ from repo_release_tools.commands._common import (
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands._version_render import render_version_write_events
 from repo_release_tools.config import (
+    DEFAULT_TAG_PREFIX,
     RrtConfig,
     VersionGroup,
     find_repo_root,
@@ -115,6 +117,9 @@ from repo_release_tools.version.targets import (
     replace_pin_in_file,
 )
 from repo_release_tools.workflow import git
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 PREVIEW_LINES = 8
 
@@ -423,12 +428,31 @@ def resolve_changelog_mode(group: VersionGroup, requested_mode: str | None) -> s
     return "generate" if group.changelog_workflow == "squash" else "auto"
 
 
-def git_log_since_latest_tag(root: Path) -> list[str]:
-    """Collect commit subjects since the latest tag."""
+def git_log_since_latest_tag(
+    root: Path,
+    tag_prefix: str = DEFAULT_TAG_PREFIX,
+    paths: Sequence[str] = (),
+) -> list[str]:
+    """Collect commit subjects since the latest tag carrying *tag_prefix*.
+
+    Filtering by prefix is what keeps a group's range anchored to its own
+    release history: a repository holding both ``v*`` and ``sdk-v*`` tags would
+    otherwise start every group's range at whichever tag sorts first overall
+    (issue #251).  ``startswith`` matches ``rrt tag check``'s own prefix test
+    rather than a git glob, so a prefix containing glob metacharacters cannot
+    silently widen the match.
+
+    *paths* restricts the log to the group's own files when the group
+    configures ``changelog_paths``.
+    """
     tags_raw = git.capture(["git", "tag", "--sort=-v:refname"], root)
     tags = [tag.strip() for tag in tags_raw.splitlines() if tag.strip()]
-    ref = f"{tags[0]}..HEAD" if tags else "HEAD"
-    out = git.capture(["git", "log", ref, "--pretty=format:%s"], root)
+    matching = [tag for tag in tags if tag.startswith(tag_prefix)]
+    ref = f"{matching[0]}..HEAD" if matching else "HEAD"
+    cmd = ["git", "log", ref, "--pretty=format:%s"]
+    if paths:
+        cmd += ["--", *paths]
+    out = git.capture(cmd, root)
     return [line.strip() for line in out.splitlines() if line.strip()]
 
 
@@ -454,6 +478,10 @@ def update_changelog(
     ``generate``
         Always generates a new section from the git log, ignoring any
         ``[Unreleased]`` section.
+
+    Generated sections read the commit range from the resolved group's own
+    latest tag (its configured ``tag_prefix``) and, when the group configures
+    ``changelog_paths``, only from commits touching those paths.
 
     When the changelog contains an empty ``[Unreleased]`` placeholder (e.g.
     after a previous release), the generated section is inserted *after* that
@@ -513,7 +541,7 @@ def update_changelog(
     # ---- Generate section from git log (heading / hash notation) -----------
     section = build_changelog_section(
         version,
-        git_log_since_latest_tag(config.root),
+        git_log_since_latest_tag(config.root, config.tag_prefix, config.changelog_paths),
         include_maintenance=include_maintenance,
         fmt=fmt,
     )
@@ -1058,6 +1086,8 @@ changelog_file = "backend/CHANGELOG.md"
 name = "sdk"
 release_branch = "release/sdk/v{version}"
 changelog_file = "sdk/CHANGELOG.md"
+tag_prefix = "sdk-v"
+changelog_paths = ["sdk/"]
 
   [[tool.rrt.version_groups.version_targets]]
   path = "sdk/package.json"
@@ -1065,8 +1095,17 @@ changelog_file = "sdk/CHANGELOG.md"
 ```
 
 Each group supports: `release_branch`, `changelog_file`,
-`changelog_workflow`, `lock_command`, `generated_files`,
-`version_targets`, and `pin_targets`.
+`changelog_workflow`, `tag_prefix`, `changelog_paths`, `lock_command`,
+`generated_files`, `version_targets`, and `pin_targets`.
+
+`tag_prefix` (default `"v"`) names the group's release tags. It is the
+default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is
+what anchors a generated changelog section to the group's *own* latest tag —
+without it, a repository holding both `v*` and `sdk-v*` tags would start
+every group's range at whichever tag sorts first overall.
+
+`changelog_paths` optionally restricts generated entries to commits touching
+the group's own files, so one group's section cannot pick up another's work.
 
 Bump a specific group:
 

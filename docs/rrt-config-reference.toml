@@ -5,6 +5,11 @@
 # Path to the changelog file relative to the project root.
 changelog_file = "..."
 
+# Git pathspecs limiting generated changelog entries to commits touching this
+# unit's own files. Empty means no path filtering. Set per version group in
+# multi-group repositories.
+changelog_paths = []
+
 # How changelog entries are written. 'incremental' = append per commit;
 # 'squash' = accumulate then promote on release.
 # one of: incremental, squash
@@ -30,6 +35,11 @@ pin_target_missing = "error"
 
 # Release branch name template. Use {version} as a placeholder.
 release_branch = "..."
+
+# Prefix for this unit's release tags. Used as the default for 'rrt tag
+# create/check --prefix' and to anchor the generated changelog range to the
+# unit's own latest tag.
+tag_prefix = "..."
 
 # Cross-pipeline artifact protection policy checked by the `rrt doctor`
 # artifact-protection lens.
@@ -165,6 +175,8 @@ provider = "crates"
 
 changelog_file = "..."
 
+changelog_paths = []
+
 # one of: incremental, squash
 changelog_workflow = "incremental"
 
@@ -177,6 +189,8 @@ name = "..."
 # pin_targets: ($ref — see the referenced section for details)
 
 release_branch = "..."
+
+tag_prefix = "..."
 
 # upstream: ($ref — see the referenced section for details)
 
