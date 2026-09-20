@@ -550,6 +550,7 @@ def _load_skeleton_config(raw: object) -> DocsSkeletonConfig | None:
     d: dict[str, object] = cast("dict[str, object]", raw)
 
     cfg = DocsSkeletonConfig(
+        root=_load_skeleton_string(d, "root", default="src"),
         required_sections=_load_skeleton_string_tuple(
             d,
             "required_sections",

@@ -128,7 +128,8 @@ an overall `ok` flag and `violation_count`.
 
 ### `DocsCheckResponse`
 Result of `rrt_docs_check`: whether `.rrt/docs.lock.toml` is current against source-owned
-docs, with a `messages` list describing any drift found.
+docs, with a `messages` list describing any drift found and a `skeleton_issues` list of
+published-docstring skeleton violations.
 
 ### `RawLockData`
 Passthrough wrapper for arbitrary lock-style data when a structured tool model is not needed.
@@ -326,10 +327,11 @@ class FolderCheckResponse(BaseModel):
 
 
 class DocsCheckResponse(BaseModel):
-    """Docs lockfile (.rrt/docs.lock.toml) drift status."""
+    """Docs lockfile (.rrt/docs.lock.toml) drift status and skeleton conformance."""
 
     is_current: bool
     messages: list[str] = Field(default_factory=list)
+    skeleton_issues: list[str] = Field(default_factory=list)
     error: str | None = None
 
 

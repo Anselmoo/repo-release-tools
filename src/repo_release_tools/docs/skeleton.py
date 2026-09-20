@@ -279,9 +279,16 @@ def collect_declared_entries(src_root: Path) -> tuple[SkeletonEntry, ...]:
 
 
 def collect_fallback_entries(src_root: Path) -> tuple[SkeletonEntry, ...]:
-    """Collect command docs published through publisher's ``getdoc`` fallback."""
+    """Collect command docs published through publisher's ``getdoc`` fallback.
+
+    The command registry is repo-release-tools' own. A downstream project that
+    opts into this check must not have rrt's installed command modules graded
+    against its docs, so entries are kept only when the module's file actually
+    lives under *src_root*.
+    """
     from repo_release_tools.docs import publisher  # noqa: PLC0415
 
+    anchor = src_root.resolve()
     modules = cast("dict[str, ModuleType]", publisher._get_command_doc_modules())
     return tuple(
         SkeletonEntry(
@@ -294,6 +301,7 @@ def collect_fallback_entries(src_root: Path) -> tuple[SkeletonEntry, ...]:
         )
         for command, module in sorted(modules.items())
         if command not in publisher.COMMAND_DOC_SOURCES
+        and anchor in Path(module.__file__ or "").resolve().parents
     )
 
 

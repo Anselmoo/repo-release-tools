@@ -4338,3 +4338,17 @@ def test_load_config_skeleton_validates_cross_field_rules(tmp_path: Path) -> Non
     )
     with pytest.raises(ValueError, match="opening_section"):
         load_config(tmp_path)
+
+
+def test_load_config_skeleton_root_override(tmp_path: Path) -> None:
+    """The skeleton check can be pointed at a different source root."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.skeleton]\nroot = "lib"\n')
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None and cfg.docs.skeleton is not None
+    assert cfg.docs.skeleton.root == "lib"
+
+
+def test_skeleton_config_rejects_blank_root() -> None:
+    """DocsSkeletonConfig.validate rejects a whitespace-only root."""
+    with pytest.raises(ValueError, match="root must be a non-empty string"):
+        DocsSkeletonConfig(root="   ").validate()

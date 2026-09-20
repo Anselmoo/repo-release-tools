@@ -27,6 +27,7 @@ from repo_release_tools.commands.docs_cmd import (
     _prepend_anchor_if_missing,
     _restore_shared_block_stubs,
     cmd_docs,
+    collect_skeleton_issues,
 )
 from repo_release_tools.config import DocsConfig, RrtConfig, SharedBlock
 from repo_release_tools.docs.extractor import DocEntry
@@ -1421,3 +1422,77 @@ class TestEmbedTocInContent:
             "# Title\n\n<!-- rrt:auto:start:toc -->\n<!-- rrt:auto:end:toc -->\n\n## Section\n"
         )
         assert _embed_toc_in_content(content, Path("target.mdx")) == content
+
+
+class TestSkeletonGate:
+    """The published-docstring skeleton gate wired into publish and check."""
+
+    def test_collect_skeleton_issues_is_empty_without_config(self, tmp_path: Path) -> None:
+        """A project with no [tool.rrt.docs.skeleton] never inherits the gate."""
+        from repo_release_tools.commands.docs_cmd import collect_skeleton_issues
+
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "x"\nversion = "0.1.0"\n\n[tool.rrt]\n',
+            encoding="utf-8",
+        )
+        assert collect_skeleton_issues(tmp_path) == []
+
+    def test_collect_skeleton_issues_is_empty_without_loadable_config(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        assert collect_skeleton_issues(tmp_path) == []
+
+    def test_cmd_publish_fails_on_skeleton_violation(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        from repo_release_tools.commands import docs_cmd as docs_cmd_module
+        from repo_release_tools.docs import publisher as docs_publisher
+
+        monkeypatch.setattr(docs_publisher, "iter_generated_doc_targets", lambda: iter([]))
+        monkeypatch.setattr(
+            docs_cmd_module,
+            "collect_skeleton_issues",
+            lambda root: ["src/pkg/mod.py:1: slug 'mod' is missing required section '## Caveats'"],
+        )
+
+        args = argparse.Namespace(check=False, dry_run=False, fail_on_change=False)
+
+        assert _cmd_publish(args) == 1
+        err = capsys.readouterr().err
+        assert "violate the skeleton" in err
+        assert "missing required section '## Caveats'" in err
+        assert "[tool.rrt.docs.skeleton]" in err
+
+    def test_cmd_check_reports_skeleton_violation_when_lock_is_current(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        """A clean lockfile still fails when the skeleton is violated."""
+        from repo_release_tools.commands import docs_cmd as docs_cmd_module
+
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "x"\nversion = "0.1.0"\n\n'
+            "[tool.rrt]\n\n"
+            '[[tool.rrt.version_targets]]\npath = "pyproject.toml"\nkind = "pep621"\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(docs_cmd_module, "lock_is_current", lambda path, sources: (True, []))
+        monkeypatch.setattr(docs_cmd_module, "extract_docs_from_dir", lambda cwd, cfg: [])
+        monkeypatch.setattr(
+            docs_cmd_module,
+            "collect_skeleton_issues",
+            lambda root: ["src/pkg/mod.py:1: slug 'mod' publishes an empty document"],
+        )
+
+        args = argparse.Namespace(root=str(tmp_path), lock_file=None, verbose=0)
+
+        assert docs_cmd_module._cmd_check(args) == 1
+        err = capsys.readouterr().err
+        assert "violate the skeleton" in err
+        assert "publishes an empty document" in err
+        assert "lockfile is stale" not in err

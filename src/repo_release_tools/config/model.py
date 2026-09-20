@@ -595,6 +595,7 @@ class DocsSkeletonConfig:
     repo-release-tools' own contract, which is why a bare table enables it.
     """
 
+    root: str = "src"
     required_sections: tuple[str, ...] = DEFAULT_REQUIRED_SECTIONS
     opening_section: str = "Overview"
     closing_sections: tuple[str, ...] = ("Caveats", "Related docs")
@@ -610,6 +611,8 @@ class DocsSkeletonConfig:
 
     def validate(self) -> None:
         """Validate section membership, depth, and register thresholds."""
+        if not self.root.strip():
+            raise ValueError("docs.skeleton.root must be a non-empty string")
         if not self.required_sections:
             raise ValueError(
                 "docs.skeleton.required_sections must not be empty; omit the "
