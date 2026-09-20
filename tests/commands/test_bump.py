@@ -538,6 +538,108 @@ def test_git_log_since_latest_tag_uses_head_when_no_tags(
     assert calls[1] == ["git", "log", "HEAD", "--pretty=format:%s"]
 
 
+def test_git_log_since_latest_tag_ignores_other_groups_tags(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A prefixed group anchors its range to its own tag, not a bare v* one (issue #251)."""
+    calls: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], root: Path) -> str:
+        calls.append(cmd)
+        if cmd[:2] == ["git", "tag"]:
+            return "v9.0.0\nsdk-v1.2.0\nsdk-v1.1.0\n"
+        return "feat: sdk parser\n"
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.capture", fake_capture)
+
+    assert git_log_since_latest_tag(tmp_path, "sdk-v") == ["feat: sdk parser"]
+    assert calls[1] == ["git", "log", "sdk-v1.2.0..HEAD", "--pretty=format:%s"]
+
+
+def test_git_log_since_latest_tag_uses_head_when_prefix_matches_no_tag(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], root: Path) -> str:
+        calls.append(cmd)
+        if cmd[:2] == ["git", "tag"]:
+            return "v1.2.0\n"
+        return "feat: first sdk commit\n"
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.capture", fake_capture)
+
+    assert git_log_since_latest_tag(tmp_path, "sdk-v") == ["feat: first sdk commit"]
+    assert calls[1] == ["git", "log", "HEAD", "--pretty=format:%s"]
+
+
+def test_git_log_since_latest_tag_scopes_to_changelog_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], root: Path) -> str:
+        calls.append(cmd)
+        if cmd[:2] == ["git", "tag"]:
+            return "v1.2.0\n"
+        return "feat: sdk only\n"
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.capture", fake_capture)
+
+    assert git_log_since_latest_tag(tmp_path, "v", ["sdk/", "shared/api.json"]) == [
+        "feat: sdk only"
+    ]
+    assert calls[1] == [
+        "git",
+        "log",
+        "v1.2.0..HEAD",
+        "--pretty=format:%s",
+        "--",
+        "sdk/",
+        "shared/api.json",
+    ]
+
+
+def test_update_changelog_generate_passes_group_tag_prefix_and_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The group's own tag_prefix/changelog_paths reach the git range lookup."""
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n## [Unreleased]\n\n", encoding="utf-8")
+    group = VersionGroup(
+        name="sdk",
+        release_branch="release/sdk/v{version}",
+        changelog_file=changelog,
+        lock_command=[],
+        generated_files=[],
+        version_targets=[VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")],
+        tag_prefix="sdk-v",
+        changelog_paths=["sdk/"],
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="sdk",
+    )
+    seen: list[tuple[Path, str, list[str]]] = []
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git_log_since_latest_tag",
+        lambda root, prefix, paths: (seen.append((root, prefix, paths)), ["feat: sdk thing"])[1],
+    )
+
+    update_changelog(config, "1.3.0", include_maintenance=False, dry_run=False)
+
+    assert seen == [(tmp_path, "sdk-v", ["sdk/"])]
+    assert "feat" not in changelog.read_text(encoding="utf-8").split("[Unreleased]")[0]
+    assert "sdk thing" in changelog.read_text(encoding="utf-8")
+
+
 def test_update_changelog_skips_missing_file(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -595,7 +697,7 @@ def test_update_changelog_generate_dry_run_shows_ellipsis_for_long_preview(
 ) -> None:
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: [f"feat: item {i}" for i in range(12)],
+        lambda root, prefix="v", paths=(): [f"feat: item {i}" for i in range(12)],
     )
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text("# Changelog\n\n## [Unreleased]\n\n", encoding="utf-8")
@@ -2531,7 +2633,7 @@ def test_update_changelog_inserts_after_empty_unreleased(
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: ["feat: brand new feature"],
+        lambda root, prefix="v", paths=(): ["feat: brand new feature"],
     )
 
     update_changelog(config, "1.1.0", include_maintenance=False, dry_run=False)
@@ -2576,7 +2678,7 @@ def test_update_changelog_adds_unreleased_placeholder_when_absent(
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: ["feat: something new"],
+        lambda root, prefix="v", paths=(): ["feat: something new"],
     )
 
     update_changelog(config, "1.1.0", include_maintenance=False, dry_run=False)
@@ -2697,7 +2799,7 @@ def test_update_changelog_mode_generate_ignores_unreleased(
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: ["feat: from git log"],
+        lambda root, prefix="v", paths=(): ["feat: from git log"],
     )
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(
@@ -2812,7 +2914,7 @@ def test_update_changelog_generates_rst_section(
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: ["feat: rst release"],
+        lambda root, prefix="v", paths=(): ["feat: rst release"],
     )
     changelog = tmp_path / "CHANGELOG.rst"
     changelog.write_text(
@@ -2840,7 +2942,7 @@ def test_update_changelog_generates_txt_section(
 
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: ["fix: txt fix"],
+        lambda root, prefix="v", paths=(): ["fix: txt fix"],
     )
     changelog = tmp_path / "CHANGELOG.txt"
     changelog.write_text(
@@ -2918,7 +3020,7 @@ def test_cmd_bump_updates_pin_targets(
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: [],
+        lambda root, prefix="v", paths=(): [],
     )
 
     args = Namespace(
@@ -2963,7 +3065,7 @@ def test_cmd_bump_dry_run_does_not_write_pin_targets(
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: [],
+        lambda root, prefix="v", paths=(): [],
     )
 
     args = Namespace(
@@ -3009,7 +3111,7 @@ def test_cmd_bump_no_pin_sync_skips_pin_targets(
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git_log_since_latest_tag",
-        lambda root: [],
+        lambda root, prefix="v", paths=(): [],
     )
 
     args = Namespace(

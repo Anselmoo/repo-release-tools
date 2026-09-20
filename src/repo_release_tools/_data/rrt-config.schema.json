@@ -31,6 +31,23 @@
       ],
       "description": "How changelog entries are written. 'incremental' = append per commit; 'squash' = accumulate then promote on release."
     },
+    "tag_prefix": {
+      "type": "string",
+      "default": "v",
+      "description": "Prefix for this unit's release tags. Used as the default for 'rrt tag create/check --prefix' and to anchor the generated changelog range to the unit's own latest tag.",
+      "examples": [
+        "v",
+        "sdk-v",
+        ""
+      ]
+    },
+    "changelog_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Git pathspecs limiting generated changelog entries to commits touching this unit's own files. Empty means no path filtering. Set per version group in multi-group repositories."
+    },
     "lock_command": {
       "type": "array",
       "items": {
@@ -185,6 +202,16 @@
               "incremental",
               "squash"
             ]
+          },
+          "tag_prefix": {
+            "type": "string",
+            "default": "v"
+          },
+          "changelog_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "lock_command": {
             "type": "array",

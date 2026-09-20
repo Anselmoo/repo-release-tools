@@ -10,6 +10,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
+    DEFAULT_TAG_PREFIX,
     DocsConfig,
     EolConfig,
     EolOverride,
@@ -341,6 +342,83 @@ kind = "package_json"
     assert config.resolve_group("web").changelog_workflow == "incremental"
 
 
+def test_load_config_parses_per_group_tag_prefix_and_changelog_paths(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+default_group = "python"
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+tag_prefix = "web-v"
+changelog_paths = ["web/", "shared/schema.json"]
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.resolve_group("python").tag_prefix == DEFAULT_TAG_PREFIX
+    assert config.resolve_group("python").changelog_paths == []
+    assert config.resolve_group("web").tag_prefix == "web-v"
+    assert config.resolve_group("web").changelog_paths == ["web/", "shared/schema.json"]
+    # Default-group properties mirror the resolved group (issue #251).
+    assert config.tag_prefix == DEFAULT_TAG_PREFIX
+    assert config.changelog_paths == []
+
+
+def test_group_inherits_default_tag_prefix(tmp_path: Path) -> None:
+    """A repo-wide [tool.rrt] tag_prefix is inherited by groups that omit it."""
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+tag_prefix = "rel-"
+default_group = "python"
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+tag_prefix = ""
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.resolve_group("python").tag_prefix == "rel-"
+    assert config.resolve_group("web").tag_prefix == ""
+
+
+def test_load_config_defaults_tag_prefix_to_v(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    assert config.tag_prefix == DEFAULT_TAG_PREFIX
+    assert config.changelog_paths == []
+
+
 def test_load_config_defaults_changelog_workflow_incremental(tmp_path: Path) -> None:
     (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
 
@@ -501,6 +579,9 @@ rrt = \"oops\"
         ("release_branch = 1", "release_branch must be a string"),
         ("changelog_file = 1", "changelog_file must be a string"),
         ("changelog_workflow = 1", "changelog_workflow must be a string"),
+        ("tag_prefix = 1", "tag_prefix must be a string"),
+        ('changelog_paths = "sdk/"', "changelog_paths must be a list of strings"),
+        ("changelog_paths = [1]", "changelog_paths must be a list of strings"),
         ('lock_command = "uv lock"', "lock_command must be a list of strings"),
         ('generated_files = "uv.lock"', "generated_files must be a list of strings"),
         ("version_source = 1", "version_source must be a string when provided"),
