@@ -28,8 +28,13 @@ def register(mcp: FastMCP) -> None:
         before opening a PR — CI fails on this drift. Read-only — never regenerates or
         writes files. If stale, run `rrt docs generate --format toml` to refresh. Covers
         .rrt/docs.lock.toml only; `rrt docs map --check` has no tool here — use the CLI.
+        Also reports published-docstring skeleton violations in `skeleton_issues`
+        when the project configures `[tool.rrt.docs.skeleton]`.
         """
-        from repo_release_tools.commands.docs_cmd import _build_docs_lock_sources
+        from repo_release_tools.commands.docs_cmd import (
+            _build_docs_lock_sources,
+            collect_skeleton_issues,
+        )
         from repo_release_tools.config import DocsConfig
         from repo_release_tools.docs.extractor import extract_docs_from_dir
         from repo_release_tools.state import docs_lock_path, lock_is_current
@@ -43,4 +48,8 @@ def register(mcp: FastMCP) -> None:
         sources = _build_docs_lock_sources(entries)
         is_current, messages = lock_is_current(lock_path, sources)
 
-        return DocsCheckResponse(is_current=is_current, messages=messages)
+        return DocsCheckResponse(
+            is_current=is_current,
+            messages=messages,
+            skeleton_issues=collect_skeleton_issues(root),
+        )

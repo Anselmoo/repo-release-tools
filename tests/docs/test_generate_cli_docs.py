@@ -344,8 +344,10 @@ def test_topic_doc_generators_use_source_owned_markdown_constants() -> None:
 
     assert docs.generate_semantic_branches_markdown() == docs.branch_module.SEMANTIC_BRANCHES_DOC
     assert docs.generate_git_markdown() == docs.git_helpers.GIT_DOC
-    assert docs.generate_semantic_branches_markdown().startswith("# rrt branch")
-    assert docs.generate_git_markdown().startswith("# rrt git")
+    # Both pages render under commands/, where _ensure_primary_h1 injects the
+    # H1 from TITLE_OVERRIDES. A source-side H1 would be a skeleton violation.
+    assert not docs.generate_semantic_branches_markdown().startswith("# ")
+    assert not docs.generate_git_markdown().startswith("# ")
     assert docs.GENERATED_DOC_TARGETS[0].output_path.name == "rrt-cli.mdx"
     assert len(docs.GENERATED_DOC_TARGETS) >= 3
     assert "branch" in docs.TOPIC_PAGE_OUTPUTS
@@ -431,6 +433,43 @@ def test_extract_first_h1_helper() -> None:
 
     assert docs._extract_first_h1("# Title\n\nBody\n") == "Title"
     assert docs._extract_first_h1("No heading here\n") is None
+
+
+def test_extract_first_h1_ignores_comments_in_fenced_code() -> None:
+    """A shell comment in an example is not the page title."""
+    docs = _load_generator_module()
+
+    text = "Intro line.\n\n```bash\n# Or via pre-commit:\nrrt docs publish\n```\n"
+    assert docs._extract_first_h1(text) is None
+
+
+def test_extract_first_h1_prefers_real_heading_after_a_fence() -> None:
+    docs = _load_generator_module()
+
+    text = "```bash\n# not a heading\n```\n\n# Real Title\n\nbody\n"
+    assert docs._extract_first_h1(text) == "Real Title"
+
+
+def test_ensure_primary_h1_does_not_rewrite_fenced_comments() -> None:
+    """Rewriting a `#` line inside a fence would corrupt the code example."""
+    docs = _load_generator_module()
+
+    text = "```bash\n# not a heading\n```\n\n# Real Title\n\nbody\n"
+    result = docs._ensure_primary_h1(text, "Injected")
+
+    assert "# not a heading" in result
+    assert "# Injected" in result
+    assert "# Real Title" not in result
+
+
+def test_ensure_primary_h1_prepends_when_only_fenced_comments_exist() -> None:
+    docs = _load_generator_module()
+
+    text = "```bash\n# not a heading\n```\n"
+    result = docs._ensure_primary_h1(text, "Injected")
+
+    assert result.startswith("# Injected\n")
+    assert "# not a heading" in result
 
 
 def test_cmd_publish_renders_each_target_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -538,6 +577,65 @@ def test_validate_generated_pages_reports_each_invalid_render_shape() -> None:
     assert any("missing YAML frontmatter" in issue for issue in issues)
     assert any("malformed YAML frontmatter" in issue for issue in issues)
     assert any("missing top-level H1" in issue for issue in issues)
+
+
+def test_validate_generated_page_covers_pages_outside_commands_dir() -> None:
+    """Topic pages such as action.mdx are no longer exempt from validation."""
+    docs = _load_generator_module()
+
+    target = docs.DocTarget(Path("docs/src/content/docs/action.mdx"), lambda: "no frontmatter\n")
+    issues = docs.validate_generated_page(target, "no frontmatter\n")
+
+    assert any("missing YAML frontmatter" in issue for issue in issues)
+
+
+def test_validate_generated_page_skips_anchor_targets() -> None:
+    """Anchor blocks are fragments of a hand-written page, not whole pages."""
+    docs = _load_generator_module()
+
+    target = docs.DocTarget(
+        Path("docs/src/content/docs/index.mdx"),
+        lambda: "- a link\n",
+        anchor_id="index-topic-links",
+    )
+    assert docs.validate_generated_page(target, "- a link\n") == []
+
+
+def test_validate_generated_page_skips_non_mdx_targets() -> None:
+    docs = _load_generator_module()
+
+    target = docs.DocTarget(Path("README.md"), lambda: "no frontmatter\n")
+    assert docs.validate_generated_page(target, "no frontmatter\n") == []
+
+
+def test_validate_generated_page_reports_duplicate_h1() -> None:
+    docs = _load_generator_module()
+
+    rendered = "---\ntitle: x\n---\n\n# First\n\nbody\n\n# Second\n\nmore\n"
+    target = docs.DocTarget(Path("docs/src/content/docs/commands/dup.mdx"), lambda: rendered)
+    issues = docs.validate_generated_page(target, rendered)
+
+    assert any("2 top-level H1 headings" in issue for issue in issues)
+
+
+def test_validate_generated_page_ignores_fenced_hash_lines_for_h1_count() -> None:
+    docs = _load_generator_module()
+
+    rendered = "---\ntitle: x\n---\n\n# Only\n\n```bash\n# not a heading\n```\n"
+    target = docs.DocTarget(Path("docs/src/content/docs/commands/fenced.mdx"), lambda: rendered)
+
+    assert docs.validate_generated_page(target, rendered) == []
+
+
+def test_validate_generated_page_reports_headings_clipped_at_h6() -> None:
+    """A heading shifted onto H6 has lost its real nesting level."""
+    docs = _load_generator_module()
+
+    rendered = "---\ntitle: x\n---\n\n# Top\n\n###### Clipped\n\nbody\n"
+    target = docs.DocTarget(Path("docs/src/content/docs/commands/deep.mdx"), lambda: rendered)
+    issues = docs.validate_generated_page(target, rendered)
+
+    assert any("clipped at H6" in issue for issue in issues)
 
 
 def test_generate_readme_links_markdown_contains_all_doc_entries() -> None:

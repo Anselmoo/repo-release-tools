@@ -54,6 +54,12 @@ The command tracks a variety of sensitive agentic surfaces, including:
 - Changes to agent surfaces must be accompanied by a `rrt drift generate`
   call to update the lock.
 - Only files matching the predefined surface patterns are tracked.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Repo health commands](/repo-release-tools/commands/repo-health/) — doctor, config, env, drift, and related checks
+- [rrt artifacts](/repo-release-tools/commands/artifacts/) — the same lock-and-check pattern for arbitrary files
 """
 
 from __future__ import annotations

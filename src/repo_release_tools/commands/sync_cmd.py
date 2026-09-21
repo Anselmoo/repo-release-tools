@@ -1,13 +1,16 @@
 """`rrt sync` — discover newer upstream releases for the tracked package.
 
-Reads the current project version from the configured version group, fetches
-all released versions from the configured upstream registry (PyPI, npm, NuGet,
-crates.io, or Packagist), and emits those that are strictly newer than the
-current version — one per line by default, or as a JSON array with ``--json``.
+## Overview
 
-When ``--bump`` is given the command shifts from list-only to mirror-orchestration
-mode: for every newer version (ascending) it applies version targets, optionally
-commits the result, and optionally creates an annotated tag.
+Reads the current project version from the configured version group.
+Fetches all released versions from the configured upstream registry
+(PyPI, npm, NuGet, crates.io, or Packagist). It prints versions that are
+strictly newer than the current one. Output is one version per line by
+default, or a JSON array with `--json`.
+
+With `--bump`, the command shifts to mirror-orchestration mode. For each
+newer version, in ascending order, it applies version targets and
+optionally commits and tags the result.
 """
 
 from __future__ import annotations
@@ -368,7 +371,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 # Source-owned topic docs
 # ---------------------------------------------------------------------------
 
-_SYNC_DOC = """
+_SYNC_REFERENCE_DOC = """
 ## Configuration
 
 `rrt sync` reads upstream version information using the `[tool.rrt.upstream]`
@@ -396,7 +399,7 @@ replaced with the new version string and used as the git commit message when
 | crates.io | `crates` | Rust crate registry; requires a `User-Agent` header — handled internally |
 | Packagist | `packagist` | PHP package registry; `package` must be in `vendor/name` form |
 
-## Basic usage
+## Examples
 
 ```bash
 # List newer versions one per line (default)
@@ -456,6 +459,23 @@ repos:
 ```bash
 pre-commit run rrt-sync --hook-stage manual
 ```
+
+## Caveats
+
+`rrt sync` skips upstream versions it cannot parse as semver or PEP 440.
+These are silently ignored rather than reported. `--bump` applies newer
+versions strictly in ascending order. It stops at the first failed tag
+creation. The command requires `[tool.rrt.upstream].package` to be
+configured. Without it, `rrt sync` exits with an error.
+
+## Related docs
+
+- [rrt bump](/repo-release-tools/commands/version-release/)
+- [pre-commit / lefthook hooks](/repo-release-tools/commands/hooks/)
 """
+
+# The module docstring is the canonical doc; the reference block above
+# extends it rather than replacing it, so editing __doc__ changes the page.
+_SYNC_DOC = (__doc__ or "") + _SYNC_REFERENCE_DOC
 
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("sync", _SYNC_DOC),)

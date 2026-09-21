@@ -40,6 +40,12 @@ JSON format.
 - Without `--target`, the command prints available destinations in dry-run
   mode and otherwise fails.
 - Hook registration happens automatically during installation.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [rrt hooks](/repo-release-tools/commands/hooks/) — command-level reference for this surface
+- [Setup & tooling commands](/repo-release-tools/commands/setup-tooling/) — install, init, skill, agents, hooks
 """
 
 from __future__ import annotations

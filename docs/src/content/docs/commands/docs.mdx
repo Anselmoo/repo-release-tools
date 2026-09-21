@@ -1,0 +1,104 @@
+---
+title: "rrt docs"
+description: "Documentation extraction, publishing, and per-directory mapping driven by rrt docs."
+---
+
+# rrt docs
+
+rrt docs — extract and manage source-owned documentation blocks.
+
+## Overview
+
+`rrt docs` provides a specialized toolset for managing documentation that lives
+directly within the source code. By extracting inline blocks from multiple
+programming languages and verifying them against a cryptographic lockfile, the
+tool ensures that your documentation stays accurate, up-to-date, and tightly
+coupled with the implementation.
+
+It supports a variety of languages including Python, TypeScript, Go, Rust, and
+several shell dialects, using regex-based extraction that doesn't require
+heavyweight AST parsers.
+
+## Responsibilities
+
+- extract inline documentation blocks from source files recursively
+- generate documentation in multiple formats (Markdown, JSON, TOML, Rich)
+- maintain a documentation lockfile (`docs.lock.toml`) to detect drift in CI
+- emit machine-readable indices of CLI commands and arguments
+- suggest or scaffold missing module docstrings for project alignment
+
+## Sub-actions
+
+- **generate**: Scans the source tree and emits documentation. Use `--format toml`
+  to write or update the documentation lockfile.
+- **check**: Validates that the current documentation lockfile matches the
+  source tree. Exits with a non-zero status if drift is detected.
+- **publish**: Generates the complete Markdown reference documentation from
+  the live CLI parser.
+- **inject**: Synchronizes shared anchor blocks (headers, footers) across
+  multiple Markdown files.
+- **suggest**: Analyzes Python modules for missing or thin docstrings and
+  provides scaffolded improvements.
+- **api**: Emits a structured index of all `rrt` commands for use in
+  external tooling.
+
+## Extraction modes
+
+Controlled by `[tool.rrt.docs] extraction_mode` in config:
+
+- `explicit` (default): only extract blocks preceded by a ``# sym: NAME``
+  (Python/Bash/PowerShell) or ``// sym: NAME`` (JS/TS/Go/Rust) marker.
+  PowerShell also supports ``<# sym: NAME #>``.
+- `implicit`: extract language-native docstrings / comment blocks.
+- `both`: explicit markers take priority; fall back to implicit.
+
+## Supported languages
+
+| Slug        | Extensions               |
+|-------------|--------------------------|
+| python      | .py                      |
+| ts          | .ts, .tsx                |
+| js          | .js, .mjs, .cjs, .jsx    |
+| go          | .go                      |
+| rust        | .rs                      |
+| bash        | .sh, .bash, .zsh         |
+| fish        | .fish                    |
+| powershell  | .ps1, .psm1, .psd1       |
+
+## Lockfile
+
+`rrt docs generate --format toml` writes `.rrt/docs.lock.toml` (default),
+a human-readable TOML file tracking each source file's SHA-256 hash and the
+symbols it exports.  Use `rrt docs check` or the `rrt-docs-check` pre-commit
+hook to fail fast when docs drift from source.
+
+## Examples
+
+```bash
+rrt docs generate --format rich            # colourised terminal preview
+rrt docs generate --format toml --dry-run  # show lock without writing
+rrt docs check                             # exits 1 if lockfile is stale
+rrt docs api --format json                 # machine-readable API index
+```
+
+## Caveats
+
+Extraction is regex-based, not AST-based. Unusual formatting around a
+docstring or an explicit `sym:` marker can cause a block to be missed.
+
+In `explicit` mode, the marker comment must directly precede the block it
+names; a stray blank line or unrelated comment breaks the association.
+
+`rrt docs check` only compares against whatever `.rrt/docs.lock.toml` last
+recorded. Run `rrt docs generate --format toml` again after editing
+docstrings, or drift goes undetected until the next regeneration.
+
+`rrt docs publish` renders each reference page from the live CLI parser and
+source docstrings, then overwrites the target file. Manual edits to a
+generated page are lost on the next publish; edit the source docstring
+instead.
+
+## Related docs
+
+- [CLI reference](/repo-release-tools/commands/rrt-cli/)
+- [Project tree command](/repo-release-tools/commands/tree/)

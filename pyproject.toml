@@ -463,6 +463,12 @@ stubs = [
     "commands/init",
 ]
 
+# Published-docstring skeleton contract. A bare table opts in: the dataclass
+# defaults in config/model.py are this repo's contract. Enforced by
+# `rrt docs publish` and `rrt docs check` via docs/skeleton.py.
+[tool.rrt.docs.skeleton]
+root = "src"
+
 [[tool.rrt.docs.shared_blocks]]
 anchor_id = "page-header"
 content = """{platform_badge_adaptive_reto}

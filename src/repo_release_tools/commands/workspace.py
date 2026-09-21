@@ -34,6 +34,26 @@ rrt workspace bump minor --packages api,sdk,docs
 rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
 rrt workspace bump patch --dry-run --packages api,sdk
 ```
+
+## Caveats
+
+Every package needs its own loadable `[tool.rrt]` configuration. A missing
+or invalid config in any package aborts the whole run before any file is
+written.
+
+Config loading is validated up front, but the actual writes still happen
+package by package. Each package's own version-target write is atomic, yet
+if a later package fails mid-run, earlier packages keep their already
+applied changes. There is no cross-package rollback.
+
+Changelog promotion is skipped per package when that package has no
+`[Unreleased]` section or the section has no entries. Use `--no-changelog`
+to skip it everywhere.
+
+## Related docs
+
+- [Version release](/repo-release-tools/commands/version-release/)
+- [rrt CLI](/repo-release-tools/commands/rrt-cli/)
 """
 
 from __future__ import annotations

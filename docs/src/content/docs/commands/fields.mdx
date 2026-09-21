@@ -1,0 +1,101 @@
+---
+title: "rrt fields"
+description: "Arbitrary config-field reads and writes across project files via rrt fields."
+---
+
+# rrt fields
+
+Field-level manifest sync for values duplicated across independent JSON files.
+
+## Overview
+
+`rrt fields` keeps a single logical fact — a value embedded in more than one
+JSON manifest — from silently drifting. The motivating case: a Claude Code
+plugin marketplace's root `.claude-plugin/marketplace.json` lists each
+plugin's `description`, copied by hand from that plugin's own
+`plugin.json`. Nothing catches it when the two copies diverge.
+
+This is the same shape of problem `rrt artifacts` and `rrt drift` already
+solve — a sensitive value silently drifting from its source of truth — but
+at individual JSON field granularity rather than whole-file content hash.
+
+Unlike `rrt artifacts`, **there is no lockfile**. The source of truth is
+itself a git-tracked file, so `--check` always compares the live source
+field against each live target field directly, on every run.
+
+## Configuration
+
+Add `[[tool.rrt.field_targets]]` entries to `pyproject.toml` (or `.rrt.toml`):
+
+```toml
+[[tool.rrt.field_targets]]
+source = "plugins/self-assess/.claude-plugin/plugin.json"
+source_field = "description"
+targets = [
+  { path = ".claude-plugin/marketplace.json", field = "plugins[name=self-assess].description" },
+  { path = "README.md", anchor = "self-assess-description" },
+]
+```
+
+- `source` — relative path to the source-of-truth JSON file.
+- `source_field` — a path into the parsed source JSON (see "Field path
+  syntax" below).
+- `targets` — a list of write destinations, each setting exactly one of:
+  - `field` — a JSON target. `path` is the target JSON file; `field` uses
+    the same path syntax as `source_field`.
+  - `anchor` — a Markdown/MDX/RST target. `path` is the prose file; `anchor`
+    is the anchor id of an `<!-- rrt:auto:start:<id> -->` /
+    `{/* rrt:auto:start:<id> */}` / `.. rrt:auto:start:<id>` block already
+    present in that file (format auto-detected from the file extension, the
+    same primitive used by `rrt docs publish`/`inject` and `rrt tree
+    --inject`). A target file missing the anchor markers fails loudly
+    (exit 1) rather than being silently skipped.
+
+### Field path syntax
+
+Only two forms are supported, deliberately — this is a hand-rolled stdlib
+resolver, not a general JSONPath/JMESPath engine (no new runtime
+dependency is taken on for it):
+
+- Dotted keys for nested objects: `author.name`
+- One bracket-filter form, for selecting an array element by a matching
+  field: `arrayKey[matchField=matchValue]` — selects the element of the
+  array at `arrayKey` whose `matchField` equals `matchValue`. Chainable
+  with further dotted segments, e.g. `plugins[name=self-assess].description`.
+
+## Subcommands
+
+- `--check` — resolve the source field and each target field, compare.
+  Advisory by default (warns on mismatch, exits 0); `--strict` makes any
+  mismatch exit 1 (for CI gates).
+- `--sync` — overwrite each target field with the current source field
+  value, in place, preserving the target file's existing key order and
+  formatting (a value-only edit). Supports `--dry-run`.
+- `--list` — show every configured `(source_field -> target.field)`
+  mapping with its current match/mismatch status.
+
+## Examples
+
+```bash
+rrt fields --check
+rrt fields --check --strict
+rrt fields --sync --dry-run
+rrt fields --sync
+rrt fields --list
+```
+
+## Caveats
+
+- Only JSON source files are supported in this first pass (TOML/YAML sources
+  are not handled). Targets may be JSON (`field`) or Markdown/MDX/RST
+  (`anchor`).
+- A `field` target path must resolve to an existing key on an existing
+  object — `--sync` will not create new keys.
+- An `anchor` target file must already contain the matching anchor marker
+  pair; `--sync`/`--check` fail loudly rather than creating or skipping it.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [rrt artifacts](/repo-release-tools/commands/artifacts/) — whole-file drift detection this complements
+- [Repo health commands](/repo-release-tools/commands/repo-health/) — doctor, config, env, drift, and related checks

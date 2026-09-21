@@ -33,49 +33,51 @@ They do **not** replace the deeper feature validators.
 
 ## Artifact protection
 
-Some CI jobs fetch a build artifact produced by a *different* pipeline run —
-for example, a docs job that pulls a report built by an earlier release
-pipeline. That dependency lives only in the *consuming* job's config, never
-on the artifact itself, so nothing on the forge side (GitLab, GitHub) can
-infer it exists — a storage cleanup or retention policy has no way to know
-the artifact is still needed. When the artifact expires, the consuming job
-breaks. A consumer that instead degrades gracefully — skips the missing
-artifact and carries on rather than failing loudly — is not the safer
-outcome: it hides the same broken dependency instead of surfacing it, so
-graceful degradation and silent breakage are the same failure underneath,
-just harder to notice.
+Some CI jobs fetch a build artifact produced by a *different* pipeline run.
+A docs job might pull a report built by an earlier release pipeline. That
+dependency lives only in the *consuming* job's config, never on the artifact
+itself. Nothing on the forge side can infer that it exists, so a storage
+cleanup or retention policy has no way to know the artifact is still needed.
+When the artifact expires, the consuming job breaks.
 
-`rrt doctor` closes this gap by scanning CI config for **cross-pipeline
-artifact fetches** — steps that download a build artifact produced by a
-*different* pipeline run — and cross-checking each one against an optional
-`[tool.rrt.artifact_protection]` declaration, where `consumed_by` records the
-CI file that performs the fetch. (This is unrelated to `rrt artifacts`, which
-tracks content-addressed integrity of generated files you keep in the repo —
-a different feature that happens to share a name fragment.)
+Degrading gracefully is not the safer outcome. A consumer that skips the
+missing artifact and carries on hides the broken dependency instead of
+surfacing it. Graceful degradation and silent breakage are the same failure
+underneath, only harder to notice.
+
+`rrt doctor` closes this gap. It scans CI config for **cross-pipeline
+artifact fetches**, meaning steps that download an artifact built by a
+different pipeline run. Each fetch is cross-checked against an optional
+`[tool.rrt.artifact_protection]` declaration, where `consumed_by` records
+the CI file that performs the fetch.
+
+This is unrelated to `rrt artifacts`. That feature tracks content-addressed
+integrity of generated files kept in the repo, and only shares a name
+fragment.
 
 The scanner recognizes two forms:
 
-- GitLab `.../jobs/artifacts/<ref>/raw/<path>?job=<name>` URLs, matched in
-  **every** CI file the scanner reads — `.gitlab-ci.yml`, any
-  `.gitlab/**/*.yml` / `*.yaml` file (scanned recursively, since GitLab's
-  `include: local:` accepts any filename in any subdirectory), and also
-  `.github/workflows/*.yml` / `*.yaml`. This is deliberate: a job running on
-  GitHub Actions can still `curl` an artifact out of a GitLab instance, and
-  scoping the check to `.gitlab*` files would make that fetch invisible. A
-  single physical line can carry more than one fetch (for example chained
-  shell commands, `curl ... && curl ...`) — every fetch on the line is found,
-  not just the first.
-- GitHub Actions `actions/download-artifact@…` steps that carry `run-id:`
-  in `.github/workflows/*.yml` / `*.yaml` (same-pipeline downloads without
-  `run-id` are ignored — they are not cross-pipeline). A step that carries
-  `run-id:` but no `name:` — standard GitHub usage meaning "download every
-  artifact from this run", common in publish/release jobs — is still
-  recorded, not dropped: see "Download-all fetches" below. GitLab's
-  same-pipeline equivalent — a job declaring `needs: [other_job]` with
-  `artifacts: true` to pull that job's output within the *same* pipeline — is
-  out of scope for the same reason: those artifacts come from the same
-  pipeline run and are never at risk from a retention cleanup of *other*
-  pipelines, so the scanner does not look for `needs:` at all.
+- GitLab `.../jobs/artifacts/<ref>/raw/<path>?job=<name>` URLs. These match
+  in **every** CI file the scanner reads: `.gitlab-ci.yml`, any
+  `.gitlab/**/*.yml` or `*.yaml` file, and also `.github/workflows/*.yml`
+  or `*.yaml`. The `.gitlab/` tree is scanned recursively, because GitLab's
+  `include: local:` accepts any filename in any subdirectory. Covering
+  GitHub files is deliberate. A job running on GitHub Actions can still
+  `curl` an artifact out of a GitLab instance, and scoping the check to
+  `.gitlab*` files would make that fetch invisible. One physical line can
+  carry several fetches, as in chained `curl ... && curl ...` commands.
+  Every fetch on the line is found, not just the first.
+- GitHub Actions `actions/download-artifact@…` steps carrying `run-id:` in
+  `.github/workflows/*.yml` or `*.yaml`. Same-pipeline downloads omit
+  `run-id` and are ignored, because they are not cross-pipeline. A step
+  with `run-id:` but no `name:` is still recorded. That is standard GitHub
+  usage meaning "download every artifact from this run", and it is common
+  in publish and release jobs. See "Download-all fetches" below. GitLab's
+  same-pipeline equivalent is out of scope for the same reason. A job
+  declaring `needs: [other_job]` with `artifacts: true` pulls output from
+  the *same* pipeline run. Those artifacts are never at risk from a
+  retention cleanup of *other* pipelines, so the scanner does not look for
+  `needs:` at all.
 
 Declare what each fetch is allowed to depend on:
 
@@ -91,46 +93,51 @@ consumed_by = [".gitlab/65-docs.yml"]
 reason = "Docs pipeline embeds the report built by this job."
 ```
 
-`protected_refs` above is shown for illustration only — it is parsed and
-validated but not read by any check yet (see "`protected_refs` is reserved,
-not yet enforced" below); do not rely on it to protect `main`. Each
-`consumed` entry: `job` and `ref` identify the fetch (see "Matching" below
-for exactly how); `artifacts` lists the paths the fetch may pull;
-`consumed_by` names the CI file(s) that perform the fetch; `reason` records
-why the dependency exists. `consumed_by` and `reason` are documentation
-only — nothing in the check validates or enforces them; matching uses only
-`job`, `ref`, and (when known) `path`.
+`protected_refs` above is shown for illustration only. It is parsed and
+validated, but no check reads it yet. Do not rely on it to protect `main`.
+See "`protected_refs` is reserved, not yet enforced" below.
 
-The check fails (error) when a scanned fetch has no matching `consumed`
-entry — the failure message names the CI file and line and prints a
-ready-to-paste `[[tool.rrt.artifact_protection.consumed]]` block. It warns
-(without failing) when a `consumed` entry matches no scanned fetch, since a
-stale declaration that protects nothing real trains people to ignore the
-check; both directions can be reported together in the same run. When no
-cross-pipeline fetches are found in CI config and no
+Each `consumed` entry uses five fields. `job` and `ref` identify the fetch,
+as described under "Matching" below. `artifacts` lists the paths the fetch
+may pull. `consumed_by` names the CI files that perform the fetch. `reason`
+records why the dependency exists. The last two are documentation only, and
+nothing in the check validates them. Matching uses `job`, `ref`, and `path`
+when known.
+
+The check fails when a scanned fetch has no matching `consumed` entry. The
+failure message names the CI file and line. It also prints a ready-to-paste
+`[[tool.rrt.artifact_protection.consumed]]` block.
+
+The check warns without failing when a `consumed` entry matches no scanned
+fetch. A stale declaration protects nothing real, and trains people to
+ignore the check. Both directions can be reported together in one run.
+
+When no cross-pipeline fetches are found and no
 `[tool.rrt.artifact_protection]` block is configured, the check is a soft
-warning rather than a failure — there is nothing to protect yet.
+warning rather than a failure. There is nothing to protect yet.
 
 ### Matching: `(job, ref)`, plus `path` when known
 
 A fetch is declared only when a `consumed` entry matches on **both** `job`
-and `ref` — never `job` alone. Matching on `job` alone would let one
-correctly-filled entry mask an unrelated, undeclared fetch anywhere else in
-CI config that merely happens to share its job string (generic names like
-`build`, `report`, `dist`, `coverage` are common, and GitLab's `job` holds a
-job name while GitHub's holds an artifact name — two namespaces sharing one
-match field). Neither `job` nor `ref` is ever split, lowercased, or otherwise
-normalized — job names may legitimately contain colons (for example
-`build:report_html:bundle`, which is a distinct job from `build:report_html`).
+and `ref`. Matching on `job` alone is not enough. One correctly-filled entry
+would then mask an unrelated, undeclared fetch that merely shares its job
+string. Generic names such as `build`, `report`, `dist` and `coverage` are
+common. GitLab's `job` holds a job name while GitHub's holds an artifact
+name, so two namespaces share a single match field.
 
-When the fetch's `path` is known — GitLab always sets it — the matched
-entry's `artifacts` list must additionally contain that exact path, or the
-fetch still counts as undeclared. Declaring "job X at ref Y protects
-artifacts `[a, b]`" must not silently cover a fetch of a *different* artifact
-`c` from that same job and ref. GitHub Actions `download-artifact` exposes no
-per-file path (`path` is always `None`), so for GitHub fetches the check
-necessarily degrades to `(job, ref)` only — the best available for that
-provider.
+Neither `job` nor `ref` is ever split, lowercased, or otherwise normalized.
+Job names may legitimately contain colons. For example,
+`build:report_html:bundle` is a distinct job from `build:report_html`.
+
+When the fetch's `path` is known, the matched entry's `artifacts` list must
+also contain that exact path. Otherwise the fetch still counts as
+undeclared. GitLab always sets `path`. Declaring that job X at ref Y
+protects artifacts `[a, b]` must not silently cover a fetch of a *different*
+artifact `c` from that same job and ref.
+
+GitHub Actions `download-artifact` exposes no per-file path, so `path` is
+always `None`. For GitHub fetches the check degrades to `(job, ref)` only.
+That is the best available signal for that provider.
 
 ### GitHub vs. GitLab: `job` means different things
 

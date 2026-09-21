@@ -1210,3 +1210,77 @@ class TestFishExtraction:
         assert len(entries) == 1
         assert entries[0].name == "deploy"
         assert entries[0].lang == "fish"
+
+
+class TestSourceOwnedAstScan:
+    """The AST scan replaced a regex that only matched multi-line tuples."""
+
+    @staticmethod
+    def extract(tmp_path: Path, source: str) -> list[DocEntry]:
+        mod = tmp_path / "mod.py"
+        mod.write_text(source, encoding="utf-8")
+        cfg = DocsConfig(extraction_mode="explicit", languages=("python",))
+        return [
+            e for e in extract_docs(mod, cfg) if e.name not in {"module"} and e.lang == "python"
+        ]
+
+    def test_single_line_declaration_is_extracted(self, tmp_path: Path) -> None:
+        """The old regex required `)` at line start, so this form was invisible."""
+        source = (
+            '"""Summary."""\n\n'
+            'MY_DOC = """## Overview\n\nbody\n"""\n'
+            'SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("slug", MY_DOC),)\n'
+        )
+        names = [e.name for e in self.extract(tmp_path, source)]
+        assert "MY_DOC" in names
+
+    def test_multi_line_declaration_still_extracted(self, tmp_path: Path) -> None:
+        source = (
+            '"""Summary."""\n\n'
+            'A_DOC = """## Overview\n\na\n"""\n'
+            'B_DOC = """## Overview\n\nb\n"""\n'
+            "SOURCE_OWNED_TOPIC_DOCS = (\n"
+            '    ("a", A_DOC),\n'
+            '    ("b", B_DOC),\n'
+            ")\n"
+        )
+        names = [e.name for e in self.extract(tmp_path, source)]
+        assert {"A_DOC", "B_DOC"} <= set(names)
+
+    def test_docstring_backed_entry_is_extracted(self, tmp_path: Path) -> None:
+        """`("slug", __doc__ or "")` never matched the old uppercase-only pattern."""
+        source = (
+            '"""Summary.\n\n## Overview\n\nbody\n"""\n\n'
+            'SOURCE_OWNED_TOPIC_DOCS = (("slug", __doc__ or ""),)\n'
+        )
+        entries = self.extract(tmp_path, source)
+        assert any(e.name == "__doc__" and "## Overview" in e.content for e in entries)
+
+    def test_computed_constant_falls_back_to_assignment_source(self, tmp_path: Path) -> None:
+        """GIT_DOC-style constants cannot be resolved statically but still hash."""
+        source = (
+            '"""Summary.\n\n## Overview\n\nbody\n"""\n\n'
+            'COMPUTED_DOC = "# Title\\n\\n" + (__doc__ or "").split("\\n\\n", 1)[1]\n'
+            'SOURCE_OWNED_TOPIC_DOCS = (("slug", COMPUTED_DOC),)\n'
+        )
+        entries = self.extract(tmp_path, source)
+        computed = next(e for e in entries if e.name == "COMPUTED_DOC")
+        assert "COMPUTED_DOC =" in computed.content
+
+    def test_module_without_declaration_yields_nothing(self, tmp_path: Path) -> None:
+        source = '"""Summary."""\n\nOTHER = "x"\n'
+        assert [e.name for e in self.extract(tmp_path, source)] == []
+
+    def test_syntax_error_is_tolerated(self, tmp_path: Path) -> None:
+        """Extraction runs over arbitrary project source and must not crash."""
+        source = '"""Summary."""\n\ndef broken(:\n'
+        assert self.extract(tmp_path, source) == []
+
+    def test_malformed_entries_are_skipped(self, tmp_path: Path) -> None:
+        source = (
+            '"""Summary."""\n\n'
+            'OK_DOC = """## Overview\n\nbody\n"""\n'
+            'SOURCE_OWNED_TOPIC_DOCS = ((1, OK_DOC), ("a", "b", "c"), ("ok", OK_DOC))\n'
+        )
+        names = [e.name for e in self.extract(tmp_path, source)]
+        assert names.count("OK_DOC") == 1

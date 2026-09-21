@@ -77,6 +77,12 @@ rrt config --schema > rrt-config.schema.json
 - Paths in the tree are shown relative to the current repository root.
 - The resolved output reflects discovery and auto-detection, not just the
   contents of one file.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Repo health commands](/repo-release-tools/commands/repo-health/) — doctor, config, env, drift, and related checks
+- [rrt doctor](/repo-release-tools/commands/doctor/) — broader health checks built on this resolved config
 """
 
 from __future__ import annotations

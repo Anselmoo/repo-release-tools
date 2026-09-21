@@ -1526,12 +1526,12 @@ def main(argv: list[str] | None = None) -> int:
             )
 
 
-PRE_COMMIT_DOC = """# rrt hooks
+PRE_COMMIT_DOC = """## Overview
 
-`repo-release-tools` publishes reusable hooks in `.pre-commit-hooks.yaml`.
-
-The first decision is not *which hook do I add?* — it is *which changelog
-workflow does this repo follow?*
+`repo-release-tools` publishes reusable hooks in `.pre-commit-hooks.yaml`. This page
+covers pre-commit, lefthook, and husky wiring for those hooks. It is written for
+maintainers setting up local policy in a repository. Start with the changelog workflow.
+The hook set follows from that choice.
 
 ## Choose the workflow first
 
@@ -1541,11 +1541,14 @@ workflow does this repo follow?*
 | `squash` | `rrt-branch-name`, `rrt-commit-subject`, optional `rrt-dirty-tree` / `rrt-doctor` / `rrt-release-check` | repos that squash many commits and do changelog work at release time |
 
 With `changelog_workflow = "squash"`, the changelog-writing and changelog-check
-hooks intentionally skip changelog enforcement. You can leave them configured
-during migration, but the cleaner setup is to remove them and keep only the
-non-changelog policy hooks.
+hooks intentionally skip changelog enforcement.
 
-## Incremental workflow: keep `[Unreleased]` current
+## Examples
+
+Two starting configurations cover most repositories. Pick the one that matches the
+workflow chosen above.
+
+### Incremental workflow: keep `[Unreleased]` current
 
 ```yaml
 default_install_hook_types: [pre-commit, commit-msg]
@@ -1572,7 +1575,7 @@ auto-writes changelog bullets for changelog-relevant commit types, while
 If you prefer manual changelog edits instead of auto-writing them, replace
 `rrt-update-unreleased` with `rrt-changelog`.
 
-## Squash workflow: keep local policy, skip per-commit changelog noise
+### Squash workflow: keep local policy, skip per-commit changelog noise
 
 ```yaml
 default_install_hook_types: [pre-commit, commit-msg]
@@ -1585,9 +1588,8 @@ repos:
       - id: rrt-commit-subject
 ```
 
-Use this when pull requests are squash-merged and you do not want ten tiny
-commit-level changelog bullets to become one giant release footnote monster.
-Pair it with:
+Use this when pull requests are squash-merged. It keeps ten tiny commit-level
+changelog bullets from becoming one giant release footnote monster. Pair it with:
 
 - `changelog_workflow = "squash"` in repo config
 - GitHub Action `changelog-strategy: "auto"` or `"release-only"`
@@ -1622,7 +1624,7 @@ Pair it with:
 | `rrt-tag-check` | pre-push | Validate existing git tags follow the configured naming convention |
 
 `rrt-update-unreleased` and `rrt-changelog` are alternatives for the
-incremental workflow. You usually want one or the other, not both.
+incremental workflow.
 
 ## Optional guards
 
@@ -1644,9 +1646,8 @@ repos:
 
 ### Doctor check
 
-`rrt-doctor` runs `rrt doctor` against the repository's core automation wiring
-so you can confirm hook and CI surfaces are configured before a release or
-automation rollout:
+`rrt-doctor` runs `rrt doctor` against the repository's core automation wiring.
+Use it to confirm hook and CI surfaces are configured before a release:
 
 ```bash
 pre-commit run rrt-doctor --hook-stage manual
@@ -1710,8 +1711,7 @@ Update the lock with `rrt drift snapshot`.
 
 `rrt-sync` lists upstream releases that are strictly newer than the current
 project version. It is a read-only informational hook registered at the
-`manual` stage — useful in release pipelines to decide whether a bump is
-needed:
+`manual` stage. Use it in release pipelines to decide whether a bump is needed:
 
 ```bash
 # List newer versions one per line
@@ -1726,18 +1726,20 @@ See `[tool.rrt.upstream]` config and the `rrt sync` command for details.
 ### Config reference & validation
 
 `rrt-config-validate` gates commits and pushes by validating the `[tool.rrt]`
-config — checking that version targets resolve, pin targets reference known
-files, and the overall structure is well-formed. `docs/rrt-config-reference.toml`
-is schema-generated; `rrt-config-reference-check` (manual stage) fails the hook
-run when the file is stale relative to the current schema. (Regenerating and
-staging that file on each commit is repo self-tooling — wire a local
+config. It checks that version targets resolve, that pin targets reference known
+files, and that the structure is well-formed. `docs/rrt-config-reference.toml`
+is schema-generated. `rrt-config-reference-check` (manual stage) fails the hook
+run when that file is stale relative to the current schema.
+
+Regenerating and staging the reference on each commit is repo self-tooling. Wire
+a local
 `bash -c 'rrt config --reference --check || (rrt config --reference && git add …)'`
-hook in your own `.pre-commit-config.yaml` if you vendor the reference.)
+hook in your own `.pre-commit-config.yaml` if you vendor the reference.
 
 ### Changelog lint
 
-`rrt-changelog-lint` enforces changelog entry style on every `pre-commit` run —
-requiring sentence case, capping entry length, and rejecting duplicate bullets
+`rrt-changelog-lint` enforces changelog entry style on every `pre-commit` run.
+It requires sentence case, caps entry length, and rejects duplicate bullets
 before they accumulate.
 
 ### Tag check
@@ -1907,11 +1909,42 @@ rrt-hooks commit-msg "$1"
 | Validate commit subject | `rrt-commit-subject` (commit-msg) | `rrt-commit-subject {1}` | `rrt-hooks commit-msg "$1"` |
 | Validate branch name | `rrt-branch-name` (pre-commit) | `rrt-hooks pre-commit` | `rrt-hooks pre-commit` |
 | Pre-push unreleased guard | `rrt-changelog` or `rrt-dirty-tree` | `rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased` | `rrt-hooks check-changelog --subject "$(git log -1 --format=%s)" --strategy unreleased` |
+
+## Caveats
+
+- Under `changelog_workflow = "squash"` the changelog hooks stay configured but do
+  nothing. You can leave them during migration. The cleaner setup is to remove them
+  and keep only the non-changelog policy hooks.
+- `rrt-update-unreleased` and `rrt-changelog` overlap. Enable one, not both.
+- Commit-msg hooks only fire when `commit-msg` is listed in
+  `default_install_hook_types`. A missing entry skips them silently.
+- `rrt-dirty-tree` fails an ordinary `pre-commit` run, because the working tree is
+  dirty at that point. Register it at `pre-push` or the manual stage.
+- Lefthook and husky call `rrt-hooks` directly. Install `repo-release-tools` first so
+  the binary is on `PATH`.
+- Husky hook files must be executable. Run `chmod +x .husky/<hook>` after creating
+  each one.
+
+## Related docs
+
+- [Hook & Action reference](/repo-release-tools/agent-instructions/) for
+  ready-to-paste agent prompts
+- [GitHub Action](/repo-release-tools/action/) for the CI counterpart of these hooks
+- [`rrt doctor`](/repo-release-tools/commands/doctor/) to verify hook and CI wiring
+- [`rrt branch`](/repo-release-tools/commands/branch/) for the branch naming the
+  hooks enforce
 """
 
 AGENT_INSTRUCTIONS_DOC = """# Hook & Action Reference
 
 *Static context for agents: read this before using any prompt block below.*
+
+## Overview
+
+This page is static context for agents working on `repo-release-tools`. It lists the
+entry points, key files, and verification commands. It then gives ready-to-paste prompt
+blocks for pre-commit and lefthook setup. Read the context first, then use a prompt
+block unchanged.
 
 ## Agent context
 
@@ -1936,11 +1969,12 @@ uv run pytest tests/test_hooks.py -x -q   # fast unit tests
 uvx pre-commit run --all-files             # lint (ruff, line-length 100)
 ```
 
-**Assumptions:** `pre-commit`, `lefthook`, and `uv` are already installed. Do not recommend `brew install`, `pip install pre-commit`, or `apt install` for these tools.
-
 ---
 
-## pre-commit / lefthook
+## Examples
+
+Each block below is a ready-to-paste prompt for pre-commit or lefthook setup. Use one
+verbatim.
 
 ### Activate pre-commit hooks
 
@@ -2011,6 +2045,21 @@ repos:
       - id: rrt-commit-subject
 ```
 ````
+
+## Caveats
+
+- `rrt-hooks` is an installed binary, not a uvx shortcut. Do not write
+  `uvx --from repo-release-tools rrt-hooks …` in `lefthook.yml`.
+- Commit-msg hooks need `commit-msg` in `default_install_hook_types`. Omitting it
+  silently skips `rrt-update-unreleased` and `rrt-commit-subject`.
+- `pre-commit`, `lefthook`, and `uv` are assumed installed. Do not recommend
+  `brew install`, `pip install pre-commit`, or `apt install` for these tools.
+
+## Related docs
+
+- [Hooks](/repo-release-tools/commands/hooks/) for the full hook catalogue
+- [GitHub Action](/repo-release-tools/action/) for CI-side enforcement
+- [`rrt` CLI](/repo-release-tools/commands/rrt-cli/) for the developer commands
 """
 
 # Ordered source-owned topic docs for docs generation.

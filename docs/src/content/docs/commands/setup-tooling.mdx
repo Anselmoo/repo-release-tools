@@ -14,6 +14,7 @@ description: "Generated command reference for the Setup & Tooling command group.
   - [Behavior](#behavior)
   - [Examples](#examples)
   - [Caveats](#caveats)
+  - [Related docs](#related-docs)
   - [`rrt agents install`](#rrt-agents-install)
 - [`rrt hooks`](#rrt-hooks)
   - [Overview](#overview-1)
@@ -21,6 +22,7 @@ description: "Generated command reference for the Setup & Tooling command group.
   - [Behavior](#behavior-1)
   - [Examples](#examples-1)
   - [Caveats](#caveats-1)
+  - [Related docs](#related-docs-1)
   - [`rrt hooks install`](#rrt-hooks-install)
 - [`rrt init`](#rrt-init)
   - [Overview](#overview-2)
@@ -29,6 +31,7 @@ description: "Generated command reference for the Setup & Tooling command group.
   - [Behavior](#behavior-2)
   - [Examples](#examples-2)
   - [Caveats](#caveats-2)
+  - [Related docs](#related-docs-2)
 - [`rrt install`](#rrt-install)
   - [Overview](#overview-3)
   - [Responsibilities](#responsibilities-1)
@@ -36,15 +39,20 @@ description: "Generated command reference for the Setup & Tooling command group.
   - [Behavior](#behavior-3)
   - [Examples](#examples-3)
   - [Caveats](#caveats-3)
+  - [Related docs](#related-docs-3)
 - [`rrt mcp`](#rrt-mcp)
+  - [Overview](#overview-4)
   - [Examples](#examples-4)
+  - [Caveats](#caveats-4)
+  - [Related docs](#related-docs-4)
   - [`rrt mcp tool`](#rrt-mcp-tool)
 - [`rrt skill`](#rrt-skill)
-  - [Overview](#overview-4)
+  - [Overview](#overview-5)
   - [Target surfaces](#target-surfaces-3)
   - [Behavior](#behavior-4)
   - [Examples](#examples-5)
-  - [Caveats](#caveats-4)
+  - [Caveats](#caveats-5)
+  - [Related docs](#related-docs-5)
   - [`rrt skill install`](#rrt-skill-install)
 {/* rrt:auto:end:toc */}
 
@@ -90,6 +98,12 @@ Each target receives one flat `.agent.md` file per bundled user agent.
 - Without `--target`, the command prints available destinations in dry-run
   mode and otherwise fails.
 - Existing files at the destination are replaced only when `--force` is used.
+
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Setup & tooling commands](/repo-release-tools/commands/setup-tooling/) — install, init, skill, agents, hooks
+- [Agent instructions](/repo-release-tools/agent-instructions/) — how the bundled agent definitions are used
 
 ```text
 Usage:  rrt agents [OPTIONS] <agents_command>
@@ -189,6 +203,12 @@ JSON format.
 - Without `--target`, the command prints available destinations in dry-run
   mode and otherwise fails.
 - Hook registration happens automatically during installation.
+
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [rrt hooks](/repo-release-tools/commands/hooks/) — command-level reference for this surface
+- [Setup & tooling commands](/repo-release-tools/commands/setup-tooling/) — install, init, skill, agents, hooks
 
 ```text
 Usage:  rrt hooks [OPTIONS] <hooks_command>
@@ -306,6 +326,12 @@ project manifests like `pyproject.toml`, `Cargo.toml`, or `package.json`.
 - Standalone `.rrt.toml` files take precedence over manifest-embedded
   configurations during standard tool discovery.
 
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Setup & tooling commands](/repo-release-tools/commands/setup-tooling/) — install, init, skill, agents, hooks
+- [rrt doctor](/repo-release-tools/commands/doctor/) — run after `rrt init` to verify the new config
+
 ```text
 Usage:  rrt init [OPTIONS]
 
@@ -395,6 +421,13 @@ Each surface appends its own standardized subdirectory (e.g., `skills`,
 - The installation is additive by default; existing files are only replaced
   when `--force` is explicitly passed.
 
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [rrt install](/repo-release-tools/commands/install/) — command-level reference for this surface
+- [Setup & tooling commands](/repo-release-tools/commands/setup-tooling/) — install, init, skill, agents, hooks
+- [rrt skill](/repo-release-tools/commands/skill/) — one of the surfaces this command wraps
+
 ```text
 Usage:  rrt install [OPTIONS]
 
@@ -425,21 +458,34 @@ Examples
 
 `rrt mcp tool new <name>` — scaffold a starter MCP tool module.
 
-Emits a new file under ``src/repo_release_tools/mcp/tools/<name>_tools.py``
-mirroring the pattern already used by the other modules in that directory:
-a ``register(mcp: FastMCP)`` function plus one ``@mcp.tool`` body with a
-typed Pydantic response model. Tool authors fill in the ``# TODO`` block.
+### Overview
 
-The scaffolder is intentionally minimal — it does not edit
-``mcp/tools/__init__.py``; the printed reminder tells the user to add the
-new ``register()`` call there. Keeping the edits separate makes the
-generated file reviewable on its own.
+``rrt mcp tool new <name>`` scaffolds a starter MCP tool module for the
+optional ``repo-release-tools[mcp]`` server. It emits a new file under
+``src/repo_release_tools/mcp/tools/<name>_tools.py`` mirroring the pattern
+already used by the other modules in that directory: a
+``register(mcp: FastMCP)`` function plus one ``@mcp.tool`` body with a typed
+Pydantic response model. Use it whenever you add a new tool to the MCP
+server; fill in the generated ``# TODO`` block afterward.
 
 ### Examples
 
 - ``rrt mcp tool new sample``
 - ``rrt mcp tool new sample --title "Sample" --description "demo" --dry-run``
 - ``rrt mcp tool new sample --into custom/path.py --force``
+
+### Caveats
+
+The scaffolder never edits ``mcp/tools/__init__.py``. It only prints a
+reminder telling you to add the new ``register()`` call there yourself, which
+keeps the generated file reviewable on its own. It refuses to overwrite an
+existing target file unless ``--force`` is given. This command does not read
+``--verbose``.
+
+### Related docs
+
+- `/repo-release-tools/mcp-server/`
+- `/repo-release-tools/commands/setup-tooling/`
 
 ```text
 Usage:  rrt mcp [OPTIONS] <mcp_command>
@@ -554,6 +600,12 @@ Each target receives one directory per bundled skill, each containing a
   mode and otherwise fails.
 - Existing symlinks, files, or directories at the destination are replaced
   only when `--force` is used.
+
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [rrt skill](/repo-release-tools/commands/skill/) — command-level reference for this surface
+- [Setup & tooling commands](/repo-release-tools/commands/setup-tooling/) — install, init, skill, agents, hooks
 
 ```text
 Usage:  rrt skill [OPTIONS] <skill_command>

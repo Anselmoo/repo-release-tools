@@ -38,6 +38,29 @@ Everything outside the markers is preserved unchanged.
 | ``--dry-run`` | — | Print result instead of writing (requires ``--inject``) |
 
 ``--inject`` and ``--anchor`` must always be used together.
+
+## Examples
+
+```bash
+rrt toc README.md
+rrt toc README.md --min-level 2 --max-level 3
+rrt toc README.md --inject README.md --anchor toc
+rrt toc README.md --inject README.md --anchor toc --dry-run
+```
+
+## Caveats
+
+``--inject`` and ``--anchor`` must always be used together; passing only one
+exits with an error. ``--dry-run`` only changes behavior when ``--inject`` is
+also given. The inject target must already contain the
+``<!-- rrt:auto:start:ID -->`` / ``<!-- rrt:auto:end:ID -->`` marker pair, or
+the command exits without writing. The source file must exist and contain at
+least one heading in the requested level range.
+
+## Related docs
+
+- `/repo-release-tools/commands/repo-health/`
+- `/repo-release-tools/commands/rrt-cli/`
 """
 
 from __future__ import annotations

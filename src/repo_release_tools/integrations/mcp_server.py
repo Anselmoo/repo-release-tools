@@ -9,6 +9,9 @@ executes ``mcp/__init__.py``, which eagerly imports ``fastmcp`` and raises
 outside that package to avoid forcing that dependency onto doc generation.
 """
 
+# rrt:docs-exempt — the docstring above is a maintainer note about module
+# placement, not user documentation; MCP_SERVER_DOC below is the published doc.
+
 from __future__ import annotations
 
 MCP_SERVER_DOC = """# MCP Server
@@ -18,6 +21,13 @@ The `[mcp]` extra ships a [FastMCP 3.x](https://gofastmcp.com) server named
 drift / tree / artifact lock inspection, branch and commit validation, config
 introspection, and interactive dashboards as MCP tools, resources, and Prefab
 UI apps.
+
+## Overview
+
+The server turns rrt's release-policy surface into MCP tools, resources, and
+prompts. Most tools return typed JSON instead of ANSI-formatted CLI output.
+Mutating tools default to `dry_run=True`. Reach for it from any MCP client
+instead of shelling out to `rrt`.
 
 ## When to use it
 
@@ -251,7 +261,9 @@ Seven reusable prompts guide AI-assisted workflows:
 
 ---
 
-## Prompt phrasings that work
+## Examples
+
+### Prompt phrasings that work
 
 Agents route on triggers, not on capabilities. These reliably route to the MCP tools
 rather than to hand-editing or shelling out — name `rrt` explicitly, and name the
@@ -283,6 +295,34 @@ rather than to hand-editing or shelling out — name `rrt` explicitly, and name 
 See [Get your AI agent to actually use rrt](https://github.com/Anselmoo/repo-release-tools#get-your-ai-agent-to-actually-use-rrt)
 in the README for a copyable instruction-file snippet that biases your own agent toward
 these phrasings automatically.
+
+## Caveats
+
+- The server needs the optional `[mcp]` extra. A plain install has no
+  `rrt-mcp` entry point.
+- The MCP surface does not mirror every command. Docs, TOC, `--check`, and
+  `--snapshot` operations stay on the CLI, as does every `rrt-hooks`
+  subcommand.
+- Not every tool is typed. The four lock readers and `rrt_config` return raw
+  dicts, and `rrt_init_run` returns captured text.
+- The lock readers report the last snapshot, not current state. They never run
+  the matching `--check`.
+- `rrt_sync_check` hits the network, so it is not idempotent.
+- HTTP transport refuses to start without a bearer token. Anyone who reaches
+  `--host`:`--port` with that token can invoke destructive tools.
+- `generate_prefab_ui` and `search_prefab_components` come from the
+  third-party `GenerativeUI` provider, not from rrt.
+- Prefab UI apps render only in MCP-capable clients. Headless agents should
+  call the matching agent-facing tool instead.
+
+## Related docs
+
+- [rrt CLI](/repo-release-tools/commands/rrt-cli/) for the commands with no
+  MCP tool
+- [Agent instructions](/repo-release-tools/agent-instructions/) for biasing
+  your agent toward these tools
+- [GitHub Action](/repo-release-tools/action/) for enforcing the same policy
+  in CI
 """
 
 # Ordered source-owned topic docs for docs generation.

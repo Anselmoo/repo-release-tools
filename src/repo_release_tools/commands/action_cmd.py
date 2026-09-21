@@ -48,6 +48,12 @@ The generated workflow (`.github/workflows/rrt.yml`) includes:
 - Requires a Git repository with a `.github/workflows` directory structure
   (automatically created if missing).
 - The generated version pin matches the version of `rrt` currently in use.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [CI automation commands](/repo-release-tools/commands/ci-automation/) — the `action` command group
+- [GitHub Action](/repo-release-tools/action/) — the composite action this workflow invokes
 """
 
 from __future__ import annotations

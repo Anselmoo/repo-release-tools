@@ -12,6 +12,7 @@ from repo_release_tools.config import (
     DEFAULT_CHANGELOG_WORKFLOW,
     DEFAULT_TAG_PREFIX,
     DocsConfig,
+    DocsSkeletonConfig,
     EolConfig,
     EolOverride,
     MapConfig,
@@ -4321,3 +4322,114 @@ def test_upstream_commit_message_must_be_string(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="commit_message must be a string"):
         load_or_autodetect_config(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# _load_skeleton_config — [tool.rrt.docs.skeleton]
+# ---------------------------------------------------------------------------
+
+
+def test_load_config_skeleton_absent(tmp_path: Path) -> None:
+    """When [tool.rrt.docs.skeleton] is absent, docs.skeleton is None."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\n")
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    assert cfg.docs.skeleton is None
+
+
+def test_load_config_skeleton_defaults(tmp_path: Path) -> None:
+    """A bare [tool.rrt.docs.skeleton] table opts in with all defaults."""
+    _write_docs_cfg(tmp_path, "\n[tool.rrt.docs]\n\n[tool.rrt.docs.skeleton]\n")
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None
+    skeleton_cfg = cfg.docs.skeleton
+    assert isinstance(skeleton_cfg, DocsSkeletonConfig)
+    assert skeleton_cfg.required_sections == ("Overview", "Examples", "Caveats", "Related docs")
+    assert skeleton_cfg.opening_section == "Overview"
+    assert skeleton_cfg.closing_sections == ("Caveats", "Related docs")
+    assert skeleton_cfg.max_heading_depth == 3
+    assert skeleton_cfg.canonical_docstring is True
+    assert skeleton_cfg.exempt_slugs == ()
+    assert skeleton_cfg.max_words_per_sentence == 22.0
+    assert skeleton_cfg.max_em_dashes_per_100_words == 3.5
+    assert skeleton_cfg.min_sentences_for_register == 4
+
+
+def test_load_config_skeleton_overrides(tmp_path: Path) -> None:
+    """Every scalar and list field can be overridden from config."""
+    _write_docs_cfg(
+        tmp_path,
+        "\n[tool.rrt.docs.skeleton]\n"
+        'required_sections = ["Intro", "Notes"]\n'
+        'opening_section = "Intro"\n'
+        'closing_sections = ["Notes"]\n'
+        "max_heading_depth = 4\n"
+        "canonical_docstring = false\n"
+        'exempt_slugs = ["index"]\n'
+        "max_words_per_sentence = 30\n"
+        "max_em_dashes_per_100_words = 1.5\n"
+        "min_sentences_for_register = 6\n",
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None and cfg.docs.skeleton is not None
+    skeleton_cfg = cfg.docs.skeleton
+    assert skeleton_cfg.required_sections == ("Intro", "Notes")
+    assert skeleton_cfg.closing_sections == ("Notes",)
+    assert skeleton_cfg.max_heading_depth == 4
+    assert skeleton_cfg.canonical_docstring is False
+    assert skeleton_cfg.exempt_slugs == ("index",)
+    assert skeleton_cfg.max_words_per_sentence == 30.0
+    assert skeleton_cfg.min_sentences_for_register == 6
+
+
+def test_load_config_skeleton_must_be_a_table(tmp_path: Path) -> None:
+    """A non-table skeleton value is rejected."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs]\nskeleton = "yes"\n')
+    with pytest.raises(ValueError, match="docs.skeleton must be a table"):
+        load_config(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ('opening_section = ""', "opening_section must be a non-empty string"),
+        ("opening_section = 3", "opening_section must be a non-empty string"),
+        ('required_sections = "Overview"', "required_sections must be a list of strings"),
+        ("required_sections = [1]", "required_sections must be a list of strings"),
+        ('required_sections = ["Overview", " "]', "must not contain empty entries"),
+        ('max_heading_depth = "deep"', "max_heading_depth must be an integer"),
+        ("max_heading_depth = true", "max_heading_depth must be an integer"),
+        ('max_words_per_sentence = "20"', "max_words_per_sentence must be a number"),
+        ("max_words_per_sentence = true", "max_words_per_sentence must be a number"),
+        ('canonical_docstring = "yes"', "canonical_docstring must be a boolean"),
+    ],
+)
+def test_load_config_skeleton_type_errors(tmp_path: Path, body: str, message: str) -> None:
+    """Malformed skeleton fields raise a descriptive ValueError."""
+    _write_docs_cfg(tmp_path, f"\n[tool.rrt.docs.skeleton]\n{body}\n")
+    with pytest.raises(ValueError, match=message):
+        load_config(tmp_path)
+
+
+def test_load_config_skeleton_validates_cross_field_rules(tmp_path: Path) -> None:
+    """opening_section must appear in required_sections."""
+    _write_docs_cfg(
+        tmp_path,
+        '\n[tool.rrt.docs.skeleton]\nrequired_sections = ["A"]\nopening_section = "B"\n',
+    )
+    with pytest.raises(ValueError, match="opening_section"):
+        load_config(tmp_path)
+
+
+def test_load_config_skeleton_root_override(tmp_path: Path) -> None:
+    """The skeleton check can be pointed at a different source root."""
+    _write_docs_cfg(tmp_path, '\n[tool.rrt.docs.skeleton]\nroot = "lib"\n')
+    cfg = load_config(tmp_path)
+    assert cfg.docs is not None and cfg.docs.skeleton is not None
+    assert cfg.docs.skeleton.root == "lib"
+
+
+def test_skeleton_config_rejects_blank_root() -> None:
+    """DocsSkeletonConfig.validate rejects a whitespace-only root."""
+    with pytest.raises(ValueError, match="root must be a non-empty string"):
+        DocsSkeletonConfig(root="   ").validate()

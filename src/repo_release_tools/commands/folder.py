@@ -1,9 +1,13 @@
 """Folder supervision and scaffolding command family.
 
-Overview
+## Overview
 
 `rrt folder` validates, scaffolds, and infers folder structures for a
-project. It supports three primary flows:
+project against configured policy or built-in templates. Use it to catch
+structural drift in CI, bootstrap a new project layout, or capture an
+existing tree as a reusable template.
+
+It supports three subcommands:
 
 - `check` — validate an existing tree against configured folder policies or
     built-in templates and report violations.
@@ -12,15 +16,30 @@ project. It supports three primary flows:
 - `design` — capture an existing directory tree and emit a reusable
     template description (TOML) that can be applied elsewhere.
 
-Usage examples:
+This module implements the command handlers exposed via `rrt folder`,
+documented so contributors and automation can rely on a clear reference.
 
-    rrt folder check --template python-package
-    rrt folder scaffold --template cargo-inspired --dry-run
-    rrt folder design --name captured-template --root src
+## Examples
 
-This module implements the command handlers exposed via the top-level
-`rrt folder` command and is intentionally documented so contributors and
-automation can rely on a clear, multi-line module-level docstring.
+```bash
+rrt folder check --template python-package
+rrt folder scaffold --template cargo-inspired --dry-run
+rrt folder design --name captured-template --root src
+```
+
+## Caveats
+
+`check` and `scaffold` fall back to template-only mode when no `[tool.rrt]`
+config is found. In that mode, only `--template` rules apply. `--report-only`
+downgrades violations to warnings for a single invocation. It does not
+persist any state. `--snapshot` merges results into `.rrt/health.lock.toml`
+and is only available on `check`. `design` requires an existing, readable
+directory and exits non-zero otherwise.
+
+## Related docs
+
+- [rrt doctor](/repo-release-tools/commands/doctor/)
+- [Repository health](/repo-release-tools/commands/repo-health/)
 """
 
 from __future__ import annotations

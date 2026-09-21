@@ -40,9 +40,12 @@ export default defineConfig({
               label: "Commands",
               collapsed: true,
               items: [
+                { label: "rrt artifacts", link: "commands/artifacts" },
                 { label: "rrt branch", link: "commands/branch" },
+                { label: "rrt docs", link: "commands/docs" },
                 { label: "rrt doctor", link: "commands/doctor" },
                 { label: "rrt eol", link: "commands/eol_check" },
+                { label: "rrt fields", link: "commands/fields" },
                 { label: "rrt git", link: "commands/git_cmd" },
                 { label: "rrt hooks", link: "commands/hooks" },
                 { label: "rrt install", link: "commands/install" },

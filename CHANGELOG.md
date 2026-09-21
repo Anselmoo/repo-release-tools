@@ -1,10 +1,22 @@
 ## [Unreleased]
 
 ### Added
-- Per-group `tag_prefix` and `changelog_paths` settings, also used as the default for `rrt tag create/check --prefix`
+- **docs**: enforce the published-docstring skeleton
+- **docs**: publish fields, artifacts and docs topic pages
+- **docs**: widen generated-page validation to every topic page
+- **docs**: add unwired docstring skeleton validator
 
 ### Fixed
-- Bump `--group` now derives the changelog range from the group's own latest tag, not the newest repo-wide tag
+- **docs**: extract SOURCE_OWNED_TOPIC_DOCS via AST, not regex
+- **docs**: make publisher H1 detection fence-aware
+
+### Changed
+- **commands**: make __doc__ canonical for bump and sync
+- **docs**: drop the orphaned INDEX_DOC
+
+### Documentation
+- record the published-docstring skeleton contract
+- conform published docstrings to the skeleton
 
 ## [1.17.1] - 2026-08-30
 

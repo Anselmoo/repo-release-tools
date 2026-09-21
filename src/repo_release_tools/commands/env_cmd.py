@@ -40,6 +40,12 @@ rrt env --json
   relevant to rrt behavior.
 - It is a snapshot of the current process, not a probe of the wider shell or
   login environment.
+
+## Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Repo health commands](/repo-release-tools/commands/repo-health/) — doctor, config, env, drift, and related checks
+- [rrt doctor](/repo-release-tools/commands/doctor/) — diagnostics that build on this environment snapshot
 """
 
 from __future__ import annotations

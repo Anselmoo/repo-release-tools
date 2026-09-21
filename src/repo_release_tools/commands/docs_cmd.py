@@ -74,6 +74,23 @@ rrt docs check                             # exits 1 if lockfile is stale
 rrt docs api --format json                 # machine-readable API index
 ```
 
+## Caveats
+
+Extraction is regex-based, not AST-based. Unusual formatting around a
+docstring or an explicit `sym:` marker can cause a block to be missed.
+
+In `explicit` mode, the marker comment must directly precede the block it
+names; a stray blank line or unrelated comment breaks the association.
+
+`rrt docs check` only compares against whatever `.rrt/docs.lock.toml` last
+recorded. Run `rrt docs generate --format toml` again after editing
+docstrings, or drift goes undetected until the next regeneration.
+
+`rrt docs publish` renders each reference page from the live CLI parser and
+source docstrings, then overwrites the target file. Manual edits to a
+generated page are lost on the next publish; edit the source docstring
+instead.
+
 ## Related docs
 
 - [CLI reference](/repo-release-tools/commands/rrt-cli/)
@@ -301,6 +318,42 @@ class CheckOptions:
         )
 
 
+def collect_skeleton_issues(root: Path) -> list[str]:
+    """Return published-docstring skeleton violations under *root*.
+
+    Returns an empty list when the project has no ``[tool.rrt.docs.skeleton]``
+    table, so a downstream consumer never inherits a gate it did not opt into.
+    """
+    from repo_release_tools.docs import skeleton as docs_skeleton  # noqa: PLC0415
+
+    try:
+        cfg = load_config(root)
+    except (FileNotFoundError, ValueError):
+        return []
+
+    skeleton_cfg = getattr(cfg.docs, "skeleton", None) if cfg and cfg.docs else None
+    if skeleton_cfg is None:
+        return []
+    return docs_skeleton.validate_skeleton(root / skeleton_cfg.root, skeleton_cfg)
+
+
+def _report_skeleton_issues(issues: list[str], *, verbose: int = 0) -> None:
+    """Render skeleton violations to stderr, grouped by source file."""
+    p = VerbosePrinter(verbose=verbose)
+    p.line(
+        f"published docstrings violate the skeleton: {len(issues)} issue(s)",
+        ok=False,
+        stream=sys.stderr,
+    )
+    for issue in issues:
+        p.warn(issue, stream=sys.stderr)
+    p.line(
+        "See [tool.rrt.docs.skeleton] for the configured contract.",
+        ok=False,
+        stream=sys.stderr,
+    )
+
+
 def _cmd_check(args: argparse.Namespace) -> int:
     opts = CheckOptions.from_args(args)
     cwd = Path(opts.root)
@@ -315,18 +368,25 @@ def _cmd_check(args: argparse.Namespace) -> int:
     sources = _build_docs_lock_sources(entries)
 
     is_current, messages = lock_is_current(lock_path, sources)
-    if is_current:
+    skeleton_issues = collect_skeleton_issues(cwd)
+
+    if is_current and not skeleton_issues:
         p.ok("docs lockfile is current")
         return 0
 
-    p.line("docs lockfile is stale:", ok=False, stream=sys.stderr)
-    for msg in messages:
-        p.warn(msg, stream=sys.stderr)
-    p.line(
-        "Run 'rrt docs generate --format toml' to regenerate the lockfile.",
-        ok=False,
-        stream=sys.stderr,
-    )
+    if not is_current:
+        p.line("docs lockfile is stale:", ok=False, stream=sys.stderr)
+        for msg in messages:
+            p.warn(msg, stream=sys.stderr)
+        p.line(
+            "Run 'rrt docs generate --format toml' to regenerate the lockfile.",
+            ok=False,
+            stream=sys.stderr,
+        )
+
+    if skeleton_issues:
+        _report_skeleton_issues(skeleton_issues, verbose=opts.verbose)
+
     return 1
 
 
@@ -397,8 +457,19 @@ def _cmd_publish(args: argparse.Namespace) -> int:
         consistency_issues.extend(docs_publisher.validate_generated_page(target, rendered))
 
     if consistency_issues:
+        p = VerbosePrinter(verbose=opts.verbose)
+        p.line(
+            f"generated pages are inconsistent: {len(consistency_issues)} issue(s)",
+            ok=False,
+            stream=sys.stderr,
+        )
         for issue in consistency_issues:
-            sys.stderr.write(f"{issue}\n")
+            p.warn(issue, stream=sys.stderr)
+        return 1
+
+    skeleton_issues = collect_skeleton_issues(root)
+    if skeleton_issues:
+        _report_skeleton_issues(skeleton_issues, verbose=opts.verbose)
         return 1
 
     if dry_run:

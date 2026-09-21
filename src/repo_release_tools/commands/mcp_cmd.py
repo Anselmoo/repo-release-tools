@@ -1,20 +1,33 @@
 """`rrt mcp tool new <name>` — scaffold a starter MCP tool module.
 
-Emits a new file under ``src/repo_release_tools/mcp/tools/<name>_tools.py``
-mirroring the pattern already used by the other modules in that directory:
-a ``register(mcp: FastMCP)`` function plus one ``@mcp.tool`` body with a
-typed Pydantic response model. Tool authors fill in the ``# TODO`` block.
+## Overview
 
-The scaffolder is intentionally minimal — it does not edit
-``mcp/tools/__init__.py``; the printed reminder tells the user to add the
-new ``register()`` call there. Keeping the edits separate makes the
-generated file reviewable on its own.
+``rrt mcp tool new <name>`` scaffolds a starter MCP tool module for the
+optional ``repo-release-tools[mcp]`` server. It emits a new file under
+``src/repo_release_tools/mcp/tools/<name>_tools.py`` mirroring the pattern
+already used by the other modules in that directory: a
+``register(mcp: FastMCP)`` function plus one ``@mcp.tool`` body with a typed
+Pydantic response model. Use it whenever you add a new tool to the MCP
+server; fill in the generated ``# TODO`` block afterward.
 
 ## Examples
 
 - ``rrt mcp tool new sample``
 - ``rrt mcp tool new sample --title "Sample" --description "demo" --dry-run``
 - ``rrt mcp tool new sample --into custom/path.py --force``
+
+## Caveats
+
+The scaffolder never edits ``mcp/tools/__init__.py``. It only prints a
+reminder telling you to add the new ``register()`` call there yourself, which
+keeps the generated file reviewable on its own. It refuses to overwrite an
+existing target file unless ``--force`` is given. This command does not read
+``--verbose``.
+
+## Related docs
+
+- `/repo-release-tools/mcp-server/`
+- `/repo-release-tools/commands/setup-tooling/`
 """
 
 from __future__ import annotations

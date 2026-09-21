@@ -29,6 +29,7 @@ Configured via ``DocsConfig.extraction_mode``:
 
 from __future__ import annotations
 
+import ast
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -126,13 +127,6 @@ _PY_STRING_AFTER_MARKER = re.compile(
     r'(?:"""([\s\S]*?)"""|\'\'\'([\s\S]*?)\'\'\')',
     re.MULTILINE,
 )
-
-# Python: SOURCE_OWNED_TOPIC_DOCS first-class extraction
-_PY_SOURCE_OWNED = re.compile(
-    r"SOURCE_OWNED_TOPIC_DOCS\s*[^=]*=\s*\(([\s\S]*?)^\)",
-    re.MULTILINE,
-)
-_PY_TUPLE_ENTRY = re.compile(r'\(\s*"([^"]+)"\s*,\s*(?:[A-Z_][A-Z0-9_]*)\s*\)')
 
 
 # ---------------------------------------------------------------------------
@@ -371,37 +365,96 @@ def _extract_explicit(source: str, source_file: str, lang: str) -> list[DocEntry
 # ---------------------------------------------------------------------------
 
 
+def _source_owned_declaration(tree: ast.Module) -> ast.Tuple | None:
+    """Return the ``SOURCE_OWNED_TOPIC_DOCS`` tuple node, if the module has one."""
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            names = {t.id for t in node.targets if isinstance(t, ast.Name)}
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names = {node.target.id}
+        else:
+            continue
+        if "SOURCE_OWNED_TOPIC_DOCS" in names and isinstance(node.value, ast.Tuple):
+            return node.value
+    return None
+
+
+def _origin_symbol(node: ast.expr) -> str:
+    """Return the symbol an entry's value came from, or ``__doc__``."""
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Name) and sub.id != "__doc__":
+            return sub.id
+    return "__doc__"
+
+
+def _assignment_segments(source: str, tree: ast.Module) -> dict[str, str]:
+    """Return NAME → source text of its top-level assignment.
+
+    Constants such as ``GIT_DOC`` are built at runtime by slicing ``__doc__``,
+    so their published text cannot be resolved statically. Hashing the
+    assignment's own source still detects an edit, which is all the lockfile
+    needs, and avoids importing arbitrary project code during extraction.
+    """
+    segments: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        segment = ast.get_source_segment(source, node) or ""
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                segments[target.id] = segment
+    return segments
+
+
 def _extract_python_source_owned(
     source: str,
     source_file: str,
     module_vars: dict[str, str],
 ) -> list[DocEntry]:
-    """Detect SOURCE_OWNED_TOPIC_DOCS and resolve variable references to their content."""
+    """Detect SOURCE_OWNED_TOPIC_DOCS and resolve each entry to hashable content.
+
+    Uses an AST scan rather than a regex: the previous pattern anchored on a
+    closing paren at the start of a line, so it only ever matched multi-line
+    tuple declarations and silently ignored the single-line form that most
+    modules use.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []
+
+    declaration = _source_owned_declaration(tree)
+    if declaration is None:
+        return []
+
+    docstring = ast.get_docstring(tree, clean=False) or ""
+    segments = _assignment_segments(source, tree)
+
     entries: list[DocEntry] = []
-    m = _PY_SOURCE_OWNED.search(source)
-    if not m:
-        return entries
-    tuple_body = m[1]
-    for entry_m in _PY_TUPLE_ENTRY.finditer(tuple_body):
-        slug = entry_m[0]
-        # get the variable name that follows the slug string
-        var_name_m = re.search(r'\(\s*"[^"]+"\s*,\s*([A-Z_][A-Z0-9_]*)\s*\)', entry_m[0])
-        if var_name_m:
-            var_name = var_name_m[1]
-            content = module_vars.get(var_name, "")
-            if content:
-                line = source[: m.start()].count("\n") + 1
-                entries.append(
-                    DocEntry(
-                        name=var_name,
-                        lang="python",
-                        content=content,
-                        source_file=source_file,
-                        line=line,
-                        hash=hash_content(content),
-                    ),
-                )
-        del slug
+    for element in declaration.elts:
+        if not isinstance(element, ast.Tuple) or len(element.elts) != 2:
+            continue
+        slug_node, value_node = element.elts
+        if not (isinstance(slug_node, ast.Constant) and isinstance(slug_node.value, str)):
+            continue
+
+        origin = _origin_symbol(value_node)
+        content = docstring if origin == "__doc__" else module_vars.get(origin, "")
+        if not content:
+            content = segments.get(origin, "")
+        if not content:
+            continue
+
+        entries.append(
+            DocEntry(
+                name=origin,
+                lang="python",
+                content=content,
+                source_file=source_file,
+                line=element.lineno,
+                hash=hash_content(content),
+            ),
+        )
     return entries
 
 

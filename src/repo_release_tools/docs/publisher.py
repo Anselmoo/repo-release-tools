@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import inspect
 import os
-import re
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -37,10 +36,13 @@ from typing import Protocol
 
 import repo_release_tools as rrt_package
 from repo_release_tools import eol as eol_module
+from repo_release_tools.commands import artifacts_cmd as artifacts_module
 from repo_release_tools.commands import branch as branch_module
 from repo_release_tools.commands import bump as bump_module
+from repo_release_tools.commands import docs_cmd as docs_cmd_module
 from repo_release_tools.commands import doctor as doctor_module
 from repo_release_tools.commands import eol_check as eol_check_module
+from repo_release_tools.commands import fields_cmd as fields_module
 from repo_release_tools.commands import install_cmd as install_module
 from repo_release_tools.commands import release_cmd as release_cmd_module
 from repo_release_tools.commands import skill as skill_module
@@ -49,7 +51,11 @@ from repo_release_tools.commands import toc as toc_module
 from repo_release_tools.commands import tree as tree_module
 from repo_release_tools.commands._registry import ensure_registered, registry
 from repo_release_tools.config import is_missing_tool_rrt_error
-from repo_release_tools.docs.formats.markdown import heading_level, normalize_markdown_headings
+from repo_release_tools.docs.formats.markdown import (
+    heading_level,
+    normalize_markdown_headings,
+    parse_markdown_lines,
+)
 from repo_release_tools.integrations import action as action_module
 from repo_release_tools.integrations import mcp_server as mcp_server_module
 from repo_release_tools.tools.inject import (
@@ -179,8 +185,10 @@ def _collect_source_owned_topic_docs(modules: Sequence[object]) -> dict[str, str
 
 SOURCE_OWNED_TOPIC_DOCS: dict[str, str] = _collect_source_owned_topic_docs(
     (
-        rrt_package,
+        artifacts_module,
         branch_module,
+        docs_cmd_module,
+        fields_module,
         bump_module,
         git_helpers,
         hooks_module,
@@ -625,7 +633,10 @@ def _get_title_overrides(cfg_docs: object = None) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
+    "artifacts": Path("docs/src/content/docs/commands/artifacts.mdx"),
     "branch": Path("docs/src/content/docs/commands/branch.mdx"),
+    "docs": Path("docs/src/content/docs/commands/docs.mdx"),
+    "fields": Path("docs/src/content/docs/commands/fields.mdx"),
     "git": Path("docs/src/content/docs/commands/git_cmd.mdx"),
     "tree": Path("docs/src/content/docs/commands/tree.mdx"),
     "hooks": Path("docs/src/content/docs/commands/hooks.mdx"),
@@ -646,6 +657,9 @@ TOPIC_PAGE_OUTPUTS: dict[str, Path] = {
 
 TITLE_OVERRIDES: dict[str, str] = {
     "rrt-cli": "rrt CLI",
+    "artifacts": "rrt artifacts",
+    "docs": "rrt docs",
+    "fields": "rrt fields",
     "branch": "rrt branch",
     "git": "rrt git",
     "tree": "rrt tree",
@@ -662,6 +676,9 @@ TITLE_OVERRIDES: dict[str, str] = {
 }
 
 DESCRIPTION_OVERRIDES: dict[str, str] = {
+    "artifacts": ("Generated-artifact tracking and drift checks performed by rrt artifacts."),
+    "docs": ("Documentation extraction, publishing, and per-directory mapping driven by rrt docs."),
+    "fields": ("Arbitrary config-field reads and writes across project files via rrt fields."),
     "rrt-cli": (
         "Generated reference for the full rrt CLI, covering every command group and "
         "argparse option."
@@ -702,9 +719,20 @@ DESCRIPTION_OVERRIDES: dict[str, str] = {
 
 
 def _extract_first_h1(text: str) -> str | None:
-    """Return the first top-level heading text from *text*, or ``None``."""
-    m = re.search(r"(?m)^\s*#\s+(.+)$", text)
-    return m[1].strip() if m else None
+    """Return the first top-level heading text from *text*, or ``None``.
+
+    Fence-aware: a ``#`` comment inside a fenced code block is not a heading,
+    and treating one as the page title produced titles like "Or via pre-commit
+    (manual stage):" for docs whose examples start with a shell comment.
+    """
+    return next(
+        (
+            line.text
+            for line in parse_markdown_lines(text)
+            if line.kind == "heading" and line.level == 1
+        ),
+        None,
+    )
 
 
 def _wrap_with_frontmatter(
@@ -814,22 +842,30 @@ def _ensure_primary_h1(content: str, title: str) -> str:
 
     If a top-level H1 exists, it is replaced with ``# <title>``.
     If no top-level H1 exists, one is prepended.
+
+    Fence-aware, so a ``#`` comment inside a code block is never mistaken for
+    the page heading and rewritten — that would corrupt the example.
     """
     lines = content.splitlines()
-    for idx, line in enumerate(lines):
-        if re.match(r"^\s*#\s+.+$", line):
-            lines[idx] = f"# {title}"
-            return "\n".join(lines).rstrip() + "\n"
+    parsed = parse_markdown_lines(content)
+    index = next(
+        (i for i, line in enumerate(parsed) if line.kind == "heading" and line.level == 1),
+        None,
+    )
+    if index is not None:
+        lines[index] = f"# {title}"
+        return "\n".join(lines).rstrip() + "\n"
     body = content.lstrip("\n")
     return f"# {title}\n\n{body}".rstrip() + "\n"
 
 
 def validate_generated_pages() -> list[str]:
-    """Return consistency issues for generated command pages.
+    """Return consistency issues for every generated full-page target.
 
     Rules:
-    - top-level generated command pages must include frontmatter
-    - top-level generated command pages must include a top-level H1
+    - generated pages must include frontmatter
+    - generated pages must open with exactly one top-level H1
+    - no heading may be clipped by the level-6 cap when shifted
     """
     issues: list[str] = []
     for target in GENERATED_DOC_TARGETS:
@@ -838,13 +874,34 @@ def validate_generated_pages() -> list[str]:
     return issues
 
 
+def _clipped_headings(body: str) -> list[str]:
+    """Return headings that hit the H6 cap, which hides their real depth.
+
+    ``normalize_markdown_headings`` shifts by ``min(level + offset, 6)``, so a
+    doc nested deeply enough silently flattens distinct levels onto H6.
+    """
+    return [
+        line.text
+        for line in parse_markdown_lines(body)
+        if line.kind == "heading" and line.level == 6
+    ]
+
+
 def validate_generated_page(target: DocTarget, rendered: str) -> list[str]:
-    """Return consistency issues for one generated command page rendering."""
+    """Return consistency issues for one generated page rendering.
+
+    Anchor-block targets are skipped: they are fragments spliced into a
+    hand-written page, so page-level rules about frontmatter and H1 do not
+    apply to them.
+
+    This deliberately checks only page-level invariants. Section structure
+    belongs to :mod:`repo_release_tools.docs.skeleton`, which reads the source
+    docstring before headings are re-levelled and can therefore name the module
+    a contributor has to edit.
+    """
     if target.anchor_id is not None:
         return []
-    if not (
-        target.output_path.suffix.lower() == ".mdx" and target.output_path.parent.name == "commands"
-    ):
+    if target.output_path.suffix.lower() != ".mdx":
         return []
 
     issues: list[str] = []
@@ -860,6 +917,21 @@ def validate_generated_page(target: DocTarget, rendered: str) -> list[str]:
     body = rendered[fm_close + len("\n---\n") :].lstrip("\n")
     if not body.startswith("# "):
         issues.append(f"{target.output_path}: missing top-level H1")
+
+    h1_count = sum(
+        1 for line in parse_markdown_lines(body) if line.kind == "heading" and line.level == 1
+    )
+    if h1_count > 1:
+        issues.append(
+            f"{target.output_path}: has {h1_count} top-level H1 headings; expected exactly one",
+        )
+
+    clipped = _clipped_headings(body)
+    if clipped:
+        issues.append(
+            f"{target.output_path}: {len(clipped)} heading(s) clipped at H6 when shifted, "
+            f"flattening their nesting: {', '.join(repr(t) for t in clipped[:3])}",
+        )
 
     return issues
 

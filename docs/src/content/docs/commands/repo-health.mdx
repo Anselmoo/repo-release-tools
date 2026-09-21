@@ -13,6 +13,8 @@ description: "Generated command reference for the Repository Health command grou
   - [Configuration](#configuration)
   - [Subcommands](#subcommands)
   - [Examples](#examples)
+  - [Caveats](#caveats)
+  - [Related docs](#related-docs)
 - [`rrt config`](#rrt-config)
   - [Overview](#overview-1)
   - [What the command reports](#what-the-command-reports)
@@ -21,7 +23,8 @@ description: "Generated command reference for the Repository Health command grou
   - [Schema mode](#schema-mode)
   - [Failure behavior](#failure-behavior)
   - [Examples](#examples-1)
-  - [Caveats](#caveats)
+  - [Caveats](#caveats-1)
+  - [Related docs](#related-docs-1)
 - [`rrt docs`](#rrt-docs)
   - [Overview](#overview-2)
   - [Responsibilities](#responsibilities)
@@ -30,7 +33,8 @@ description: "Generated command reference for the Repository Health command grou
   - [Supported languages](#supported-languages)
   - [Lockfile](#lockfile)
   - [Examples](#examples-2)
-  - [Related docs](#related-docs)
+  - [Caveats](#caveats-2)
+  - [Related docs](#related-docs-2)
   - [`rrt docs generate`](#rrt-docs-generate)
   - [`rrt docs check`](#rrt-docs-check)
   - [`rrt docs publish`](#rrt-docs-publish)
@@ -46,15 +50,16 @@ description: "Generated command reference for the Repository Health command grou
   - [Output and severity](#output-and-severity)
   - [Config discovery behavior](#config-discovery-behavior)
   - [Examples](#examples-3)
-  - [Caveats](#caveats-1)
-  - [Related docs](#related-docs-1)
+  - [Caveats](#caveats-3)
+  - [Related docs](#related-docs-3)
 - [`rrt drift`](#rrt-drift)
   - [Overview](#overview-4)
   - [Responsibilities](#responsibilities-1)
   - [Tracked Surfaces](#tracked-surfaces)
   - [Behavior](#behavior)
   - [Examples](#examples-4)
-  - [Caveats](#caveats-2)
+  - [Caveats](#caveats-4)
+  - [Related docs](#related-docs-4)
   - [`rrt drift generate`](#rrt-drift-generate)
   - [`rrt drift check`](#rrt-drift-check)
 - [`rrt env`](#rrt-env)
@@ -62,7 +67,8 @@ description: "Generated command reference for the Repository Health command grou
   - [What it reports](#what-it-reports)
   - [JSON mode](#json-mode)
   - [Examples](#examples-5)
-  - [Caveats](#caveats-3)
+  - [Caveats](#caveats-5)
+  - [Related docs](#related-docs-5)
   - [`rrt env check`](#rrt-env-check)
 - [`rrt eol`](#rrt-eol)
   - [Overview](#overview-6)
@@ -71,36 +77,47 @@ description: "Generated command reference for the Repository Health command grou
   - [Policy behavior](#policy-behavior)
   - [Output](#output)
   - [Examples](#examples-6)
-  - [Caveats](#caveats-4)
+  - [Caveats](#caveats-6)
   - [`rrt eol check`](#rrt-eol-check)
 - [`rrt fields`](#rrt-fields)
   - [Overview](#overview-7)
   - [Configuration](#configuration-1)
   - [Subcommands](#subcommands-1)
   - [Examples](#examples-7)
-  - [Caveats](#caveats-5)
+  - [Caveats](#caveats-7)
+  - [Related docs](#related-docs-6)
 - [`rrt folder`](#rrt-folder)
+  - [Overview](#overview-8)
+  - [Examples](#examples-8)
+  - [Caveats](#caveats-8)
+  - [Related docs](#related-docs-7)
   - [`rrt folder check`](#rrt-folder-check)
   - [`rrt folder scaffold`](#rrt-folder-scaffold)
   - [`rrt folder design`](#rrt-folder-design)
 - [`rrt project`](#rrt-project)
-  - [Examples](#examples-8)
+  - [Overview](#overview-9)
+  - [Examples](#examples-9)
+  - [Caveats](#caveats-9)
+  - [Related docs](#related-docs-8)
   - [`rrt project info`](#rrt-project-info)
 - [`rrt toc`](#rrt-toc)
-  - [Overview](#overview-8)
+  - [Overview](#overview-10)
   - [Usage](#usage)
   - [Anchors](#anchors)
   - [Options](#options)
+  - [Examples](#examples-10)
+  - [Caveats](#caveats-10)
+  - [Related docs](#related-docs-9)
 - [`rrt tree`](#rrt-tree)
-  - [Overview](#overview-9)
+  - [Overview](#overview-11)
   - [Ignore behavior](#ignore-behavior)
   - [Output formats](#output-formats)
   - [Common options](#common-options)
   - [Failure behavior](#failure-behavior-1)
-  - [Examples](#examples-9)
+  - [Examples](#examples-11)
   - [Embedding a tree into a Markdown file](#embedding-a-tree-into-a-markdown-file)
-  - [Caveats](#caveats-6)
-  - [Related docs](#related-docs-2)
+  - [Caveats](#caveats-11)
+  - [Related docs](#related-docs-10)
 {/* rrt:auto:end:toc */}
 
 ## `rrt artifacts`
@@ -148,6 +165,29 @@ rrt artifacts --check
 rrt artifacts --check --strict
 rrt artifacts --list
 ```
+
+### Caveats
+
+Nothing is tracked without `[[tool.rrt.artifact_targets]]` entries. With none
+configured, every mode reports zero targets and exits 0.
+
+`--check` is advisory by default: a hash mismatch prints a warning but still
+exits 0. Pass `--strict` to fail the build on drift. The `rrt-hooks
+artifacts-check` CI gate flips this default and requires `--no-strict` to
+downgrade it.
+
+`--regenerate` only runs targets that declare a `command`. Targets without
+one are silently skipped, and a failing command aborts the whole run before
+the snapshot is rewritten. `--dry-run` only affects `--regenerate`; it is
+rejected alongside `--check`, `--snapshot`, or `--list`.
+
+`--snapshot`, `--check`, `--list`, and `--regenerate` are mutually exclusive.
+
+### Related docs
+
+- [Repo health](/repo-release-tools/commands/repo-health/)
+- [Artifacts](/repo-release-tools/commands/artifacts/)
+- [Hooks](/repo-release-tools/commands/hooks/)
 
 ```text
 Usage:  rrt artifacts [OPTIONS]
@@ -260,6 +300,12 @@ rrt config --schema > rrt-config.schema.json
 - The resolved output reflects discovery and auto-detection, not just the
   contents of one file.
 
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Repo health commands](/repo-release-tools/commands/repo-health/) — doctor, config, env, drift, and related checks
+- [rrt doctor](/repo-release-tools/commands/doctor/) — broader health checks built on this resolved config
+
 ```text
 Usage:  rrt config [OPTIONS]
 
@@ -371,6 +417,23 @@ rrt docs generate --format toml --dry-run  # show lock without writing
 rrt docs check                             # exits 1 if lockfile is stale
 rrt docs api --format json                 # machine-readable API index
 ```
+
+### Caveats
+
+Extraction is regex-based, not AST-based. Unusual formatting around a
+docstring or an explicit `sym:` marker can cause a block to be missed.
+
+In `explicit` mode, the marker comment must directly precede the block it
+names; a stray blank line or unrelated comment breaks the association.
+
+`rrt docs check` only compares against whatever `.rrt/docs.lock.toml` last
+recorded. Run `rrt docs generate --format toml` again after editing
+docstrings, or drift goes undetected until the next regeneration.
+
+`rrt docs publish` renders each reference page from the live CLI parser and
+source docstrings, then overwrites the target file. Manual edits to a
+generated page are lost on the next publish; edit the source docstring
+instead.
 
 ### Related docs
 
@@ -599,49 +662,51 @@ They do **not** replace the deeper feature validators.
 
 ### Artifact protection
 
-Some CI jobs fetch a build artifact produced by a *different* pipeline run —
-for example, a docs job that pulls a report built by an earlier release
-pipeline. That dependency lives only in the *consuming* job's config, never
-on the artifact itself, so nothing on the forge side (GitLab, GitHub) can
-infer it exists — a storage cleanup or retention policy has no way to know
-the artifact is still needed. When the artifact expires, the consuming job
-breaks. A consumer that instead degrades gracefully — skips the missing
-artifact and carries on rather than failing loudly — is not the safer
-outcome: it hides the same broken dependency instead of surfacing it, so
-graceful degradation and silent breakage are the same failure underneath,
-just harder to notice.
+Some CI jobs fetch a build artifact produced by a *different* pipeline run.
+A docs job might pull a report built by an earlier release pipeline. That
+dependency lives only in the *consuming* job's config, never on the artifact
+itself. Nothing on the forge side can infer that it exists, so a storage
+cleanup or retention policy has no way to know the artifact is still needed.
+When the artifact expires, the consuming job breaks.
 
-`rrt doctor` closes this gap by scanning CI config for **cross-pipeline
-artifact fetches** — steps that download a build artifact produced by a
-*different* pipeline run — and cross-checking each one against an optional
-`[tool.rrt.artifact_protection]` declaration, where `consumed_by` records the
-CI file that performs the fetch. (This is unrelated to `rrt artifacts`, which
-tracks content-addressed integrity of generated files you keep in the repo —
-a different feature that happens to share a name fragment.)
+Degrading gracefully is not the safer outcome. A consumer that skips the
+missing artifact and carries on hides the broken dependency instead of
+surfacing it. Graceful degradation and silent breakage are the same failure
+underneath, only harder to notice.
+
+`rrt doctor` closes this gap. It scans CI config for **cross-pipeline
+artifact fetches**, meaning steps that download an artifact built by a
+different pipeline run. Each fetch is cross-checked against an optional
+`[tool.rrt.artifact_protection]` declaration, where `consumed_by` records
+the CI file that performs the fetch.
+
+This is unrelated to `rrt artifacts`. That feature tracks content-addressed
+integrity of generated files kept in the repo, and only shares a name
+fragment.
 
 The scanner recognizes two forms:
 
-- GitLab `.../jobs/artifacts/<ref>/raw/<path>?job=<name>` URLs, matched in
-  **every** CI file the scanner reads — `.gitlab-ci.yml`, any
-  `.gitlab/**/*.yml` / `*.yaml` file (scanned recursively, since GitLab's
-  `include: local:` accepts any filename in any subdirectory), and also
-  `.github/workflows/*.yml` / `*.yaml`. This is deliberate: a job running on
-  GitHub Actions can still `curl` an artifact out of a GitLab instance, and
-  scoping the check to `.gitlab*` files would make that fetch invisible. A
-  single physical line can carry more than one fetch (for example chained
-  shell commands, `curl ... && curl ...`) — every fetch on the line is found,
-  not just the first.
-- GitHub Actions `actions/download-artifact@…` steps that carry `run-id:`
-  in `.github/workflows/*.yml` / `*.yaml` (same-pipeline downloads without
-  `run-id` are ignored — they are not cross-pipeline). A step that carries
-  `run-id:` but no `name:` — standard GitHub usage meaning "download every
-  artifact from this run", common in publish/release jobs — is still
-  recorded, not dropped: see "Download-all fetches" below. GitLab's
-  same-pipeline equivalent — a job declaring `needs: [other_job]` with
-  `artifacts: true` to pull that job's output within the *same* pipeline — is
-  out of scope for the same reason: those artifacts come from the same
-  pipeline run and are never at risk from a retention cleanup of *other*
-  pipelines, so the scanner does not look for `needs:` at all.
+- GitLab `.../jobs/artifacts/<ref>/raw/<path>?job=<name>` URLs. These match
+  in **every** CI file the scanner reads: `.gitlab-ci.yml`, any
+  `.gitlab/**/*.yml` or `*.yaml` file, and also `.github/workflows/*.yml`
+  or `*.yaml`. The `.gitlab/` tree is scanned recursively, because GitLab's
+  `include: local:` accepts any filename in any subdirectory. Covering
+  GitHub files is deliberate. A job running on GitHub Actions can still
+  `curl` an artifact out of a GitLab instance, and scoping the check to
+  `.gitlab*` files would make that fetch invisible. One physical line can
+  carry several fetches, as in chained `curl ... && curl ...` commands.
+  Every fetch on the line is found, not just the first.
+- GitHub Actions `actions/download-artifact@…` steps carrying `run-id:` in
+  `.github/workflows/*.yml` or `*.yaml`. Same-pipeline downloads omit
+  `run-id` and are ignored, because they are not cross-pipeline. A step
+  with `run-id:` but no `name:` is still recorded. That is standard GitHub
+  usage meaning "download every artifact from this run", and it is common
+  in publish and release jobs. See "Download-all fetches" below. GitLab's
+  same-pipeline equivalent is out of scope for the same reason. A job
+  declaring `needs: [other_job]` with `artifacts: true` pulls output from
+  the *same* pipeline run. Those artifacts are never at risk from a
+  retention cleanup of *other* pipelines, so the scanner does not look for
+  `needs:` at all.
 
 Declare what each fetch is allowed to depend on:
 
@@ -657,46 +722,51 @@ consumed_by = [".gitlab/65-docs.yml"]
 reason = "Docs pipeline embeds the report built by this job."
 ```
 
-`protected_refs` above is shown for illustration only — it is parsed and
-validated but not read by any check yet (see "`protected_refs` is reserved,
-not yet enforced" below); do not rely on it to protect `main`. Each
-`consumed` entry: `job` and `ref` identify the fetch (see "Matching" below
-for exactly how); `artifacts` lists the paths the fetch may pull;
-`consumed_by` names the CI file(s) that perform the fetch; `reason` records
-why the dependency exists. `consumed_by` and `reason` are documentation
-only — nothing in the check validates or enforces them; matching uses only
-`job`, `ref`, and (when known) `path`.
+`protected_refs` above is shown for illustration only. It is parsed and
+validated, but no check reads it yet. Do not rely on it to protect `main`.
+See "`protected_refs` is reserved, not yet enforced" below.
 
-The check fails (error) when a scanned fetch has no matching `consumed`
-entry — the failure message names the CI file and line and prints a
-ready-to-paste `[[tool.rrt.artifact_protection.consumed]]` block. It warns
-(without failing) when a `consumed` entry matches no scanned fetch, since a
-stale declaration that protects nothing real trains people to ignore the
-check; both directions can be reported together in the same run. When no
-cross-pipeline fetches are found in CI config and no
+Each `consumed` entry uses five fields. `job` and `ref` identify the fetch,
+as described under "Matching" below. `artifacts` lists the paths the fetch
+may pull. `consumed_by` names the CI files that perform the fetch. `reason`
+records why the dependency exists. The last two are documentation only, and
+nothing in the check validates them. Matching uses `job`, `ref`, and `path`
+when known.
+
+The check fails when a scanned fetch has no matching `consumed` entry. The
+failure message names the CI file and line. It also prints a ready-to-paste
+`[[tool.rrt.artifact_protection.consumed]]` block.
+
+The check warns without failing when a `consumed` entry matches no scanned
+fetch. A stale declaration protects nothing real, and trains people to
+ignore the check. Both directions can be reported together in one run.
+
+When no cross-pipeline fetches are found and no
 `[tool.rrt.artifact_protection]` block is configured, the check is a soft
-warning rather than a failure — there is nothing to protect yet.
+warning rather than a failure. There is nothing to protect yet.
 
 #### Matching: `(job, ref)`, plus `path` when known
 
 A fetch is declared only when a `consumed` entry matches on **both** `job`
-and `ref` — never `job` alone. Matching on `job` alone would let one
-correctly-filled entry mask an unrelated, undeclared fetch anywhere else in
-CI config that merely happens to share its job string (generic names like
-`build`, `report`, `dist`, `coverage` are common, and GitLab's `job` holds a
-job name while GitHub's holds an artifact name — two namespaces sharing one
-match field). Neither `job` nor `ref` is ever split, lowercased, or otherwise
-normalized — job names may legitimately contain colons (for example
-`build:report_html:bundle`, which is a distinct job from `build:report_html`).
+and `ref`. Matching on `job` alone is not enough. One correctly-filled entry
+would then mask an unrelated, undeclared fetch that merely shares its job
+string. Generic names such as `build`, `report`, `dist` and `coverage` are
+common. GitLab's `job` holds a job name while GitHub's holds an artifact
+name, so two namespaces share a single match field.
 
-When the fetch's `path` is known — GitLab always sets it — the matched
-entry's `artifacts` list must additionally contain that exact path, or the
-fetch still counts as undeclared. Declaring "job X at ref Y protects
-artifacts `[a, b]`" must not silently cover a fetch of a *different* artifact
-`c` from that same job and ref. GitHub Actions `download-artifact` exposes no
-per-file path (`path` is always `None`), so for GitHub fetches the check
-necessarily degrades to `(job, ref)` only — the best available for that
-provider.
+Neither `job` nor `ref` is ever split, lowercased, or otherwise normalized.
+Job names may legitimately contain colons. For example,
+`build:report_html:bundle` is a distinct job from `build:report_html`.
+
+When the fetch's `path` is known, the matched entry's `artifacts` list must
+also contain that exact path. Otherwise the fetch still counts as
+undeclared. GitLab always sets `path`. Declaring that job X at ref Y
+protects artifacts `[a, b]` must not silently cover a fetch of a *different*
+artifact `c` from that same job and ref.
+
+GitHub Actions `download-artifact` exposes no per-file path, so `path` is
+always `None`. For GitHub fetches the check degrades to `(job, ref)` only.
+That is the best available signal for that provider.
 
 #### GitHub vs. GitLab: `job` means different things
 
@@ -898,6 +968,12 @@ The command tracks a variety of sensitive agentic surfaces, including:
   call to update the lock.
 - Only files matching the predefined surface patterns are tracked.
 
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Repo health commands](/repo-release-tools/commands/repo-health/) — doctor, config, env, drift, and related checks
+- [rrt artifacts](/repo-release-tools/commands/artifacts/) — the same lock-and-check pattern for arbitrary files
+
 ```text
 Usage:  rrt drift [OPTIONS] <drift_command>
 
@@ -1016,6 +1092,12 @@ rrt env --json
   relevant to rrt behavior.
 - It is a snapshot of the current process, not a probe of the wider shell or
   login environment.
+
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [Repo health commands](/repo-release-tools/commands/repo-health/) — doctor, config, env, drift, and related checks
+- [rrt doctor](/repo-release-tools/commands/doctor/) — diagnostics that build on this environment snapshot
 
 ```text
 Usage:  rrt env [OPTIONS] <env_action>
@@ -1285,6 +1367,12 @@ rrt fields --list
 - An `anchor` target file must already contain the matching anchor marker
   pair; `--sync`/`--check` fail loudly rather than creating or skipping it.
 
+### Related docs
+
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/) — full command surface
+- [rrt artifacts](/repo-release-tools/commands/artifacts/) — whole-file drift detection this complements
+- [Repo health commands](/repo-release-tools/commands/repo-health/) — doctor, config, env, drift, and related checks
+
 ```text
 Usage:  rrt fields [OPTIONS]
 
@@ -1319,10 +1407,14 @@ Examples
 
 Folder supervision and scaffolding command family.
 
-Overview
+### Overview
 
 `rrt folder` validates, scaffolds, and infers folder structures for a
-project. It supports three primary flows:
+project against configured policy or built-in templates. Use it to catch
+structural drift in CI, bootstrap a new project layout, or capture an
+existing tree as a reusable template.
+
+It supports three subcommands:
 
 - `check` — validate an existing tree against configured folder policies or
     built-in templates and report violations.
@@ -1331,15 +1423,30 @@ project. It supports three primary flows:
 - `design` — capture an existing directory tree and emit a reusable
     template description (TOML) that can be applied elsewhere.
 
-Usage examples:
+This module implements the command handlers exposed via `rrt folder`,
+documented so contributors and automation can rely on a clear reference.
 
-    rrt folder check --template python-package
-    rrt folder scaffold --template cargo-inspired --dry-run
-    rrt folder design --name captured-template --root src
+### Examples
 
-This module implements the command handlers exposed via the top-level
-`rrt folder` command and is intentionally documented so contributors and
-automation can rely on a clear, multi-line module-level docstring.
+```bash
+rrt folder check --template python-package
+rrt folder scaffold --template cargo-inspired --dry-run
+rrt folder design --name captured-template --root src
+```
+
+### Caveats
+
+`check` and `scaffold` fall back to template-only mode when no `[tool.rrt]`
+config is found. In that mode, only `--template` rules apply. `--report-only`
+downgrades violations to warnings for a single invocation. It does not
+persist any state. `--snapshot` merges results into `.rrt/health.lock.toml`
+and is only available on `check`. `design` requires an existing, readable
+directory and exits non-zero otherwise.
+
+### Related docs
+
+- [rrt doctor](/repo-release-tools/commands/doctor/)
+- [Repository health](/repo-release-tools/commands/repo-health/)
 
 ```text
 Usage:  rrt folder [OPTIONS] <folder_command>
@@ -1427,11 +1534,14 @@ Options
 
 `rrt project info` — surface project metadata from the project manifest.
 
-Reads ``pyproject.toml`` / ``Cargo.toml`` / ``package.json`` and emits
+### Overview
+
+``rrt project info`` surfaces project metadata from the project manifest. It
+reads ``pyproject.toml``, ``Cargo.toml``, or ``package.json`` and emits
 ``name``, ``description``, ``version``, ``authors``, ``license``, and
-``urls`` as text (default) or JSON. Useful for generating README headers,
-populating release-body templates, or scripting CI tasks that need a
-single field via ``--key``.
+``urls`` as text (default) or JSON. Use it to generate README headers,
+populate release-body templates, or script CI tasks that need a single
+field via ``--key``.
 
 ### Examples
 
@@ -1439,6 +1549,20 @@ single field via ``--key``.
 - ``rrt project info --format json``
 - ``rrt project info --key description``
 - ``rrt project info --format json --output project-info.json``
+
+### Caveats
+
+The command reads only the one manifest file present under ``--root``; it
+never merges fields across multiple manifest types. ``--key`` accepts only
+``name``, ``version``, ``description``, ``authors``, ``license``, ``urls``,
+or ``source``; any other value exits with an error listing the valid keys.
+``--root`` must already exist as a directory, or the command exits before
+reading anything.
+
+### Related docs
+
+- `/repo-release-tools/commands/repo-health/`
+- `/repo-release-tools/commands/rrt-cli/`
 
 ```text
 Usage:  rrt project [OPTIONS] <project_command>
@@ -1519,6 +1643,29 @@ Everything outside the markers is preserved unchanged.
 | ``--dry-run`` | — | Print result instead of writing (requires ``--inject``) |
 
 ``--inject`` and ``--anchor`` must always be used together.
+
+### Examples
+
+```bash
+rrt toc README.md
+rrt toc README.md --min-level 2 --max-level 3
+rrt toc README.md --inject README.md --anchor toc
+rrt toc README.md --inject README.md --anchor toc --dry-run
+```
+
+### Caveats
+
+``--inject`` and ``--anchor`` must always be used together; passing only one
+exits with an error. ``--dry-run`` only changes behavior when ``--inject`` is
+also given. The inject target must already contain the
+``<!-- rrt:auto:start:ID -->`` / ``<!-- rrt:auto:end:ID -->`` marker pair, or
+the command exits without writing. The source file must exist and contain at
+least one heading in the requested level range.
+
+### Related docs
+
+- `/repo-release-tools/commands/repo-health/`
+- `/repo-release-tools/commands/rrt-cli/`
 
 ```text
 Usage:  rrt toc [OPTIONS] FILE

@@ -54,13 +54,6 @@ from there.
 
 Version targets may also point at Go, Rust, or .NET-style version files when
 you need to keep multiple language surfaces aligned.
-
-## Related docs
-
-- [rrt doctor](/repo-release-tools/commands/doctor/)
-- [rrt eol (CLI)](/repo-release-tools/commands/rrt-cli/)
-- [pre-commit / lefthook](/repo-release-tools/commands/hooks/)
-- [GitHub Action](/repo-release-tools/action/)
 """
 
 from __future__ import annotations
@@ -142,6 +135,23 @@ rrt release check
 # Or via pre-commit (manual stage):
 pre-commit run rrt-release-check --hook-stage manual
 ```
+
+## Caveats
+
+The check only covers targets reachable from `[tool.rrt]`. A version string
+maintained outside any configured target or pin is invisible to it.
+
+Pin target drift and missing matches are always reported as warnings, not
+errors, regardless of the `pin_target_missing` setting that governs
+`rrt bump`. A clean `rrt release check` run can still hide a stale or
+missing pin.
+
+## Related docs
+
+- [rrt doctor](/repo-release-tools/commands/doctor/)
+- [rrt eol (CLI)](/repo-release-tools/commands/rrt-cli/)
+- [pre-commit / lefthook](/repo-release-tools/commands/hooks/)
+- [GitHub Action](/repo-release-tools/action/)
 """
 )
 

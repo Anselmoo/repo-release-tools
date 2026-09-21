@@ -58,7 +58,19 @@ summary first, followed by the details needed to act on the result.
 - `rrt git squash-local --base-ref origin/main "ship parser"`
 - `rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run`
 
-## See also
+## Caveats
+
+- `undo-safe` and `rebootstrap` rewrite repository history. `rebootstrap`
+  requires explicit confirmation before it destroys anything.
+- `sync` and `move` stash your local changes automatically and restore them
+  afterwards. The working tree is touched even on a run you expected to be
+  read-only.
+- `rrt git commit` only infers the commit type from the branch when that
+  branch follows the conventional `type/slug` format.
+- These commands refuse to continue in unsafe states, such as unresolved
+  conflicts or an in-progress merge.
+
+## Related docs
 
 - [Conventional branches](/repo-release-tools/commands/branch/)
 - [Generated CLI reference](/repo-release-tools/commands/rrt-cli/)
