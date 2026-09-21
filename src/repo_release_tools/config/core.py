@@ -27,6 +27,7 @@ from .model import (
     DEFAULT_INIT_CONFIG,
     DEFAULT_LOCK_COMMAND,
     DEFAULT_RELEASE_BRANCH,
+    DEFAULT_TAG_PREFIX,
     GENERIC_TOOL_RRT_EXAMPLE,
     GO_TOOL_RRT_EXAMPLE,
     NODE_TOOL_RRT_EXAMPLE,
@@ -690,6 +691,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         "release_branch": raw.get("release_branch", DEFAULT_RELEASE_BRANCH),
         "changelog_file": raw.get("changelog_file", DEFAULT_CHANGELOG),
         "changelog_workflow": raw.get("changelog_workflow", DEFAULT_CHANGELOG_WORKFLOW),
+        "tag_prefix": raw.get("tag_prefix", DEFAULT_TAG_PREFIX),
         "lock_command": raw.get("lock_command", _default_lock_command(config_file)),
         "generated_files": raw.get("generated_files", _default_generated_files(config_file)),
         "generated_assets": raw.get("generated_assets", []),
@@ -1397,11 +1399,18 @@ def _load_version_group(
                 default=defaults["changelog_workflow"],
                 error="changelog_workflow must be a string",
             ),
+            FieldSpec(
+                "tag_prefix",
+                str,
+                default=defaults["tag_prefix"],
+                error="tag_prefix must be a string",
+            ),
         ],
     )
     release_branch = cast("str", simple_fields["release_branch"])
     changelog_value = cast("str", simple_fields["changelog_file"])
     changelog_workflow = cast("str", simple_fields["changelog_workflow"])
+    tag_prefix = cast("str", simple_fields["tag_prefix"])
     if changelog_workflow not in VALID_CHANGELOG_WORKFLOWS:
         allowed = ", ".join(sorted(VALID_CHANGELOG_WORKFLOWS))
         raise ValueError(f"changelog_workflow must be one of {allowed}, got {changelog_workflow!r}")
@@ -1429,6 +1438,13 @@ def _load_version_group(
         raise ValueError("generated_files must be a list of strings")
     else:
         generated_files = cast("list[str]", generated_files_raw)
+
+    changelog_paths_raw = raw_group.get("changelog_paths", [])
+    if not isinstance(changelog_paths_raw, list) or not all(
+        isinstance(item, str) for item in changelog_paths_raw
+    ):
+        raise ValueError("changelog_paths must be a list of strings")
+    changelog_paths = cast("list[str]", changelog_paths_raw)
 
     generated_assets_raw = raw_group.get("generated_assets", defaults["generated_assets"])
     generated_assets = _load_generated_assets(root, generated_assets_raw)
@@ -1478,6 +1494,8 @@ def _load_version_group(
         version_source=version_source,
         pin_targets=_load_pin_targets(root, raw_group.get("pin_targets", [])),
         changelog_workflow=changelog_workflow,
+        tag_prefix=tag_prefix,
+        changelog_paths=changelog_paths,
         upstream_package=upstream_package,
         upstream_provider=upstream_provider,
         upstream_commit_message=upstream_commit_message,
@@ -1493,6 +1511,7 @@ __all__ = [
     "DEFAULT_INIT_CONFIG",
     "DEFAULT_LOCK_COMMAND",
     "DEFAULT_RELEASE_BRANCH",
+    "DEFAULT_TAG_PREFIX",
     "GENERIC_TOOL_RRT_EXAMPLE",
     "GO_TOOL_RRT_EXAMPLE",
     "NODE_TOOL_RRT_EXAMPLE",

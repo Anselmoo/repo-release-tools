@@ -13,12 +13,18 @@ from repo_release_tools.commands.tag import (
     _existing_tags,
     _git,
     _load_config_and_version,
+    _resolve_prefix,
     _tag_name,
     _tag_name_for_group,
     cmd_tag_check,
     cmd_tag_create,
 )
-from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.config import (
+    DEFAULT_TAG_PREFIX,
+    RrtConfig,
+    VersionGroup,
+    VersionTarget,
+)
 
 
 def _make_config(tmp_path: Path, version: str = "1.2.3") -> RrtConfig:
@@ -44,7 +50,7 @@ def _make_config(tmp_path: Path, version: str = "1.2.3") -> RrtConfig:
 
 
 def _args_create(
-    prefix: str = "v",
+    prefix: str | None = "v",
     message: str | None = None,
     push: bool = False,
     force: bool = False,
@@ -62,7 +68,7 @@ def _args_create(
 
 
 def _args_check(
-    prefix: str = "v",
+    prefix: str | None = "v",
     strict: bool = False,
     group: str | None = None,
 ) -> argparse.Namespace:
@@ -508,7 +514,11 @@ def test_load_config_and_version_resolve_group_value_error(
 # ---------------------------------------------------------------------------
 
 
-def _make_multi_group_config(tmp_path: Path, versions: dict[str, str]) -> RrtConfig:
+def _make_multi_group_config(
+    tmp_path: Path,
+    versions: dict[str, str],
+    tag_prefixes: dict[str, str] | None = None,
+) -> RrtConfig:
     groups = []
     for name, version in versions.items():
         init_file = tmp_path / name / "__init__.py"
@@ -524,6 +534,7 @@ def _make_multi_group_config(tmp_path: Path, versions: dict[str, str]) -> RrtCon
                 generated_files=[],
                 version_targets=[target],
                 pin_targets=[],
+                tag_prefix=(tag_prefixes or {}).get(name, DEFAULT_TAG_PREFIX),
             )
         )
     return RrtConfig(
@@ -1041,3 +1052,174 @@ def test_cmd_tag_check_batch_empty_group_names_fails(
     rc = cmd_tag_check(_args_check(group=" , ,"))
     assert rc == 1
     assert "no valid group names" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# --prefix defaults to the group's configured tag_prefix (issue #251)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_prefix_falls_back_to_group_tag_prefix(tmp_path: Path) -> None:
+    """An omitted --prefix resolves to the group's configured tag_prefix."""
+    group = _make_multi_group_config(tmp_path, {"sdk": "1.0.0"}, {"sdk": "sdk-v"}).resolve_group(
+        "sdk"
+    )
+
+    assert _resolve_prefix(None, group) == "sdk-v"
+
+
+def test_resolve_prefix_explicit_flag_wins_over_config(tmp_path: Path) -> None:
+    """An explicit --prefix overrides config, including an explicit empty prefix."""
+    group = _make_multi_group_config(tmp_path, {"sdk": "1.0.0"}, {"sdk": "sdk-v"}).resolve_group(
+        "sdk"
+    )
+
+    assert _resolve_prefix("rel-", group) == "rel-"
+    assert _resolve_prefix("", group) == ""
+
+
+def test_cmd_tag_create_uses_configured_tag_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Without --prefix, the tag is named from the group's tag_prefix."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"sdk": "1.2.3"}, {"sdk": "sdk-v"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    git_calls: list[list[str]] = []
+
+    def _fake_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        git_calls.append(cmd)
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fake_git)
+
+    rc = cmd_tag_create(_args_create(prefix=None, group="sdk"))
+
+    assert rc == 0
+    assert ["git", "tag", "-a", "sdk-v1.2.3", "-m", "Release sdk-v1.2.3"] in git_calls
+    assert "Created tag 'sdk-v1.2.3'" in capsys.readouterr().out
+
+
+def test_cmd_tag_create_explicit_prefix_overrides_configured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit --prefix still wins over the group's tag_prefix."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"sdk": "1.2.3"}, {"sdk": "sdk-v"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    git_calls: list[list[str]] = []
+
+    def _fake_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        git_calls.append(cmd)
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fake_git)
+
+    assert cmd_tag_create(_args_create(prefix="", group="sdk")) == 0
+    assert ["git", "tag", "-a", "1.2.3", "-m", "Release 1.2.3"] in git_calls
+
+
+def test_cmd_tag_check_uses_configured_tag_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A prefixed group's own tags are accepted without passing --prefix."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"sdk": "1.2.3"}, {"sdk": "sdk-v"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag._existing_tags",
+        lambda _: ["sdk-v1.2.3", "sdk-v1.1.0"],
+    )
+
+    rc = cmd_tag_check(_args_check(prefix=None, strict=True, group="sdk"))
+
+    assert rc == 0
+    assert "Tag 'sdk-v1.2.3' is present and consistent." in capsys.readouterr().out
+
+
+def test_cmd_tag_create_batch_without_prefix_uses_each_groups_tag_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Batch mode without --prefix needs no {group} token: each group brings its own."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(
+        tmp_path,
+        {"alpha": "1.0.0", "beta": "2.0.0"},
+        {"alpha": "alpha-v", "beta": "beta-"},
+    )
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: [])
+
+    git_calls: list[list[str]] = []
+
+    def _fake_git(cmd: list[str], _root: Path, **kwargs: object) -> MagicMock:
+        git_calls.append(cmd)
+        m = MagicMock()
+        m.stderr = ""
+        return m
+
+    monkeypatch.setattr("repo_release_tools.commands.tag._git", _fake_git)
+
+    rc = cmd_tag_create(_args_create(prefix=None, group="alpha,beta"))
+
+    assert rc == 0
+    tagged = [c[3] for c in git_calls if c[:3] == ["git", "tag", "-a"]]
+    assert tagged == ["alpha-v1.0.0", "beta-2.0.0"]
+
+
+def test_cmd_tag_check_batch_without_prefix_uses_each_groups_tag_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Each group is checked against its own configured prefix."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(
+        tmp_path,
+        {"alpha": "1.0.0", "beta": "2.0.0"},
+        {"alpha": "alpha-v", "beta": "beta-v"},
+    )
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr(
+        "repo_release_tools.commands.tag._existing_tags",
+        lambda _: ["alpha-v1.0.0", "beta-v2.0.0"],
+    )
+
+    rc = cmd_tag_check(_args_check(prefix=None, strict=True, group="alpha,beta"))
+
+    out = capsys.readouterr().out
+    assert rc == 1  # each group flags the other group's tag as a prefix mismatch
+    assert "Tag 'beta-v2.0.0' does not match prefix 'alpha-v'" in out
+    assert "Tag 'alpha-v1.0.0' does not match prefix 'beta-v'" in out
+
+
+def test_single_group_renders_group_token_from_configured_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A repo-wide tag_prefix of '{group}-v' renders in single-group mode too."""
+    monkeypatch.chdir(tmp_path)
+    conf = _make_multi_group_config(tmp_path, {"sdk": "1.2.3"}, {"sdk": "{group}-v"})
+    monkeypatch.setattr("repo_release_tools.commands.tag.load_or_autodetect_config", lambda _: conf)
+    monkeypatch.setattr("repo_release_tools.commands.tag._existing_tags", lambda _: ["sdk-v1.2.3"])
+
+    assert cmd_tag_create(_args_create(prefix=None, group="sdk", dry_run=True)) == 1
+    assert "Tag 'sdk-v1.2.3' already exists" in capsys.readouterr().err
+
+    assert cmd_tag_check(_args_check(prefix=None, strict=True, group="sdk")) == 0
+    assert "Tag 'sdk-v1.2.3' is present and consistent." in capsys.readouterr().out

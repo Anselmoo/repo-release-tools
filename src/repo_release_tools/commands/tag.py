@@ -23,7 +23,10 @@ CI pipelines, helping to maintain a clean and reliable release record.
 By default, tags are created with a `v` prefix (e.g., `v1.2.3`) as is standard
 for many version control and release automation tools.
 
-- The prefix can be customized using `--prefix <string>`.
+- The prefix comes from the resolved group's `tag_prefix` setting, which is
+  itself `v` unless configured. Setting it per group (e.g. `sdk-v`) is what
+  lets `rrt bump` anchor that group's changelog range to its own tags.
+- The prefix can be overridden for one invocation using `--prefix <string>`.
 - The prefix can be removed entirely using `--prefix ""`.
 - Tag names are derived directly from the current version read from the
   active `[tool.rrt]` configuration group.
@@ -107,8 +110,22 @@ def _tag_name_for_group(version: str, prefix: str, group_name: str) -> str:
     return f"{prefix.replace('{group}', group_name)}{version}"
 
 
-def _load_config_and_version(root: Path, group_name: str | None) -> tuple[object, str] | None:
-    """Load config and return (config, version_str), printing errors on failure."""
+def _resolve_prefix(prefix: str | None, group: VersionGroup) -> str:
+    """Return the effective tag prefix for *group*.
+
+    ``--prefix`` defaults to ``None`` rather than ``"v"`` so an omitted flag
+    falls back to the group's configured ``tag_prefix``; this is what keeps
+    ``rrt tag`` and ``rrt bump``'s changelog range agreeing on a group's tag
+    naming (issue #251).  An explicit ``--prefix ""`` still means "no prefix".
+
+    Callers render the result's ``{group}`` token themselves, so a repo-wide
+    ``tag_prefix = "{group}-v"`` behaves the same in single and batch mode.
+    """
+    return group.tag_prefix if prefix is None else prefix
+
+
+def _load_config_and_version(root: Path, group_name: str | None) -> tuple[VersionGroup, str] | None:
+    """Load config and return (group, version_str), printing errors on failure."""
     try:
         config = load_or_autodetect_config(root)
     except FileNotFoundError as exc:
@@ -132,7 +149,7 @@ def _load_config_and_version(root: Path, group_name: str | None) -> tuple[object
         return None
 
     current = read_group_current_version(group)
-    return config, str(current)
+    return group, str(current)
 
 
 def _existing_tags(root: Path) -> list[str]:
@@ -156,7 +173,7 @@ class TagCreateOptions:
     verbose: int
     dry_run: bool
     push: bool
-    prefix: str
+    prefix: str | None
     message: str | None
     group: str | None
     force: bool
@@ -177,7 +194,7 @@ class TagCreateOptions:
             verbose=getattr(args, "verbose", 0) or 0,
             dry_run=getattr(args, "dry_run", False),
             push=getattr(args, "push", False),
-            prefix=getattr(args, "prefix", "v"),
+            prefix=getattr(args, "prefix", None),
             message=getattr(args, "message", None),
             group=getattr(args, "group", None),
             force=getattr(args, "force", False),
@@ -218,7 +235,7 @@ def _cmd_tag_create_batch(opts: TagCreateOptions, root: Path, group_names: list[
             VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
             return 1
         version = str(read_group_current_version(group))
-        tag = _tag_name_for_group(version, opts.prefix, group.name)
+        tag = _tag_name_for_group(version, _resolve_prefix(opts.prefix, group), group.name)
         if tag in existing and not opts.force:
             VerbosePrinter(verbose=verbose).line(
                 f"Tag '{tag}' already exists (group {group.name!r}). Use --force to overwrite.",
@@ -291,7 +308,7 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
                 stream=sys.stderr,
             )
             return 1
-        if "{group}" not in opts.prefix:
+        if opts.prefix is not None and "{group}" not in opts.prefix:
             VerbosePrinter(verbose=verbose).line(
                 "--prefix must include the '{group}' placeholder when --group lists "
                 f"multiple groups (got --prefix {opts.prefix!r}). Example: --prefix '{{group}}-v'.",
@@ -304,9 +321,9 @@ def cmd_tag_create(args: argparse.Namespace) -> int:
     result = _load_config_and_version(root, opts.group)
     if result is None:
         return 1
-    _config, version = result
+    group, version = result
 
-    tag = _tag_name(version, opts.prefix)
+    tag = _tag_name_for_group(version, _resolve_prefix(opts.prefix, group), group.name)
     msg = opts.message or f"Release {tag}"
 
     p = DryRunPrinter(opts.dry_run, verbose=verbose)
@@ -362,7 +379,7 @@ class TagCheckOptions:
 
     verbose: int
     strict: bool
-    prefix: str
+    prefix: str | None
     group: str | None
 
     @classmethod
@@ -370,7 +387,7 @@ class TagCheckOptions:
         """Build a :class:`TagCheckOptions` from a parsed ``argparse.Namespace``.
 
         workflow/hooks.py's "tag-check" case hand-builds
-        ``argparse.Namespace(strict=False, prefix="v", group=None,
+        ``argparse.Namespace(strict=False, prefix=None, group=None,
         verbose=verbose)`` — exactly these four fields, so no field is
         missing from that dispatch arm. The getattr fallbacks remain because
         several tests in tests/commands/test_tag.py construct sparse
@@ -380,7 +397,7 @@ class TagCheckOptions:
         return cls(
             verbose=getattr(args, "verbose", 0) or 0,
             strict=getattr(args, "strict", False),
-            prefix=getattr(args, "prefix", "v"),
+            prefix=getattr(args, "prefix", None),
             group=getattr(args, "group", None),
         )
 
@@ -427,7 +444,7 @@ def _cmd_tag_check_batch(opts: TagCheckOptions, root: Path, group_names: list[st
 
     any_errors = False
     for group, version in resolved:
-        group_prefix = opts.prefix.replace("{group}", group.name)
+        group_prefix = _resolve_prefix(opts.prefix, group).replace("{group}", group.name)
         expected_tag = f"{group_prefix}{version}"
         p.section(group.name)
 
@@ -475,7 +492,7 @@ def cmd_tag_check(args: argparse.Namespace) -> int:
                 stream=sys.stderr,
             )
             return 1
-        if "{group}" not in opts.prefix:
+        if opts.prefix is not None and "{group}" not in opts.prefix:
             VerbosePrinter(verbose=verbose).line(
                 "--prefix must include the '{group}' placeholder when --group lists "
                 f"multiple groups (got --prefix {opts.prefix!r}). Example: --prefix '{{group}}-v'.",
@@ -488,9 +505,10 @@ def cmd_tag_check(args: argparse.Namespace) -> int:
     result = _load_config_and_version(root, opts.group)
     if result is None:
         return 1
-    _config, version = result
+    group, version = result
 
-    expected_tag = _tag_name(version, opts.prefix)
+    prefix = _resolve_prefix(opts.prefix, group).replace("{group}", group.name)
+    expected_tag = _tag_name(version, prefix)
     existing_tags = _existing_tags(root)
 
     p = VerbosePrinter(verbose=verbose)
@@ -500,8 +518,8 @@ def cmd_tag_check(args: argparse.Namespace) -> int:
     errors: list[str] = []
 
     for tag in existing_tags:
-        if not tag.startswith(opts.prefix):
-            errors.append(f"Tag '{tag}' does not match prefix '{opts.prefix}'")
+        if not tag.startswith(prefix):
+            errors.append(f"Tag '{tag}' does not match prefix '{prefix}'")
 
     if expected_tag not in existing_tags:
         if opts.strict:
@@ -556,10 +574,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     create_parser.add_argument(
         "--prefix",
-        default="v",
+        default=None,
         metavar="PREFIX",
         help=(
-            "Tag prefix (default: 'v'). Pass empty string for no prefix. "
+            "Tag prefix. Defaults to the group's configured 'tag_prefix' "
+            "(itself 'v' unless set). Pass empty string for no prefix. "
             "Include the '{group}' token to render each group's name when "
             "--group lists multiple groups (e.g. '{group}-v')."
         ),
@@ -602,11 +621,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     check_parser.add_argument(
         "--prefix",
-        default="v",
+        default=None,
         metavar="PREFIX",
         help=(
-            "Expected tag prefix (default: 'v'). Include the '{group}' token to "
-            "render each group's name when --group lists multiple groups "
+            "Expected tag prefix. Defaults to the group's configured "
+            "'tag_prefix' (itself 'v' unless set). Include the '{group}' token "
+            "to render each group's name when --group lists multiple groups "
             "(e.g. '{group}-v')."
         ),
     )

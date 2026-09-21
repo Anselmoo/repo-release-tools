@@ -1391,7 +1391,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         case "tag-check":
             return cmd_tag_check(
-                argparse.Namespace(strict=False, prefix="v", group=None, verbose=verbose)
+                argparse.Namespace(strict=False, prefix=None, group=None, verbose=verbose)
             )
         case "check-eol":
             parsed.verbose = verbose

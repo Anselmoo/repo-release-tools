@@ -13,6 +13,7 @@ from repo_release_tools.sync.providers import PROVIDERS as VALID_UPSTREAM_PROVID
 DEFAULT_RELEASE_BRANCH = "release/v{version}"
 DEFAULT_CHANGELOG = "CHANGELOG.md"
 DEFAULT_CHANGELOG_WORKFLOW = "incremental"
+DEFAULT_TAG_PREFIX = "v"
 DEFAULT_LOCK_COMMAND = ["uv", "lock", "-U"]
 DEFAULT_GENERIC_LOCK_COMMAND: list[str] = []
 VALID_CHANGELOG_WORKFLOWS = frozenset({"incremental", "squash"})
@@ -448,6 +449,8 @@ class VersionGroup:
     version_source: Path | None = None
     pin_targets: list[PinTarget] = field(default_factory=list)
     changelog_workflow: str = DEFAULT_CHANGELOG_WORKFLOW
+    tag_prefix: str = DEFAULT_TAG_PREFIX
+    changelog_paths: list[str] = field(default_factory=list)
     upstream_package: str | None = None
     upstream_provider: str = "pypi"
     upstream_commit_message: str = "Mirror: {version}"
@@ -1005,6 +1008,16 @@ class RrtConfig:
     def changelog_file(self) -> Path:
         """Backward-compatible access to the default group's changelog file."""
         return self.resolve_group().changelog_file
+
+    @property
+    def tag_prefix(self) -> str:
+        """Backward-compatible access to the default group's tag prefix."""
+        return self.resolve_group().tag_prefix
+
+    @property
+    def changelog_paths(self) -> list[str]:
+        """Backward-compatible access to the default group's changelog pathspecs."""
+        return self.resolve_group().changelog_paths
 
     @property
     def lock_command(self) -> list[str]:
