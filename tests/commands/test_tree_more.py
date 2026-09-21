@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from repo_release_tools.commands.tree import (
+    TreeEntry,
     _inject_rendered_tree,
     _render_ascii_tree,
     _render_markdown_tree,
@@ -18,7 +19,7 @@ from repo_release_tools.ui import DryRunPrinter
 
 
 def test_renderers_simple() -> None:
-    entries = [("a.txt", False, None), ("bdir", True, [("c.txt", False, None)])]
+    entries: list[TreeEntry] = [("a.txt", False, None), ("bdir", True, [("c.txt", False, None)])]
     ascii_out = _render_ascii_tree(entries)
     assert "a.txt" in ascii_out and "c.txt" in ascii_out and "bdir/" in ascii_out
 

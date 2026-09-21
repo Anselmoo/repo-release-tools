@@ -152,9 +152,9 @@ def test_cmd_install_global_target_uses_home_directory(
     tmp_path: Path,
 ) -> None:
     home = tmp_path / "home"
-    monkeypatch.chdir(
-        tmp_path / "workspace" if (tmp_path / "workspace").mkdir() or True else tmp_path,
-    )
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
     _mock_home(monkeypatch, home)
     args = Namespace(targets=["claude-global"], dry_run=False, force=False)
 

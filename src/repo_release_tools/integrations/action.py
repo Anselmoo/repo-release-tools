@@ -21,7 +21,7 @@ for it when CI has to be the gate, not just the contributor's machine.
   with:
     fetch-depth: 0
 
-- uses: Anselmoo/repo-release-tools@v1.17.1
+- uses: Anselmoo/repo-release-tools@v1.18.0
   with:
     check-branch-name: "true"
     check-commit-subject: "true"
@@ -71,7 +71,7 @@ hooks with CI `changelog-strategy: "unreleased"`.
 ### Default CI setup
 
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.17.1
+- uses: Anselmoo/repo-release-tools@v1.18.0
   with:
     check-changelog: "true"
     changelog-strategy: "auto"
@@ -80,7 +80,7 @@ hooks with CI `changelog-strategy: "unreleased"`.
 ### Hook-managed `[Unreleased]` workflow
 
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.17.1
+- uses: Anselmoo/repo-release-tools@v1.18.0
   with:
     check-changelog: "true"
     changelog-strategy: "unreleased"
@@ -89,7 +89,7 @@ hooks with CI `changelog-strategy: "unreleased"`.
 ### Release-time changelog workflow
 
 ```yaml
-- uses: Anselmoo/repo-release-tools@v1.17.1
+- uses: Anselmoo/repo-release-tools@v1.18.0
   with:
     check-changelog: "true"
     changelog-strategy: "release-only"
@@ -197,7 +197,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Anselmoo/repo-release-tools/actions/publish-snapshot@v1.17.1
+      - uses: Anselmoo/repo-release-tools/actions/publish-snapshot@v1.18.0
         with:
           target: public-preview
           confirm: "true"
