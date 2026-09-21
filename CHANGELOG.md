@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.18.0] - 2026-09-21
 ### Added
 - **docs**: enforce the published-docstring skeleton
 - **docs**: publish fields, artifacts and docs topic pages
