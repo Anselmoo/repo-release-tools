@@ -639,14 +639,58 @@ _FINAL_PYPROJECT = PYPROJECT_TEMPLATE.replace('version = "0.1.0"', 'version = "1
 _CLI_BUMP_LINE = re.compile(r"Current: (\S+) → (\S+)")
 
 
-def _make_final_release_repo(factory: RepoFactory) -> Path:
-    """A repo at the FINAL ``1.0.0`` (tagged ``v1.0.0``) with one ``feat`` commit since."""
+def _make_final_release_repo(
+    factory: RepoFactory, message: str = "feat: add a feature after 1.0.0"
+) -> Path:
+    """A repo at the FINAL ``1.0.0`` (tagged ``v1.0.0``) with one *message* commit since."""
     repo = factory(pyproject=_FINAL_PYPROJECT)
     git("tag", "v1.0.0", cwd=repo)
     (repo / "feature.txt").write_text("new feature\n", encoding="utf-8")
     git("add", "-A", cwd=repo)
-    git("commit", "-m", "feat: add a feature after 1.0.0", cwd=repo)
+    git("commit", "-m", message, cwd=repo)
     return repo
+
+
+def _cli_and_mcp_rc_bump(
+    factory: RepoFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    base: str | None,
+    message: str = "feat: add a feature after 1.0.0",
+) -> tuple[str, str, Any]:
+    """Dry-run ``rc`` on twin repos via CLI and MCP; return (cli_current, cli_new, mcp_result)."""
+    pytest.importorskip("fastmcp")
+    from fastmcp import Client
+
+    from repo_release_tools.mcp.server import create_server
+
+    cli_repo = _make_final_release_repo(factory, message)
+    mcp_repo = _make_final_release_repo(factory, message)
+
+    cli_args = ["bump", "rc", "--dry-run"] + ([] if base is None else ["--base", base])
+    cli_result = rrt(*cli_args, cwd=cli_repo)
+    assert cli_result.returncode == 0, (
+        f"CLI dry-run bump failed.\nstdout:\n{cli_result.stdout}\nstderr:\n{cli_result.stderr}"
+    )
+    match = _CLI_BUMP_LINE.search(cli_result.stdout)
+    assert match is not None, f"no 'Current: X → Y' line in CLI output:\n{cli_result.stdout}"
+    cli_current, cli_new = match.groups()
+
+    monkeypatch.chdir(mcp_repo)
+    arguments: dict[str, Any] = {"level": "rc", "dry_run": True}
+    if base is not None:
+        arguments["base"] = base
+
+    async def _call() -> Any:
+        server = create_server()
+        async with Client(server) as client:
+            result = await client.call_tool("rrt_bump", arguments)
+            return result.data
+
+    mcp_data = asyncio.run(_call())
+    assert isinstance(mcp_data, list) and len(mcp_data) == 1, f"unexpected: {mcp_data!r}"
+    mcp_result = mcp_data[0]
+    assert mcp_result.error is None, f"unexpected MCP bump error: {mcp_result!r}"
+    return cli_current, cli_new, mcp_result
 
 
 @pytest.mark.mcp
@@ -673,40 +717,40 @@ def test_mcp_bump_base_matches_cli_for_same_input(
     CLI and MCP surfaces. Omitting the base means the next patch (D-1); ``auto`` sees
     the ``feat`` commit since ``v1.0.0`` and picks minor on both surfaces.
     """
-    pytest.importorskip("fastmcp")
-    from fastmcp import Client
-
-    from repo_release_tools.mcp.server import create_server
-
-    cli_repo = _make_final_release_repo(e2e_repo_factory)
-    mcp_repo = _make_final_release_repo(e2e_repo_factory)
-
-    cli_args = ["bump", "rc", "--dry-run"] + ([] if base is None else ["--base", base])
-    cli_result = rrt(*cli_args, cwd=cli_repo)
-    assert cli_result.returncode == 0, (
-        f"CLI dry-run bump failed.\nstdout:\n{cli_result.stdout}\nstderr:\n{cli_result.stderr}"
-    )
-    match = _CLI_BUMP_LINE.search(cli_result.stdout)
-    assert match is not None, f"no 'Current: X → Y' line in CLI output:\n{cli_result.stdout}"
-    cli_current, cli_new = match.groups()
-
-    monkeypatch.chdir(mcp_repo)
-    arguments: dict[str, Any] = {"level": "rc", "dry_run": True}
-    if base is not None:
-        arguments["base"] = base
-
-    async def _call() -> Any:
-        server = create_server()
-        async with Client(server) as client:
-            result = await client.call_tool("rrt_bump", arguments)
-            return result.data
-
-    mcp_data = asyncio.run(_call())
-    assert isinstance(mcp_data, list) and len(mcp_data) == 1, f"unexpected: {mcp_data!r}"
-    mcp_result = mcp_data[0]
-    assert mcp_result.error is None, f"unexpected MCP bump error: {mcp_result!r}"
+    cli_current, cli_new, mcp_result = _cli_and_mcp_rc_bump(e2e_repo_factory, monkeypatch, base)
 
     assert cli_current == mcp_result.current == "1.0.0"
     assert cli_new == mcp_result.new == expected, (
         f"base={base!r}: CLI gave {cli_new}, MCP gave {mcp_result.new}; expected {expected}"
+    )
+
+
+@pytest.mark.mcp
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("feat: add a feature after 1.0.0", "1.1.0-rc.1"),
+        ("feat!: drop the legacy API", "2.0.0-rc.1"),
+        ("fix: repair the parser\n\nBREAKING CHANGE: output format changed", "2.0.0-rc.1"),
+        ("fix: repair the parser", "1.0.1-rc.1"),
+    ],
+    ids=["feat-minor", "bang-major", "footer-major", "fix-patch"],
+)
+def test_mcp_bump_auto_base_matches_cli_for_every_commit_kind(
+    e2e_repo_factory: RepoFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    message: str,
+    expected: str,
+) -> None:
+    """``base='auto'`` resolves identically on CLI and MCP (D-1): breaking→major, feat→minor.
+
+    Anything else since the last FINAL tag (here a plain ``fix``) keeps the next patch.
+    """
+    cli_current, cli_new, mcp_result = _cli_and_mcp_rc_bump(
+        e2e_repo_factory, monkeypatch, "auto", message
+    )
+
+    assert cli_current == mcp_result.current == "1.0.0"
+    assert cli_new == mcp_result.new == expected, (
+        f"{message!r}: CLI gave {cli_new}, MCP gave {mcp_result.new}; expected {expected}"
     )

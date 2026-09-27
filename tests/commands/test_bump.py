@@ -4385,3 +4385,29 @@ def test_bump_help_lists_base_flag_and_example(capsys: pytest.CaptureFixture[str
     assert "--base LEVEL" in out
     assert "Overrides [tool.rrt] prerelease_base." in out
     assert "rrt bump rc --base minor --dry-run" in out
+
+
+@pytest.mark.parametrize(
+    ("base_line", "bad"),
+    [
+        pytest.param('prerelease_base = "huge"', "huge", id="unknown-name"),
+        pytest.param('prerelease_base = "prerelease"', "prerelease", id="npm-keyword"),
+    ],
+)
+def test_cli_bump_invalid_config_prerelease_base_is_a_clean_config_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    base_line: str,
+    bad: str,
+) -> None:
+    """An invalid [tool.rrt] prerelease_base stops `rrt bump rc` with a config error, exit 1."""
+    path = _write_base_pyproject(tmp_path, "1.0.0", base_line)
+    before = path.read_bytes()
+
+    result = _run_cli(tmp_path, ["bump", "rc", "--dry-run"])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert f"prerelease_base must be one of auto, major, minor, patch, got '{bad}'" in captured.err
+    assert "Traceback" not in captured.err
+    assert path.read_bytes() == before
