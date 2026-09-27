@@ -438,17 +438,19 @@ def git_log_since_latest_tag(
     Filtering by prefix is what keeps a group's range anchored to its own
     release history: a repository holding both ``v*`` and ``sdk-v*`` tags would
     otherwise start every group's range at whichever tag sorts first overall
-    (issue #251).  ``startswith`` matches ``rrt tag check``'s own prefix test
-    rather than a git glob, so a prefix containing glob metacharacters cannot
-    silently widen the match.
+    (issue #251).  The anchor comes from :func:`git.latest_tag`, which matches
+    the prefix with ``startswith`` (like ``rrt tag check``), never a git glob.
+
+    Tags are ranked by version precedence, not by name: a final release
+    outranks its own pre-releases (``v1.0.0`` beats ``v1.0.0-rc.2``), and
+    tags whose remainder is not a version (``vnext``) are ignored.  CalVer
+    tags rank by date.  Without a matching tag the range is all of ``HEAD``.
 
     *paths* restricts the log to the group's own files when the group
     configures ``changelog_paths``.
     """
-    tags_raw = git.capture(["git", "tag", "--sort=-v:refname"], root)
-    tags = [tag.strip() for tag in tags_raw.splitlines() if tag.strip()]
-    matching = [tag for tag in tags if tag.startswith(tag_prefix)]
-    ref = f"{matching[0]}..HEAD" if matching else "HEAD"
+    latest = git.latest_tag(root, tag_prefix)
+    ref = f"{latest}..HEAD" if latest else "HEAD"
     cmd = ["git", "log", ref, "--pretty=format:%s"]
     if paths:
         cmd += ["--", *paths]
@@ -480,8 +482,9 @@ def update_changelog(
         ``[Unreleased]`` section.
 
     Generated sections read the commit range from the resolved group's own
-    latest tag (its configured ``tag_prefix``) and, when the group configures
-    ``changelog_paths``, only from commits touching those paths.
+    latest tag (its configured ``tag_prefix``, with a ``{group}`` token rendered
+    to the group name) and, when the group configures ``changelog_paths``, only
+    from commits touching those paths.
 
     When the changelog contains an empty ``[Unreleased]`` placeholder (e.g.
     after a previous release), the generated section is inserted *after* that
@@ -539,9 +542,11 @@ def update_changelog(
         return
 
     # ---- Generate section from git log (heading / hash notation) -----------
+    group = config.resolve_group()
+    tag_prefix = group.tag_prefix.replace("{group}", group.name)
     section = build_changelog_section(
         version,
-        git_log_since_latest_tag(config.root, config.tag_prefix, config.changelog_paths),
+        git_log_since_latest_tag(config.root, tag_prefix, group.changelog_paths),
         include_maintenance=include_maintenance,
         fmt=fmt,
     )
@@ -1102,7 +1107,10 @@ Each group supports: `release_branch`, `changelog_file`,
 default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is
 what anchors a generated changelog section to the group's *own* latest tag —
 without it, a repository holding both `v*` and `sdk-v*` tags would start
-every group's range at whichever tag sorts first overall.
+every group's range at whichever tag sorts first overall. A `{group}` token
+in the prefix renders to the group name, so `"{group}-v"` means `sdk-v` here.
+The latest tag is chosen by version precedence: `v1.0.0` outranks
+`v1.0.0-rc.2`, and non-version tags such as `vnext` are ignored.
 
 `changelog_paths` optionally restricts generated entries to commits touching
 the group's own files, so one group's section cannot pick up another's work.

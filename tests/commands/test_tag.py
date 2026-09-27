@@ -90,17 +90,27 @@ def test_tag_name_no_prefix() -> None:
 
 def test_existing_tags_returns_list(tmp_path: Path) -> None:
     """Returns empty list when git is unavailable."""
-    with patch("repo_release_tools.commands.tag._git") as mock_git:
-        mock_git.side_effect = FileNotFoundError()
+    with patch("repo_release_tools.commands.tag.git.list_tags") as mock_list:
+        mock_list.side_effect = FileNotFoundError()
         assert _existing_tags(tmp_path) == []
 
 
 def test_existing_tags_parses_output(tmp_path: Path) -> None:
-    """Parses newline-separated tag output correctly."""
-    mock = MagicMock()
-    mock.stdout = "v2.0.0\nv1.1.0\nv1.0.0\n"
-    with patch("repo_release_tools.commands.tag._git", return_value=mock):
-        assert _existing_tags(tmp_path) == ["v2.0.0", "v1.1.0", "v1.0.0"]
+    """Returns every tag from a plain ``git tag`` listing, unsorted."""
+    calls: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], _root: Path) -> str:
+        calls.append(cmd)
+        return "v1.0.0\nv2.0.0\n\nsdk-v1.1.0\n"
+
+    with patch("repo_release_tools.commands.tag.git.capture", side_effect=fake_capture):
+        assert _existing_tags(tmp_path) == ["v1.0.0", "v2.0.0", "sdk-v1.1.0"]
+    assert calls == [["git", "tag"]]
+
+
+def test_existing_tags_outside_a_repository_is_empty(tmp_path: Path) -> None:
+    """A directory that is not a Git work tree simply has no tags."""
+    assert _existing_tags(tmp_path) == []
 
 
 # ---------------------------------------------------------------------------

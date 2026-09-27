@@ -245,7 +245,10 @@ Each group supports: `release_branch`, `changelog_file`,
 default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is
 what anchors a generated changelog section to the group's *own* latest tag —
 without it, a repository holding both `v*` and `sdk-v*` tags would start
-every group's range at whichever tag sorts first overall.
+every group's range at whichever tag sorts first overall. A `{group}` token
+in the prefix renders to the group name, so `"{group}-v"` means `sdk-v` here.
+The latest tag is chosen by version precedence: `v1.0.0` outranks
+`v1.0.0-rc.2`, and non-version tags such as `vnext` are ignored.
 
 `changelog_paths` optionally restricts generated entries to commits touching
 the group's own files, so one group's section cannot pick up another's work.

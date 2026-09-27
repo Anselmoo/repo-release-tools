@@ -16,7 +16,8 @@ captured in the project history.
 
 - parse the `[Unreleased]` section from Markdown or RST changelog files
 - extract and clean individual bullet points for use in the release body
-- discover unique contributors from the Git history since the last release tag
+- discover unique contributors from the Git history since the group's own
+  latest release tag
 - format the output using standard Markdown or GitHub-flavored styles
 - support multi-group configurations to target specific package changelogs
 
@@ -27,15 +28,17 @@ captured in the project history.
   simple Markdown list.
 - **gh-release**: Emits a rich, GitHub-flavored release body. It includes a
   `## What's Changed` header followed by the changelog entries, and an
-  automatically generated `## Contributors` section listing the names of
-  everyone who committed since the most recent tag.
+  automatically generated `## Contributors` section. It lists everyone who
+  committed since the selected group's latest tag.
 
 ## Behavior
 
 - **Detection**: Automatically identifies the changelog format based on the
   file extension.
-- **Git Integration**: Uses `git tag` to find the most recent release and
-  `git log` to identify contributors for the `gh-release` format.
+- **Git Integration**: For `gh-release`, finds the group's latest tag and
+  lists `git log` authors since it. Only tags starting with the group's
+  `tag_prefix` count, with a `{group}` token rendered to the group name.
+  Tags rank by version precedence, so `v1.0.0` outranks `v1.0.0-rc.2`.
 - **Validation**: Refuses to emit notes if the `[Unreleased]` section is
   missing or empty.
 - **Output**: Writes the formatted content directly to standard output,
@@ -52,8 +55,10 @@ captured in the project history.
 
 - Relies on the presence of a standard `[Unreleased]` placeholder in the
   changelog.
-- Contributor discovery requires a Git history and assumes that release tags
-  follow a detectable versioning pattern.
+- Contributor discovery requires a Git history. Tags whose remainder after
+  the prefix is not a SemVer or CalVer version are ignored.
+- With no matching tag, every commit reachable from `HEAD` counts as a
+  contribution.
 - The command targets only the unreleased changes; for comparing previous
   releases, see `rrt changelog compare`.
 """
@@ -75,25 +80,27 @@ from repo_release_tools.changelog import (
 )
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.config import (
+    DEFAULT_TAG_PREFIX,
     find_repo_root,
     iter_config_files,
     load_or_autodetect_config,
 )
 from repo_release_tools.ui import VerbosePrinter
+from repo_release_tools.workflow import git
 
 
-def _git_contributors(root: Path) -> list[str]:
-    """Return sorted, unique author names from commits since the latest tag."""
+def _git_contributors(root: Path, tag_prefix: str = DEFAULT_TAG_PREFIX) -> list[str]:
+    """Return sorted, unique author names from commits since the group's latest tag.
+
+    The range starts at :func:`git.latest_tag` for *tag_prefix*, so a repository
+    holding both ``v*`` and ``sdk-v*`` tags counts each group's contributors
+    from its own release.  Tags rank by version precedence, never by name.
+    Without a matching tag every commit reachable from ``HEAD`` counts.  A
+    missing ``git`` binary or a failing ``git log`` yields an empty list.
+    """
     try:
-        tags_raw = subprocess.run(
-            ["git", "tag", "--sort=-v:refname"],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=root,
-        ).stdout
-        tags = [t.strip() for t in tags_raw.splitlines() if t.strip()]
-        ref = f"{tags[0]}..HEAD" if tags else "HEAD"
+        latest = git.latest_tag(root, tag_prefix)
+        ref = f"{latest}..HEAD" if latest else "HEAD"
         out = subprocess.run(
             ["git", "log", ref, "--format=%an"],
             capture_output=True,
@@ -262,7 +269,8 @@ def cmd_release_notes(args: argparse.Namespace) -> int:
         return 1
 
     if output_format == "gh-release":
-        contributors = _git_contributors(root)
+        tag_prefix = group.tag_prefix.replace("{group}", group.name)
+        contributors = _git_contributors(root, tag_prefix)
         output = _format_gh_release(body, contributors)
     else:
         output = body + "\n"

@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from repo_fixtures import init_two_prefix_history
 
 from repo_release_tools.commands.bump import (
     BumpResolutionError,
@@ -601,6 +602,70 @@ def test_git_log_since_latest_tag_scopes_to_changelog_paths(
         "sdk/",
         "shared/api.json",
     ]
+
+
+def test_git_log_since_latest_tag_real_repo_resolves_each_group_prefix(tmp_path: Path) -> None:
+    """Each group's range starts at its own newest tag by version precedence (T0.3)."""
+    init_two_prefix_history(tmp_path)
+
+    assert git_log_since_latest_tag(tmp_path, "sdk-v") == ["feat: sdk after sdk-v2"]
+    assert git_log_since_latest_tag(tmp_path) == [
+        "feat: sdk after sdk-v2",
+        "feat: core after v1",
+    ]
+
+
+def test_git_log_since_latest_tag_prefers_final_over_newer_named_rc(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``v1.0.0`` anchors the range even though ``git tag`` lists ``rc.2`` after it."""
+    calls: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], root: Path) -> str:
+        calls.append(cmd)
+        if cmd == ["git", "tag"]:
+            return "v1.0.0\nv1.0.0-rc.1\nv1.0.0-rc.2\nvnext\n"
+        return "fix: after final\n"
+
+    monkeypatch.setattr("repo_release_tools.commands.bump.git.capture", fake_capture)
+
+    assert git_log_since_latest_tag(tmp_path) == ["fix: after final"]
+    assert calls == [["git", "tag"], ["git", "log", "v1.0.0..HEAD", "--pretty=format:%s"]]
+
+
+def test_update_changelog_generate_renders_group_token_in_tag_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A ``{group}-v`` tag_prefix resolves to the group's own ``sdk-v`` tags."""
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n## [Unreleased]\n\n", encoding="utf-8")
+    group = VersionGroup(
+        name="sdk",
+        release_branch="release/sdk/v{version}",
+        changelog_file=changelog,
+        lock_command=[],
+        generated_files=[],
+        version_targets=[VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")],
+        tag_prefix="{group}-v",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="sdk",
+    )
+    seen: list[str] = []
+
+    monkeypatch.setattr(
+        "repo_release_tools.commands.bump.git_log_since_latest_tag",
+        lambda root, prefix, paths: (seen.append(prefix), ["feat: sdk thing"])[1],
+    )
+
+    update_changelog(config, "1.3.0", include_maintenance=False, dry_run=False)
+
+    assert seen == ["sdk-v"]
 
 
 def test_update_changelog_generate_passes_group_tag_prefix_and_paths(

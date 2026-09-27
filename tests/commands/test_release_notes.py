@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from repo_fixtures import init_two_prefix_history
 
 from repo_release_tools.commands.release_notes import (
     _git_contributors,
@@ -39,12 +41,14 @@ def _args(
 def test_git_contributors_with_tags(tmp_path: Path) -> None:
     """Returns sorted unique author names when git tag and git log succeed."""
     mock_tags = MagicMock()
-    mock_tags.stdout = "v1.0.0\nv0.9.0\n"
+    mock_tags.stdout = "v0.9.0\nv1.0.0\n"
     mock_log = MagicMock()
     mock_log.stdout = "Alice\nBob\nAlice\n"
-    with patch("subprocess.run", side_effect=[mock_tags, mock_log]):
+    with patch("subprocess.run", side_effect=[mock_tags, mock_log]) as mock_run:
         result = _git_contributors(tmp_path)
     assert result == ["Alice", "Bob"]
+    assert mock_run.call_args_list[0][0][0] == ["git", "tag"]
+    assert mock_run.call_args_list[1][0][0] == ["git", "log", "v1.0.0..HEAD", "--format=%an"]
 
 
 def test_git_contributors_no_tags(tmp_path: Path) -> None:
@@ -57,7 +61,83 @@ def test_git_contributors_no_tags(tmp_path: Path) -> None:
         result = _git_contributors(tmp_path)
     assert result == ["Charlie"]
     log_call_args = mock_run.call_args_list[1][0][0]
-    assert "HEAD" in log_call_args
+    assert log_call_args == ["git", "log", "HEAD", "--format=%an"]
+
+
+def test_git_contributors_honours_group_tag_prefix(tmp_path: Path) -> None:
+    """Each group counts contributors since its own latest tag only (T0.3)."""
+    init_two_prefix_history(tmp_path)
+
+    assert _git_contributors(tmp_path, "sdk-v") == ["Bob"]
+    assert _git_contributors(tmp_path) == ["Alice", "Bob"]
+    assert _git_contributors(tmp_path, "v") == ["Alice", "Bob"]
+
+
+def test_git_contributors_git_log_failure_returns_empty(tmp_path: Path) -> None:
+    """A failing ``git log`` degrades to no contributors instead of raising."""
+    mock_tags = MagicMock()
+    mock_tags.stdout = "v1.0.0\n"
+    failure = subprocess.CalledProcessError(128, ["git", "log"])
+    with patch("subprocess.run", side_effect=[mock_tags, failure]):
+        assert _git_contributors(tmp_path, "v") == []
+
+
+_TWO_GROUP_CONFIG = """[tool.rrt]
+default_group = "core"
+
+[[tool.rrt.version_groups]]
+name = "core"
+release_branch = "release/v{version}"
+changelog_file = "CHANGELOG.md"
+
+  [[tool.rrt.version_groups.version_targets]]
+  path = "pyproject.toml"
+  kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "sdk"
+release_branch = "release/sdk/v{version}"
+changelog_file = "sdk/CHANGELOG.md"
+tag_prefix = "{group}-v"
+
+  [[tool.rrt.version_groups.version_targets]]
+  path = "sdk/pyproject.toml"
+  kind = "pep621"
+"""
+
+
+def test_release_notes_gh_release_contributors_follow_each_group_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--group sdk`` lists contributors since sdk-v2.0.0; the default group since v1.0.0."""
+    init_two_prefix_history(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "core"\nversion = "1.0.0"\n\n' + _TWO_GROUP_CONFIG,
+        encoding="utf-8",
+    )
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n- core change\n", encoding="utf-8"
+    )
+    (tmp_path / "sdk").mkdir()
+    (tmp_path / "sdk" / "pyproject.toml").write_text(
+        '[project]\nname = "sdk"\nversion = "2.0.0"\n', encoding="utf-8"
+    )
+    (tmp_path / "sdk" / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n- sdk change\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert cmd_release_notes(_args("gh-release", group="sdk")) == 0
+    sdk_out = capsys.readouterr().out
+    assert "- sdk change" in sdk_out
+    assert sdk_out.split("## Contributors")[1].split() == ["-", "Bob"]
+
+    assert cmd_release_notes(_args("gh-release")) == 0
+    core_out = capsys.readouterr().out
+    assert "- core change" in core_out
+    assert core_out.split("## Contributors")[1].split() == ["-", "Alice", "-", "Bob"]
 
 
 # ---------------------------------------------------------------------------

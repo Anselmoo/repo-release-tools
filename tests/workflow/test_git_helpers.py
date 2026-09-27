@@ -711,3 +711,147 @@ def test_unique_snapshot_branch_name_default_prefix(tmp_path: Path) -> None:
         now=lambda: dt.datetime(2026, 7, 5, 12, 0, 0, tzinfo=dt.UTC),
     )
     assert name == "rrt-snapshot-tmp-20260705120000"
+
+
+# ---------------------------------------------------------------------------
+# list_tags / latest_tag / latest_final_tag – prefix-aware precedence lookup
+# ---------------------------------------------------------------------------
+
+
+def _tag_repo(root: Path, tags: list[str]) -> None:
+    """Build a real repo with one commit carrying every lightweight tag in *tags*."""
+    _init_repo(root)
+    (root / "README.md").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-q", "-m", "seed"], cwd=root, check=True, capture_output=True)
+    for tag in tags:
+        subprocess.run(["git", "tag", tag], cwd=root, check=True, capture_output=True)
+
+
+def _stub_tags(monkeypatch: pytest.MonkeyPatch, tags: list[str]) -> list[list[str]]:
+    """Route git.capture to a canned ``git tag`` listing and record the calls."""
+    calls: list[list[str]] = []
+
+    def fake_capture(cmd: list[str], cwd: Path) -> str:
+        calls.append(cmd)
+        return "\n".join(tags) + "\n"
+
+    monkeypatch.setattr(git, "capture", fake_capture)
+    return calls
+
+
+def test_list_tags_returns_stripped_non_empty_lines(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = _stub_tags(monkeypatch, ["  v1.0.0 ", "", "sdk-v2.0.0"])
+    assert git.list_tags(tmp_path) == ["v1.0.0", "sdk-v2.0.0"]
+    assert calls == [["git", "tag"]]
+
+
+def test_list_tags_outside_a_repository_is_empty(tmp_path: Path) -> None:
+    assert git.list_tags(tmp_path) == []
+
+
+def test_latest_tag_prefers_final_over_its_pre_releases(tmp_path: Path) -> None:
+    _tag_repo(tmp_path, ["v1.0.0-rc.1", "v1.0.0", "v1.0.0-rc.2"])
+    assert git.latest_tag(tmp_path, "v") == "v1.0.0"
+    assert git.latest_final_tag(tmp_path, "v") == "v1.0.0"
+
+
+def test_latest_tag_and_latest_final_tag_diverge_on_newer_pre_release(tmp_path: Path) -> None:
+    _tag_repo(tmp_path, ["v1.0.0", "v1.1.0-rc.1"])
+    assert git.latest_tag(tmp_path, "v") == "v1.1.0-rc.1"
+    assert git.latest_final_tag(tmp_path, "v") == "v1.0.0"
+
+
+def test_latest_tag_orders_pre_release_numbers_numerically(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["v2.0.0-rc.10", "v2.0.0-rc.2", "v1.9.9"])
+    assert git.latest_tag(tmp_path) == "v2.0.0-rc.10"
+    assert git.latest_final_tag(tmp_path) == "v1.9.9"
+
+
+def test_latest_tag_skips_unparsable_prefixed_tags(tmp_path: Path) -> None:
+    _tag_repo(tmp_path, ["vnext", "v-foo", "vX.Y", "v1.0.0", "v2", "v1.0.0.0.0"])
+    assert git.latest_tag(tmp_path, "v") == "v1.0.0"
+    assert git.latest_final_tag(tmp_path, "v") == "v1.0.0"
+
+
+def test_latest_tag_returns_none_when_nothing_matches(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["release-1.0.0", "vnext"])
+    assert git.latest_tag(tmp_path, "v") is None
+    assert git.latest_final_tag(tmp_path, "v") is None
+
+
+def test_latest_tag_returns_none_without_any_tags(tmp_path: Path) -> None:
+    _tag_repo(tmp_path, [])
+    assert git.latest_tag(tmp_path) is None
+    assert git.latest_final_tag(tmp_path) is None
+
+
+def test_latest_final_tag_is_none_when_only_pre_releases_exist(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["v1.0.0-alpha.1", "v1.0.0-beta.1"])
+    assert git.latest_tag(tmp_path) == "v1.0.0-beta.1"
+    assert git.latest_final_tag(tmp_path) is None
+
+
+def test_latest_tag_empty_prefix_accepts_bare_versions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["1.2.3", "1.10.0", "v9.0.0", "sdk-v8.0.0"])
+    assert git.latest_tag(tmp_path, "") == "1.10.0"
+    assert git.latest_final_tag(tmp_path, "") == "1.10.0"
+
+
+def test_latest_tag_keeps_each_group_prefix_separate(tmp_path: Path) -> None:
+    _tag_repo(tmp_path, ["v1.0.0", "v1.4.0", "sdk-v2.0.0", "sdk-v0.3.0"])
+    assert git.latest_tag(tmp_path, "v") == "v1.4.0"
+    assert git.latest_tag(tmp_path, "sdk-v") == "sdk-v2.0.0"
+    assert git.latest_final_tag(tmp_path, "sdk-v") == "sdk-v2.0.0"
+
+
+def test_latest_tag_never_crosses_into_a_longer_prefix(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["sdk-v9.0.0", "v0.1.0"])
+    assert git.latest_tag(tmp_path, "v") == "v0.1.0"
+    assert git.latest_tag(tmp_path, "sdk-v") == "sdk-v9.0.0"
+
+
+def test_latest_tag_resolves_calver_tags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _stub_tags(monkeypatch, ["v2024.05.30", "v2024.06.01", "v2024.06.01.1", "v2023.12"])
+    assert git.latest_tag(tmp_path) == "v2024.06.01.1"
+    assert git.latest_final_tag(tmp_path) == "v2024.06.01.1"
+
+
+def test_latest_tag_calver_month_only_scheme(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["v2024.05", "v2024.11", "v2023.12"])
+    assert git.latest_tag(tmp_path) == "v2024.11"
+
+
+def test_latest_tag_breaks_build_metadata_ties_by_name(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["v1.0.0+b", "v1.0.0+a"])
+    assert git.latest_tag(tmp_path) == "v1.0.0+b"
+    _stub_tags(monkeypatch, ["v1.0.0+a", "v1.0.0+b"])
+    assert git.latest_tag(tmp_path) == "v1.0.0+b"
+    assert git.latest_final_tag(tmp_path) == "v1.0.0+b"
+
+
+def test_no_version_refname_sort_left_in_src() -> None:
+    src = Path(__file__).resolve().parents[2] / "src" / "repo_release_tools"
+    offenders = [
+        path.relative_to(src).as_posix()
+        for path in sorted(src.rglob("*.py"))
+        if "__pycache__" not in path.parts
+        and "--sort=-v:refname" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []
