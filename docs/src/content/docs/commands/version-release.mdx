@@ -104,7 +104,8 @@ patch by default. So ``rrt bump rc`` turns ``1.0.0`` into ``1.0.1-rc.1``.
 
 ``--base LEVEL`` picks another core for one run. ``minor`` gives
 ``1.1.0-rc.1`` and ``major`` gives ``2.0.0-rc.1``. The flag overrides the
-``prerelease_base`` key under ``[tool.rrt]`` or the version group.
+``prerelease_base`` key under ``[tool.rrt]`` or the version group. The MCP
+``rrt_bump`` tool takes the same values as ``base``, with the same default.
 
 ``auto`` reads the Conventional Commits since the group's last final tag. A
 breaking change means major, a ``feat`` means minor, anything else means patch.
@@ -233,6 +234,46 @@ the expected pattern, or when a pin target is intentionally optional.
 `pin_target_missing` applies to `rrt bump` only; `rrt release check` always
 reports missing pin target matches as warnings regardless of this setting.
 
+#### `prerelease_base`
+
+Picks the core an `alpha`, `beta` or `rc` bump targets when the current
+version is final:
+
+| Value | `1.0.0` + `rc` | Behavior |
+|---|---|---|
+| `"patch"` *(default)* | `1.0.1-rc.1` | Next patch, like npm and Poetry |
+| `"minor"` | `1.1.0-rc.1` | Next minor |
+| `"major"` | `2.0.0-rc.1` | Next major |
+| `"auto"` | any of the above | Level from Conventional Commits since the last final tag |
+
+`auto` scans the commits after the group's last final tag. A breaking change
+means major, a `feat` means minor, and anything else means patch. Pre-release
+tags such as `v1.0.1-rc.1` never move that range.
+
+```toml
+[tool.rrt]
+prerelease_base = "minor"
+
+[[tool.rrt.version_groups]]
+name = "sdk"
+prerelease_base = "auto"   # this group's own value wins over the global one
+```
+
+Override it for one run on either surface. Both take the same values and
+share the same default:
+
+```bash
+rrt bump rc --base major           # CLI: 1.0.0 -> 2.0.0-rc.1
+```
+
+```python
+rrt_bump(level="rc", base="major")  # MCP: same result as the CLI
+```
+
+The base only applies when a channel starts from a final version. Inside a
+channel the core stays put: `1.0.1-rc.1` bumps to `1.0.1-rc.2`. Switching
+channel keeps it too, so `1.0.1-beta.2` bumps to `1.0.1-rc.1`.
+
 #### `version_groups` — per-component versioning
 
 `version_groups` lets a single repository maintain multiple independently
@@ -266,12 +307,8 @@ Each group supports: `release_branch`, `changelog_file`,
 `lock_command`, `generated_files`, `version_targets`, and `pin_targets`.
 
 `prerelease_base` (default `"patch"`) picks the core an `alpha`, `beta` or
-`rc` bump targets from a final version. `patch` turns `1.0.0` into
-`1.0.1-rc.1`; `minor` gives `1.1.0-rc.1` and `major` gives `2.0.0-rc.1`.
-`auto` reads Conventional Commits since the last final tag. A breaking change
-means major, a `feat` means minor, anything else means patch. Set it under
-`[tool.rrt]` for every group; a group's own value wins over that default.
-Moving inside a channel (`rc.1` to `rc.2`) never changes the core.
+`rc` bump targets from a final version; see `prerelease_base` above. A
+group's own value wins over the `[tool.rrt]` one.
 
 `tag_prefix` (default `"v"`) names the group's release tags. It is the
 default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is

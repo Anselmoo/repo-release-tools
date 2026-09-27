@@ -37,6 +37,9 @@ registrations in dependency order.
 - **`rrt_bump`** — Preview or apply a semver bump across all version targets.  Defaults to
   `dry_run=True` for safety; set `dry_run=False` only after the user explicitly confirms.
   Accepts `level` = `"major"`, `"minor"`, `"patch"`, `"alpha"`, `"beta"`, or `"rc"`.
+  Optional `base` = `"patch"`, `"minor"`, `"major"`, or `"auto"` picks the core an
+  alpha/beta/rc bump targets from a final version, like the CLI's `--base`; omitted, it
+  falls back to the group's `prerelease_base` config (default: next patch).
 
 ### `validation_tools` → `rrt_validate_branch`, `rrt_validate_commit`
 

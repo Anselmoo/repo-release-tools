@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 
 from repo_release_tools import __version__ as _PKG_VERSION
 from repo_release_tools.mcp.models import BumpGroupResult, ConfigError, VersionGroupResult
+from repo_release_tools.version.semver import PRERELEASE_BASES
 
 
 def register(mcp: FastMCP) -> None:
@@ -59,6 +60,7 @@ def register(mcp: FastMCP) -> None:
         level: str,
         dry_run: bool = True,
         group: str | None = None,
+        base: str | None = None,
     ) -> list[BumpGroupResult] | dict[str, Any]:
         """Preview or apply a version bump — use instead of editing version strings by hand.
 
@@ -71,6 +73,13 @@ def register(mcp: FastMCP) -> None:
         level: major | minor | patch | alpha | beta | rc. dry_run=True by default.
         group: restrict the bump to one ``[tool.rrt]`` version group; omit to bump every
         configured group (one :class:`BumpGroupResult` per group either way).
+        base: patch | minor | major | auto — the core an alpha/beta/rc bump targets
+        when the current version is FINAL. Same as the CLI's ``rrt bump rc --base``.
+        Omit it to use the group's ``prerelease_base`` config, which defaults to the
+        next patch (1.0.0 -> 1.0.1-rc.1; minor -> 1.1.0-rc.1; major -> 2.0.0-rc.1).
+        ``auto`` reads Conventional Commits since the last final tag: breaking ->
+        major, feat -> minor, else patch. Ignored once the version is already a
+        pre-release, so rc.1 -> rc.2 never moves the core.
 
         Runs the SAME pipeline as the ``rrt bump`` CLI command (preflight, version
         targets, pin targets, changelog promotion/generation, lockfile and generated-asset
@@ -83,6 +92,8 @@ def register(mcp: FastMCP) -> None:
         valid_levels = ("major", "minor", "patch", "alpha", "beta", "rc")
         if level not in valid_levels:
             return {"error": f"level must be one of: {', '.join(valid_levels)}"}
+        if base is not None and base not in PRERELEASE_BASES:
+            return {"error": f"base must be one of: {', '.join(PRERELEASE_BASES)}"}
 
         config_error = ctx.lifespan_context.get("config_error")
         if config_error is not None:
@@ -119,6 +130,7 @@ def register(mcp: FastMCP) -> None:
                 base_branch=None,
                 calver_scheme="YYYY.MM.DD",
                 verbose=0,
+                prerelease_base=base,
             )
             try:
                 resolved = bump_cmd.resolve_bump_target(config, group_opts)
@@ -138,7 +150,7 @@ def register(mcp: FastMCP) -> None:
                 run_preflight(config, dry_run=dry_run, group=target_group)
 
                 branch_name = target_group.release_branch.format(version=new)
-                base = "<current>" if dry_run else git.current_branch(root)
+                base_ref = "<current>" if dry_run else git.current_branch(root)
 
                 if not dry_run and git.branch_exists(root, branch_name):
                     raise RuntimeError(
@@ -180,7 +192,7 @@ def register(mcp: FastMCP) -> None:
                     changed_paths,
                     root,
                     branch_name=branch_name,
-                    base=base,
+                    base=base_ref,
                     force=False,
                     opts=group_opts,
                 )
