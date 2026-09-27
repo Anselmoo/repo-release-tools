@@ -288,6 +288,12 @@ summary first, followed by the details needed to act on the result.
   rewrite history, with `rebootstrap` requiring explicit confirmation.
 - **Validation**: Refuses to continue in unsafe states, such as unresolved
   conflicts or in-progress merges.
+- **Latest tag lookup**: `latest_tag` and `latest_final_tag` pick a group's
+  newest release tag. Only tags starting with the group's `tag_prefix` count.
+  The remainder must parse as SemVer or CalVer; anything else is skipped.
+  Tags sort by version precedence, so `v1.0.0` beats `v1.0.0-rc.2`.
+  `latest_final_tag` ignores pre-releases. `rrt bump`, `rrt release notes` and
+  `rrt tag` all share this lookup.
 
 ### Examples
 
@@ -308,6 +314,9 @@ summary first, followed by the details needed to act on the result.
   branch follows the conventional `type/slug` format.
 - These commands refuse to continue in unsafe states, such as unresolved
   conflicts or an in-progress merge.
+- The latest-tag lookup matches the prefix literally, not as a glob. With
+  prefix `v`, a tag named `vnext` is ignored rather than breaking the range.
+  Build metadata never decides precedence; equal versions fall back to tag name.
 
 ### Related docs
 

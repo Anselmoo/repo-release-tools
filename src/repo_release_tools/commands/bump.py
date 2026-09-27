@@ -9,7 +9,45 @@ selected version group.
 The bump value may be one of:
 
 * ``major``, ``minor``, or ``patch`` to increment the current version
+* ``alpha``, ``beta``, or ``rc`` to start or advance a pre-release channel
+* ``release`` to drop the pre-release suffix, or ``pre-release`` to advance it
+* ``calver`` to move to today's calendar version
 * an explicit version string such as ``2.1.0``
+
+## Pre-release base
+
+Starting ``alpha``, ``beta`` or ``rc`` from a final version targets the next
+patch by default. So ``rrt bump rc`` turns ``1.0.0`` into ``1.0.1-rc.1``.
+
+``--base LEVEL`` picks another core for one run. ``minor`` gives
+``1.1.0-rc.1`` and ``major`` gives ``2.0.0-rc.1``. The flag overrides the
+``prerelease_base`` key under ``[tool.rrt]`` or the version group. The MCP
+``rrt_bump`` tool takes the same values as ``base``, with the same default.
+
+``auto`` reads the Conventional Commits since the group's last final tag. A
+breaking change means major, a ``feat`` means minor, anything else means patch.
+Later pre-release tags never move that range. ``changelog_paths`` and
+``extra_commit_types`` apply as they do for changelog generation.
+
+The base is ignored once the version is already a pre-release. So ``1.0.1-rc.1``
+bumps to ``1.0.1-rc.2``, whatever ``--base`` says.
+
+## Version scheme
+
+The ``version_scheme`` key names the grammar a group's version follows. It takes
+``semver``, ``pep440`` or ``calver``, globally or per version group.
+
+Left unset, the scheme is inferred from the primary target. A calendar-shaped
+version such as ``2026.05.15`` means ``calver``. Otherwise a ``pep621`` or
+``python_version`` target means ``pep440``, and any other target means ``semver``.
+
+``--scheme SCHEME`` overrides the config for one run. The MCP ``rrt_bump`` tool
+takes the same values as ``scheme``, with the same default. An unknown value in
+config is a config error, so ``rrt bump`` exits 1.
+
+A ``calver`` scheme only accepts the ``calver`` bump kind or an explicit calendar
+version; ``major``, ``rc``, ``dev`` and the other keyword kinds are refused with a
+clear error, since they have no meaning for a calendar version.
 
 ## What the command updates
 
@@ -49,6 +87,11 @@ below it so the placeholder stays at the top of the file.
 
 * The working tree must be clean unless ``--dry-run`` is used.
 * Existing release branches are refused unless ``--force`` is set.
+* An explicit ``<bump>`` version that is not strictly newer than the current one
+  (RRT-VER-1 I5) is refused unless ``--force`` is set -- ``--force`` also allows
+  this downgrade or no-op bump, alongside its existing release-branch-reset
+  meaning. A keyword kind (``major``, ``rc``, ``dev``, ...) always computes a
+  strictly newer version on its own, so this check never applies to one.
 * ``--no-commit`` leaves the branch created with staged changes only.
 * ``--dry-run`` previews the planned file edits and git actions without writing
   to disk.
@@ -59,6 +102,10 @@ below it so the placeholder stays at the top of the file.
 * ``rrt bump minor --dry-run``
 * ``rrt bump 2.1.0 --no-changelog --no-commit``
 * ``rrt bump major --base-branch develop``
+* ``rrt bump rc --dry-run``
+* ``rrt bump rc --base minor --dry-run``
+* ``rrt bump beta --base auto``
+* ``rrt bump calver --scheme calver --dry-run``
 """
 
 from __future__ import annotations
@@ -77,6 +124,7 @@ from repo_release_tools.changelog import (
     get_unreleased_entries,
     has_unreleased_section,
     insert_generated_section,
+    parse_conventional_commit,
     promote_unreleased,
 )
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
@@ -109,10 +157,11 @@ from repo_release_tools.ui import (
     spinner_lines,
 )
 from repo_release_tools.version.calver import CALVER_SCHEMES, CalVersion
-from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, Version
+from repo_release_tools.version.scheme import VERSION_SCHEMES
+from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, PRERELEASE_BASES, Version
 from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
-    read_group_current_version,
+    read_group_current_version_for_scheme,
     replace_all_versions_atomic,
     replace_pin_in_file,
 )
@@ -123,7 +172,8 @@ if TYPE_CHECKING:
 
 PREVIEW_LINES = 8
 
-_BUMP_KINDS = {"major", "minor", "patch", "release", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
+# Keyword bump kinds shared by ``rrt bump`` and ``rrt workspace bump``.
+BUMP_KINDS = {"major", "minor", "patch", "release", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
 
 # Pre-commit's fixed status line for a hook that auto-regenerated files and
 # thereby failed its own pass even though the fix is now correct on disk.
@@ -157,31 +207,51 @@ class BumpTarget:
 def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
     """Resolve the release group and compute the new version.
 
-    Pure w.r.t. the filesystem and git -- no printing, no side effects. This
-    step happens entirely before ``cmd_bump`` prints its "Version bump"
-    header, so extracting it cannot reorder any observable output (unlike
-    preflight/branch-existence, which interleave with that header print and
-    stay inline in ``cmd_bump`` for that reason).
+    No printing and no filesystem writes. This step happens entirely before
+    ``cmd_bump`` prints its "Version bump" header, so extracting it cannot
+    reorder any observable output (unlike preflight/branch-existence, which
+    interleave with that header print and stay inline in ``cmd_bump`` for that
+    reason).
+
+    Starting ``alpha``, ``beta`` or ``rc`` from a FINAL version uses the
+    pre-release base from :func:`resolve_prerelease_base`. That is the only
+    case that reads git: a base of ``auto`` scans the Conventional Commits
+    since the group's last FINAL tag. Every other kind stays git-free.
     """
     try:
         group = config.resolve_group(opts.group)
     except ValueError as exc:
         raise BumpResolutionError(str(exc)) from exc
 
-    current = read_group_current_version(group)
+    try:
+        current = read_group_current_version_for_scheme(group, scheme_override=opts.version_scheme)
+    except ValueError as exc:
+        raise BumpResolutionError(str(exc)) from exc
+
     new: Version | CalVersion | str
     if opts.bump == "calver":
         calver_scheme = opts.calver_scheme
-        try:
-            current_calver = CalVersion.parse(str(current))
-        except ValueError:
-            current_calver = CalVersion.today(calver_scheme)
-            new = str(current_calver)
+        if isinstance(current, CalVersion):
+            new = str(current.bump())
         else:
-            new = str(current_calver.bump())
-    elif opts.bump in _BUMP_KINDS:
+            # Non-calver current (no calver scheme configured or inferred, or one
+            # overridden away from calver for this run): treated as a fresh start
+            # (matches original inline behavior).
+            new = str(CalVersion.today(calver_scheme))
+    elif opts.bump in BUMP_KINDS:
+        if isinstance(current, CalVersion):
+            raise BumpResolutionError(
+                f"Cannot bump group {group.name!r} with kind {opts.bump!r}: its "
+                "version scheme is 'calver', which only supports the 'calver' bump "
+                "kind or an explicit version. Run `rrt bump calver` instead, or pass "
+                "an explicit calendar version."
+            )
+        base = resolve_prerelease_base(config, group, opts.bump, current, opts.prerelease_base)
         try:
-            new = current.bump(opts.bump)  # type: ignore[assignment]
+            if base is None:
+                new = current.bump(opts.bump)
+            else:
+                new = current.bump(opts.bump, base=base)
         except ValueError as exc:
             raise BumpResolutionError(str(exc)) from exc
     else:
@@ -193,7 +263,103 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
             except ValueError:
                 raise BumpResolutionError(f"Invalid bump value: {opts.bump!r}") from None
 
+    if not opts.force and _is_downgrade_or_equal(current, new):
+        raise BumpResolutionError(
+            f"Refusing to bump group {group.name!r} from {current} to {new}: {new} is "
+            f"not newer than {current}. Pass --force to bump anyway."
+        )
+
     return BumpTarget(group=group, current=current, new=new)
+
+
+def _is_downgrade_or_equal(current: Version | CalVersion, new: Version | CalVersion | str) -> bool:
+    """Return True when *new* is not strictly newer than *current* (RRT-VER-1 I5).
+
+    *new* is a plain ``str`` only for the ``calver`` bump kind (its own
+    :meth:`CalVersion.bump` already guarantees a strictly newer result, same-day
+    micro increment included), which this never second-guesses. A keyword kind
+    (``major``, ``rc``, ``dev``, ...) always produces a :class:`Version`, and its
+    own :meth:`Version.bump` guard already refused a non-newer result before
+    returning here -- this guard is only ever load-bearing for an *explicit*
+    ``<bump>`` version string.
+    """
+    if isinstance(new, str):
+        return False
+    return new.sort_key() <= current.sort_key()
+
+
+def infer_prerelease_base(
+    root: Path,
+    tag_prefix: str = DEFAULT_TAG_PREFIX,
+    paths: Sequence[str] = (),
+    extra_types: Sequence[str] = (),
+) -> str:
+    """Return the core level implied by Conventional Commits since the last FINAL tag.
+
+    This is how a pre-release base of ``auto`` resolves (decision D-1). The
+    range starts at :func:`git.latest_final_tag` for *tag_prefix*, so commits
+    before that release and later pre-release tags (``v1.0.1-rc.1``) never
+    move it.  Without a final tag the range is all of ``HEAD``.
+
+    Returns ``"major"`` when any commit is breaking (``type!:`` or a
+    ``BREAKING CHANGE:`` / ``BREAKING-CHANGE:`` footer), else ``"minor"`` when
+    any commit is a ``feat``, else ``"patch"``.  *paths* restricts the log to
+    the group's ``changelog_paths``; *extra_types* are the project's
+    ``extra_commit_types``.
+    """
+    latest = git.latest_final_tag(root, tag_prefix)
+    ref = f"{latest}..HEAD" if latest else "HEAD"
+    cmd = ["git", "log", ref, "--pretty=format:%B%x1e"]
+    if paths:
+        cmd += ["--", *paths]
+    out = git.capture(cmd, root)
+
+    level = "patch"
+    for message in out.split("\x1e"):
+        lines = message.strip().splitlines()
+        if not lines:
+            continue
+        if any(line.startswith(("BREAKING CHANGE:", "BREAKING-CHANGE:")) for line in lines):
+            return "major"
+        parsed = parse_conventional_commit(lines[0], tuple(extra_types))
+        if parsed is None:
+            continue
+        if parsed.breaking:
+            return "major"
+        if parsed.type == "feat":
+            level = "minor"
+    return level
+
+
+def resolve_prerelease_base(
+    config: RrtConfig,
+    group: VersionGroup,
+    kind: str,
+    current: Version | CalVersion,
+    override: str | None = None,
+) -> str | None:
+    """Return the concrete pre-release base for *kind*, or ``None`` when none applies.
+
+    A base only matters when *kind* starts ``alpha``, ``beta`` or ``rc`` from a
+    FINAL SemVer *current*; every other case returns ``None`` without touching
+    git.  *override* (the CLI ``--base`` or MCP ``base``) wins over the group's
+    ``prerelease_base``.  ``auto`` resolves through :func:`infer_prerelease_base`
+    against *config*'s root, the rendered group ``tag_prefix``, the group's
+    ``changelog_paths`` and the project's ``extra_commit_types``.
+    """
+    if (
+        kind not in PRE_RELEASE_CHANNELS
+        or not isinstance(current, Version)
+        or current.is_pre_release()
+    ):
+        return None
+    base = override or group.prerelease_base
+    if base == "auto":
+        tag_prefix = group.tag_prefix.replace("{group}", group.name)
+        return infer_prerelease_base(
+            config.root, tag_prefix, group.changelog_paths, config.extra_commit_types
+        )
+    return base
 
 
 def apply_bump_files(
@@ -438,17 +604,19 @@ def git_log_since_latest_tag(
     Filtering by prefix is what keeps a group's range anchored to its own
     release history: a repository holding both ``v*`` and ``sdk-v*`` tags would
     otherwise start every group's range at whichever tag sorts first overall
-    (issue #251).  ``startswith`` matches ``rrt tag check``'s own prefix test
-    rather than a git glob, so a prefix containing glob metacharacters cannot
-    silently widen the match.
+    (issue #251).  The anchor comes from :func:`git.latest_tag`, which matches
+    the prefix with ``startswith`` (like ``rrt tag check``), never a git glob.
+
+    Tags are ranked by version precedence, not by name: a final release
+    outranks its own pre-releases (``v1.0.0`` beats ``v1.0.0-rc.2``), and
+    tags whose remainder is not a version (``vnext``) are ignored.  CalVer
+    tags rank by date.  Without a matching tag the range is all of ``HEAD``.
 
     *paths* restricts the log to the group's own files when the group
     configures ``changelog_paths``.
     """
-    tags_raw = git.capture(["git", "tag", "--sort=-v:refname"], root)
-    tags = [tag.strip() for tag in tags_raw.splitlines() if tag.strip()]
-    matching = [tag for tag in tags if tag.startswith(tag_prefix)]
-    ref = f"{matching[0]}..HEAD" if matching else "HEAD"
+    latest = git.latest_tag(root, tag_prefix)
+    ref = f"{latest}..HEAD" if latest else "HEAD"
     cmd = ["git", "log", ref, "--pretty=format:%s"]
     if paths:
         cmd += ["--", *paths]
@@ -480,8 +648,9 @@ def update_changelog(
         ``[Unreleased]`` section.
 
     Generated sections read the commit range from the resolved group's own
-    latest tag (its configured ``tag_prefix``) and, when the group configures
-    ``changelog_paths``, only from commits touching those paths.
+    latest tag (its configured ``tag_prefix``, with a ``{group}`` token rendered
+    to the group name) and, when the group configures ``changelog_paths``, only
+    from commits touching those paths.
 
     When the changelog contains an empty ``[Unreleased]`` placeholder (e.g.
     after a previous release), the generated section is inserted *after* that
@@ -539,9 +708,11 @@ def update_changelog(
         return
 
     # ---- Generate section from git log (heading / hash notation) -----------
+    group = config.resolve_group()
+    tag_prefix = group.tag_prefix.replace("{group}", group.name)
     section = build_changelog_section(
         version,
-        git_log_since_latest_tag(config.root, config.tag_prefix, config.changelog_paths),
+        git_log_since_latest_tag(config.root, tag_prefix, group.changelog_paths),
         include_maintenance=include_maintenance,
         fmt=fmt,
     )
@@ -586,6 +757,8 @@ class Options:
     base_branch: str | None
     calver_scheme: str
     verbose: int
+    prerelease_base: str | None = None
+    version_scheme: str | None = None
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> Options:
@@ -614,6 +787,8 @@ class Options:
             base_branch=getattr(args, "base_branch", None),
             calver_scheme=getattr(args, "calver_scheme", "YYYY.MM.DD"),
             verbose=getattr(args, "verbose", 0) or 0,
+            prerelease_base=getattr(args, "prerelease_base", None),
+            version_scheme=getattr(args, "version_scheme", None),
         )
 
 
@@ -902,8 +1077,43 @@ _BUMP_EXAMPLES = (
     "  $ rrt bump 2.1.0 --no-changelog --no-commit\n"
     "  $ rrt bump major --base-branch develop\n"
     "  $ rrt bump release --dry-run\n"
+    "  $ rrt bump rc --base minor --dry-run\n"
     "  $ rrt bump patch --group self-assess,cupertino,confab"
 )
+
+
+def add_prerelease_base_flag(parser: argparse._ActionsContainer) -> None:
+    """Register ``--base`` (dest ``prerelease_base``) shared by ``bump`` and ``workspace bump``."""
+    parser.add_argument(
+        "--base",
+        dest="prerelease_base",
+        choices=list(PRERELEASE_BASES),
+        default=None,
+        metavar="LEVEL",
+        help=(
+            "Core level for starting alpha|beta|rc from a final version "
+            "(patch | minor | major | auto). Overrides [tool.rrt] prerelease_base."
+        ),
+    )
+
+
+def add_version_scheme_flag(parser: argparse._ActionsContainer) -> None:
+    """Register ``--scheme`` (dest ``version_scheme``), the CLI side of ``version_scheme``.
+
+    The default ``None`` defers to the group's ``version_scheme`` config, then to
+    inference from the primary target.
+    """
+    parser.add_argument(
+        "--scheme",
+        dest="version_scheme",
+        choices=list(VERSION_SCHEMES),
+        default=None,
+        metavar="SCHEME",
+        help=(
+            "Version grammar to read, bump and write in (semver | pep440 | calver). "
+            "Overrides [tool.rrt] version_scheme."
+        ),
+    )
 
 
 @register_command(name="bump", category=CommandCategory.WRITE, group=CommandGroup.VERSION_RELEASE)
@@ -931,12 +1141,21 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="CalVer scheme to use when bump=calver (YYYY.MM | YYYY.MM.DD | YYYY.M.D).",
     )
 
+    prerelease_grp = parser.add_argument_group("Pre-release")
+    add_prerelease_base_flag(prerelease_grp)
+
+    scheme_grp = parser.add_argument_group("Version scheme")
+    add_version_scheme_flag(scheme_grp)
+
     release_grp = parser.add_argument_group("Release control")
     add_dry_run_flag(release_grp, verb="writing to disk")
     release_grp.add_argument(
         "--force",
         action="store_true",
-        help="Reset the release branch if it already exists.",
+        help=(
+            "Reset the release branch if it already exists, and allow an explicit "
+            "<bump> version that is not strictly newer than the current one."
+        ),
     )
     release_grp.add_argument("--no-commit", action="store_true", help="Skip the git commit step.")
     release_grp.add_argument(
@@ -1066,6 +1285,83 @@ the expected pattern, or when a pin target is intentionally optional.
 `pin_target_missing` applies to `rrt bump` only; `rrt release check` always
 reports missing pin target matches as warnings regardless of this setting.
 
+### `prerelease_base`
+
+Picks the core an `alpha`, `beta` or `rc` bump targets when the current
+version is final:
+
+| Value | `1.0.0` + `rc` | Behavior |
+|---|---|---|
+| `"patch"` *(default)* | `1.0.1-rc.1` | Next patch, like npm and Poetry |
+| `"minor"` | `1.1.0-rc.1` | Next minor |
+| `"major"` | `2.0.0-rc.1` | Next major |
+| `"auto"` | any of the above | Level from Conventional Commits since the last final tag |
+
+`auto` scans the commits after the group's last final tag. A breaking change
+means major, a `feat` means minor, and anything else means patch. Pre-release
+tags such as `v1.0.1-rc.1` never move that range.
+
+```toml
+[tool.rrt]
+prerelease_base = "minor"
+
+[[tool.rrt.version_groups]]
+name = "sdk"
+prerelease_base = "auto"   # this group's own value wins over the global one
+```
+
+Override it for one run on either surface. Both take the same values and
+share the same default:
+
+```bash
+rrt bump rc --base major           # CLI: 1.0.0 -> 2.0.0-rc.1
+```
+
+```python
+rrt_bump(level="rc", base="major")  # MCP: same result as the CLI
+```
+
+The base only applies when a channel starts from a final version. Inside a
+channel the core stays put: `1.0.1-rc.1` bumps to `1.0.1-rc.2`. Switching
+channel keeps it too, so `1.0.1-beta.2` bumps to `1.0.1-rc.1`.
+
+### `version_scheme`
+
+Names the grammar a group's version is read, bumped and written in:
+
+| Value | Example | Grammar |
+|---|---|---|
+| `"semver"` | `1.2.3-rc.1` | Semantic Versioning 2.0 |
+| `"pep440"` | `1.2.3rc1` | Python PEP 440 spellings |
+| `"calver"` | `2026.05.15` | Calendar versions (`YYYY.MM`, `YYYY.MM.DD`, `YYYY.M.D`) |
+
+There is no default. When the key is unset, the scheme is inferred from the
+group's primary target:
+
+1. A calendar-shaped version, such as `2026.05.15`, means `calver`.
+2. Otherwise a `pep621` or `python_version` target means `pep440`.
+3. Any other target means `semver`.
+
+```toml
+[tool.rrt]
+version_scheme = "pep440"
+
+[[tool.rrt.version_groups]]
+name = "web"
+version_scheme = "semver"   # this group's own value wins over the global one
+```
+
+Any other value, including a different case such as `"SemVer"`, is a config
+error. Override it for one run on either surface, with the same values:
+
+```bash
+rrt bump patch --scheme pep440     # CLI
+```
+
+```python
+rrt_bump(level="patch", scheme="pep440")  # MCP: same values as the CLI
+```
+
 ### `version_groups` — per-component versioning
 
 `version_groups` lets a single repository maintain multiple independently
@@ -1095,14 +1391,26 @@ changelog_paths = ["sdk/"]
 ```
 
 Each group supports: `release_branch`, `changelog_file`,
-`changelog_workflow`, `tag_prefix`, `changelog_paths`, `lock_command`,
-`generated_files`, `version_targets`, and `pin_targets`.
+`changelog_workflow`, `tag_prefix`, `prerelease_base`, `version_scheme`,
+`changelog_paths`, `lock_command`, `generated_files`, `version_targets`, and
+`pin_targets`.
+
+`prerelease_base` (default `"patch"`) picks the core an `alpha`, `beta` or
+`rc` bump targets from a final version; see `prerelease_base` above. A
+group's own value wins over the `[tool.rrt]` one.
+
+`version_scheme` (no default) names the group's version grammar: `semver`,
+`pep440` or `calver`. Unset, it is inferred from the group's primary target;
+see `version_scheme` above. A group's own value wins over the `[tool.rrt]` one.
 
 `tag_prefix` (default `"v"`) names the group's release tags. It is the
 default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is
 what anchors a generated changelog section to the group's *own* latest tag —
 without it, a repository holding both `v*` and `sdk-v*` tags would start
-every group's range at whichever tag sorts first overall.
+every group's range at whichever tag sorts first overall. A `{group}` token
+in the prefix renders to the group name, so `"{group}-v"` means `sdk-v` here.
+The latest tag is chosen by version precedence: `v1.0.0` outranks
+`v1.0.0-rc.2`, and non-version tags such as `vnext` are ignored.
 
 `changelog_paths` optionally restricts generated entries to commits touching
 the group's own files, so one group's section cannot pick up another's work.
@@ -1139,6 +1447,10 @@ styles cannot be mixed on the same target.
 `pin_target_missing` only changes `rrt bump` behavior. `rrt release check`
 always reports a missing pin match as a warning, regardless of this
 setting.
+
+`--base` is now a flag of its own that sets the pre-release base. It no longer
+abbreviates `--base-branch`, so spell out `--base-branch` to pick the branch.
+An `auto` base reads git history, so it needs the group's release tags locally.
 
 With more than one `version_group` configured, `--group` becomes required
 unless `default_group_name` names a default. Bumping several groups in one

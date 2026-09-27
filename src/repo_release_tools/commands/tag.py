@@ -89,6 +89,7 @@ from repo_release_tools.config import (
 )
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.targets import read_group_current_version
+from repo_release_tools.workflow import git
 
 
 def _git(args: list[str], cwd: Path, *, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -153,11 +154,14 @@ def _load_config_and_version(root: Path, group_name: str | None) -> tuple[Versio
 
 
 def _existing_tags(root: Path) -> list[str]:
-    """Return all tags sorted by version."""
+    """Return all tags in the repository.
+
+    Callers only test membership and prefixes, so no ordering is applied.
+    Outside a Git work tree, or when ``git`` is not installed, the list is empty.
+    """
     try:
-        result = _git(["git", "tag", "--sort=-v:refname"], root)
-        return [t.strip() for t in result.stdout.splitlines() if t.strip()]
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        return git.list_tags(root)
+    except FileNotFoundError:
         return []
 
 

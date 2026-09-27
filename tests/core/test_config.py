@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
@@ -10,7 +11,10 @@ from _pytest.monkeypatch import MonkeyPatch
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
+    DEFAULT_PRERELEASE_BASE,
     DEFAULT_TAG_PREFIX,
+    VALID_PRERELEASE_BASES,
+    VALID_VERSION_SCHEMES,
     DocsConfig,
     DocsSkeletonConfig,
     EolConfig,
@@ -4433,3 +4437,390 @@ def test_skeleton_config_rejects_blank_root() -> None:
     """DocsSkeletonConfig.validate rejects a whitespace-only root."""
     with pytest.raises(ValueError, match="root must be a non-empty string"):
         DocsSkeletonConfig(root="   ").validate()
+
+
+# ---------------------------------------------------------------------------
+# prerelease_base (decision D-1)
+# ---------------------------------------------------------------------------
+
+_PRERELEASE_GROUPS_CONFIG = """\
+[tool.rrt]
+{global_line}
+default_group = "python"
+
+[[tool.rrt.version_groups]]
+name = "python"
+{python_line}
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+{web_line}
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+"""
+
+
+def _write_prerelease_groups(
+    root: Path, *, global_line: str = "", python_line: str = "", web_line: str = ""
+) -> None:
+    (root / ".rrt.toml").write_text(
+        _PRERELEASE_GROUPS_CONFIG.format(
+            global_line=global_line, python_line=python_line, web_line=web_line
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_prerelease_base_parsed_validated_and_group_override_wins_over_global(
+    tmp_path: Path,
+) -> None:
+    _write_prerelease_groups(
+        tmp_path, global_line='prerelease_base = "minor"', web_line='prerelease_base = "major"'
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.resolve_group("python").prerelease_base == "minor"
+    assert config.resolve_group("web").prerelease_base == "major"
+    assert config.prerelease_base == "minor"
+
+
+def test_prerelease_base_defaults_to_patch_for_every_group(tmp_path: Path) -> None:
+    _write_prerelease_groups(tmp_path)
+
+    config = load_config(tmp_path)
+
+    assert DEFAULT_PRERELEASE_BASE == "patch"
+    assert {group.prerelease_base for group in config.version_groups} == {"patch"}
+    assert config.prerelease_base == "patch"
+
+
+def test_prerelease_base_defaults_to_patch_for_flat_config(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+
+    config = load_config(tmp_path)
+
+    assert config.prerelease_base == "patch"
+    assert config.resolve_group().prerelease_base == "patch"
+
+
+def test_prerelease_base_global_applies_to_flat_default_group(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        _RRT_CONFIG.replace("[tool.rrt]\n", '[tool.rrt]\nprerelease_base = "minor"\n'),
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.prerelease_base == "minor"
+    assert config.resolve_group("default").prerelease_base == "minor"
+
+
+def test_prerelease_base_global_applies_to_every_version_group(tmp_path: Path) -> None:
+    _write_prerelease_groups(tmp_path, global_line='prerelease_base = "auto"')
+
+    config = load_config(tmp_path)
+
+    assert [group.prerelease_base for group in config.version_groups] == ["auto", "auto"]
+
+
+def test_valid_prerelease_bases_mirror_semver_constants() -> None:
+    from repo_release_tools.version.semver import PRERELEASE_BASES
+
+    assert frozenset(PRERELEASE_BASES) == VALID_PRERELEASE_BASES
+    assert VALID_PRERELEASE_BASES == frozenset({"patch", "minor", "major", "auto"})
+
+
+@pytest.mark.parametrize(
+    ("global_line", "python_line", "web_line"),
+    [
+        pytest.param('prerelease_base = "huge"', "", "", id="global"),
+        pytest.param(
+            'prerelease_base = "huge"',
+            'prerelease_base = "minor"',
+            'prerelease_base = "major"',
+            id="global-shadowed-by-every-group",
+        ),
+    ],
+)
+def test_prerelease_base_rejects_invalid_global_value(
+    tmp_path: Path, global_line: str, python_line: str, web_line: str
+) -> None:
+    _write_prerelease_groups(
+        tmp_path, global_line=global_line, python_line=python_line, web_line=web_line
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"prerelease_base must be one of auto, major, minor, patch, got 'huge'",
+    ):
+        load_config(tmp_path)
+
+
+def test_prerelease_base_rejects_invalid_global_value_in_flat_config(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        _RRT_CONFIG.replace("[tool.rrt]\n", '[tool.rrt]\nprerelease_base = "huge"\n'),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"prerelease_base must be one of .*got 'huge'"):
+        load_config(tmp_path)
+
+
+def test_prerelease_base_rejects_invalid_per_group_value(tmp_path: Path) -> None:
+    _write_prerelease_groups(tmp_path, web_line='prerelease_base = "prerelease"')
+
+    with pytest.raises(
+        ValueError,
+        match=r"prerelease_base must be one of auto, major, minor, patch, got 'prerelease'",
+    ):
+        load_config(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("global_line", "web_line"),
+    [
+        pytest.param("prerelease_base = 1", "", id="global"),
+        pytest.param("", "prerelease_base = true", id="per-group"),
+        pytest.param("", 'prerelease_base = ["minor"]', id="per-group-list"),
+    ],
+)
+def test_prerelease_base_rejects_non_string_value(
+    tmp_path: Path, global_line: str, web_line: str
+) -> None:
+    _write_prerelease_groups(tmp_path, global_line=global_line, web_line=web_line)
+
+    with pytest.raises(ValueError, match="prerelease_base must be a string"):
+        load_config(tmp_path)
+
+
+def test_prerelease_base_read_from_pyproject_toml(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[project]
+name = "example"
+version = "1.0.0"
+
+[tool.rrt]
+prerelease_base = "major"
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+""",
+        encoding="utf-8",
+    )
+
+    assert load_config(tmp_path).prerelease_base == "major"
+
+
+def test_prerelease_base_read_from_package_json(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        """{
+  "name": "example",
+  "version": "1.0.0",
+  "rrt": {
+    "prerelease_base": "minor",
+    "version_targets": [{"path": "package.json", "kind": "package_json"}]
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    assert load_config(tmp_path).prerelease_base == "minor"
+
+
+def test_prerelease_base_read_from_cargo_metadata(tmp_path: Path) -> None:
+    (tmp_path / "Cargo.toml").write_text(
+        """\
+[package]
+name = "example"
+version = "1.0.0"
+
+[package.metadata.rrt]
+prerelease_base = "auto"
+
+[[package.metadata.rrt.version_targets]]
+path = "Cargo.toml"
+section = "package"
+field = "version"
+""",
+        encoding="utf-8",
+    )
+
+    assert load_config(tmp_path).prerelease_base == "auto"
+
+
+def test_version_group_prerelease_base_defaults_to_patch() -> None:
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=Path("CHANGELOG.md"),
+        lock_command=[],
+        generated_files=[],
+        version_targets=[VersionTarget(path=Path("pyproject.toml"), kind="pep621")],
+    )
+
+    assert group.prerelease_base == DEFAULT_PRERELEASE_BASE
+
+
+# ---------------------------------------------------------------------------
+# version_scheme (issue #259, T1.2, decision D-4)
+# ---------------------------------------------------------------------------
+
+
+def test_version_scheme_global_and_group_override_and_default_none(tmp_path: Path) -> None:
+    """A global value applies to every group, a group value wins, unset means None."""
+    _write_prerelease_groups(
+        tmp_path, global_line='version_scheme = "pep440"', web_line='version_scheme = "semver"'
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.resolve_group("python").version_scheme == "pep440"
+    assert config.resolve_group("web").version_scheme == "semver"
+    assert config.version_scheme == "pep440"
+
+    _write_prerelease_groups(tmp_path, python_line='version_scheme = "calver"')
+    config = load_config(tmp_path)
+    assert config.resolve_group("python").version_scheme == "calver"
+    # Unset everywhere -> None, meaning "infer from the primary target".
+    assert config.resolve_group("web").version_scheme is None
+
+    (tmp_path / ".rrt.toml").write_text(_RRT_CONFIG, encoding="utf-8")
+    config = load_config(tmp_path)
+    assert config.version_scheme is None
+    assert config.resolve_group().version_scheme is None
+
+
+def test_version_scheme_global_applies_to_flat_default_group(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        _RRT_CONFIG.replace("[tool.rrt]\n", '[tool.rrt]\nversion_scheme = "calver"\n'),
+        encoding="utf-8",
+    )
+
+    assert load_config(tmp_path).resolve_group("default").version_scheme == "calver"
+
+
+def test_valid_version_schemes_mirror_scheme_constants() -> None:
+    from repo_release_tools.version.scheme import VERSION_SCHEMES
+
+    assert VERSION_SCHEMES == ("semver", "pep440", "calver")
+    assert frozenset(VERSION_SCHEMES) == VALID_VERSION_SCHEMES
+
+
+@pytest.mark.parametrize(
+    ("global_line", "python_line", "web_line", "bad"),
+    [
+        pytest.param('version_scheme = "semver2"', "", "", "semver2", id="global"),
+        pytest.param(
+            'version_scheme = "semver2"',
+            'version_scheme = "semver"',
+            'version_scheme = "pep440"',
+            "semver2",
+            id="global-shadowed-by-every-group",
+        ),
+        pytest.param("", "", 'version_scheme = "semver2"', "semver2", id="per-group"),
+        pytest.param("", 'version_scheme = "SemVer"', "", "SemVer", id="per-group-case"),
+    ],
+)
+def test_version_scheme_invalid_value_is_config_error(
+    tmp_path: Path, global_line: str, python_line: str, web_line: str, bad: str
+) -> None:
+    _write_prerelease_groups(
+        tmp_path, global_line=global_line, python_line=python_line, web_line=web_line
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=rf"version_scheme must be one of calver, pep440, semver, got '{bad}'",
+    ):
+        load_config(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("global_line", "web_line"),
+    [
+        pytest.param("version_scheme = 1", "", id="global"),
+        pytest.param("", "version_scheme = true", id="per-group"),
+        pytest.param("", 'version_scheme = ["semver"]', id="per-group-list"),
+    ],
+)
+def test_version_scheme_non_string_is_config_error(
+    tmp_path: Path, global_line: str, web_line: str
+) -> None:
+    _write_prerelease_groups(tmp_path, global_line=global_line, web_line=web_line)
+
+    with pytest.raises(ValueError, match="version_scheme must be a string"):
+        load_config(tmp_path)
+
+
+def test_version_scheme_read_from_package_json(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        """{
+  "name": "example",
+  "version": "1.0.0",
+  "rrt": {
+    "version_scheme": "semver",
+    "version_targets": [{"path": "package.json", "kind": "package_json"}]
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    assert load_config(tmp_path).version_scheme == "semver"
+
+
+def test_version_group_version_scheme_defaults_to_none() -> None:
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=Path("CHANGELOG.md"),
+        lock_command=[],
+        generated_files=[],
+        version_targets=[VersionTarget(path=Path("pyproject.toml"), kind="pep621")],
+    )
+
+    assert group.version_scheme is None
+
+
+def test_recommended_config_writers_round_trip_version_scheme(tmp_path: Path) -> None:
+    """`rrt init` renderers keep a configured version_scheme and omit an unset one."""
+    import tomllib
+
+    from repo_release_tools.config import (
+        _render_recommended_rrt_dict,
+        _render_recommended_rrt_toml,
+    )
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "2026.05.15"\n', encoding="utf-8"
+    )
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")],
+        version_scheme="calver",
+    )
+
+    rendered = _render_recommended_rrt_toml(tmp_path, group)
+    assert tomllib.loads(rendered)["tool"]["rrt"]["version_scheme"] == "calver"
+    assert _render_recommended_rrt_dict(tmp_path, group)["version_scheme"] == "calver"
+
+    (tmp_path / ".rrt.toml").write_text(rendered, encoding="utf-8")
+    assert load_config(tmp_path).version_scheme == "calver"
+
+    unset = dataclasses.replace(group, version_scheme=None)
+    assert "version_scheme" not in _render_recommended_rrt_toml(tmp_path, unset)
+    assert "version_scheme" not in _render_recommended_rrt_dict(tmp_path, unset)

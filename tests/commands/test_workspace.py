@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import subprocess
 from pathlib import Path
 from typing import cast
 
 import pytest
+from repo_fixtures import init_git_repo
 
+from repo_release_tools import cli
 from repo_release_tools.commands.workspace import (
     _compute_new_version,
     _resolve_packages,
@@ -15,6 +19,7 @@ from repo_release_tools.commands.workspace import (
     cmd_workspace_bump,
 )
 from repo_release_tools.config import RrtConfig, VersionGroup, VersionTarget
+from repo_release_tools.ui import GLYPHS
 from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import Version
 from repo_release_tools.version.targets import VersionWriteEvent
@@ -100,12 +105,14 @@ def _args(
     packages: str = "",
     dry_run: bool = False,
     no_changelog: bool = False,
+    prerelease_base: str | None = None,
 ) -> argparse.Namespace:
     return argparse.Namespace(
         bump=bump,
         packages=packages,
         dry_run=dry_run,
         no_changelog=no_changelog,
+        prerelease_base=prerelease_base,
     )
 
 
@@ -335,6 +342,18 @@ def test_compute_new_version_calver_from_semver() -> None:
     assert isinstance(result, CalVersion)
 
 
+def test_compute_new_version_keyword_kind_on_calver_current_raises() -> None:
+    """A keyword kind (e.g. 'patch') on a calver-scheme current version is a clean error.
+
+    Covers RRT-VER-1 T1.2: read_group_current_version_for_scheme() returns a
+    CalVersion for a calver-scheme package, so _compute_new_version must refuse
+    non-'calver' keyword kinds instead of calling .bump("patch") on it.
+    """
+    current = CalVersion.parse("2026.05.15")
+    with pytest.raises(ValueError, match=r"'calver'.*only supports the 'calver' bump kind"):
+        _compute_new_version("patch", current)
+
+
 # ---------------------------------------------------------------------------
 # _update_changelog_for_package – early-return and dry-run paths (117, 119, 124)
 # ---------------------------------------------------------------------------
@@ -423,3 +442,208 @@ def test_workspace_bump_generic_value_error(
     rc = cmd_workspace_bump(_args(packages="api"))
     assert rc == 1
     assert "bad config value" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Impossible bumps abort before any write; `release` finalizes pre-releases
+# ---------------------------------------------------------------------------
+
+
+def _patch_configs(monkeypatch: pytest.MonkeyPatch, configs: dict[Path, RrtConfig]) -> None:
+    monkeypatch.setattr(
+        "repo_release_tools.commands.workspace.load_or_autodetect_config",
+        lambda path: configs[path],
+    )
+
+
+def test_compute_new_version_release_finalizes_pre_release() -> None:
+    """`release` is an accepted bump kind and drops the pre-release suffix."""
+    assert str(_compute_new_version("release", Version.parse("1.2.0-rc.1"))) == "1.2.0"
+
+
+def test_workspace_bump_pre_release_on_stable_package_exits_1_and_writes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An impossible bump in any package aborts cleanly before any file is written."""
+    monkeypatch.chdir(tmp_path)
+    pkg_a = tmp_path / "api"
+    pkg_a.mkdir()
+    conf_a = _make_pkg_config(pkg_a, "1.2.0-rc.1")
+    _write_changelog(pkg_a / "CHANGELOG.md", with_entries=True)
+    pkg_b = tmp_path / "sdk"
+    pkg_b.mkdir()
+    conf_b = _make_pkg_config(pkg_b, "1.0.0")
+    _write_changelog(pkg_b / "CHANGELOG.md", with_entries=True)
+    _patch_configs(monkeypatch, {pkg_a: conf_a, pkg_b: conf_b})
+
+    files = [
+        conf_a.version_groups[0].version_targets[0].path,
+        conf_b.version_groups[0].version_targets[0].path,
+        pkg_a / "CHANGELOG.md",
+        pkg_b / "CHANGELOG.md",
+    ]
+    before = {f: f.read_bytes() for f in files}
+
+    rc = cmd_workspace_bump(_args(bump="pre-release", packages="api,sdk"))
+
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "Cannot bump pre-release on a stable version" in captured.err
+    assert "sdk" in captured.err
+    assert "Traceback" not in captured.err
+    assert "Workspace bump" not in captured.out
+    assert {f: f.read_bytes() for f in files} == before
+
+
+def test_workspace_bump_release_finalizes_pre_release_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`workspace bump release` turns 1.2.0-rc.1 into 1.2.0."""
+    monkeypatch.chdir(tmp_path)
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    conf = _make_pkg_config(pkg, "1.2.0-rc.1")
+    _patch_configs(monkeypatch, {pkg: conf})
+
+    rc = cmd_workspace_bump(_args(bump="release", packages="api", no_changelog=True))
+
+    assert rc == 0
+    target = conf.version_groups[0].version_targets[0].path
+    assert target.read_text(encoding="utf-8") == '__version__ = "1.2.0"\n'
+
+
+def test_workspace_bump_release_dry_run_writes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`workspace bump release --dry-run` previews 1.2.0 without touching files."""
+    monkeypatch.chdir(tmp_path)
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    conf = _make_pkg_config(pkg, "1.2.0-rc.1")
+    _write_changelog(pkg / "CHANGELOG.md", with_entries=True)
+    _patch_configs(monkeypatch, {pkg: conf})
+    target = conf.version_groups[0].version_targets[0].path
+    before = (target.read_bytes(), (pkg / "CHANGELOG.md").read_bytes())
+
+    rc = cmd_workspace_bump(_args(bump="release", packages="api", dry_run=True))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "1.2.0" in out
+    assert "no files were modified" in out
+    assert (target.read_bytes(), (pkg / "CHANGELOG.md").read_bytes()) == before
+
+
+def test_workspace_bump_release_on_stable_package_exits_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`workspace bump release` on a stable version fails with the finalize reason."""
+    monkeypatch.chdir(tmp_path)
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    conf = _make_pkg_config(pkg, "1.0.0")
+    _patch_configs(monkeypatch, {pkg: conf})
+    target = conf.version_groups[0].version_targets[0].path
+    before = target.read_bytes()
+
+    rc = cmd_workspace_bump(_args(bump="release", packages="api"))
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Cannot finalize" in err
+    assert "api" in err
+    assert target.read_bytes() == before
+
+
+# ---------------------------------------------------------------------------
+# Pre-release base pass-through (issue #259, T0.2, D-1)
+# ---------------------------------------------------------------------------
+
+
+def _with_base(config: RrtConfig, base: str) -> RrtConfig:
+    group = dataclasses.replace(config.version_groups[0], prerelease_base=base)
+    return dataclasses.replace(config, version_groups=[group])
+
+
+@pytest.mark.parametrize(
+    ("config_base", "base_flag", "expected"),
+    [
+        pytest.param("minor", None, "1.1.0-rc.1", id="config_minor"),
+        pytest.param("minor", "major", "2.0.0-rc.1", id="flag_overrides"),
+        pytest.param(None, None, "1.0.1-rc.1", id="default_patch"),
+    ],
+)
+def test_workspace_bump_rc_honours_prerelease_base(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    config_base: str | None,
+    base_flag: str | None,
+    expected: str,
+) -> None:
+    """Config prerelease_base applies per package; --base overrides it."""
+    monkeypatch.chdir(tmp_path)
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    conf = _make_pkg_config(pkg, "1.0.0")
+    if config_base is not None:
+        conf = _with_base(conf, config_base)
+    _patch_configs(monkeypatch, {pkg: conf})
+
+    rc = cmd_workspace_bump(
+        _args(bump="rc", packages="api", no_changelog=True, prerelease_base=base_flag)
+    )
+
+    assert rc == 0
+    target = conf.version_groups[0].version_targets[0].path
+    assert target.read_text(encoding="utf-8") == f'__version__ = "{expected}"\n'
+
+
+def test_workspace_bump_rc_auto_base_reads_each_package_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """'auto' resolves from the package's own repo and group tag_prefix."""
+    monkeypatch.chdir(tmp_path)
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    init_git_repo(pkg)
+    conf = _with_base(_make_pkg_config(pkg, "1.0.0"), "auto")
+    _patch_configs(monkeypatch, {pkg: conf})
+    for message, tag in (("feat!: ancient", None), ("chore: release", "v1.0.0"), ("feat: x", None)):
+        (pkg / "history.txt").open("a", encoding="utf-8").write(f"{message}\n")
+        subprocess.run(["git", "add", "-A"], cwd=pkg, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-q", "-m", message], cwd=pkg, check=True)
+        if tag:
+            subprocess.run(["git", "tag", tag], cwd=pkg, check=True)
+
+    rc = cmd_workspace_bump(_args(bump="rc", packages="api", dry_run=True))
+
+    assert rc == 0
+    assert f"1.0.0 {GLYPHS.arrow.right} 1.1.0-rc.1" in capsys.readouterr().out
+
+
+def test_workspace_bump_prerelease_base_ignored_for_core_and_prerelease() -> None:
+    """A base never changes a core bump or a version already on a pre-release."""
+    assert str(_compute_new_version("minor", Version.parse("1.0.0"), "major")) == "1.1.0"
+    assert str(_compute_new_version("rc", Version.parse("1.0.1-rc.1"), "major")) == "1.0.1-rc.2"
+    assert str(_compute_new_version("rc", Version.parse("1.0.0"), "minor")) == "1.1.0-rc.1"
+
+
+def test_workspace_bump_parser_accepts_base_flag() -> None:
+    """`rrt workspace bump --base` is registered with the D-1 choices."""
+    parser = cli.build_parser()
+    args = parser.parse_args(["workspace", "bump", "rc", "--packages", "api", "--base", "minor"])
+    assert args.prerelease_base == "minor"
+    assert (
+        parser.parse_args(["workspace", "bump", "rc", "--packages", "api"]).prerelease_base is None
+    )
+    with pytest.raises(SystemExit):
+        parser.parse_args(["workspace", "bump", "rc", "--packages", "api", "--base", "bogus"])

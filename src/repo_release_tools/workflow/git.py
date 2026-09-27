@@ -42,6 +42,12 @@ summary first, followed by the details needed to act on the result.
   rewrite history, with `rebootstrap` requiring explicit confirmation.
 - **Validation**: Refuses to continue in unsafe states, such as unresolved
   conflicts or in-progress merges.
+- **Latest tag lookup**: `latest_tag` and `latest_final_tag` pick a group's
+  newest release tag. Only tags starting with the group's `tag_prefix` count.
+  The remainder must parse as SemVer or CalVer; anything else is skipped.
+  Tags sort by version precedence, so `v1.0.0` beats `v1.0.0-rc.2`.
+  `latest_final_tag` ignores pre-releases. `rrt bump`, `rrt release notes` and
+  `rrt tag` all share this lookup.
 
 ## Examples
 
@@ -62,6 +68,9 @@ summary first, followed by the details needed to act on the result.
   branch follows the conventional `type/slug` format.
 - These commands refuse to continue in unsafe states, such as unresolved
   conflicts or an in-progress merge.
+- The latest-tag lookup matches the prefix literally, not as a glob. With
+  prefix `v`, a tag named `vnext` is ignored rather than breaking the range.
+  Build metadata never decides precedence; equal versions fall back to tag name.
 
 ## Related docs
 
@@ -79,6 +88,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
+from repo_release_tools.version import CalVersion, Version
+from repo_release_tools.version.semver import SortKey
 
 # Ordered source-owned topic docs for future generic docs generation.
 # The page renders under docs/.../commands/, where the publisher injects the
@@ -183,6 +194,80 @@ def capture_checked(cmd: list[str], cwd: Path) -> str:
         detail = f": {detail_text}" if detail_text else ""
         raise RuntimeError(f"{label} failed (exit {result.returncode}){detail}")
     return result.stdout.strip()
+
+
+def list_tags(cwd: Path) -> list[str]:
+    """Return every tag name in the repository, in git's default (name) order.
+
+    Outside a Git work tree ``git tag`` prints nothing, so the result is empty.
+    """
+    out = capture(["git", "tag"], cwd)
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def _tag_sort_key(tag: str, prefix: str) -> SortKey | None:
+    """Return the version precedence key for *tag*, or ``None`` when it does not count.
+
+    A tag counts when it starts with *prefix* (a literal ``startswith``, never a
+    glob) and the remainder parses as SemVer (:meth:`Version.parse`) or, failing
+    that, as CalVer (:meth:`CalVersion.parse`).  :meth:`Version.parse` reads both
+    the SemVer and the PEP 440 spelling (``v1.0.0rc1`` equals ``v1.0.0-rc.1``).
+    A CalVer tag maps onto the same key shape as :meth:`Version.sort_key` via
+    :meth:`CalVersion.sort_key` -- ``(year, month, day or 0, 1, micro
+    identifiers, (0, 1, 0))`` -- so both schemes order consistently under one
+    prefix.  The fourth element is ``1`` for a final or post release and ``0``
+    for a pre-release; the sixth is the post key, whose middle element is ``0``
+    only for a post-dev release.
+    """
+    if not tag.startswith(prefix):
+        return None
+    remainder = tag[len(prefix) :]
+    try:
+        return Version.parse(remainder).sort_key()
+    except ValueError:
+        pass
+    try:
+        return CalVersion.parse(remainder).sort_key()
+    except ValueError:
+        return None
+
+
+def _latest_matching_tag(cwd: Path, prefix: str, *, final_only: bool) -> str | None:
+    """Return the highest-precedence tag carrying *prefix*, optionally finals only."""
+    candidates: list[tuple[SortKey, str]] = []
+    for tag in list_tags(cwd):
+        key = _tag_sort_key(tag, prefix)
+        # A pre-release has stable flag 0; a post-dev release has post key (N, 0, M).
+        if key is None or (final_only and (key[3] == 0 or key[5][1] == 0)):
+            continue
+        candidates.append((key, tag))
+    if not candidates:
+        return None
+    return max(candidates)[1]
+
+
+def latest_tag(cwd: Path, prefix: str = "v") -> str | None:
+    """Return the newest tag starting with *prefix*, by version precedence.
+
+    Tags whose remainder after *prefix* is not a SemVer, PEP 440 or CalVer
+    version are skipped.  A final release outranks its own pre-releases (``v1.0.0`` beats
+    ``v1.0.0-rc.2``), while a newer core's pre-release outranks an older final
+    (``v1.1.0-rc.1`` beats ``v1.0.0``).  Versions equal in precedence (they
+    differ only in build metadata) are ordered by tag name, so the result is
+    deterministic.  Returns ``None`` when no tag qualifies.
+    """
+    return _latest_matching_tag(cwd, prefix, final_only=False)
+
+
+def latest_final_tag(cwd: Path, prefix: str = "v") -> str | None:
+    """Return the newest non-pre-release tag starting with *prefix*.
+
+    Same selection rules as :func:`latest_tag`, restricted to final and post
+    releases, so ``v1.0.0`` wins over a later ``v1.1.0-rc.1``.  A dev release
+    (``v1.1.0.dev1``, ``v1.0.0.post1.dev2``) counts as a pre-release.  Returns
+    ``None`` when no final tag qualifies.
+    """
+    return _latest_matching_tag(cwd, prefix, final_only=True)
 
 
 def current_branch(cwd: Path) -> str:

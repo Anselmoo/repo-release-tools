@@ -69,6 +69,7 @@ dev = [
     "ruff>=0.14.0",
     "ty>=0.0.26",
     "libcst>=0.4.0",
+    "packaging>=24",
 ]
 
 [tool.poe.groups.docs]

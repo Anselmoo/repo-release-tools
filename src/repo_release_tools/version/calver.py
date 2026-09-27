@@ -10,7 +10,9 @@ Use :func:`CalVersion.today` to create a version from the current UTC date.
 Use :func:`CalVersion.parse` to round-trip a version string back to a
 :class:`CalVersion`.  :func:`CalVersion.bump` always returns the current
 date — if today's version already exists, an optional micro counter is
-incremented.
+incremented.  :meth:`CalVersion.sort_key` gives the same key shape as
+:meth:`repo_release_tools.version.semver.Version.sort_key`, so CalVer and SemVer
+values order under one key.
 """
 
 from __future__ import annotations
@@ -18,6 +20,8 @@ from __future__ import annotations
 import datetime as dt
 import re
 from dataclasses import dataclass
+
+from repo_release_tools.version.semver import NO_POST_KEY, PreReleaseIdentifierKey, SortKey
 
 # Matches YYYY.MM[.DD][.micro]  — padded and unpadded variants
 _CALVER_RE = re.compile(
@@ -96,6 +100,19 @@ class CalVersion:
             micro=new_micro,
             scheme=self.scheme,
         )
+
+    def sort_key(self) -> SortKey:
+        """Return a precedence key with the same shape as :meth:`Version.sort_key`.
+
+        The key is ``(year, month, day or 0, 1, micro identifiers, (0, 1, 0))``: a
+        CalVer value is always a final release without a post release, and its
+        micro counter orders like a trailing numeric identifier. So SemVer and
+        CalVer tags under one prefix order consistently.
+        """
+        micro: tuple[PreReleaseIdentifierKey, ...] = (
+            ((0, self.micro, ""),) if self.micro is not None else ()
+        )
+        return (self.year, self.month, self.day or 0, 1, micro, NO_POST_KEY)
 
     def __str__(self) -> str:
         """Return the canonical calver string."""

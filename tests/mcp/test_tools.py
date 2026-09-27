@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -163,6 +164,44 @@ def test_rrt_config_success(tmp_path: Path) -> None:
     ):
         result = mcp._tools["rrt_config"](ctx)
     assert isinstance(result, dict)
+
+
+def test_rrt_config_exposes_resolved_prerelease_base_per_group(tmp_path: Path) -> None:
+    """rrt_config returns each group's resolved prerelease_base (decision D-1)."""
+    from repo_release_tools.config import load_config
+
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+prerelease_base = "minor"
+default_group = "python"
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+prerelease_base = "auto"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    mcp = _CaptureMCP()
+    register_config(mcp)  # ty: ignore[invalid-argument-type]
+    ctx = _ctx(tmp_path, config=load_config(tmp_path))
+
+    result = mcp._tools["rrt_config"](ctx)
+
+    assert isinstance(result, dict)
+    bases = {group["name"]: group["prerelease_base"] for group in result["version_groups"]}
+    assert bases == {"python": "minor", "web": "auto"}
 
 
 def test_rrt_config_error(tmp_path: Path) -> None:
@@ -729,6 +768,170 @@ def test_rrt_bump_version_error(tmp_path: Path) -> None:
 
     result = asyncio.run(_run())
     assert result[0].error is not None
+
+
+def test_rrt_bump_accepts_base_and_rejects_invalid_base(tmp_path: Path) -> None:
+    """D-1/D-4: ``base`` mirrors the CLI ``--base`` flag and ``prerelease_base`` config.
+
+    Starting ``rc`` from the final ``1.0.0`` targets the next patch by default. An explicit
+    ``base`` picks another core, the group's ``prerelease_base`` is the fallback, ``auto``
+    goes through the CLI's own inference, and an unknown base is rejected up front.
+    """
+    tools = _ver_tools(tmp_path)
+    group, config = _real_group_config(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+
+    def _bump(**kwargs: Any) -> Any:
+        async def _run() -> Any:
+            return await tools["rrt_bump"](ctx, level="rc", dry_run=True, **kwargs)
+
+        return asyncio.run(_run())
+
+    assert _bump(base="minor")[0].new == "1.1.0-rc.1"
+    assert _bump(base="major")[0].new == "2.0.0-rc.1"
+    assert _bump(base="patch")[0].new == "1.0.1-rc.1"
+    # base omitted -> next patch (the default prerelease_base).
+    default = _bump()
+    assert default[0].error is None, default[0]
+    assert default[0].current == "1.0.0"
+    assert default[0].new == "1.0.1-rc.1"
+
+    # base='auto' resolves through the CLI's infer_prerelease_base for the group.
+    with patch(
+        "repo_release_tools.commands.bump.infer_prerelease_base", return_value="minor"
+    ) as mock_infer:
+        auto = _bump(base="auto")
+    assert auto[0].new == "1.1.0-rc.1"
+    mock_infer.assert_called_once()
+    assert mock_infer.call_args.args[0] == tmp_path
+    assert mock_infer.call_args.args[1] == "v"
+
+    # base omitted -> the group's configured prerelease_base wins over the patch default.
+    major_group = dataclasses.replace(group, prerelease_base="major")
+    ctx.lifespan_context["config"] = dataclasses.replace(config, version_groups=[major_group])
+    assert _bump()[0].new == "2.0.0-rc.1"
+    # An explicit base still overrides the config, just like `rrt bump rc --base`.
+    assert _bump(base="minor")[0].new == "1.1.0-rc.1"
+
+    # An unknown base is rejected before the config is even consulted.
+    expected_error = {"error": "base must be one of: patch, minor, major, auto"}
+    assert _bump(base="bogus") == expected_error
+    no_config_ctx = _ctx(tmp_path, config=None)
+
+    async def _run_no_config() -> Any:
+        return await tools["rrt_bump"](no_config_ctx, level="rc", base="bogus")
+
+    assert asyncio.run(_run_no_config()) == expected_error
+
+
+def test_rrt_bump_rejects_invalid_scheme(tmp_path: Path) -> None:
+    """D-4: ``scheme`` mirrors the CLI ``--scheme`` flag and the ``version_scheme`` config.
+
+    An unknown scheme is rejected up front with the same error shape as ``base``. A valid
+    scheme (or none) is handed to the shared bump pipeline through ``Options``.
+    """
+    from repo_release_tools.commands import bump as bump_cmd
+
+    tools = _ver_tools(tmp_path)
+    _group, config = _real_group_config(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+
+    def _bump(context: Any, **kwargs: Any) -> Any:
+        async def _run() -> Any:
+            return await tools["rrt_bump"](context, level="patch", dry_run=True, **kwargs)
+
+        return asyncio.run(_run())
+
+    expected_error = {"error": "scheme must be one of: semver, pep440, calver"}
+    assert _bump(ctx, scheme="semver2") == expected_error
+    assert _bump(ctx, scheme="SemVer") == expected_error
+    # Rejected before the config is even consulted, like ``base``.
+    assert _bump(_ctx(tmp_path, config=None), scheme="bogus") == expected_error
+
+    seen: list[str | None] = []
+    real_resolve = bump_cmd.resolve_bump_target
+
+    def _spy(cfg: Any, opts: Any) -> Any:
+        seen.append(opts.version_scheme)
+        return real_resolve(cfg, opts)
+
+    with patch("repo_release_tools.commands.bump.resolve_bump_target", side_effect=_spy):
+        result = _bump(ctx, scheme="pep440")
+        default = _bump(ctx)
+
+    assert result[0].error is None, result[0]
+    assert result[0].new == "1.0.1"
+    assert default[0].new == "1.0.1"
+    assert seen == ["pep440", None]
+
+
+def test_rrt_bump_calver_scheme_rejects_keyword_level_with_a_clean_error(
+    tmp_path: Path,
+) -> None:
+    """A ``calver`` scheme refuses ``level="rc"`` the same way ``rrt bump rc`` does (T1.2)."""
+    tools = _ver_tools(tmp_path)
+    _group, config = _real_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "fixture"\nversion = "2026.05.15"\n', encoding="utf-8"
+    )
+    ctx = _ctx(tmp_path, config=config)
+
+    async def _run() -> Any:
+        return await tools["rrt_bump"](ctx, level="rc", dry_run=True, scheme="calver")
+
+    results = asyncio.run(_run())
+
+    assert results[0].error is not None
+    assert "'calver'" in results[0].error
+    assert "only supports the 'calver' bump kind" in results[0].error
+
+
+def test_rrt_bump_base_applies_to_every_group(tmp_path: Path) -> None:
+    """Regression: the branch-base local must not clobber the pre-release ``base``.
+
+    With several version groups, every group gets the requested pre-release base (or
+    its own ``prerelease_base`` fallback), not the ``'<current>'`` branch placeholder
+    left over from the previous group. The git branch base stays ``'<current>'``.
+    """
+    from repo_release_tools.commands import bump as bump_cmd
+
+    tools = _ver_tools(tmp_path)
+    first, config = _real_group_config(tmp_path)
+    sub = tmp_path / "sdk"
+    sub.mkdir()
+    (sub / "pyproject.toml").write_text(
+        '[project]\nname = "sdk"\nversion = "2.0.0"\n', encoding="utf-8"
+    )
+    (sub / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n### Added\n- sdk thing\n", encoding="utf-8"
+    )
+    second = dataclasses.replace(
+        first,
+        name="sdk",
+        release_branch="release/sdk-v{version}",
+        changelog_file=sub / "CHANGELOG.md",
+        version_targets=[VersionTarget(path=sub / "pyproject.toml", kind="pep621")],
+        tag_prefix="sdk-v",
+        prerelease_base="minor",
+    )
+    ctx = _ctx(tmp_path, config=dataclasses.replace(config, version_groups=[first, second]))
+
+    def _bump(**kwargs: Any) -> Any:
+        async def _run() -> Any:
+            return await tools["rrt_bump"](ctx, level="rc", dry_run=True, **kwargs)
+
+        with patch.object(bump_cmd, "finalize_bump_git", wraps=bump_cmd.finalize_bump_git) as spy:
+            results = asyncio.run(_run())
+        assert [c.kwargs["base"] for c in spy.call_args_list] == ["<current>", "<current>"]
+        assert [r.error for r in results] == [None, None], results
+        return {r.group: r.new for r in results}
+
+    # base omitted: first group -> patch default, second -> its own prerelease_base.
+    assert _bump() == {"default": "1.0.1-rc.1", "sdk": "2.1.0-rc.1"}
+    # An explicit base applies to every group and wins over the per-group config.
+    assert _bump(base="minor") == {"default": "1.1.0-rc.1", "sdk": "2.1.0-rc.1"}
+    assert _bump(base="major") == {"default": "2.0.0-rc.1", "sdk": "3.0.0-rc.1"}
+    assert _bump(base="patch") == {"default": "1.0.1-rc.1", "sdk": "2.0.1-rc.1"}
 
 
 # ── validation tools ──────────────────────────────────────────────────────────
@@ -1880,6 +2083,24 @@ def test_rrt_sync_check_reports_newer_versions(tmp_path: Path) -> None:
     assert result.upstream_package == "example-pkg"
     assert result.upstream_provider == "pypi"
     assert result.newer_versions == ["1.1.0", "1.2.0"]
+
+
+def test_rrt_sync_check_orders_pre_releases_by_semver_precedence(tmp_path: Path) -> None:
+    """rc.10 is reported as newer than rc.2 (SemVer 2.0 section 11), matching the CLI."""
+    config = _sync_group_config(tmp_path)
+    tools = _sync_tools(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0-rc.2"\n', encoding="utf-8"
+    )
+    ctx = _ctx(tmp_path, config=config)
+    with patch(
+        "repo_release_tools.sync.providers.fetch_versions",
+        return_value=["1.0.0-rc.10", "1.0.0-rc.1", "1.0.0-rc.2", "1.0.0-rc.3"],
+    ):
+        result = tools["rrt_sync_check"](ctx)
+    assert result.error is None
+    assert result.current == "1.0.0-rc.2"
+    assert result.newer_versions == ["1.0.0-rc.3", "1.0.0-rc.10"]
 
 
 def test_rrt_sync_check_no_newer_versions(tmp_path: Path) -> None:

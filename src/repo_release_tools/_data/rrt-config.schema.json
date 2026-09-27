@@ -41,6 +41,26 @@
         ""
       ]
     },
+    "prerelease_base": {
+      "type": "string",
+      "enum": [
+        "patch",
+        "minor",
+        "major",
+        "auto"
+      ],
+      "default": "patch",
+      "description": "Which core a pre-release channel (alpha, beta, rc) targets when started from a FINAL version. 'patch' (default): 1.0.0 -> 1.0.1-rc.1; 'minor': 1.0.0 -> 1.1.0-rc.1; 'major': 1.0.0 -> 2.0.0-rc.1; 'auto': level from Conventional Commits since the last FINAL tag (breaking -> major, feat -> minor, else patch). Advancing inside a channel (rc.1 -> rc.2) or switching channel (beta.2 -> rc.1) never changes the core. A version_groups entry overrides this global value."
+    },
+    "version_scheme": {
+      "type": "string",
+      "enum": [
+        "semver",
+        "pep440",
+        "calver"
+      ],
+      "description": "The grammar the version is read, bumped and written in: 'semver' (1.2.3-rc.1), 'pep440' (1.2.3rc1) or 'calver' (2026.05.15). No default: when unset it is inferred from the primary target. A calendar-shaped version (YYYY.MM, YYYY.MM.DD or YYYY.M.D) is calver; otherwise a pep621 or python_version target is pep440, and any other target is semver. A version_groups entry overrides this global value. rrt bump --scheme and the MCP rrt_bump scheme parameter override both for one run."
+    },
     "changelog_paths": {
       "type": "array",
       "items": {
@@ -206,6 +226,26 @@
           "tag_prefix": {
             "type": "string",
             "default": "v"
+          },
+          "prerelease_base": {
+            "type": "string",
+            "enum": [
+              "patch",
+              "minor",
+              "major",
+              "auto"
+            ],
+            "default": "patch",
+            "description": "Per-group override of the global prerelease_base (patch, minor, major or auto)."
+          },
+          "version_scheme": {
+            "type": "string",
+            "enum": [
+              "semver",
+              "pep440",
+              "calver"
+            ],
+            "description": "Per-group override of the global version_scheme (semver, pep440 or calver). Unset everywhere, it is inferred from the group's primary target."
           },
           "changelog_paths": {
             "type": "array",

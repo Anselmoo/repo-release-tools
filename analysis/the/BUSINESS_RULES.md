@@ -745,6 +745,7 @@ These are places where the *implemented* behavior is confirmed but the referee f
 
 1. **Version ordering / stable-after-prerelease sort** — `src/repo_release_tools/version/semver.py:104-110`
    Pre-release label comparison at semver.py:110 is a plain string comparison, so 'alpha.10' sorts before 'alpha.9' lexically, which is not standard semver precedence.
+   **Fixed (issue #259 T0.1):** ordering now follows SemVer 2.0 §11 precedence.
 
 2. **Unreleased bullet dedup on squash merge cancels opposite-verb pairs** *(also in Behavior Contract)* — `src/repo_release_tools/workflow/hooks.py:281-374,377-455`
    Cancelling logic is purely lexical (verb+suffix match) and does not consider commit authorship, timing, or intent — two genuinely independent commits that happen to phrase opposite verbs on the same subject would be silently dropped from the changelog.
@@ -1145,6 +1146,7 @@ For sorting/comparison purposes, a stable release always sorts after any pre-rel
 - **Then** 1.2.0-rc.1 orders before 1.2.0
 - **Parameters:** sort_key 4th element: 0 for pre-release, 1 for stable
 - **Edge case:** pre-release labels among themselves order lexically (string comparison), not semver-precedence-aware (e.g. 'rc.9' > 'rc.10' lexically) — potential defect
+- ✅ **Fixed (issue #259 T0.1):** `sort_key()` now follows SemVer 2.0 §11 precedence — identifiers compared left to right, numeric ones numerically and before alphanumeric ones, shorter list first on an equal prefix — so `rc.9` < `rc.10`.
 - ⚠️ **Suspected defect:** Pre-release label comparison at semver.py:110 is a plain string comparison, so 'alpha.10' sorts before 'alpha.9' lexically, which is not standard semver precedence.
 - ❓ **SME question:** Should pre-release identifiers be compared numerically per SemVer 2.0 precedence rules (dot-separated identifiers compared numerically when both are numeric) rather than as plain strings?
 
@@ -1159,7 +1161,7 @@ When comparing versions for sorting or 'is this newer' checks, a stable release 
 - **When** When newer_versions(current, candidates) is computed
 - **Then** Then the result, ascending, is [1.2.0-rc.1, 1.2.0] — both are 'newer' and the pre-release sorts before the stable release of the same core
 - **Parameters:** n/a
-- **Edge case:** Two pre-releases of the same core order lexically by their pre-release label text
+- **Edge case:** Two pre-releases of the same core order lexically by their pre-release label text (fixed in issue #259 T0.1: they now order by SemVer 2.0 §11 precedence)
 
 ### CAL-032 — Upstream mirror discovery: only strictly-newer versions surfaced
 

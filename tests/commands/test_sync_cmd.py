@@ -155,6 +155,28 @@ def test_cmd_sync_json_output(
     assert "0.4.0" not in data
 
 
+def test_cmd_sync_orders_pre_releases_by_semver_precedence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """rc.10 is reported as newer than rc.2 and listed after it (SemVer 2.0 section 11)."""
+    (tmp_path / "pyproject.toml").write_text(
+        _PYPROJECT_WITH_UPSTREAM.replace('version = "0.5.0"', 'version = "1.0.0-rc.2"'),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        sync_cmd,
+        "fetch_versions",
+        lambda pkg, provider: ["1.0.0-rc.10", "1.0.0-rc.1", "1.0.0-rc.2", "1.0.0-rc.3"],
+    )
+    rc = sync_cmd.cmd_sync(_ns(json=True))
+    out = capsys.readouterr().out.strip()
+    assert rc == 0
+    assert json.loads(out) == ["1.0.0-rc.3", "1.0.0-rc.10"]
+
+
 # ---------------------------------------------------------------------------
 # Test 3: no upstream_package configured → returns 1
 # ---------------------------------------------------------------------------

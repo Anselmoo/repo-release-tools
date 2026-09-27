@@ -70,9 +70,10 @@ def test_bump_pre_release_on_stable_raises() -> None:
 
 
 def test_set_channel_on_stable_starts_at_1() -> None:
+    """Decision D-1: starting a channel from a final version targets the next patch."""
     v = Version.parse("1.2.3")
     result = v.bump("alpha")
-    assert str(result) == "1.2.3-alpha.1"
+    assert str(result) == "1.2.4-alpha.1"
 
 
 def test_set_channel_same_channel_increments() -> None:

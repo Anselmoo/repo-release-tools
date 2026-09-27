@@ -1,15 +1,18 @@
-"""PEP 440 version identifier validation and PEP 440 <-> SemVer conversion helpers.
+"""PEP 440 version identifier grammar, validation and PEP 440 -> SemVer helpers.
 
-Kept separate from :mod:`repo_release_tools.version.semver` deliberately: SemVer
-2.0 and PEP 440 are different grammars with different precedence rules (see
-PEP 440), and rrt's canonical ``Version`` type stays plain SemVer. This module
-holds the PEP 440-specific concerns -- checking that a string is syntactically
-valid PEP 440 (:func:`is_valid`; this does *not* imply it's publishable -- a
-local-version segment is syntactically valid PEP 440 but rejected by PyPI on
-upload, which is what :func:`has_local_segment` exists to flag separately),
-and converting a PEP 440 dev-release into the SemVer shape a
-``ci_format = "semver_pre"`` target expects -- so nothing else in the
-codebase has to know PEP 440 grammar.
+This module owns the PEP 440 grammar (``_PEP440_RE``, verbatim from the PEP 440
+reference regex). SemVer 2.0 and PEP 440 are different grammars, so nothing
+else in the codebase re-implements it: the canonical
+:class:`repo_release_tools.version.semver.Version` reads PEP 440 spellings
+through this module's compiled regex, so ``0.1.0rc1`` and ``0.1.0-rc.1`` parse to
+the same value, and :meth:`Version.to_pep440` renders one back.
+
+The helpers here cover the remaining PEP 440-specific concerns -- checking that a
+string is syntactically valid PEP 440 (:func:`is_valid`; this does *not* imply
+it's publishable -- a local-version segment is syntactically valid PEP 440 but
+rejected by PyPI on upload, which is what :func:`has_local_segment` exists to
+flag separately), and converting a PEP 440 dev-release into the SemVer shape a
+``ci_format = "semver_pre"`` target expects.
 """
 
 from __future__ import annotations

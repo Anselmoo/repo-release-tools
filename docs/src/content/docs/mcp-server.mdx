@@ -170,7 +170,7 @@ for a person to look at.
 
 | Tool | Tags | Description |
 |---|---|---|
-| `rrt_bump` | versioning | Semver bump — preview or apply |
+| `rrt_bump` | versioning | Semver bump — preview or apply; `base` picks the pre-release core like `rrt bump --base`; `scheme` names the version grammar like `rrt bump --scheme` |
 | `rrt_branch_new` | git | Create conventionally-named branch |
 | `rrt_init_run` | init, config | Run `rrt init` with selected target |
 | `rrt_publish_snapshot` | git, publishing | Force-push a single-commit snapshot of tracked content to a secondary remote; `exclude` drops specific glob patterns from the snapshot |
@@ -264,6 +264,12 @@ rather than to hand-editing or shelling out — name `rrt` explicitly, and name 
 
 "Use rrt to preview a minor bump — dry run — and show me every file it would touch."
 → calls rrt_bump with level="minor", dry_run=True
+
+"Use rrt to preview the first release candidate for the next minor — dry run."
+→ calls rrt_bump with level="rc", base="minor", dry_run=True
+
+"Use rrt to preview a patch bump of this PEP 440 version — dry run."
+→ calls rrt_bump with level="patch", scheme="pep440", dry_run=True
 
 "Read the Unreleased changelog with rrt before adding an entry, so you don't duplicate one."
 → calls rrt_changelog

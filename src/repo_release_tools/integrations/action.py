@@ -133,6 +133,19 @@ enforce a consistent project structure across contributors and CI environments.
 artifact hashes against the committed `.rrt/artifacts.lock.toml`. It detects
 artifacts that were regenerated but not re-snapshotted, or vice versa.
 
+## Outputs
+
+| Output | Description |
+|---|---|
+| `detected-version` | Published version for this run, printed by `rrt ci-version compute` |
+| `changelog-status` | `clean`, `dirty`, or `missing` for the `[Unreleased]` section |
+| `health-summary` | JSON object summarising the policy check results |
+
+`detected-version` follows the `rrt ci-version compute` rules. A `v*` tag build
+yields the tag without its leading `v`. A `main` build yields
+`{base}.dev{run_id}{run_attempt:02d}`. Any other ref yields the configured base
+version. The output is empty when no version target can be read.
+
 ## Caveats
 
 - `fetch-depth: 0` is required. Shallow checkouts break the changelog and

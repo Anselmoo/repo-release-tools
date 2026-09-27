@@ -103,6 +103,22 @@ the previous defect (D9) where MCP's bump only rewrote version-target files
 and silently skipped pins, changelog, lockfile, generated assets, and the
 git branch/commit step entirely.
 
+Every bump knob carries the same name, values and default on both
+surfaces (decision D-4). The pre-release base is the first: `[tool.rrt]`
+`prerelease_base`, the CLI's `rrt bump rc --base minor` and MCP's
+`rrt_bump(level="rc", base="minor")` all accept `patch`, `minor`, `major` or
+`auto`. With no base given, both fall back to the config, whose default is
+the next patch. Both resolve it through `resolve_prerelease_base`, so
+`auto` reads the same commits on either surface.
+
+The version scheme follows the same rule. `[tool.rrt]` `version_scheme`, the
+CLI's `rrt bump --scheme pep440` and MCP's `rrt_bump(scheme="pep440")` all
+accept `semver`, `pep440` or `calver`, validated against
+`version.scheme.VERSION_SCHEMES`. With no scheme given, both fall back to the
+group's config; unset there, the scheme is inferred from the primary target.
+An unknown value is a config error in `[tool.rrt]`, an argparse error on the
+CLI and `{"error": "scheme must be one of: ..."}` on MCP.
+
 `rrt_publish_snapshot` (MCP) now requires **both** `dry_run=False` **and**
 `confirm=True` to force-push — if `confirm` is omitted or `False`, the call
 always behaves as a dry-run preview regardless of `dry_run`. This mirrors the

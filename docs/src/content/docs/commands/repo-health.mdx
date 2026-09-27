@@ -246,6 +246,10 @@ The default view renders a tree-style summary with:
 - per-group details for:
   - `release_branch`
   - `changelog`
+  - `prerelease_base`, the core a pre-release channel targets from a final
+    version (`patch`, `minor`, `major` or `auto`)
+  - `version_scheme`, the grammar the version follows (`semver`, `pep440` or
+    `calver`), or the primary target it is inferred from when unset
   - `lock_command`, when configured
   - `generated_files`, when configured
   - `version_targets`

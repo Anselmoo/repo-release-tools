@@ -18,6 +18,12 @@ a Go CLI tool) that are always released together at the same version.
 1. Resolve each package path from ``--packages``.
 2. Load each package's rrt config and read its current version.
 3. Compute the new version using the same bump logic as ``rrt bump``.
+   Keyword kinds are ``major``, ``minor``, ``patch``, ``release``,
+   ``pre-release``, ``alpha``, ``beta``, ``rc`` and ``calver``.
+   Starting ``alpha``, ``beta`` or ``rc`` from a final version targets the
+   next patch unless the package sets ``prerelease_base``. ``--base LEVEL``
+   overrides that for every package. ``auto`` reads each package's own
+   Conventional Commits since its last final tag.
 4. For each package: update version targets and, unless ``--no-changelog``,
    the changelog.
 5. Report every file write to stdout (or preview them with ``--dry-run``).
@@ -25,6 +31,8 @@ a Go CLI tool) that are always released together at the same version.
 ## Safety notes
 
 * All package configs must exist and be valid before any file is written.
+* Every package's new version is computed before any file is written.
+  An impossible bump for any package aborts the run with exit code 1.
 * ``--dry-run`` previews all planned writes without touching any file.
 
 ## Examples
@@ -33,6 +41,8 @@ a Go CLI tool) that are always released together at the same version.
 rrt workspace bump minor --packages api,sdk,docs
 rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
 rrt workspace bump patch --dry-run --packages api,sdk
+rrt workspace bump release --packages api,sdk
+rrt workspace bump rc --base minor --packages api,sdk
 ```
 
 ## Caveats
@@ -40,6 +50,16 @@ rrt workspace bump patch --dry-run --packages api,sdk
 Every package needs its own loadable `[tool.rrt]` configuration. A missing
 or invalid config in any package aborts the whole run before any file is
 written.
+
+An impossible bump for any package also aborts before any write. Examples
+are `pre-release` on a stable version or `release` on a final version. The
+error line names the package and the reason.
+
+`release` drops the pre-release suffix, so `1.2.0-rc.1` becomes `1.2.0`.
+
+`--base` only matters when a channel starts from a final version. A package
+already on a pre-release keeps its core, so `1.0.1-rc.1` becomes `1.0.1-rc.2`.
+`--base` is its own flag and is not an abbreviation of any other option.
 
 Config loading is validated up front, but the actual writes still happen
 package by package. Each package's own version-target write is atomic, yet
@@ -73,6 +93,11 @@ from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands._version_render import render_version_write_events
+from repo_release_tools.commands.bump import (
+    BUMP_KINDS,
+    add_prerelease_base_flag,
+    resolve_prerelease_base,
+)
 from repo_release_tools.config import (
     RrtConfig,
     iter_config_files,
@@ -80,9 +105,9 @@ from repo_release_tools.config import (
 )
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.calver import CalVersion
-from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, Version
+from repo_release_tools.version.semver import Version
 from repo_release_tools.version.targets import (
-    read_group_current_version,
+    read_group_current_version_for_scheme,
     replace_all_versions_atomic,
 )
 
@@ -94,19 +119,42 @@ def _resolve_packages(packages_arg: str, cwd: Path) -> list[Path]:
 
 def _compute_new_version(
     bump_kind: str,
-    current: Version,
+    current: Version | CalVersion,
+    base: str | None = None,
 ) -> Version | CalVersion | None:
-    """Return the new version for *bump_kind*, or None on parse failure."""
-    _BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
+    """Return the new version for *bump_kind*, or None on parse failure.
 
+    *current* is scheme-aware (RRT-VER-1 T1.2): a package whose version scheme
+    is ``calver`` (configured or inferred) reads as a :class:`CalVersion`, so a
+    zero-padded current version such as ``2026.05.15`` round-trips instead of
+    raising.
+
+    *base* is the concrete pre-release base (``patch``, ``minor`` or
+    ``major``) used when ``alpha``, ``beta`` or ``rc`` starts from a final
+    version; ``None`` keeps the ``patch`` default.  It never changes a core
+    bump or a version already on a pre-release.
+
+    Raises ``ValueError`` when a keyword bump is impossible for *current*,
+    such as ``pre-release`` on a stable version, ``release`` on a final one,
+    or any non-``calver`` keyword kind on a ``calver``-scheme *current*.
+    """
     if bump_kind == "calver":
-        try:
-            return CalVersion.parse(str(current)).bump()
-        except ValueError:
-            return CalVersion.today()
+        if isinstance(current, CalVersion):
+            return current.bump()
+        # Non-calver current (no calver scheme configured or inferred): treated
+        # as a fresh start, matching `rrt bump calver`'s own behavior.
+        return CalVersion.today()
 
-    if bump_kind in _BUMP_KINDS:
-        return current.bump(bump_kind)
+    if bump_kind in BUMP_KINDS:
+        if isinstance(current, CalVersion):
+            raise ValueError(
+                f"Cannot bump with kind {bump_kind!r}: this package's version scheme "
+                "is 'calver', which only supports the 'calver' bump kind or an "
+                "explicit version."
+            )
+        if base is None:
+            return current.bump(bump_kind)
+        return current.bump(bump_kind, base=base)
 
     try:
         return Version.parse(bump_kind)
@@ -160,6 +208,7 @@ class WorkspaceBumpOptions:
     dry_run: bool
     no_changelog: bool
     verbose: int
+    prerelease_base: str | None = None
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> WorkspaceBumpOptions:
@@ -172,6 +221,8 @@ class WorkspaceBumpOptions:
         helper which always sets all four, so they are read directly.
         ``verbose`` is set globally by cli.py's parser, but ``_args()``
         never sets it, so the getattr fallback here absorbs that gap.
+        ``prerelease_base`` (``--base``) gets the same fallback for the same
+        reason.
         """
         return cls(
             bump=args.bump,
@@ -179,6 +230,7 @@ class WorkspaceBumpOptions:
             dry_run=args.dry_run,
             no_changelog=args.no_changelog,
             verbose=getattr(args, "verbose", 0) or 0,
+            prerelease_base=getattr(args, "prerelease_base", None),
         )
 
 
@@ -231,8 +283,14 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
             return 1
 
         group = config.resolve_group(None)
-        current = read_group_current_version(group)
-        new = _compute_new_version(bump_kind, current)
+        current = read_group_current_version_for_scheme(group)
+        try:
+            base = resolve_prerelease_base(config, group, bump_kind, current, opts.prerelease_base)
+            new = _compute_new_version(bump_kind, current, base)
+        except ValueError as exc:
+            p = VerbosePrinter(verbose=verbose)
+            p.line(f"{pkg_path.name}: {exc}", ok=False, stream=sys.stderr)
+            return 1
         if new is None:
             p = VerbosePrinter(verbose=verbose)
             p.line(f"Invalid bump value: {bump_kind!r}", ok=False, stream=sys.stderr)
@@ -247,7 +305,7 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
 
     for pkg_path, config, new in loaded:
         group = config.resolve_group(None)
-        current = read_group_current_version(group)
+        current = read_group_current_version_for_scheme(group)
         pr.section(f"{pkg_path.name}: {current} {GLYPHS.arrow.right} {new}")
 
         events = replace_all_versions_atomic(group.version_targets, str(new), dry_run=dry_run)
@@ -271,7 +329,9 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
 _WORKSPACE_EPILOG = (
     "  $ rrt workspace bump minor --packages api,sdk,docs\n"
     "  $ rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk\n"
-    "  $ rrt workspace bump patch --dry-run --packages api,sdk"
+    "  $ rrt workspace bump patch --dry-run --packages api,sdk\n"
+    "  $ rrt workspace bump release --packages api,sdk\n"
+    "  $ rrt workspace bump rc --base minor --packages api,sdk"
 )
 
 
@@ -304,7 +364,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     bump_parser.add_argument(
         "bump",
         metavar="<bump>",
-        help="major | minor | patch | pre-release | calver | <version>",
+        help="major | minor | patch | release | pre-release | alpha | beta | rc | calver | <version>",
     )
     bump_parser.add_argument(
         "--packages",
@@ -312,6 +372,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="PATHS",
         help="Comma-separated list of package directories to bump.",
     )
+    add_prerelease_base_flag(bump_parser)
     add_dry_run_flag(bump_parser, verb="writing to disk")
     bump_parser.add_argument(
         "--no-changelog",

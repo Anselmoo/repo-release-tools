@@ -2,11 +2,12 @@
 
 Pins the behavior contract from ``analysis/the/MODERNIZATION_BRIEF.md`` §5:
 
-- **C11 + D1** (``version/semver.py:104-126``): stable outranks its own pre-release in
-  ``Version.sort_key()``; ``newer_versions()`` returns only strictly-newer candidates; the
-  4th/5th sort-key elements order pre-release labels *lexically*, which is not SemVer 2.0
-  precedence (``rc.10`` sorts before ``rc.2``) — pinned as-is per the brief's SME
-  recommendation to pin D1 initially (§7-Q2).
+- **C11** (``version/semver.py`` ``Version.sort_key``): stable outranks its own pre-release in
+  ``Version.sort_key()``; ``newer_versions()`` returns only strictly-newer candidates.
+- **D1 (FIXED, issue #259 T0.1)**: pre-release labels now follow SemVer 2.0 §11
+  precedence — dot-separated identifiers compared left to right, numeric identifiers
+  numerically — so ``rc.2`` sorts before ``rc.10``. The D1 tests below were flipped from
+  the old lexical pin to the numeric order.
 - **D9 (FIXED in Phase 5)** (``mcp/tools/version_tools.py`` vs. ``commands/bump.py``'s full
   pipeline): the MCP ``rrt_bump`` tool now calls the SAME stage functions the CLI's
   ``cmd_bump`` uses (``resolve_bump_target`` → ``apply_bump_files`` → ``update_changelog`` →
@@ -35,11 +36,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import re
 from pathlib import Path
 from typing import Any, Callable, cast
 
 import pytest
-from harness import git, rrt, run_ok
+from harness import PYPROJECT_TEMPLATE, git, rrt, run_ok
 
 from repo_release_tools.version.semver import Version, newer_versions
 
@@ -115,53 +117,36 @@ def test_c11_newer_versions_excludes_current_prerelease_of_itself() -> None:
     )
 
 
-def test_d1_prerelease_label_ordering_is_lexical_not_semver() -> None:
-    """Pre-release numeric label comparison is lexical string comparison, not numeric.
+def test_d1_prerelease_label_ordering_is_numeric_per_semver() -> None:
+    """Pre-release numeric identifiers compare numerically (SemVer 2.0 §11).
 
-    version/semver.py:104-110 — the 5th sort_key element is the raw pre-release string
-    (``self.pre or ""``), compared lexically by Python tuple comparison. SemVer 2.0 §11
-    requires numeric identifiers to compare numerically, so ``rc.2`` must precede
-    ``rc.10``. This implementation instead sorts the pre-release *label* as a plain
-    string, so ``"rc.10" < "rc.2"`` lexically (the character '1' < '2').
-
-    # D1: lexical label comparison — 'rc.10' sorts before 'rc.2'; pinned as-is,
-    # SME ruling: pin (violates SemVer 2.0 precedence)
+    version/semver.py ``Version.sort_key`` — the 5th element is a tuple of per-identifier
+    keys, so ``rc.2`` < ``rc.10`` (2 < 10), not the old lexical ``"rc.10" < "rc.2"``.
     """
     rc2 = Version.parse("1.0.0-rc.2")
     rc10 = Version.parse("1.0.0-rc.10")
 
-    # NOTE(P1): this is the D1 defect itself — SemVer 2.0 requires rc.2 < rc.10
-    # (numeric identifier comparison), but this implementation sorts rc.10 first.
-    assert rc10.sort_key() < rc2.sort_key(), (
-        f"D1 defect check: expected the (as-is, lexical) sort_key of {rc10} to sort "
-        f"*before* {rc2} because '1' < '2' lexically in the pre-release string; "
-        f"got {rc10.sort_key()!r} vs {rc2.sort_key()!r} — behavior changed, D1 may be fixed"
+    assert rc2.sort_key() < rc10.sort_key(), (
+        f"D1 fixed: expected {rc2} to sort before {rc10} (numeric identifier comparison); "
+        f"got {rc2.sort_key()!r} >= {rc10.sort_key()!r}"
     )
-    assert sorted([rc2, rc10], key=Version.sort_key) == [rc10, rc2], (
-        "D1: lexical pre-release ordering — 'rc.10' sorts before 'rc.2'; pinned as-is, "
-        "SME ruling: pin (violates SemVer 2.0 precedence). Sorting [rc.2, rc.10] should "
-        f"(as-is) yield [rc.10, rc.2]; got "
-        f"{[str(v) for v in sorted([rc2, rc10], key=Version.sort_key)]}"
+    assert rc2 < rc10
+    assert sorted([rc10, rc2], key=Version.sort_key) == [rc2, rc10], (
+        "Sorting [rc.10, rc.2] by Version.sort_key should yield [rc.2, rc.10]; got "
+        f"{[str(v) for v in sorted([rc10, rc2], key=Version.sort_key)]}"
     )
 
 
-def test_d1_newer_versions_lexical_ordering_propagates() -> None:
-    """``newer_versions()``'s ascending sort inherits D1's lexical pre-release ordering.
-
-    # D1: lexical label comparison — 'rc.10' sorts before 'rc.2'; pinned as-is,
-    # SME ruling: pin (violates SemVer 2.0 precedence)
-    """
+def test_d1_newer_versions_numeric_ordering_propagates() -> None:
+    """``newer_versions()``'s ascending sort inherits the numeric pre-release ordering."""
     current = Version.parse("1.0.0-alpha.1")
-    candidates = [Version.parse("1.0.0-rc.2"), Version.parse("1.0.0-rc.10")]
+    candidates = [Version.parse("1.0.0-rc.10"), Version.parse("1.0.0-rc.2")]
 
     result = newer_versions(current, candidates)
     result_strs = [str(v) for v in result]
 
-    # NOTE(P1): D1 defect — numerically rc.2 (2) < rc.10 (10), but the lexical sort_key
-    # orders "rc.10" before "rc.2" because '1' < '2' as characters.
-    assert result_strs == ["1.0.0-rc.10", "1.0.0-rc.2"], (
-        f"newer_versions ascending order should (as-is, lexically) place rc.10 before "
-        f"rc.2; got {result_strs}"
+    assert result_strs == ["1.0.0-rc.2", "1.0.0-rc.10"], (
+        f"newer_versions ascending order should place rc.2 before rc.10; got {result_strs}"
     )
 
 
@@ -643,3 +628,129 @@ def test_parity_cli_reports_more_target_files_than_mcp_dry_run(
     # change (pin targets, changelog) the way the CLI's dry-run narration does — this is
     # exactly the divergence Phase 5's "MCP rrt_bump result ≡ CLI bump result" contract
     # test (brief §5 Phase 5 exit criteria) must close.
+
+
+# ---------------------------------------------------------------------------
+# D-4 — MCP ``base`` parity with the CLI ``--base`` flag (issue #259 T0.2)
+# ---------------------------------------------------------------------------
+
+_FINAL_PYPROJECT = PYPROJECT_TEMPLATE.replace('version = "0.1.0"', 'version = "1.0.0"')
+
+_CLI_BUMP_LINE = re.compile(r"Current: (\S+) → (\S+)")
+
+
+def _make_final_release_repo(
+    factory: RepoFactory, message: str = "feat: add a feature after 1.0.0"
+) -> Path:
+    """A repo at the FINAL ``1.0.0`` (tagged ``v1.0.0``) with one *message* commit since."""
+    repo = factory(pyproject=_FINAL_PYPROJECT)
+    git("tag", "v1.0.0", cwd=repo)
+    (repo / "feature.txt").write_text("new feature\n", encoding="utf-8")
+    git("add", "-A", cwd=repo)
+    git("commit", "-m", message, cwd=repo)
+    return repo
+
+
+def _cli_and_mcp_rc_bump(
+    factory: RepoFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    base: str | None,
+    message: str = "feat: add a feature after 1.0.0",
+) -> tuple[str, str, Any]:
+    """Dry-run ``rc`` on twin repos via CLI and MCP; return (cli_current, cli_new, mcp_result)."""
+    pytest.importorskip("fastmcp")
+    from fastmcp import Client
+
+    from repo_release_tools.mcp.server import create_server
+
+    cli_repo = _make_final_release_repo(factory, message)
+    mcp_repo = _make_final_release_repo(factory, message)
+
+    cli_args = ["bump", "rc", "--dry-run"] + ([] if base is None else ["--base", base])
+    cli_result = rrt(*cli_args, cwd=cli_repo)
+    assert cli_result.returncode == 0, (
+        f"CLI dry-run bump failed.\nstdout:\n{cli_result.stdout}\nstderr:\n{cli_result.stderr}"
+    )
+    match = _CLI_BUMP_LINE.search(cli_result.stdout)
+    assert match is not None, f"no 'Current: X → Y' line in CLI output:\n{cli_result.stdout}"
+    cli_current, cli_new = match.groups()
+
+    monkeypatch.chdir(mcp_repo)
+    arguments: dict[str, Any] = {"level": "rc", "dry_run": True}
+    if base is not None:
+        arguments["base"] = base
+
+    async def _call() -> Any:
+        server = create_server()
+        async with Client(server) as client:
+            result = await client.call_tool("rrt_bump", arguments)
+            return result.data
+
+    mcp_data = asyncio.run(_call())
+    assert isinstance(mcp_data, list) and len(mcp_data) == 1, f"unexpected: {mcp_data!r}"
+    mcp_result = mcp_data[0]
+    assert mcp_result.error is None, f"unexpected MCP bump error: {mcp_result!r}"
+    return cli_current, cli_new, mcp_result
+
+
+@pytest.mark.mcp
+@pytest.mark.parametrize(
+    ("base", "expected"),
+    [
+        (None, "1.0.1-rc.1"),
+        ("patch", "1.0.1-rc.1"),
+        ("minor", "1.1.0-rc.1"),
+        ("major", "2.0.0-rc.1"),
+        ("auto", "1.1.0-rc.1"),
+    ],
+    ids=["None", "patch", "minor", "major", "auto"],
+)
+def test_mcp_bump_base_matches_cli_for_same_input(
+    e2e_repo_factory: RepoFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    base: str | None,
+    expected: str,
+) -> None:
+    """``rrt bump rc --base <b> --dry-run`` and ``rrt_bump(level='rc', base=<b>)`` agree.
+
+    D-4: every pre-release-base knob has the same default and the same result on the
+    CLI and MCP surfaces. Omitting the base means the next patch (D-1); ``auto`` sees
+    the ``feat`` commit since ``v1.0.0`` and picks minor on both surfaces.
+    """
+    cli_current, cli_new, mcp_result = _cli_and_mcp_rc_bump(e2e_repo_factory, monkeypatch, base)
+
+    assert cli_current == mcp_result.current == "1.0.0"
+    assert cli_new == mcp_result.new == expected, (
+        f"base={base!r}: CLI gave {cli_new}, MCP gave {mcp_result.new}; expected {expected}"
+    )
+
+
+@pytest.mark.mcp
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("feat: add a feature after 1.0.0", "1.1.0-rc.1"),
+        ("feat!: drop the legacy API", "2.0.0-rc.1"),
+        ("fix: repair the parser\n\nBREAKING CHANGE: output format changed", "2.0.0-rc.1"),
+        ("fix: repair the parser", "1.0.1-rc.1"),
+    ],
+    ids=["feat-minor", "bang-major", "footer-major", "fix-patch"],
+)
+def test_mcp_bump_auto_base_matches_cli_for_every_commit_kind(
+    e2e_repo_factory: RepoFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    message: str,
+    expected: str,
+) -> None:
+    """``base='auto'`` resolves identically on CLI and MCP (D-1): breaking→major, feat→minor.
+
+    Anything else since the last FINAL tag (here a plain ``fix``) keeps the next patch.
+    """
+    cli_current, cli_new, mcp_result = _cli_and_mcp_rc_bump(
+        e2e_repo_factory, monkeypatch, "auto", message
+    )
+
+    assert cli_current == mcp_result.current == "1.0.0"
+    assert cli_new == mcp_result.new == expected, (
+        f"{message!r}: CLI gave {cli_new}, MCP gave {mcp_result.new}; expected {expected}"
+    )

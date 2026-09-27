@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Fixed
+- **version**: add prerelease_base config, rrt bump --base and MCP rrt_bump base (patch|minor|major|auto)
+- **version**: start alpha/beta/rc from a final version on the next patch (1.0.0 -> 1.0.1-rc.1, was 1.0.0-rc.1)
+- **version**: make the Action detect-version step call rrt ci-version compute
+- **version**: make workspace bump exit 1 cleanly on invalid bumps and accept release
+- **version**: resolve the latest tag per tag_prefix by version precedence
+- **version**: sort pre-releases by SemVer 2.0 precedence (rc.2 < rc.10)
+
 ## [1.18.0] - 2026-09-21
 ### Added
 - **docs**: enforce the published-docstring skeleton

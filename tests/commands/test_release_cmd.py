@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -629,12 +630,14 @@ def test_release_notes_gh_release_format(
     """Returns 0 and wraps output in GitHub release header for gh-release format."""
     monkeypatch.chdir(tmp_path)
     conf = _make_notes_config(tmp_path)
+    seen_prefixes: list[str] = []
     (tmp_path / "CHANGELOG.md").write_text(_UNRELEASED_CONTENT, encoding="utf-8")
     monkeypatch.setattr(
         "repo_release_tools.commands.release_notes.load_or_autodetect_config", lambda _: conf
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.release_notes._git_contributors", lambda _: ["Alice", "Bob"]
+        "repo_release_tools.commands.release_notes._git_contributors",
+        lambda _root, prefix: (seen_prefixes.append(prefix), ["Alice", "Bob"])[1],
     )
 
     rc = cmd_release_notes(argparse.Namespace(notes_format="gh-release", group=None))
@@ -646,6 +649,34 @@ def test_release_notes_gh_release_format(
     assert "## Contributors" in out
     assert "- Alice" in out
     assert "- Bob" in out
+    assert seen_prefixes == ["v"]
+
+
+def test_release_notes_gh_release_renders_group_token_in_tag_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A ``{group}-v`` tag_prefix reaches the contributor lookup as ``<name>-v``."""
+    monkeypatch.chdir(tmp_path)
+    base = _make_notes_config(tmp_path)
+    group = dataclasses.replace(base.version_groups[0], tag_prefix="{group}-v")
+    conf = dataclasses.replace(base, version_groups=[group])
+    (tmp_path / "CHANGELOG.md").write_text(_UNRELEASED_CONTENT, encoding="utf-8")
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes.load_or_autodetect_config", lambda _: conf
+    )
+    seen_prefixes: list[str] = []
+    monkeypatch.setattr(
+        "repo_release_tools.commands.release_notes._git_contributors",
+        lambda _root, prefix: (seen_prefixes.append(prefix), ["Alice"])[1],
+    )
+
+    rc = cmd_release_notes(argparse.Namespace(notes_format="gh-release", group=None))
+
+    assert rc == 0
+    assert "- Alice" in capsys.readouterr().out
+    assert seen_prefixes == ["default-v"]
 
 
 def test_release_notes_no_unreleased_returns_1(
@@ -765,3 +796,4 @@ def test_git_contributors_handles_failure(tmp_path: Path, monkeypatch: pytest.Mo
         subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(FileNotFoundError())
     )
     assert _git_contributors(tmp_path) == []
+    assert _git_contributors(tmp_path, "sdk-v") == []

@@ -387,3 +387,43 @@ def test_empty_properties_produces_valid_toml() -> None:
     result = render_reference_toml({})
     parsed = tomllib.loads(result)
     assert parsed["tool"]["rrt"] == {}
+
+
+def test_real_schema_reference_documents_prerelease_base() -> None:
+    """prerelease_base (decision D-1) is documented globally and per version group."""
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    rendered = render_reference_toml(schema)
+    parsed = tomllib.loads(rendered)["tool"]["rrt"]
+
+    assert "prerelease_base" in rendered
+    assert "prerelease_base" in parsed
+    assert "prerelease_base" in parsed["version_groups"][0]
+    top = schema["properties"]["prerelease_base"]
+    assert top["enum"] == ["patch", "minor", "major", "auto"]
+    assert top["default"] == "patch"
+    group_prop = schema["properties"]["version_groups"]["items"]["properties"]["prerelease_base"]
+    assert group_prop["enum"] == top["enum"]
+
+
+def test_real_schema_reference_documents_version_scheme() -> None:
+    """version_scheme (T1.2) is documented globally and per version group, with no default."""
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    rendered = render_reference_toml(schema)
+    parsed = tomllib.loads(rendered)["tool"]["rrt"]
+
+    assert "version_scheme" in parsed
+    assert "version_scheme" in parsed["version_groups"][0]
+    top = schema["properties"]["version_scheme"]
+    assert top["enum"] == ["semver", "pep440", "calver"]
+    assert "default" not in top
+    assert "inferred" in top["description"]
+    group_prop = schema["properties"]["version_groups"]["items"]["properties"]["version_scheme"]
+    assert group_prop["enum"] == top["enum"]
+    assert "default" not in group_prop
+
+    from repo_release_tools.version.scheme import VERSION_SCHEMES
+
+    assert tuple(top["enum"]) == VERSION_SCHEMES
+
+    reference = _SCHEMA_PATH.parents[3] / "docs" / "rrt-config-reference.toml"
+    assert reference.read_text(encoding="utf-8") == rendered

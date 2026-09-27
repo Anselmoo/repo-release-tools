@@ -10,6 +10,8 @@ description: "Generated command reference for the Version & Release command grou
 {/* rrt:auto:start:toc */}
 - [`rrt bump`](#rrt-bump)
   - [Overview](#overview)
+  - [Pre-release base](#pre-release-base)
+  - [Version scheme](#version-scheme)
   - [What the command updates](#what-the-command-updates)
   - [Release workflow](#release-workflow)
   - [Changelog behavior](#changelog-behavior)
@@ -91,7 +93,45 @@ selected version group.
 The bump value may be one of:
 
 * ``major``, ``minor``, or ``patch`` to increment the current version
+* ``alpha``, ``beta``, or ``rc`` to start or advance a pre-release channel
+* ``release`` to drop the pre-release suffix, or ``pre-release`` to advance it
+* ``calver`` to move to today's calendar version
 * an explicit version string such as ``2.1.0``
+
+### Pre-release base
+
+Starting ``alpha``, ``beta`` or ``rc`` from a final version targets the next
+patch by default. So ``rrt bump rc`` turns ``1.0.0`` into ``1.0.1-rc.1``.
+
+``--base LEVEL`` picks another core for one run. ``minor`` gives
+``1.1.0-rc.1`` and ``major`` gives ``2.0.0-rc.1``. The flag overrides the
+``prerelease_base`` key under ``[tool.rrt]`` or the version group. The MCP
+``rrt_bump`` tool takes the same values as ``base``, with the same default.
+
+``auto`` reads the Conventional Commits since the group's last final tag. A
+breaking change means major, a ``feat`` means minor, anything else means patch.
+Later pre-release tags never move that range. ``changelog_paths`` and
+``extra_commit_types`` apply as they do for changelog generation.
+
+The base is ignored once the version is already a pre-release. So ``1.0.1-rc.1``
+bumps to ``1.0.1-rc.2``, whatever ``--base`` says.
+
+### Version scheme
+
+The ``version_scheme`` key names the grammar a group's version follows. It takes
+``semver``, ``pep440`` or ``calver``, globally or per version group.
+
+Left unset, the scheme is inferred from the primary target. A calendar-shaped
+version such as ``2026.05.15`` means ``calver``. Otherwise a ``pep621`` or
+``python_version`` target means ``pep440``, and any other target means ``semver``.
+
+``--scheme SCHEME`` overrides the config for one run. The MCP ``rrt_bump`` tool
+takes the same values as ``scheme``, with the same default. An unknown value in
+config is a config error, so ``rrt bump`` exits 1.
+
+A ``calver`` scheme only accepts the ``calver`` bump kind or an explicit calendar
+version; ``major``, ``rc``, ``dev`` and the other keyword kinds are refused with a
+clear error, since they have no meaning for a calendar version.
 
 ### What the command updates
 
@@ -131,6 +171,11 @@ below it so the placeholder stays at the top of the file.
 
 * The working tree must be clean unless ``--dry-run`` is used.
 * Existing release branches are refused unless ``--force`` is set.
+* An explicit ``<bump>`` version that is not strictly newer than the current one
+  (RRT-VER-1 I5) is refused unless ``--force`` is set -- ``--force`` also allows
+  this downgrade or no-op bump, alongside its existing release-branch-reset
+  meaning. A keyword kind (``major``, ``rc``, ``dev``, ...) always computes a
+  strictly newer version on its own, so this check never applies to one.
 * ``--no-commit`` leaves the branch created with staged changes only.
 * ``--dry-run`` previews the planned file edits and git actions without writing
   to disk.
@@ -141,6 +186,10 @@ below it so the placeholder stays at the top of the file.
 * ``rrt bump minor --dry-run``
 * ``rrt bump 2.1.0 --no-changelog --no-commit``
 * ``rrt bump major --base-branch develop``
+* ``rrt bump rc --dry-run``
+* ``rrt bump rc --base minor --dry-run``
+* ``rrt bump beta --base auto``
+* ``rrt bump calver --scheme calver --dry-run``
 
 ### Version target configuration reference
 
@@ -209,6 +258,83 @@ the expected pattern, or when a pin target is intentionally optional.
 `pin_target_missing` applies to `rrt bump` only; `rrt release check` always
 reports missing pin target matches as warnings regardless of this setting.
 
+#### `prerelease_base`
+
+Picks the core an `alpha`, `beta` or `rc` bump targets when the current
+version is final:
+
+| Value | `1.0.0` + `rc` | Behavior |
+|---|---|---|
+| `"patch"` *(default)* | `1.0.1-rc.1` | Next patch, like npm and Poetry |
+| `"minor"` | `1.1.0-rc.1` | Next minor |
+| `"major"` | `2.0.0-rc.1` | Next major |
+| `"auto"` | any of the above | Level from Conventional Commits since the last final tag |
+
+`auto` scans the commits after the group's last final tag. A breaking change
+means major, a `feat` means minor, and anything else means patch. Pre-release
+tags such as `v1.0.1-rc.1` never move that range.
+
+```toml
+[tool.rrt]
+prerelease_base = "minor"
+
+[[tool.rrt.version_groups]]
+name = "sdk"
+prerelease_base = "auto"   # this group's own value wins over the global one
+```
+
+Override it for one run on either surface. Both take the same values and
+share the same default:
+
+```bash
+rrt bump rc --base major           # CLI: 1.0.0 -> 2.0.0-rc.1
+```
+
+```python
+rrt_bump(level="rc", base="major")  # MCP: same result as the CLI
+```
+
+The base only applies when a channel starts from a final version. Inside a
+channel the core stays put: `1.0.1-rc.1` bumps to `1.0.1-rc.2`. Switching
+channel keeps it too, so `1.0.1-beta.2` bumps to `1.0.1-rc.1`.
+
+#### `version_scheme`
+
+Names the grammar a group's version is read, bumped and written in:
+
+| Value | Example | Grammar |
+|---|---|---|
+| `"semver"` | `1.2.3-rc.1` | Semantic Versioning 2.0 |
+| `"pep440"` | `1.2.3rc1` | Python PEP 440 spellings |
+| `"calver"` | `2026.05.15` | Calendar versions (`YYYY.MM`, `YYYY.MM.DD`, `YYYY.M.D`) |
+
+There is no default. When the key is unset, the scheme is inferred from the
+group's primary target:
+
+1. A calendar-shaped version, such as `2026.05.15`, means `calver`.
+2. Otherwise a `pep621` or `python_version` target means `pep440`.
+3. Any other target means `semver`.
+
+```toml
+[tool.rrt]
+version_scheme = "pep440"
+
+[[tool.rrt.version_groups]]
+name = "web"
+version_scheme = "semver"   # this group's own value wins over the global one
+```
+
+Any other value, including a different case such as `"SemVer"`, is a config
+error. Override it for one run on either surface, with the same values:
+
+```bash
+rrt bump patch --scheme pep440     # CLI
+```
+
+```python
+rrt_bump(level="patch", scheme="pep440")  # MCP: same values as the CLI
+```
+
 #### `version_groups` — per-component versioning
 
 `version_groups` lets a single repository maintain multiple independently
@@ -238,14 +364,26 @@ changelog_paths = ["sdk/"]
 ```
 
 Each group supports: `release_branch`, `changelog_file`,
-`changelog_workflow`, `tag_prefix`, `changelog_paths`, `lock_command`,
-`generated_files`, `version_targets`, and `pin_targets`.
+`changelog_workflow`, `tag_prefix`, `prerelease_base`, `version_scheme`,
+`changelog_paths`, `lock_command`, `generated_files`, `version_targets`, and
+`pin_targets`.
+
+`prerelease_base` (default `"patch"`) picks the core an `alpha`, `beta` or
+`rc` bump targets from a final version; see `prerelease_base` above. A
+group's own value wins over the `[tool.rrt]` one.
+
+`version_scheme` (no default) names the group's version grammar: `semver`,
+`pep440` or `calver`. Unset, it is inferred from the group's primary target;
+see `version_scheme` above. A group's own value wins over the `[tool.rrt]` one.
 
 `tag_prefix` (default `"v"`) names the group's release tags. It is the
 default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is
 what anchors a generated changelog section to the group's *own* latest tag —
 without it, a repository holding both `v*` and `sdk-v*` tags would start
-every group's range at whichever tag sorts first overall.
+every group's range at whichever tag sorts first overall. A `{group}` token
+in the prefix renders to the group name, so `"{group}-v"` means `sdk-v` here.
+The latest tag is chosen by version precedence: `v1.0.0` outranks
+`v1.0.0-rc.2`, and non-version tags such as `vnext` are ignored.
 
 `changelog_paths` optionally restricts generated entries to commits touching
 the group's own files, so one group's section cannot pick up another's work.
@@ -283,6 +421,10 @@ styles cannot be mixed on the same target.
 always reports a missing pin match as a warning, regardless of this
 setting.
 
+`--base` is now a flag of its own that sets the pre-release base. It no longer
+abbreviates `--base-branch`, so spell out `--base-branch` to pick the branch.
+An `auto` base reads git history, so it needs the group's release tags locally.
+
 With more than one `version_group` configured, `--group` becomes required
 unless `default_group_name` names a default. Bumping several groups in one
 invocation still creates one release branch and one commit per group.
@@ -310,10 +452,20 @@ Options
   --calver-scheme SCHEME  CalVer scheme to use when bump=calver (YYYY.MM | YYYY.MM.DD | YYYY.M.D).
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Pre-release
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  --base LEVEL            Core level for starting alpha|beta|rc from a final version (patch | minor | major | auto). Overrides [tool.rrt] prerelease_base.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Version scheme
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  --scheme SCHEME         Version grammar to read, bump and write in (semver | pep440 | calver). Overrides [tool.rrt] version_scheme.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Release control
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   --dry-run               Preview without writing to disk.
-  --force                 Reset the release branch if it already exists.
+  --force                 Reset the release branch if it already exists, and allow an explicit <bump> version that is not strictly newer than the current one.
   --no-commit             Skip the git commit step.
   --no-verify             Pass --no-verify to git commit (bypass pre-commit hooks).
 
@@ -340,6 +492,7 @@ Examples
   $ rrt bump 2.1.0 --no-changelog --no-commit
   $ rrt bump major --base-branch develop
   $ rrt bump release --dry-run
+  $ rrt bump rc --base minor --dry-run
   $ rrt bump patch --group self-assess,cupertino,confab
 ```
 
@@ -965,9 +1118,12 @@ pre-commit run rrt-sync --hook-stage manual
 ### Caveats
 
 `rrt sync` skips upstream versions it cannot parse as semver or PEP 440.
-These are silently ignored rather than reported. `--bump` applies newer
-versions strictly in ascending order. It stops at the first failed tag
-creation. The command requires `[tool.rrt.upstream].package` to be
+These are silently ignored rather than reported. "Newer" and "ascending"
+follow SemVer 2.0 precedence, so `1.0.0-rc.10` comes after `1.0.0-rc.2`.
+A PEP 440 spelling orders like its SemVer twin, so `1.0.0rc1` equals `1.0.0-rc.1`.
+A post release such as `1.0.0.post1` sorts after `1.0.0`.
+`--bump` applies newer versions strictly in ascending order. It stops at
+the first failed tag creation. The command requires `[tool.rrt.upstream].package` to be
 configured. Without it, `rrt sync` exits with an error.
 
 ### Related docs
@@ -1184,6 +1340,12 @@ a Go CLI tool) that are always released together at the same version.
 1. Resolve each package path from ``--packages``.
 2. Load each package's rrt config and read its current version.
 3. Compute the new version using the same bump logic as ``rrt bump``.
+   Keyword kinds are ``major``, ``minor``, ``patch``, ``release``,
+   ``pre-release``, ``alpha``, ``beta``, ``rc`` and ``calver``.
+   Starting ``alpha``, ``beta`` or ``rc`` from a final version targets the
+   next patch unless the package sets ``prerelease_base``. ``--base LEVEL``
+   overrides that for every package. ``auto`` reads each package's own
+   Conventional Commits since its last final tag.
 4. For each package: update version targets and, unless ``--no-changelog``,
    the changelog.
 5. Report every file write to stdout (or preview them with ``--dry-run``).
@@ -1191,6 +1353,8 @@ a Go CLI tool) that are always released together at the same version.
 ### Safety notes
 
 * All package configs must exist and be valid before any file is written.
+* Every package's new version is computed before any file is written.
+  An impossible bump for any package aborts the run with exit code 1.
 * ``--dry-run`` previews all planned writes without touching any file.
 
 ### Examples
@@ -1199,6 +1363,8 @@ a Go CLI tool) that are always released together at the same version.
 rrt workspace bump minor --packages api,sdk,docs
 rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
 rrt workspace bump patch --dry-run --packages api,sdk
+rrt workspace bump release --packages api,sdk
+rrt workspace bump rc --base minor --packages api,sdk
 ```
 
 ### Caveats
@@ -1206,6 +1372,16 @@ rrt workspace bump patch --dry-run --packages api,sdk
 Every package needs its own loadable `[tool.rrt]` configuration. A missing
 or invalid config in any package aborts the whole run before any file is
 written.
+
+An impossible bump for any package also aborts before any write. Examples
+are `pre-release` on a stable version or `release` on a final version. The
+error line names the package and the reason.
+
+`release` drops the pre-release suffix, so `1.2.0-rc.1` becomes `1.2.0`.
+
+`--base` only matters when a channel starts from a final version. A package
+already on a pre-release keeps its core, so `1.0.1-rc.1` becomes `1.0.1-rc.2`.
+`--base` is its own flag and is not an abbreviation of any other option.
 
 Config loading is validated up front, but the actual writes still happen
 package by package. Each package's own version-target write is atomic, yet
@@ -1249,13 +1425,14 @@ Apply the same version bump to every package listed in --packages.
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  <bump>            major | minor | patch | pre-release | calver | <version>
+  <bump>            major | minor | patch | release | pre-release | alpha | beta | rc | calver | <version>
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   -h, --help        Show this message and exit.
   --packages PATHS  Comma-separated list of package directories to bump.
+  --base LEVEL      Core level for starting alpha|beta|rc from a final version (patch | minor | major | auto). Overrides [tool.rrt] prerelease_base.
   --dry-run         Preview without writing to disk.
   --no-changelog    Skip changelog updates.
 
@@ -1265,4 +1442,6 @@ Examples
   $ rrt workspace bump minor --packages api,sdk,docs
   $ rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
   $ rrt workspace bump patch --dry-run --packages api,sdk
+  $ rrt workspace bump release --packages api,sdk
+  $ rrt workspace bump rc --base minor --packages api,sdk
 ```

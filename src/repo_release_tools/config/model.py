@@ -9,6 +9,8 @@ from textwrap import dedent
 
 from repo_release_tools.state import DOCS_LOCK_DEFAULT, DOCS_MAP_LOCK_DEFAULT
 from repo_release_tools.sync.providers import PROVIDERS as VALID_UPSTREAM_PROVIDERS  # noqa: F401
+from repo_release_tools.version.scheme import VERSION_SCHEMES
+from repo_release_tools.version.semver import DEFAULT_PRERELEASE_BASE, PRERELEASE_BASES
 
 DEFAULT_RELEASE_BRANCH = "release/v{version}"
 DEFAULT_CHANGELOG = "CHANGELOG.md"
@@ -17,6 +19,12 @@ DEFAULT_TAG_PREFIX = "v"
 DEFAULT_LOCK_COMMAND = ["uv", "lock", "-U"]
 DEFAULT_GENERIC_LOCK_COMMAND: list[str] = []
 VALID_CHANGELOG_WORKFLOWS = frozenset({"incremental", "squash"})
+# Decision D-1: which core a pre-release channel targets when started from a FINAL
+# version. Mirrors version.semver.PRERELEASE_BASES so config, CLI and MCP agree.
+VALID_PRERELEASE_BASES = frozenset(PRERELEASE_BASES)
+# Issue #259 T1.2: the grammar a version group's version follows. Mirrors
+# version.scheme.VERSION_SCHEMES so config, CLI (--scheme) and MCP (scheme) agree.
+VALID_VERSION_SCHEMES = frozenset(VERSION_SCHEMES)
 
 # Well-known changelog filenames probed in order when autodetecting.
 CHANGELOG_CANDIDATES = (
@@ -451,6 +459,9 @@ class VersionGroup:
     changelog_workflow: str = DEFAULT_CHANGELOG_WORKFLOW
     tag_prefix: str = DEFAULT_TAG_PREFIX
     changelog_paths: list[str] = field(default_factory=list)
+    prerelease_base: str = DEFAULT_PRERELEASE_BASE
+    # None means "infer the scheme from the primary target".
+    version_scheme: str | None = None
     upstream_package: str | None = None
     upstream_provider: str = "pypi"
     upstream_commit_message: str = "Mirror: {version}"
@@ -1043,6 +1054,16 @@ class RrtConfig:
     def changelog_workflow(self) -> str:
         """Backward-compatible access to the default group's changelog workflow."""
         return self.resolve_group().changelog_workflow
+
+    @property
+    def prerelease_base(self) -> str:
+        """Backward-compatible access to the default group's pre-release base."""
+        return self.resolve_group().prerelease_base
+
+    @property
+    def version_scheme(self) -> str | None:
+        """Backward-compatible access to the default group's version scheme (None = inferred)."""
+        return self.resolve_group().version_scheme
 
 
 class MissingRrtConfigError(ValueError):

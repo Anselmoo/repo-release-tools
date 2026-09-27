@@ -15,6 +15,9 @@ Pins contract items from ``analysis/the/MODERNIZATION_BRIEF.md`` §5:
   heading. Fixed in Phase 6a to match ``^## \\[Unreleased\\]`` (mirroring
   ``changelog.py``'s ``_UNRELEASED_HEADER_RE``); tests here now pin the corrected
   three-way classification.
+* **F16** — the Action's ``detect-version`` step called bare ``rrt ci-version``
+  (help only, non-zero exit), so ``detected-version`` was always empty. It now
+  calls ``rrt ci-version compute``; tests here pin the call and its output.
 
 All tests read the legacy code as an oracle: assertions reflect what
 ``src/repo_release_tools`` actually does today, not what the contract text implies it
@@ -31,7 +34,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from harness import git, rrt_hooks
+from harness import git, rrt, rrt_env, rrt_hooks
 
 pytestmark = pytest.mark.e2e
 
@@ -551,3 +554,93 @@ def test_d8_action_grep_pattern_is_taken_verbatim_from_action_yml() -> None:
         f"action.yml grep pattern changed to {match.group(1)!r} - update the D8 "
         "tests in this module to match the new behavior."
     )
+
+
+# ---------------------------------------------------------------------------
+# F16 — GitHub Action detect-version step (issue #259, T0.5)
+# ---------------------------------------------------------------------------
+
+_ACTION_YML = Path(__file__).resolve().parent.parent.parent / "action.yml"
+_BARE_CI_VERSION_RE = re.compile(r"rrt ci-version(?!\s+(compute|apply|sync)\b)")
+_DETECT_VERSION_CALL_RE = re.compile(r"detected_version=\$\((rrt ci-version[^)]*?)\s*2>/dev/null\)")
+
+
+def _detect_version_run_block() -> str:
+    """Return the ``run:`` block of action.yml's ``detect-version`` step.
+
+    Reads action.yml as data only. The step starts at its ``- name:`` list item
+    and ends at the next ``- name:`` step at the same indentation.
+    """
+    lines = _ACTION_YML.read_text(encoding="utf-8").splitlines()
+    id_index = next(i for i, line in enumerate(lines) if line.strip() == "id: detect-version")
+    start = max(i for i in range(id_index) if lines[i].lstrip().startswith("- name:"))
+    step_indent = len(lines[start]) - len(lines[start].lstrip())
+    end = next(
+        (
+            i
+            for i in range(id_index + 1, len(lines))
+            if lines[i].lstrip().startswith("- ")
+            and len(lines[i]) - len(lines[i].lstrip()) == step_indent
+        ),
+        len(lines),
+    )
+    step = lines[start:end]
+    run_index = next(i for i, line in enumerate(step) if line.strip() == "run: |")
+    return "\n".join(step[run_index + 1 :])
+
+
+def test_f16_detect_version_step_uses_ci_version_compute() -> None:
+    """F16: the detect-version step populates ``detected_version`` via ``rrt ci-version compute``.
+
+    A bare ``rrt ci-version`` only prints group help and exits non-zero, so the
+    ``detected-version`` output stayed empty on every run.
+    """
+    run_block = _detect_version_run_block()
+    assert "rrt ci-version compute" in run_block, run_block
+    match = _DETECT_VERSION_CALL_RE.search(run_block)
+    assert match is not None, run_block
+    assert match.group(1).strip() == "rrt ci-version compute", match.group(1)
+
+
+def test_f16_detect_version_step_has_no_bare_ci_version_call() -> None:
+    """F16: no line in action.yml invokes ``rrt ci-version`` without a subcommand."""
+    run_block = _detect_version_run_block()
+    offenders = [line for line in run_block.splitlines() if _BARE_CI_VERSION_RE.search(line)]
+    assert offenders == [], offenders
+    whole_file = _ACTION_YML.read_text(encoding="utf-8").splitlines()
+    file_offenders = [line for line in whole_file if _BARE_CI_VERSION_RE.search(line)]
+    assert file_offenders == [], file_offenders
+
+
+def test_f16_detect_version_command_prints_a_single_version_line(e2e_repo: Path) -> None:
+    """F16: the exact command in the step exits 0 with one non-empty version line.
+
+    Runs the command string extracted from action.yml inside a configured repo
+    with the minimal GitHub Actions env the step would see, proving the
+    ``detected_version`` output variable is populated.
+    """
+    match = _DETECT_VERSION_CALL_RE.search(_detect_version_run_block())
+    assert match is not None
+    argv = match.group(1).split()
+    assert argv[0] == "rrt"
+    env = rrt_env(
+        GITHUB_REF="refs/heads/feat/some-slug",
+        GITHUB_REF_NAME="feat/some-slug",
+        GITHUB_RUN_ID="4242",
+        GITHUB_RUN_ATTEMPT="1",
+    )
+    result = rrt(*argv[1:], cwd=e2e_repo, env=env)
+    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+    lines = result.stdout.splitlines()
+    assert len(lines) == 1, result.stdout
+    assert lines[0].strip() == "0.1.0", result.stdout
+
+    main_env = rrt_env(
+        GITHUB_REF="refs/heads/main",
+        GITHUB_REF_NAME="main",
+        GITHUB_RUN_ID="4242",
+        GITHUB_RUN_ATTEMPT="3",
+    )
+    main_result = rrt(*argv[1:], cwd=e2e_repo, env=main_env)
+    assert main_result.returncode == 0, main_result.stderr
+    assert main_result.stdout.strip() == "0.1.0.dev424203", main_result.stdout
