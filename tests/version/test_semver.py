@@ -178,8 +178,39 @@ _PROPERTY_BASES = ["patch", "minor", "major"]
 @pytest.mark.parametrize("raw", _PROPERTY_VERSIONS)
 def test_every_bump_result_is_strictly_greater_or_raises(raw: str, kind: str, base: str) -> None:
     current = Version.parse(raw)
-    try:
-        result = current.bump(kind, base=base)
-    except ValueError:
+    if (raw, kind) in _PROPERTY_REFUSED:
+        # The only refusals are the "would not be newer" guards; nothing silently regresses.
+        with pytest.raises(ValueError, match=_PROPERTY_REFUSED[(raw, kind)]):
+            current.bump(kind, base=base)
         return
+    result = current.bump(kind, base=base)
     assert result > current, f"{current} bump {kind} (base={base}) -> {result} is not newer"
+
+
+_FINALS = ("0.0.0", "1.0.0", "1.2.3")
+_NOT_NEWER = r"which is not newer"
+_PROPERTY_REFUSED: dict[tuple[str, str], str] = {
+    **{(raw, "release"): r"Cannot finalize a version that has no pre-release" for raw in _FINALS},
+    **{(raw, "pre-release"): r"Cannot bump pre-release on a stable version" for raw in _FINALS},
+    ("1.0.1-beta.2", "alpha"): _NOT_NEWER,
+    ("2.0.0-beta.2", "alpha"): _NOT_NEWER,
+    ("1.0.1-rc.1", "alpha"): _NOT_NEWER,
+    ("1.0.1-rc.1", "beta"): _NOT_NEWER,
+    ("1.2.0-rc.1", "alpha"): _NOT_NEWER,
+    ("1.2.0-rc.1", "beta"): _NOT_NEWER,
+    ("1.0.0-dev.1", "alpha"): _NOT_NEWER,
+    ("1.0.0-dev.1", "beta"): _NOT_NEWER,
+}
+
+
+@pytest.mark.parametrize("base", _PROPERTY_BASES)
+@pytest.mark.parametrize("channel", ["alpha", "beta", "rc"])
+@pytest.mark.parametrize("raw", _FINALS)
+def test_every_channel_start_from_final_is_strictly_greater(
+    raw: str, channel: str, base: str
+) -> None:
+    """D-1: starting any channel from a FINAL version always succeeds and moves forward."""
+    current = Version.parse(raw)
+    result = current.bump(channel, base=base)
+    assert result > current
+    assert result.pre == f"{channel}.1"
