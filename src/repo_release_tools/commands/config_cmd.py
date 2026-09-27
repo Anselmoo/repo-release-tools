@@ -24,6 +24,8 @@ The default view renders a tree-style summary with:
 - per-group details for:
   - `release_branch`
   - `changelog`
+  - `prerelease_base`, the core a pre-release channel targets from a final
+    version (`patch`, `minor`, `major` or `auto`)
   - `lock_command`, when configured
   - `generated_files`, when configured
   - `version_targets`
@@ -124,6 +126,7 @@ def _render_group_details(group: cfg.VersionGroup, root: Path) -> list[str]:
     details: list[str] = [
         f"  {g.bullet.dot} release_branch: {group.release_branch}",
         f"  {g.bullet.dot} changelog: {group.changelog_file.relative_to(root)}",
+        f"  {g.bullet.dot} prerelease_base: {group.prerelease_base}",
     ]
     if group.lock_command:
         details.append(f"  {g.bullet.dot} lock_command: {' '.join(group.lock_command)}")

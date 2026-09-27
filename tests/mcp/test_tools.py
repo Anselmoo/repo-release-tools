@@ -165,6 +165,44 @@ def test_rrt_config_success(tmp_path: Path) -> None:
     assert isinstance(result, dict)
 
 
+def test_rrt_config_exposes_resolved_prerelease_base_per_group(tmp_path: Path) -> None:
+    """rrt_config returns each group's resolved prerelease_base (decision D-1)."""
+    from repo_release_tools.config import load_config
+
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+prerelease_base = "minor"
+default_group = "python"
+
+[[tool.rrt.version_groups]]
+name = "python"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "web"
+prerelease_base = "auto"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    mcp = _CaptureMCP()
+    register_config(mcp)  # ty: ignore[invalid-argument-type]
+    ctx = _ctx(tmp_path, config=load_config(tmp_path))
+
+    result = mcp._tools["rrt_config"](ctx)
+
+    assert isinstance(result, dict)
+    bases = {group["name"]: group["prerelease_base"] for group in result["version_groups"]}
+    assert bases == {"python": "minor", "web": "auto"}
+
+
 def test_rrt_config_error(tmp_path: Path) -> None:
     mcp = _CaptureMCP()
     register_config(mcp)  # ty: ignore[invalid-argument-type]

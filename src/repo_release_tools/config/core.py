@@ -26,6 +26,7 @@ from .model import (
     DEFAULT_CHANGELOG_WORKFLOW,
     DEFAULT_INIT_CONFIG,
     DEFAULT_LOCK_COMMAND,
+    DEFAULT_PRERELEASE_BASE,
     DEFAULT_RELEASE_BRANCH,
     DEFAULT_TAG_PREFIX,
     GENERIC_TOOL_RRT_EXAMPLE,
@@ -36,6 +37,7 @@ from .model import (
     VALID_CHANGELOG_WORKFLOWS,
     VALID_CI_FORMATS,
     VALID_PIN_TARGET_MISSING,
+    VALID_PRERELEASE_BASES,
     VALID_TARGET_KINDS,
     VALID_UPSTREAM_PROVIDERS,
     ArtifactProtection,
@@ -692,6 +694,9 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         "changelog_file": raw.get("changelog_file", DEFAULT_CHANGELOG),
         "changelog_workflow": raw.get("changelog_workflow", DEFAULT_CHANGELOG_WORKFLOW),
         "tag_prefix": raw.get("tag_prefix", DEFAULT_TAG_PREFIX),
+        "prerelease_base": _validate_prerelease_base(
+            raw.get("prerelease_base", DEFAULT_PRERELEASE_BASE)
+        ),
         "lock_command": raw.get("lock_command", _default_lock_command(config_file)),
         "generated_files": raw.get("generated_files", _default_generated_files(config_file)),
         "generated_assets": raw.get("generated_assets", []),
@@ -1347,6 +1352,20 @@ _VERSION_TARGET_FIELDS = [
 ]
 
 
+def _validate_prerelease_base(value: object) -> str:
+    """Return *value* when it is a valid ``prerelease_base`` (decision D-1), else raise.
+
+    Shared by the global ``[tool.rrt]`` default and every version group, so an
+    invalid global value is reported even when each group overrides it.
+    """
+    if not isinstance(value, str):
+        raise ValueError("prerelease_base must be a string")
+    if value not in VALID_PRERELEASE_BASES:
+        allowed = ", ".join(sorted(VALID_PRERELEASE_BASES))
+        raise ValueError(f"prerelease_base must be one of {allowed}, got {value!r}")
+    return value
+
+
 def _load_version_group(
     root: Path,
     *,
@@ -1405,6 +1424,12 @@ def _load_version_group(
                 default=defaults["tag_prefix"],
                 error="tag_prefix must be a string",
             ),
+            FieldSpec(
+                "prerelease_base",
+                str,
+                default=defaults["prerelease_base"],
+                error="prerelease_base must be a string",
+            ),
         ],
     )
     release_branch = cast("str", simple_fields["release_branch"])
@@ -1414,6 +1439,7 @@ def _load_version_group(
     if changelog_workflow not in VALID_CHANGELOG_WORKFLOWS:
         allowed = ", ".join(sorted(VALID_CHANGELOG_WORKFLOWS))
         raise ValueError(f"changelog_workflow must be one of {allowed}, got {changelog_workflow!r}")
+    prerelease_base = _validate_prerelease_base(simple_fields["prerelease_base"])
 
     lock_command_raw = raw_group.get("lock_command", defaults["lock_command"])
     auto_gen: list[str] = []
@@ -1496,6 +1522,7 @@ def _load_version_group(
         changelog_workflow=changelog_workflow,
         tag_prefix=tag_prefix,
         changelog_paths=changelog_paths,
+        prerelease_base=prerelease_base,
         upstream_package=upstream_package,
         upstream_provider=upstream_provider,
         upstream_commit_message=upstream_commit_message,
@@ -1510,6 +1537,7 @@ __all__ = [
     "DEFAULT_CHANGELOG_WORKFLOW",
     "DEFAULT_INIT_CONFIG",
     "DEFAULT_LOCK_COMMAND",
+    "DEFAULT_PRERELEASE_BASE",
     "DEFAULT_RELEASE_BRANCH",
     "DEFAULT_TAG_PREFIX",
     "GENERIC_TOOL_RRT_EXAMPLE",
@@ -1519,6 +1547,7 @@ __all__ = [
     "RUST_TOOL_RRT_EXAMPLE",
     "VALID_CHANGELOG_WORKFLOWS",
     "VALID_CI_FORMATS",
+    "VALID_PRERELEASE_BASES",
     "VALID_TARGET_KINDS",
     "VALID_UPSTREAM_PROVIDERS",
     "_VALID_LANGUAGES",

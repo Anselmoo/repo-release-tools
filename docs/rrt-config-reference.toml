@@ -33,6 +33,16 @@ lock_command = []
 # one of: error, warn
 pin_target_missing = "error"
 
+# Which core a pre-release channel (alpha, beta, rc) targets when started from
+# a FINAL version. 'patch' (default): 1.0.0 -> 1.0.1-rc.1; 'minor': 1.0.0 ->
+# 1.1.0-rc.1; 'major': 1.0.0 -> 2.0.0-rc.1; 'auto': level from Conventional
+# Commits since the last FINAL tag (breaking -> major, feat -> minor, else
+# patch). Advancing inside a channel (rc.1 -> rc.2) or switching channel
+# (beta.2 -> rc.1) never changes the core. A version_groups entry overrides
+# this global value.
+# one of: auto, major, minor, patch
+prerelease_base = "auto"
+
 # Release branch name template. Use {version} as a placeholder.
 release_branch = "..."
 
@@ -187,6 +197,11 @@ lock_command = []
 name = "..."
 
 # pin_targets: ($ref — see the referenced section for details)
+
+# Per-group override of the global prerelease_base (patch, minor, major or
+# auto).
+# one of: auto, major, minor, patch
+prerelease_base = "auto"
 
 release_branch = "..."
 

@@ -387,3 +387,19 @@ def test_empty_properties_produces_valid_toml() -> None:
     result = render_reference_toml({})
     parsed = tomllib.loads(result)
     assert parsed["tool"]["rrt"] == {}
+
+
+def test_real_schema_reference_documents_prerelease_base() -> None:
+    """prerelease_base (decision D-1) is documented globally and per version group."""
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    rendered = render_reference_toml(schema)
+    parsed = tomllib.loads(rendered)["tool"]["rrt"]
+
+    assert "prerelease_base" in rendered
+    assert "prerelease_base" in parsed
+    assert "prerelease_base" in parsed["version_groups"][0]
+    top = schema["properties"]["prerelease_base"]
+    assert top["enum"] == ["patch", "minor", "major", "auto"]
+    assert top["default"] == "patch"
+    group_prop = schema["properties"]["version_groups"]["items"]["properties"]["prerelease_base"]
+    assert group_prop["enum"] == top["enum"]

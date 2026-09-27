@@ -1101,8 +1101,16 @@ changelog_paths = ["sdk/"]
 ```
 
 Each group supports: `release_branch`, `changelog_file`,
-`changelog_workflow`, `tag_prefix`, `changelog_paths`, `lock_command`,
-`generated_files`, `version_targets`, and `pin_targets`.
+`changelog_workflow`, `tag_prefix`, `prerelease_base`, `changelog_paths`,
+`lock_command`, `generated_files`, `version_targets`, and `pin_targets`.
+
+`prerelease_base` (default `"patch"`) picks the core an `alpha`, `beta` or
+`rc` bump targets from a final version. `patch` turns `1.0.0` into
+`1.0.1-rc.1`; `minor` gives `1.1.0-rc.1` and `major` gives `2.0.0-rc.1`.
+`auto` reads Conventional Commits since the last final tag. A breaking change
+means major, a `feat` means minor, anything else means patch. Set it under
+`[tool.rrt]` for every group; a group's own value wins over that default.
+Moving inside a channel (`rc.1` to `rc.2`) never changes the core.
 
 `tag_prefix` (default `"v"`) names the group's release tags. It is the
 default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is

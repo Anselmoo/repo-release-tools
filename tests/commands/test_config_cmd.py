@@ -391,6 +391,24 @@ def test_cmd_config_aligns_tree_details(
     assert "release_branch: release/v{version}" in captured.out
     assert "changelog: CHANGELOG.md" in captured.out
     assert "lock_command: uv lock" in captured.out
+    assert "prerelease_base: patch" in captured.out
+
+
+def test_render_group_details_shows_per_group_prerelease_base(tmp_path: Path) -> None:
+    """Each group's resolved prerelease_base (decision D-1) is rendered, not the global one."""
+    group = VersionGroup(
+        name="sdk",
+        release_branch="release/sdk/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621")],
+        prerelease_base="minor",
+    )
+
+    details = config_cmd._render_group_details(group, tmp_path)
+
+    assert any(line.endswith("prerelease_base: minor") for line in details)
 
 
 # ---------------------------------------------------------------------------
