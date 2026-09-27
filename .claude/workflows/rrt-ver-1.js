@@ -181,9 +181,10 @@ const PLAN_SCHEMA = {
           steps: { type: 'array', items: { type: 'string' }, description: 'concrete edits, in order' },
           files: { type: 'array', items: { type: 'string' } },
           tests: { type: 'array', items: { type: 'string' }, description: 'test file :: case, one per acceptance criterion covered' },
-          acceptance: { type: 'array', items: { type: 'string' }, description: 'the criteria of the covered items this task must satisfy, verbatim' },
+          criteria_ids: { type: 'array', items: { type: 'string' }, description: 'ids of the acceptance criteria this task satisfies, e.g. T0.2#3' },
+          acceptance: { type: 'array', items: { type: 'string' }, description: 'the text of those criteria' },
         },
-        required: ['id', 'covers', 'goal', 'steps', 'files', 'tests', 'acceptance'],
+        required: ['id', 'covers', 'goal', 'steps', 'files', 'tests', 'criteria_ids', 'acceptance'],
       },
     },
   },
@@ -248,30 +249,20 @@ const REVIEW_SCHEMA = {
 const AUDIT_SCHEMA = {
   type: 'object',
   properties: {
-    items: {
+    criteria: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string' },
-          criteria: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                criterion: { type: 'string' },
-                met: { type: 'boolean' },
-                evidence: { type: 'string' },
-              },
-              required: ['criterion', 'met', 'evidence'],
-            },
-          },
+          criterion_id: { type: 'string', description: 'the id in brackets, e.g. T0.2#3' },
+          met: { type: 'boolean' },
+          evidence: { type: 'string' },
         },
-        required: ['id', 'criteria'],
+        required: ['criterion_id', 'met', 'evidence'],
       },
     },
   },
-  required: ['items'],
+  required: ['criteria'],
 }
 
 const GATE_SCHEMA = {
@@ -326,7 +317,7 @@ const maxFixRounds = Number(input.maxFixRounds ?? 2)
 const doCommit = input.commit === true
 
 const itemBlock = (items) => items.map((it) =>
-  `${it.id} [${it.findings.join(', ')}] ${it.what}\n  files: ${it.files.join(', ')}\n  acceptance:\n${it.acceptance.map((a) => `    - ${a}`).join('\n')}`,
+  `${it.id} [${it.findings.join(', ')}] ${it.what}\n  files: ${it.files.join(', ')}\n  acceptance:\n${it.acceptance.map((a, i) => `    - [${it.id}#${i + 1}] ${a}`).join('\n')}`,
 ).join('\n')
 
 const RULES = `
@@ -381,21 +372,23 @@ ${RULES}`
 available, read issue 259 (owner Anselmoo, repo repo-release-tools) for extra detail; the scope items
 below still win over anything else.
 Split the scope items into ordered tasks. Every scope item id must appear in some task's "covers",
-and every acceptance criterion of an item must appear verbatim in the "acceptance" of a task that
-covers it. Do not drop, defer or merge away anything. Order tasks so a task only depends on earlier ones.
+and every acceptance criterion id (e.g. [T0.2#3]) must appear in the "criteria_ids" of a task that
+covers it (copy the criterion text into "acceptance" too). Do not drop, defer or merge away anything. Order tasks so a task only depends on earlier ones.
 ${planFeedback}
 ${BRIEF}`,
       { label: `plan tier ${tierNo} #${attempt}`, phase: 'Plan', schema: PLAN_SCHEMA },
     )
     const covered = new Set((plan ? plan.tasks : []).flatMap((t) => t.covers))
     uncovered = scopeIds.filter((id) => !covered.has(id))
+    const plannedIds = new Set((plan ? plan.tasks : []).flatMap((t) => (t.criteria_ids || []).map((x) => x.replace(/[\[\]\s]/g, ''))))
     const missingCriteria = tier.items.flatMap((it) => it.acceptance
-      .filter((a) => !(plan ? plan.tasks : []).some((t) => t.covers.includes(it.id) && t.acceptance.includes(a)))
-      .map((a) => `${it.id}: ${a}`))
-    if (missingCriteria.length) uncovered = [...new Set([...uncovered, ...missingCriteria.map((m) => m.split(':')[0])])]
+      .map((a, i) => ({ cid: `${it.id}#${i + 1}`, id: it.id, a }))
+      .filter((c) => !plannedIds.has(c.cid))
+      .map((c) => `${c.cid} ${c.a}`))
+    if (missingCriteria.length) uncovered = [...new Set([...uncovered, ...missingCriteria.map((m) => m.split('#')[0])])]
     if (uncovered.length) {
       planFeedback = `Your previous plan was rejected. Uncovered items: ${uncovered.join(', ')}.
-Criteria missing verbatim: ${missingCriteria.join(' | ') || 'none'}. Produce a complete plan.`
+Criteria ids not listed in any task's criteria_ids: ${missingCriteria.join(' | ') || 'none'}. Produce a complete plan.`
       log(`plan attempt ${attempt} rejected; uncovered: ${uncovered.join(', ')}`)
     }
   }
@@ -494,19 +487,17 @@ ${BRIEF}`,
   for (let round = 0; round <= maxFixRounds; round++) {
     const audit = await agent(
       `Acceptance audit for tier ${tierNo}. For EVERY scope item and EVERY one of its acceptance criteria,
-find the proving test, run it, and check the production code. Report met/unmet with evidence
-(test id + result, or why it is missing). Be strict: partially wired features are unmet.
+find the proving test, run it, and check the production code. Return one entry per criterion id
+shown in brackets (e.g. T0.2#3), with met/unmet and evidence (test id + result, or why it is missing).
+Be strict: partially wired features are unmet.
 ${itemBlock(tier.items)}`,
       { label: `audit tier ${tierNo} r${round}`, phase: 'Accept', schema: AUDIT_SCHEMA },
     )
-    const reported = new Map((audit ? audit.items : []).map((it) => [it.id, it.criteria]))
-    unmet = tier.items.flatMap((it) => {
-      const got = reported.get(it.id)
-      if (!got) return it.acceptance.map((a) => ({ id: it.id, criterion: a, evidence: 'not audited' }))
-      return it.acceptance
-        .filter((a) => !got.some((c) => c.met && c.criterion.trim() === a.trim()))
-        .map((a) => ({ id: it.id, criterion: a, evidence: (got.find((c) => c.criterion.trim() === a.trim()) || {}).evidence || 'no evidence' }))
-    })
+    const reported = new Map((audit ? audit.criteria : []).map((c) => [c.criterion_id.replace(/[\[\]\s]/g, ''), c]))
+    unmet = tier.items.flatMap((it) => it.acceptance
+      .map((a, i) => ({ id: `${it.id}#${i + 1}`, criterion: a, got: reported.get(`${it.id}#${i + 1}`) }))
+      .filter((c) => !(c.got && c.got.met))
+      .map((c) => ({ id: c.id, criterion: c.criterion, evidence: c.got ? c.got.evidence : 'not audited' })))
     log(`tier ${tierNo} acceptance ${round}: ${tier.items.reduce((n, it) => n + it.acceptance.length, 0) - unmet.length} met, ${unmet.length} unmet`)
     if (!unmet.length || round === maxFixRounds) break
     await agent(
