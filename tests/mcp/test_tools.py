@@ -865,6 +865,27 @@ def test_rrt_bump_rejects_invalid_scheme(tmp_path: Path) -> None:
     assert seen == ["pep440", None]
 
 
+def test_rrt_bump_calver_scheme_rejects_keyword_level_with_a_clean_error(
+    tmp_path: Path,
+) -> None:
+    """A ``calver`` scheme refuses ``level="rc"`` the same way ``rrt bump rc`` does (T1.2)."""
+    tools = _ver_tools(tmp_path)
+    _group, config = _real_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "fixture"\nversion = "2026.05.15"\n', encoding="utf-8"
+    )
+    ctx = _ctx(tmp_path, config=config)
+
+    async def _run() -> Any:
+        return await tools["rrt_bump"](ctx, level="rc", dry_run=True, scheme="calver")
+
+    results = asyncio.run(_run())
+
+    assert results[0].error is not None
+    assert "'calver'" in results[0].error
+    assert "only supports the 'calver' bump kind" in results[0].error
+
+
 def test_rrt_bump_base_applies_to_every_group(tmp_path: Path) -> None:
     """Regression: the branch-base local must not clobber the pre-release ``base``.
 

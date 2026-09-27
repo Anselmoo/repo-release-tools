@@ -129,6 +129,10 @@ version such as ``2026.05.15`` means ``calver``. Otherwise a ``pep621`` or
 takes the same values as ``scheme``, with the same default. An unknown value in
 config is a config error, so ``rrt bump`` exits 1.
 
+A ``calver`` scheme only accepts the ``calver`` bump kind or an explicit calendar
+version; ``major``, ``rc``, ``dev`` and the other keyword kinds are refused with a
+clear error, since they have no meaning for a calendar version.
+
 ### What the command updates
 
 Depending on the selected version group, the command can update:
@@ -167,6 +171,11 @@ below it so the placeholder stays at the top of the file.
 
 * The working tree must be clean unless ``--dry-run`` is used.
 * Existing release branches are refused unless ``--force`` is set.
+* An explicit ``<bump>`` version that is not strictly newer than the current one
+  (RRT-VER-1 I5) is refused unless ``--force`` is set -- ``--force`` also allows
+  this downgrade or no-op bump, alongside its existing release-branch-reset
+  meaning. A keyword kind (``major``, ``rc``, ``dev``, ...) always computes a
+  strictly newer version on its own, so this check never applies to one.
 * ``--no-commit`` leaves the branch created with staged changes only.
 * ``--dry-run`` previews the planned file edits and git actions without writing
   to disk.
@@ -456,7 +465,7 @@ Version scheme
 Release control
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   --dry-run               Preview without writing to disk.
-  --force                 Reset the release branch if it already exists.
+  --force                 Reset the release branch if it already exists, and allow an explicit <bump> version that is not strictly newer than the current one.
   --no-commit             Skip the git commit step.
   --no-verify             Pass --no-verify to git commit (bypass pre-commit hooks).
 

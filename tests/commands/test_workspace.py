@@ -342,6 +342,18 @@ def test_compute_new_version_calver_from_semver() -> None:
     assert isinstance(result, CalVersion)
 
 
+def test_compute_new_version_keyword_kind_on_calver_current_raises() -> None:
+    """A keyword kind (e.g. 'patch') on a calver-scheme current version is a clean error.
+
+    Covers RRT-VER-1 T1.2: read_group_current_version_for_scheme() returns a
+    CalVersion for a calver-scheme package, so _compute_new_version must refuse
+    non-'calver' keyword kinds instead of calling .bump("patch") on it.
+    """
+    current = CalVersion.parse("2026.05.15")
+    with pytest.raises(ValueError, match=r"'calver'.*only supports the 'calver' bump kind"):
+        _compute_new_version("patch", current)
+
+
 # ---------------------------------------------------------------------------
 # _update_changelog_for_package – early-return and dry-run paths (117, 119, 124)
 # ---------------------------------------------------------------------------

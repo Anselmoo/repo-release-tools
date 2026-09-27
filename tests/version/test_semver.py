@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from packaging.version import Version as PackagingVersion
 
 from repo_release_tools.version.semver import (
     DEFAULT_PRERELEASE_BASE,
@@ -214,3 +215,137 @@ def test_every_channel_start_from_final_is_strictly_greater(
     result = current.bump(channel, base=base)
     assert result > current
     assert result.pre == f"{channel}.1"
+
+
+# ---------------------------------------------------------------------------
+# Bump algebra: kind x state table, dev/post kinds (issue #259, T1.3)
+# ---------------------------------------------------------------------------
+#
+# Five representative states built on the same core (1.0.1) and channel (rc),
+# crossed with every bump kind. Each cell is either the expected PEP 440
+# result or a regex matching the ValueError it must raise. Every non-error
+# cell is asserted strictly newer both by our own sort_key() and by
+# packaging.version.Version ordering on to_pep440(), so the table is
+# cross-checked against an independent implementation of version precedence.
+
+_ALGEBRA_STATES: dict[str, Version] = {
+    "final": Version(1, 0, 1),
+    "pre": Version(1, 0, 1, pre="rc.1"),  # 1.0.1rc1
+    "dev-of-final": Version(1, 0, 1, dev=3),  # 1.0.1.dev3
+    "dev-of-pre": Version(1, 0, 1, pre="rc.1", dev=2),  # 1.0.1rc1.dev2
+    "post": Version(1, 0, 1, post=1),  # 1.0.1.post1
+}
+
+_ALGEBRA_KINDS = (
+    "major",
+    "minor",
+    "patch",
+    "release",
+    "pre-release",
+    "alpha",
+    "beta",
+    "rc",
+    "dev",
+    "post",
+)
+
+_NO_PRE_RELEASE = r"Cannot bump pre-release on a stable version"
+_NO_FINALIZE = r"Cannot finalize a version that has no pre-release"
+_POST_ONLY_FOLLOWS_FINAL = r"only follows a final release"
+
+# (state, kind) -> expected PEP 440 result, or a regex for the ValueError raised.
+_ALGEBRA_TABLE: dict[tuple[str, str], str] = {
+    # major/minor/patch: uniform per kind across every state (existing semver
+    # semantics -- a pre/dev/post release finalizes in place at the boundary).
+    ("final", "major"): "2.0.0",
+    ("pre", "major"): "2.0.0",
+    ("dev-of-final", "major"): "2.0.0",
+    ("dev-of-pre", "major"): "2.0.0",
+    ("post", "major"): "2.0.0",
+    ("final", "minor"): "1.1.0",
+    ("pre", "minor"): "1.1.0",
+    ("dev-of-final", "minor"): "1.1.0",
+    ("dev-of-pre", "minor"): "1.1.0",
+    ("post", "minor"): "1.1.0",
+    ("final", "patch"): "1.0.2",
+    ("pre", "patch"): "1.0.1",
+    ("dev-of-final", "patch"): "1.0.1",
+    ("dev-of-pre", "patch"): "1.0.1",
+    ("post", "patch"): "1.0.2",
+    # release: finalizes a pre/dev release to its stable core; final/post have
+    # no pre-release to finalize.
+    ("final", "release"): _NO_FINALIZE,
+    ("pre", "release"): "1.0.1",
+    ("dev-of-final", "release"): "1.0.1",
+    ("dev-of-pre", "release"): "1.0.1",
+    ("post", "release"): _NO_FINALIZE,
+    # pre-release: advances the current pre-release label; a dev-of-pre drops
+    # dev instead of incrementing it (I3: dev only ever precedes its channel).
+    ("final", "pre-release"): _NO_PRE_RELEASE,
+    ("pre", "pre-release"): "1.0.1rc2",
+    ("dev-of-final", "pre-release"): "1.0.1.dev4",
+    ("dev-of-pre", "pre-release"): "1.0.1rc1",
+    ("post", "pre-release"): _NO_PRE_RELEASE,
+    # alpha/beta: starting a *different*, lower channel than "rc" on a state
+    # already at or past rc (pre, dev-of-pre) would go backwards -- refused.
+    ("final", "alpha"): "1.0.2a1",
+    ("pre", "alpha"): r"not newer",
+    ("dev-of-final", "alpha"): "1.0.1a1",
+    ("dev-of-pre", "alpha"): r"not newer",
+    ("post", "alpha"): "1.0.2a1",
+    ("final", "beta"): "1.0.2b1",
+    ("pre", "beta"): r"not newer",
+    ("dev-of-final", "beta"): "1.0.1b1",
+    ("dev-of-pre", "beta"): r"not newer",
+    ("post", "beta"): "1.0.2b1",
+    # rc: same channel as "pre"/"dev-of-pre", so it always advances forward.
+    ("final", "rc"): "1.0.2rc1",
+    ("pre", "rc"): "1.0.1rc2",
+    ("dev-of-final", "rc"): "1.0.1rc1",
+    ("dev-of-pre", "rc"): "1.0.1rc1",
+    ("post", "rc"): "1.0.2rc1",
+    # dev: start or advance a dev release (T1.3 rules, see Version.bump docstring).
+    ("final", "dev"): "1.0.2.dev0",
+    ("pre", "dev"): "1.0.1rc2.dev0",
+    ("dev-of-final", "dev"): "1.0.1.dev4",
+    ("dev-of-pre", "dev"): "1.0.1rc1.dev3",
+    ("post", "dev"): "1.0.2.dev0",
+    # post: only ever follows a final or another post release.
+    ("final", "post"): "1.0.1.post1",
+    ("pre", "post"): _POST_ONLY_FOLLOWS_FINAL,
+    ("dev-of-final", "post"): _POST_ONLY_FOLLOWS_FINAL,
+    ("dev-of-pre", "post"): _POST_ONLY_FOLLOWS_FINAL,
+    ("post", "post"): "1.0.1.post2",
+}
+
+
+def test_bump_algebra_table_covers_every_state_and_kind() -> None:
+    """Every (state, kind) pair used by the table below is accounted for."""
+    expected = {(s, k) for s in _ALGEBRA_STATES for k in _ALGEBRA_KINDS}
+    assert set(_ALGEBRA_TABLE) == expected
+
+
+@pytest.mark.parametrize("kind", _ALGEBRA_KINDS)
+@pytest.mark.parametrize("state", list(_ALGEBRA_STATES))
+def test_bump_algebra_kind_by_state_table(state: str, kind: str) -> None:
+    """Full kind x state table for major/minor/patch/release/pre-release/alpha/
+
+    beta/rc/dev/post (issue #259 T1.3). Each cell either raises or produces a
+    result that is strictly newer than the current version, both by our own
+    sort_key() and by packaging.version.Version ordering on to_pep440() --
+    cross-checking the invariant (I5) against an independent implementation.
+    """
+    current = _ALGEBRA_STATES[state]
+    expected = _ALGEBRA_TABLE[(state, kind)]
+    if not expected[0].isdigit():
+        with pytest.raises(ValueError, match=expected):
+            current.bump(kind)
+        return
+
+    result = current.bump(kind)
+
+    assert result.to_pep440() == expected
+    assert result > current, f"{current} bump {kind} -> {result} is not newer (sort_key)"
+    assert PackagingVersion(result.to_pep440()) > PackagingVersion(current.to_pep440()), (
+        f"{current} bump {kind} -> {result} is not newer per packaging.version"
+    )

@@ -262,12 +262,21 @@ def test_sort_key_orders_post_and_post_dev_per_pep440() -> None:
 
 def test_bumps_keep_legacy_behaviour_on_dev_and_post_versions() -> None:
     assert Version.parse("0.1.0.dev1").bump("patch") == Version.parse("0.1.0")
+    # A dev release with no channel: "pre-release" advances the dev counter, same
+    # as bump("dev") would (there is no channel release to drop dev in favor of).
     assert Version.parse("0.1.0.dev1").bump("pre-release") == Version.parse("0.1.0.dev2")
     assert Version.parse("0.1.0.dev1").bump("rc") == Version.parse("0.1.0rc1")
-    assert Version.parse("1.2.3-beta.1.dev.42").bump("pre-release") == Version.parse(
-        "1.2.3-beta.1.dev.43"
-    )
+    # A dev release *of* a channel: "pre-release" drops dev instead of incrementing
+    # it, landing on the channel release itself -- changed by RRT-VER-1 T1.3, since
+    # a dev release only ever precedes the release it is a dev release of.
+    assert Version.parse("1.2.3-beta.1.dev.42").bump("pre-release") == Version.parse("1.2.3-beta.2")
     assert Version.parse("0.1.0.post1").bump("patch") == Version.parse("0.1.1")
     assert Version.parse("0.1.0.post1").bump("rc") == Version.parse("0.1.1rc1")
     with pytest.raises(ValueError, match="no pre-release"):
         Version.parse("0.1.0.post1").bump("release")
+
+
+def test_dev_bump_on_opaque_pre_release_label_raises() -> None:
+    """A dev release needs a canonical alpha.N/beta.N/rc.N channel to attach to."""
+    with pytest.raises(ValueError, match=r"opaque pre-release label 'alpha'.*dev release"):
+        Version.parse("1.0.0-alpha").bump("dev")

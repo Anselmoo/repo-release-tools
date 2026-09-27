@@ -11,6 +11,8 @@ from pathlib import Path
 from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, VersionTarget
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.version import pep440
+from repo_release_tools.version.calver import CalVersion
+from repo_release_tools.version.scheme import infer_version_scheme
 from repo_release_tools.version.semver import Version
 
 PEP621_PATTERN = re.compile(r'(?ms)(^\[project\]\s.*?^version\s*=\s*")([^"]+)(")')
@@ -238,6 +240,43 @@ def read_current_version(config: RrtConfig) -> Version:
 def read_group_current_version(group: VersionGroup) -> Version:
     """Read the current version from a version group's canonical source."""
     return Version.parse(read_version_string(group.primary_target()))
+
+
+def read_group_current_version_for_scheme(
+    group: VersionGroup, *, scheme_override: str | None = None
+) -> Version | CalVersion:
+    """Read a group's current version, resolving its version scheme first (RRT-VER-1 T1.2).
+
+    The effective scheme is *scheme_override* (the CLI's ``rrt bump --scheme`` or the
+    MCP ``rrt_bump(scheme=...)`` parameter), else ``group.version_scheme`` (already
+    merged with the global ``[tool.rrt] version_scheme``), else
+    :func:`~repo_release_tools.version.scheme.infer_version_scheme` on the primary
+    target's kind and raw string.
+
+    ``calver`` parses through :class:`~repo_release_tools.version.calver.CalVersion`,
+    so a zero-padded current version such as ``2026.05.15`` reads (and later bumps and
+    writes back) without raising -- this is the fix for the bug where
+    :func:`read_group_current_version` fed a CalVer string straight into
+    :meth:`Version.parse`, which rejects the leading zero in ``05``.
+
+    ``pep440`` parses through :meth:`Version.parse` with ``spelling="pep440"``, and an
+    *explicit* ``semver`` (from *scheme_override* or ``group.version_scheme`` -- not
+    merely inferred) parses with ``spelling="semver"``, so a non-SemVer current version
+    under an explicitly configured semver scheme raises a clean error instead of
+    silently falling back. An *inferred* ``semver`` scheme -- the fallback when nothing
+    configures one -- keeps the historical ``spelling="any"`` behaviour, so an
+    already-PEP 440-spelled version under an unconfigured group still reads exactly as
+    it always did.
+    """
+    target = group.primary_target()
+    raw = read_version_string(target)
+    configured_scheme = scheme_override or group.version_scheme
+    scheme = configured_scheme or infer_version_scheme(target.kind, raw)
+    if scheme == "calver":
+        return CalVersion.parse(raw)
+    if scheme == "pep440":
+        return Version.parse(raw, spelling="pep440")
+    return Version.parse(raw, spelling="semver" if configured_scheme else "any")
 
 
 def read_group_version_strings(group: VersionGroup) -> list[tuple[VersionTarget, str]]:

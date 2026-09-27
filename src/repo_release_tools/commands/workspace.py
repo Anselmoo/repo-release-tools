@@ -107,7 +107,7 @@ from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import Version
 from repo_release_tools.version.targets import (
-    read_group_current_version,
+    read_group_current_version_for_scheme,
     replace_all_versions_atomic,
 )
 
@@ -119,10 +119,15 @@ def _resolve_packages(packages_arg: str, cwd: Path) -> list[Path]:
 
 def _compute_new_version(
     bump_kind: str,
-    current: Version,
+    current: Version | CalVersion,
     base: str | None = None,
 ) -> Version | CalVersion | None:
     """Return the new version for *bump_kind*, or None on parse failure.
+
+    *current* is scheme-aware (RRT-VER-1 T1.2): a package whose version scheme
+    is ``calver`` (configured or inferred) reads as a :class:`CalVersion`, so a
+    zero-padded current version such as ``2026.05.15`` round-trips instead of
+    raising.
 
     *base* is the concrete pre-release base (``patch``, ``minor`` or
     ``major``) used when ``alpha``, ``beta`` or ``rc`` starts from a final
@@ -130,15 +135,23 @@ def _compute_new_version(
     bump or a version already on a pre-release.
 
     Raises ``ValueError`` when a keyword bump is impossible for *current*,
-    such as ``pre-release`` on a stable version or ``release`` on a final one.
+    such as ``pre-release`` on a stable version, ``release`` on a final one,
+    or any non-``calver`` keyword kind on a ``calver``-scheme *current*.
     """
     if bump_kind == "calver":
-        try:
-            return CalVersion.parse(str(current)).bump()
-        except ValueError:
-            return CalVersion.today()
+        if isinstance(current, CalVersion):
+            return current.bump()
+        # Non-calver current (no calver scheme configured or inferred): treated
+        # as a fresh start, matching `rrt bump calver`'s own behavior.
+        return CalVersion.today()
 
     if bump_kind in BUMP_KINDS:
+        if isinstance(current, CalVersion):
+            raise ValueError(
+                f"Cannot bump with kind {bump_kind!r}: this package's version scheme "
+                "is 'calver', which only supports the 'calver' bump kind or an "
+                "explicit version."
+            )
         if base is None:
             return current.bump(bump_kind)
         return current.bump(bump_kind, base=base)
@@ -270,7 +283,7 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
             return 1
 
         group = config.resolve_group(None)
-        current = read_group_current_version(group)
+        current = read_group_current_version_for_scheme(group)
         try:
             base = resolve_prerelease_base(config, group, bump_kind, current, opts.prerelease_base)
             new = _compute_new_version(bump_kind, current, base)
@@ -292,7 +305,7 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
 
     for pkg_path, config, new in loaded:
         group = config.resolve_group(None)
-        current = read_group_current_version(group)
+        current = read_group_current_version_for_scheme(group)
         pr.section(f"{pkg_path.name}: {current} {GLYPHS.arrow.right} {new}")
 
         events = replace_all_versions_atomic(group.version_targets, str(new), dry_run=dry_run)

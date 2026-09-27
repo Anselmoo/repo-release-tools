@@ -298,8 +298,27 @@ class Version:
         - ``release`` — finalize the current pre-release to its stable target version,
           unconditionally (requires the version to already carry a pre-release identifier)
         - ``pre-release`` — increment the numeric suffix of the current pre-release label
-          (requires the version to already carry a pre-release identifier)
+          (requires the version to already carry a pre-release identifier). On a dev
+          release of a channel (``1.0.1rc1.dev2``) this drops the dev number instead of
+          incrementing it, landing on the channel release itself (``1.0.1rc1``) -- a dev
+          release only ever precedes the release it is a dev release *of*.
         - ``alpha``, ``beta``, ``rc`` — start or advance a named pre-release channel
+        - ``dev`` — start or advance a dev release (RRT-VER-1 T1.3):
+
+          * on a FINAL version, bumps the core by *base* (default ``patch``) and starts
+            ``dev0`` there (``1.0.0`` -> ``1.0.1.dev0``)
+          * on any existing dev release (of a final core, a channel, or -- via
+            ``pre-release``/``release`` first -- otherwise), advances the dev number
+            (``1.0.1.dev0`` -> ``1.0.1.dev1``; ``1.0.1rc1.dev2`` -> ``1.0.1rc1.dev3``)
+          * on a channel pre-release that is not itself a dev release, starts a dev
+            release of the *next* pre-release number (``1.0.1rc1`` -> ``1.0.1rc2.dev0``)
+          * on a post release, bumps the core by ``patch`` and starts ``dev0`` there
+            (``1.0.1.post1`` -> ``1.0.2.dev0``)
+        - ``post`` — start or advance a post release (RRT-VER-1 T1.3): ``.post1`` on a
+          FINAL or post version, incrementing on an existing post release
+          (``1.0.1`` -> ``1.0.1.post1`` -> ``1.0.1.post2``). Raises :class:`ValueError`
+          on a pre-release or dev release -- a post release only ever follows a final
+          release.
 
         Pre-release channels follow decision D-1:
         - Starting a channel from a FINAL version first increments the core by *base*
@@ -367,18 +386,31 @@ class Version:
                 return self._finalize_release(label)
             case "pre-release":
                 return self._bump_pre_release(label)
+            case "dev":
+                return self._bump_dev(base)
+            case "post":
+                return self._bump_post()
             case _ if kind in PRE_RELEASE_CHANNELS:
                 return self._set_channel(kind, base, label)
             case _:
                 raise ValueError(f"Unknown bump kind: {kind!r}")
 
     def _bump_pre_release(self, label: str | None) -> Version:
-        """Increment the numeric suffix of the current pre-release *label*."""
+        """Increment the numeric suffix of the current pre-release *label*.
+
+        A dev release of a channel (``pre`` and ``dev`` both set) is the one
+        exception: it drops ``dev`` instead of incrementing it, landing on the
+        channel release itself (``1.0.1rc1.dev2`` -> ``1.0.1rc1``) rather than
+        advancing further -- a dev release only ever precedes the release it is
+        a dev release *of*, so "finishing" it means arriving at that release.
+        """
         if label is None:
             raise ValueError(
                 "Cannot bump pre-release on a stable version. "
                 "Use 'alpha', 'beta', or 'rc' to start a pre-release channel."
             )
+        if self.pre is not None and self.dev is not None:
+            return Version(self.major, self.minor, self.patch, pre=self.pre)
         parts = label.rsplit(".", 1)
         if len(parts) == 2 and parts[1].isdigit():
             new_pre = f"{parts[0]}.{int(parts[1]) + 1}"
@@ -398,6 +430,38 @@ class Version:
             return self._bump_pre_release(label)
         # Switch to a new channel (e.g. alpha → beta); reset the counter
         return Version(self.major, self.minor, self.patch, pre=f"{channel}.1")
+
+    def _bump_dev(self, base: str) -> Version:
+        """Start or advance a dev release (RRT-VER-1 T1.3, see :meth:`bump`)."""
+        if self.dev is not None:
+            # Already a dev release (of a final core, or of a channel via ``pre``):
+            # advance the dev number, keeping whatever it is a dev release of.
+            return Version(self.major, self.minor, self.patch, pre=self.pre, dev=self.dev + 1)
+        if self.pre is not None:
+            if self.pre_channel is None:
+                raise ValueError(
+                    f"Cannot start a dev release from the opaque pre-release label "
+                    f"{self.pre!r} of {self}; only alpha.N, beta.N and rc.N (N >= 1) "
+                    "support a dev release."
+                )
+            next_pre = f"{self.pre_channel}.{(self.pre_number or 0) + 1}"
+            return Version(self.major, self.minor, self.patch, pre=next_pre, dev=0)
+        if self.post is not None:
+            return Version(self.major, self.minor, self.patch + 1, dev=0)
+        core = self._bump_kind(base, base)
+        return Version(core.major, core.minor, core.patch, dev=0)
+
+    def _bump_post(self) -> Version:
+        """Start or advance a post release (RRT-VER-1 T1.3, see :meth:`bump`)."""
+        if self.pre is not None or self.dev is not None:
+            raise ValueError(
+                f"Cannot start a post release from {self}: a post release only "
+                "follows a final release (or advances an existing post release); "
+                "it never follows a pre-release or dev release."
+            )
+        if self.post is not None:
+            return Version(self.major, self.minor, self.patch, post=self.post + 1)
+        return Version(self.major, self.minor, self.patch, post=1)
 
     def stable(self) -> Version:
         """Return the final release for this version (drop pre, build, post and dev)."""

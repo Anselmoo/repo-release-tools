@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import os
+import re
 import subprocess
 import sys
 from argparse import Namespace
@@ -66,7 +67,7 @@ def _options(**overrides: object) -> Options:
         "prerelease_base": None,
     }
     defaults.update(overrides)
-    return Options(**defaults)  # type: ignore[arg-type]
+    return Options(**defaults)  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
 
 
 def _default_group_config(tmp_path: Path) -> tuple[VersionGroup, RrtConfig]:
@@ -2920,8 +2921,8 @@ def test_cmd_bump_defaults_to_generate_for_squash_workflow(
         lambda root: config,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.read_group_current_version",
-        lambda grp: Version.parse("1.0.0"),
+        "repo_release_tools.commands.bump.read_group_current_version_for_scheme",
+        lambda grp, scheme_override=None: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
@@ -3247,8 +3248,8 @@ def test_cmd_bump_deduplicates_pin_updates_and_stage_entries(
         lambda root: config,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.read_group_current_version",
-        lambda grp: Version.parse("1.0.0"),
+        "repo_release_tools.commands.bump.read_group_current_version_for_scheme",
+        lambda grp, scheme_override=None: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.replace_all_versions_atomic",
@@ -3374,8 +3375,8 @@ def test_cmd_bump_uses_inline_lock_spinner(
         lambda root: config,
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.bump.read_group_current_version",
-        lambda grp: Version.parse("1.0.0"),
+        "repo_release_tools.commands.bump.read_group_current_version_for_scheme",
+        lambda grp, scheme_override=None: Version.parse("1.0.0"),
     )
     monkeypatch.setattr(
         "repo_release_tools.commands.bump.git.working_tree_clean",
@@ -4472,3 +4473,119 @@ def test_scheme_flag_parses_into_options_and_rejects_unknown_choice(
     out = capsys.readouterr().out
     assert "--scheme SCHEME" in out
     assert "Overrides [tool.rrt] version_scheme." in out
+
+
+# ---------------------------------------------------------------------------
+# Scheme-aware read path (issue #259, T1.2)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_bump_target_calver_zero_padded_current_reads_bumps_and_writes(
+    tmp_path: Path,
+) -> None:
+    """A zero-padded CalVer current version (2026.05.15) reads, bumps and writes back.
+
+    Regression test for the bug where read_group_current_version() fed a CalVer
+    string straight into Version.parse(), which rejects the leading zero in '05'
+    (`rrt bump calver --dry-run --no-commit` used to fail with "Invalid semver:
+    '2026.05.15'"). Covers the full resolve -> apply round trip, not just the read.
+    """
+    group, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "2026.05.15"\n', encoding="utf-8"
+    )
+    opts = _options(bump="calver", calver_scheme="YYYY.MM.DD")
+
+    target = resolve_bump_target(config, opts)
+
+    assert isinstance(target.current, CalVersion)
+    assert str(target.current) == "2026.05.15"
+    new = CalVersion.parse(str(target.new))
+    # Same zero-padded scheme; either today's date or a same-day micro bump.
+    assert re.match(r"^\d{4}\.\d{2}\.\d{2}(\.\d+)?$", str(new))
+    assert new.sort_key() > target.current.sort_key()
+
+    apply_bump_files(group, target.new, config, dry_run=False)
+
+    content = (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert f'version = "{new}"' in content
+
+
+def test_cmd_bump_calver_scheme_rejects_keyword_kind_with_clean_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A `calver` version_scheme refuses `rrt bump rc`: no such thing as a calver channel."""
+    path = _write_base_pyproject(tmp_path, "2026.05.15", 'version_scheme = "calver"')
+    before = path.read_bytes()
+
+    result = _run_cli(tmp_path, ["bump", "rc", "--dry-run"])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "'calver'" in captured.err
+    assert "only supports the 'calver' bump kind" in captured.err
+    assert "Traceback" not in captured.err
+    assert path.read_bytes() == before
+
+
+def test_cmd_bump_explicit_semver_scheme_rejects_non_semver_current(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An explicit `semver` version_scheme raises cleanly on a non-SemVer current version."""
+    path = _write_base_pyproject(tmp_path, "1.0.0a1", 'version_scheme = "semver"')
+    before = path.read_bytes()
+
+    result = _run_cli(tmp_path, ["bump", "patch", "--dry-run"])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "Invalid semver" in captured.err
+    assert "Traceback" not in captured.err
+    assert path.read_bytes() == before
+
+
+def test_cmd_bump_scheme_flag_overrides_group_config(tmp_path: Path) -> None:
+    """`--scheme pep440` overrides an unset config and reads a PEP 440-only current version."""
+    _write_base_pyproject(tmp_path, "1.0.0a1", "")
+
+    result = _run_cli(tmp_path, ["bump", "patch", "--scheme", "pep440", "--dry-run"])
+
+    assert result == 0
+
+
+def test_resolve_bump_target_refuses_explicit_downgrade_without_force(tmp_path: Path) -> None:
+    """An explicit version <= current is refused (I5) unless --force is passed."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "2.0.0"\n', encoding="utf-8"
+    )
+
+    with pytest.raises(BumpResolutionError, match=r"not newer than 2\.0\.0.*--force"):
+        resolve_bump_target(config, _options(bump="1.0.0"))
+
+    with pytest.raises(BumpResolutionError, match=r"not newer"):
+        resolve_bump_target(config, _options(bump="2.0.0"))  # equal counts as a downgrade too
+
+    # --force allows it.
+    target = resolve_bump_target(config, _options(bump="1.0.0", force=True))
+    assert str(target.new) == "1.0.0"
+
+
+def test_cmd_bump_explicit_downgrade_is_a_clean_error_and_force_allows_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CLI-level: `rrt bump 1.0.0` on a 2.0.0 current is refused; `--force` allows it."""
+    path = _write_base_pyproject(tmp_path, "2.0.0", "")
+    before = path.read_bytes()
+
+    result = _run_cli(tmp_path, ["bump", "1.0.0", "--dry-run"])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "not newer than 2.0.0" in captured.err
+    assert "--force" in captured.err
+    assert "Traceback" not in captured.err
+    assert path.read_bytes() == before
+
+    result = _run_cli(tmp_path, ["bump", "1.0.0", "--dry-run", "--force"])
+    assert result == 0

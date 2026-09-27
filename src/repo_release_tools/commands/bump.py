@@ -45,6 +45,10 @@ version such as ``2026.05.15`` means ``calver``. Otherwise a ``pep621`` or
 takes the same values as ``scheme``, with the same default. An unknown value in
 config is a config error, so ``rrt bump`` exits 1.
 
+A ``calver`` scheme only accepts the ``calver`` bump kind or an explicit calendar
+version; ``major``, ``rc``, ``dev`` and the other keyword kinds are refused with a
+clear error, since they have no meaning for a calendar version.
+
 ## What the command updates
 
 Depending on the selected version group, the command can update:
@@ -83,6 +87,11 @@ below it so the placeholder stays at the top of the file.
 
 * The working tree must be clean unless ``--dry-run`` is used.
 * Existing release branches are refused unless ``--force`` is set.
+* An explicit ``<bump>`` version that is not strictly newer than the current one
+  (RRT-VER-1 I5) is refused unless ``--force`` is set -- ``--force`` also allows
+  this downgrade or no-op bump, alongside its existing release-branch-reset
+  meaning. A keyword kind (``major``, ``rc``, ``dev``, ...) always computes a
+  strictly newer version on its own, so this check never applies to one.
 * ``--no-commit`` leaves the branch created with staged changes only.
 * ``--dry-run`` previews the planned file edits and git actions without writing
   to disk.
@@ -152,7 +161,7 @@ from repo_release_tools.version.scheme import VERSION_SCHEMES
 from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, PRERELEASE_BASES, Version
 from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
-    read_group_current_version,
+    read_group_current_version_for_scheme,
     replace_all_versions_atomic,
     replace_pin_in_file,
 )
@@ -214,24 +223,35 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
     except ValueError as exc:
         raise BumpResolutionError(str(exc)) from exc
 
-    current = read_group_current_version(group)
+    try:
+        current = read_group_current_version_for_scheme(group, scheme_override=opts.version_scheme)
+    except ValueError as exc:
+        raise BumpResolutionError(str(exc)) from exc
+
     new: Version | CalVersion | str
     if opts.bump == "calver":
         calver_scheme = opts.calver_scheme
-        try:
-            current_calver = CalVersion.parse(str(current))
-        except ValueError:
-            current_calver = CalVersion.today(calver_scheme)
-            new = str(current_calver)
+        if isinstance(current, CalVersion):
+            new = str(current.bump())
         else:
-            new = str(current_calver.bump())
+            # Non-calver current (no calver scheme configured or inferred, or one
+            # overridden away from calver for this run): treated as a fresh start
+            # (matches original inline behavior).
+            new = str(CalVersion.today(calver_scheme))
     elif opts.bump in BUMP_KINDS:
+        if isinstance(current, CalVersion):
+            raise BumpResolutionError(
+                f"Cannot bump group {group.name!r} with kind {opts.bump!r}: its "
+                "version scheme is 'calver', which only supports the 'calver' bump "
+                "kind or an explicit version. Run `rrt bump calver` instead, or pass "
+                "an explicit calendar version."
+            )
         base = resolve_prerelease_base(config, group, opts.bump, current, opts.prerelease_base)
         try:
             if base is None:
-                new = current.bump(opts.bump)  # type: ignore[assignment]
+                new = current.bump(opts.bump)
             else:
-                new = current.bump(opts.bump, base=base)  # type: ignore[call-arg]
+                new = current.bump(opts.bump, base=base)
         except ValueError as exc:
             raise BumpResolutionError(str(exc)) from exc
     else:
@@ -243,7 +263,29 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
             except ValueError:
                 raise BumpResolutionError(f"Invalid bump value: {opts.bump!r}") from None
 
+    if not opts.force and _is_downgrade_or_equal(current, new):
+        raise BumpResolutionError(
+            f"Refusing to bump group {group.name!r} from {current} to {new}: {new} is "
+            f"not newer than {current}. Pass --force to bump anyway."
+        )
+
     return BumpTarget(group=group, current=current, new=new)
+
+
+def _is_downgrade_or_equal(current: Version | CalVersion, new: Version | CalVersion | str) -> bool:
+    """Return True when *new* is not strictly newer than *current* (RRT-VER-1 I5).
+
+    *new* is a plain ``str`` only for the ``calver`` bump kind (its own
+    :meth:`CalVersion.bump` already guarantees a strictly newer result, same-day
+    micro increment included), which this never second-guesses. A keyword kind
+    (``major``, ``rc``, ``dev``, ...) always produces a :class:`Version`, and its
+    own :meth:`Version.bump` guard already refused a non-newer result before
+    returning here -- this guard is only ever load-bearing for an *explicit*
+    ``<bump>`` version string.
+    """
+    if isinstance(new, str):
+        return False
+    return new.sort_key() <= current.sort_key()
 
 
 def infer_prerelease_base(
@@ -1110,7 +1152,10 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     release_grp.add_argument(
         "--force",
         action="store_true",
-        help="Reset the release branch if it already exists.",
+        help=(
+            "Reset the release branch if it already exists, and allow an explicit "
+            "<bump> version that is not strictly newer than the current one."
+        ),
     )
     release_grp.add_argument("--no-commit", action="store_true", help="Skip the git commit step.")
     release_grp.add_argument(
