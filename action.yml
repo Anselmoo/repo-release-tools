@@ -82,7 +82,7 @@ inputs:
 
 outputs:
   detected-version:
-    description: The current project version detected from the rrt configuration
+    description: The published version for this run, computed by `rrt ci-version compute` from the rrt configuration
     value: ${{ steps.detect-version.outputs.detected_version }}
   changelog-status:
     description: Changelog status — one of 'clean', 'dirty', or 'missing'
@@ -127,7 +127,7 @@ runs:
         detected_version=""
         changelog_status="missing"
 
-        if detected_version=$(rrt ci-version 2>/dev/null); then
+        if detected_version=$(rrt ci-version compute 2>/dev/null); then
           detected_version="${detected_version//[$'\n\r']}"
         fi
 
