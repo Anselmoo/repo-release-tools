@@ -423,3 +423,121 @@ def test_workspace_bump_generic_value_error(
     rc = cmd_workspace_bump(_args(packages="api"))
     assert rc == 1
     assert "bad config value" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Impossible bumps abort before any write; `release` finalizes pre-releases
+# ---------------------------------------------------------------------------
+
+
+def _patch_configs(monkeypatch: pytest.MonkeyPatch, configs: dict[Path, RrtConfig]) -> None:
+    monkeypatch.setattr(
+        "repo_release_tools.commands.workspace.load_or_autodetect_config",
+        lambda path: configs[path],
+    )
+
+
+def test_compute_new_version_release_finalizes_pre_release() -> None:
+    """`release` is an accepted bump kind and drops the pre-release suffix."""
+    assert str(_compute_new_version("release", Version.parse("1.2.0-rc.1"))) == "1.2.0"
+
+
+def test_workspace_bump_pre_release_on_stable_package_exits_1_and_writes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An impossible bump in any package aborts cleanly before any file is written."""
+    monkeypatch.chdir(tmp_path)
+    pkg_a = tmp_path / "api"
+    pkg_a.mkdir()
+    conf_a = _make_pkg_config(pkg_a, "1.2.0-rc.1")
+    _write_changelog(pkg_a / "CHANGELOG.md", with_entries=True)
+    pkg_b = tmp_path / "sdk"
+    pkg_b.mkdir()
+    conf_b = _make_pkg_config(pkg_b, "1.0.0")
+    _write_changelog(pkg_b / "CHANGELOG.md", with_entries=True)
+    _patch_configs(monkeypatch, {pkg_a: conf_a, pkg_b: conf_b})
+
+    files = [
+        conf_a.version_groups[0].version_targets[0].path,
+        conf_b.version_groups[0].version_targets[0].path,
+        pkg_a / "CHANGELOG.md",
+        pkg_b / "CHANGELOG.md",
+    ]
+    before = {f: f.read_bytes() for f in files}
+
+    rc = cmd_workspace_bump(_args(bump="pre-release", packages="api,sdk"))
+
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "Cannot bump pre-release on a stable version" in captured.err
+    assert "sdk" in captured.err
+    assert "Traceback" not in captured.err
+    assert "Workspace bump" not in captured.out
+    assert {f: f.read_bytes() for f in files} == before
+
+
+def test_workspace_bump_release_finalizes_pre_release_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`workspace bump release` turns 1.2.0-rc.1 into 1.2.0."""
+    monkeypatch.chdir(tmp_path)
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    conf = _make_pkg_config(pkg, "1.2.0-rc.1")
+    _patch_configs(monkeypatch, {pkg: conf})
+
+    rc = cmd_workspace_bump(_args(bump="release", packages="api", no_changelog=True))
+
+    assert rc == 0
+    target = conf.version_groups[0].version_targets[0].path
+    assert target.read_text(encoding="utf-8") == '__version__ = "1.2.0"\n'
+
+
+def test_workspace_bump_release_dry_run_writes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`workspace bump release --dry-run` previews 1.2.0 without touching files."""
+    monkeypatch.chdir(tmp_path)
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    conf = _make_pkg_config(pkg, "1.2.0-rc.1")
+    _write_changelog(pkg / "CHANGELOG.md", with_entries=True)
+    _patch_configs(monkeypatch, {pkg: conf})
+    target = conf.version_groups[0].version_targets[0].path
+    before = (target.read_bytes(), (pkg / "CHANGELOG.md").read_bytes())
+
+    rc = cmd_workspace_bump(_args(bump="release", packages="api", dry_run=True))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "1.2.0" in out
+    assert "no files were modified" in out
+    assert (target.read_bytes(), (pkg / "CHANGELOG.md").read_bytes()) == before
+
+
+def test_workspace_bump_release_on_stable_package_exits_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`workspace bump release` on a stable version fails with the finalize reason."""
+    monkeypatch.chdir(tmp_path)
+    pkg = tmp_path / "api"
+    pkg.mkdir()
+    conf = _make_pkg_config(pkg, "1.0.0")
+    _patch_configs(monkeypatch, {pkg: conf})
+    target = conf.version_groups[0].version_targets[0].path
+    before = target.read_bytes()
+
+    rc = cmd_workspace_bump(_args(bump="release", packages="api"))
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Cannot finalize" in err
+    assert "api" in err
+    assert target.read_bytes() == before

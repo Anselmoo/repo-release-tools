@@ -123,7 +123,8 @@ if TYPE_CHECKING:
 
 PREVIEW_LINES = 8
 
-_BUMP_KINDS = {"major", "minor", "patch", "release", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
+# Keyword bump kinds shared by ``rrt bump`` and ``rrt workspace bump``.
+BUMP_KINDS = {"major", "minor", "patch", "release", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
 
 # Pre-commit's fixed status line for a hook that auto-regenerated files and
 # thereby failed its own pass even though the fix is now correct on disk.
@@ -179,7 +180,7 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
             new = str(current_calver)
         else:
             new = str(current_calver.bump())
-    elif opts.bump in _BUMP_KINDS:
+    elif opts.bump in BUMP_KINDS:
         try:
             new = current.bump(opts.bump)  # type: ignore[assignment]
         except ValueError as exc:

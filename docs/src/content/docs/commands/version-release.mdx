@@ -1188,6 +1188,8 @@ a Go CLI tool) that are always released together at the same version.
 1. Resolve each package path from ``--packages``.
 2. Load each package's rrt config and read its current version.
 3. Compute the new version using the same bump logic as ``rrt bump``.
+   Keyword kinds are ``major``, ``minor``, ``patch``, ``release``,
+   ``pre-release``, ``alpha``, ``beta``, ``rc`` and ``calver``.
 4. For each package: update version targets and, unless ``--no-changelog``,
    the changelog.
 5. Report every file write to stdout (or preview them with ``--dry-run``).
@@ -1195,6 +1197,8 @@ a Go CLI tool) that are always released together at the same version.
 ### Safety notes
 
 * All package configs must exist and be valid before any file is written.
+* Every package's new version is computed before any file is written.
+  An impossible bump for any package aborts the run with exit code 1.
 * ``--dry-run`` previews all planned writes without touching any file.
 
 ### Examples
@@ -1203,6 +1207,7 @@ a Go CLI tool) that are always released together at the same version.
 rrt workspace bump minor --packages api,sdk,docs
 rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
 rrt workspace bump patch --dry-run --packages api,sdk
+rrt workspace bump release --packages api,sdk
 ```
 
 ### Caveats
@@ -1210,6 +1215,12 @@ rrt workspace bump patch --dry-run --packages api,sdk
 Every package needs its own loadable `[tool.rrt]` configuration. A missing
 or invalid config in any package aborts the whole run before any file is
 written.
+
+An impossible bump for any package also aborts before any write. Examples
+are `pre-release` on a stable version or `release` on a final version. The
+error line names the package and the reason.
+
+`release` drops the pre-release suffix, so `1.2.0-rc.1` becomes `1.2.0`.
 
 Config loading is validated up front, but the actual writes still happen
 package by package. Each package's own version-target write is atomic, yet
@@ -1253,7 +1264,7 @@ Apply the same version bump to every package listed in --packages.
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  <bump>            major | minor | patch | pre-release | calver | <version>
+  <bump>            major | minor | patch | release | pre-release | alpha | beta | rc | calver | <version>
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
@@ -1269,4 +1280,5 @@ Examples
   $ rrt workspace bump minor --packages api,sdk,docs
   $ rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
   $ rrt workspace bump patch --dry-run --packages api,sdk
+  $ rrt workspace bump release --packages api,sdk
 ```

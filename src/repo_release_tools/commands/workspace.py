@@ -18,6 +18,8 @@ a Go CLI tool) that are always released together at the same version.
 1. Resolve each package path from ``--packages``.
 2. Load each package's rrt config and read its current version.
 3. Compute the new version using the same bump logic as ``rrt bump``.
+   Keyword kinds are ``major``, ``minor``, ``patch``, ``release``,
+   ``pre-release``, ``alpha``, ``beta``, ``rc`` and ``calver``.
 4. For each package: update version targets and, unless ``--no-changelog``,
    the changelog.
 5. Report every file write to stdout (or preview them with ``--dry-run``).
@@ -25,6 +27,8 @@ a Go CLI tool) that are always released together at the same version.
 ## Safety notes
 
 * All package configs must exist and be valid before any file is written.
+* Every package's new version is computed before any file is written.
+  An impossible bump for any package aborts the run with exit code 1.
 * ``--dry-run`` previews all planned writes without touching any file.
 
 ## Examples
@@ -33,6 +37,7 @@ a Go CLI tool) that are always released together at the same version.
 rrt workspace bump minor --packages api,sdk,docs
 rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk
 rrt workspace bump patch --dry-run --packages api,sdk
+rrt workspace bump release --packages api,sdk
 ```
 
 ## Caveats
@@ -40,6 +45,12 @@ rrt workspace bump patch --dry-run --packages api,sdk
 Every package needs its own loadable `[tool.rrt]` configuration. A missing
 or invalid config in any package aborts the whole run before any file is
 written.
+
+An impossible bump for any package also aborts before any write. Examples
+are `pre-release` on a stable version or `release` on a final version. The
+error line names the package and the reason.
+
+`release` drops the pre-release suffix, so `1.2.0-rc.1` becomes `1.2.0`.
 
 Config loading is validated up front, but the actual writes still happen
 package by package. Each package's own version-target write is atomic, yet
@@ -73,6 +84,7 @@ from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.commands._version_render import render_version_write_events
+from repo_release_tools.commands.bump import BUMP_KINDS
 from repo_release_tools.config import (
     RrtConfig,
     iter_config_files,
@@ -80,7 +92,7 @@ from repo_release_tools.config import (
 )
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.version.calver import CalVersion
-from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, Version
+from repo_release_tools.version.semver import Version
 from repo_release_tools.version.targets import (
     read_group_current_version,
     replace_all_versions_atomic,
@@ -96,16 +108,18 @@ def _compute_new_version(
     bump_kind: str,
     current: Version,
 ) -> Version | CalVersion | None:
-    """Return the new version for *bump_kind*, or None on parse failure."""
-    _BUMP_KINDS = {"major", "minor", "patch", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
+    """Return the new version for *bump_kind*, or None on parse failure.
 
+    Raises ``ValueError`` when a keyword bump is impossible for *current*,
+    such as ``pre-release`` on a stable version or ``release`` on a final one.
+    """
     if bump_kind == "calver":
         try:
             return CalVersion.parse(str(current)).bump()
         except ValueError:
             return CalVersion.today()
 
-    if bump_kind in _BUMP_KINDS:
+    if bump_kind in BUMP_KINDS:
         return current.bump(bump_kind)
 
     try:
@@ -232,7 +246,12 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
 
         group = config.resolve_group(None)
         current = read_group_current_version(group)
-        new = _compute_new_version(bump_kind, current)
+        try:
+            new = _compute_new_version(bump_kind, current)
+        except ValueError as exc:
+            p = VerbosePrinter(verbose=verbose)
+            p.line(f"{pkg_path.name}: {exc}", ok=False, stream=sys.stderr)
+            return 1
         if new is None:
             p = VerbosePrinter(verbose=verbose)
             p.line(f"Invalid bump value: {bump_kind!r}", ok=False, stream=sys.stderr)
@@ -271,7 +290,8 @@ def cmd_workspace_bump(args: argparse.Namespace) -> int:
 _WORKSPACE_EPILOG = (
     "  $ rrt workspace bump minor --packages api,sdk,docs\n"
     "  $ rrt workspace bump 2.0.0 --packages ./packages/api,./packages/sdk\n"
-    "  $ rrt workspace bump patch --dry-run --packages api,sdk"
+    "  $ rrt workspace bump patch --dry-run --packages api,sdk\n"
+    "  $ rrt workspace bump release --packages api,sdk"
 )
 
 
@@ -304,7 +324,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     bump_parser.add_argument(
         "bump",
         metavar="<bump>",
-        help="major | minor | patch | pre-release | calver | <version>",
+        help="major | minor | patch | release | pre-release | alpha | beta | rc | calver | <version>",
     )
     bump_parser.add_argument(
         "--packages",
