@@ -40,6 +40,9 @@ registrations in dependency order.
   Optional `base` = `"patch"`, `"minor"`, `"major"`, or `"auto"` picks the core an
   alpha/beta/rc bump targets from a final version, like the CLI's `--base`; omitted, it
   falls back to the group's `prerelease_base` config (default: next patch).
+  Optional `scheme` = `"semver"`, `"pep440"`, or `"calver"` names the version grammar,
+  like the CLI's `--scheme`; omitted, it falls back to the group's `version_scheme`
+  config, which is inferred from the primary target when unset.
 
 ### `validation_tools` → `rrt_validate_branch`, `rrt_validate_commit`
 

@@ -39,6 +39,7 @@ from .model import (
     VALID_PIN_TARGET_MISSING,
     VALID_PRERELEASE_BASES,
     VALID_TARGET_KINDS,
+    VALID_VERSION_SCHEMES,
     VALID_UPSTREAM_PROVIDERS,
     ArtifactProtection,
     ArtifactTarget,
@@ -525,6 +526,8 @@ def _render_recommended_rrt_dict(root: Path, group: VersionGroup) -> dict[str, o
         result["generated_files"] = generated_files
     if len(group.version_targets) > 1:
         result["version_source"] = str(group.primary_target().path.relative_to(root))
+    if group.version_scheme is not None:
+        result["version_scheme"] = group.version_scheme
 
     targets: list[dict[str, object]] = []
     for target in group.version_targets:
@@ -571,6 +574,8 @@ def _render_recommended_rrt_toml(
         lines.append(
             f"version_source = {_toml_basic_string(str(group.primary_target().path.relative_to(root)))}",
         )
+    if group.version_scheme is not None:
+        lines.append(f"version_scheme = {_toml_basic_string(group.version_scheme)}")
 
     for target in group.version_targets:
         lines.extend(["", f"[[{prefix}.version_targets]]"])
@@ -697,6 +702,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         "prerelease_base": _validate_prerelease_base(
             raw.get("prerelease_base", DEFAULT_PRERELEASE_BASE)
         ),
+        "version_scheme": _validate_version_scheme(raw.get("version_scheme")),
         "lock_command": raw.get("lock_command", _default_lock_command(config_file)),
         "generated_files": raw.get("generated_files", _default_generated_files(config_file)),
         "generated_assets": raw.get("generated_assets", []),
@@ -1366,6 +1372,23 @@ def _validate_prerelease_base(value: object) -> str:
     return value
 
 
+def _validate_version_scheme(value: object) -> str | None:
+    """Return *value* when it is a valid ``version_scheme`` (or unset), else raise.
+
+    ``None`` means the key is unset and the scheme is inferred from the group's
+    primary target. Shared by the global ``[tool.rrt]`` value and every version
+    group, so an invalid global value is reported even when each group overrides it.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("version_scheme must be a string")
+    if value not in VALID_VERSION_SCHEMES:
+        allowed = ", ".join(sorted(VALID_VERSION_SCHEMES))
+        raise ValueError(f"version_scheme must be one of {allowed}, got {value!r}")
+    return value
+
+
 def _load_version_group(
     root: Path,
     *,
@@ -1430,6 +1453,13 @@ def _load_version_group(
                 default=defaults["prerelease_base"],
                 error="prerelease_base must be a string",
             ),
+            FieldSpec(
+                "version_scheme",
+                str,
+                default=defaults["version_scheme"],
+                error="version_scheme must be a string",
+                allow_none_default=True,
+            ),
         ],
     )
     release_branch = cast("str", simple_fields["release_branch"])
@@ -1440,6 +1470,7 @@ def _load_version_group(
         allowed = ", ".join(sorted(VALID_CHANGELOG_WORKFLOWS))
         raise ValueError(f"changelog_workflow must be one of {allowed}, got {changelog_workflow!r}")
     prerelease_base = _validate_prerelease_base(simple_fields["prerelease_base"])
+    version_scheme = _validate_version_scheme(simple_fields["version_scheme"])
 
     lock_command_raw = raw_group.get("lock_command", defaults["lock_command"])
     auto_gen: list[str] = []
@@ -1523,6 +1554,7 @@ def _load_version_group(
         tag_prefix=tag_prefix,
         changelog_paths=changelog_paths,
         prerelease_base=prerelease_base,
+        version_scheme=version_scheme,
         upstream_package=upstream_package,
         upstream_provider=upstream_provider,
         upstream_commit_message=upstream_commit_message,
@@ -1548,6 +1580,7 @@ __all__ = [
     "VALID_CHANGELOG_WORKFLOWS",
     "VALID_CI_FORMATS",
     "VALID_PRERELEASE_BASES",
+    "VALID_VERSION_SCHEMES",
     "VALID_TARGET_KINDS",
     "VALID_UPSTREAM_PROVIDERS",
     "_VALID_LANGUAGES",

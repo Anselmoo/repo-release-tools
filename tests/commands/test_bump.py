@@ -4411,3 +4411,64 @@ def test_cli_bump_invalid_config_prerelease_base_is_a_clean_config_error(
     assert f"prerelease_base must be one of auto, major, minor, patch, got '{bad}'" in captured.err
     assert "Traceback" not in captured.err
     assert path.read_bytes() == before
+
+
+# ---------------------------------------------------------------------------
+# Version scheme: --scheme / version_scheme (issue #259, T1.2, D-4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("scheme_line", "bad"),
+    [
+        pytest.param('version_scheme = "semver2"', "semver2", id="unknown-name"),
+        pytest.param('version_scheme = "SemVer"', "SemVer", id="wrong-case"),
+    ],
+)
+def test_cmd_bump_invalid_version_scheme_config_exits_1_with_config_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    scheme_line: str,
+    bad: str,
+) -> None:
+    """An invalid [tool.rrt] version_scheme stops `rrt bump` with a config error, exit 1."""
+    path = _write_base_pyproject(tmp_path, "1.0.0", scheme_line)
+    before = path.read_bytes()
+
+    result = _run_cli(tmp_path, ["bump", "patch", "--dry-run"])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert f"version_scheme must be one of calver, pep440, semver, got '{bad}'" in captured.err
+    assert "Traceback" not in captured.err
+    assert path.read_bytes() == before
+
+
+def test_scheme_flag_parses_into_options_and_rejects_unknown_choice(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`--scheme` takes semver|pep440|calver, defaults to None and lands in Options."""
+    from repo_release_tools.version.scheme import VERSION_SCHEMES
+
+    parser = cli.build_parser()
+    for scheme in VERSION_SCHEMES:
+        args = parser.parse_args(["bump", "patch", "--scheme", scheme])
+        assert args.version_scheme == scheme
+        assert Options.from_args(args).version_scheme == scheme
+
+    args = parser.parse_args(["bump", "patch"])
+    assert args.version_scheme is None
+    assert Options.from_args(args).version_scheme is None
+    # Hand-built sparse Namespaces keep working (None = group config, then inference).
+    assert Options.from_args(Namespace(bump="patch")).version_scheme is None
+
+    with pytest.raises(SystemExit) as excinfo:
+        parser.parse_args(["bump", "patch", "--scheme", "semver2"])
+    assert excinfo.value.code == 2
+    assert "invalid choice: 'semver2'" in capsys.readouterr().err
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["bump", "--help"])
+    out = capsys.readouterr().out
+    assert "--scheme SCHEME" in out
+    assert "Overrides [tool.rrt] version_scheme." in out

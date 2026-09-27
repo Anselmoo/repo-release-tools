@@ -51,6 +51,16 @@ release_branch = "..."
 # unit's own latest tag.
 tag_prefix = "..."
 
+# The grammar the version is read, bumped and written in: 'semver'
+# (1.2.3-rc.1), 'pep440' (1.2.3rc1) or 'calver' (2026.05.15). No default: when
+# unset it is inferred from the primary target. A calendar-shaped version
+# (YYYY.MM, YYYY.MM.DD or YYYY.M.D) is calver; otherwise a pep621 or
+# python_version target is pep440, and any other target is semver. A
+# version_groups entry overrides this global value. rrt bump --scheme and the
+# MCP rrt_bump scheme parameter override both for one run.
+# one of: calver, pep440, semver
+version_scheme = "calver"
+
 # Cross-pipeline artifact protection policy checked by the `rrt doctor`
 # artifact-protection lens.
 [tool.rrt.artifact_protection]
@@ -208,6 +218,11 @@ release_branch = "..."
 tag_prefix = "..."
 
 # upstream: ($ref — see the referenced section for details)
+
+# Per-group override of the global version_scheme (semver, pep440 or calver).
+# Unset everywhere, it is inferred from the group's primary target.
+# one of: calver, pep440, semver
+version_scheme = "calver"
 
 # version_targets: ($ref — see the referenced section for details)
 

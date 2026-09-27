@@ -26,6 +26,8 @@ The default view renders a tree-style summary with:
   - `changelog`
   - `prerelease_base`, the core a pre-release channel targets from a final
     version (`patch`, `minor`, `major` or `auto`)
+  - `version_scheme`, the grammar the version follows (`semver`, `pep440` or
+    `calver`), or the primary target it is inferred from when unset
   - `lock_command`, when configured
   - `generated_files`, when configured
   - `version_targets`
@@ -120,6 +122,13 @@ RRT_CONFIG_SCHEMA = "rrt-config.schema.json"
 CONFIG_REFERENCE_PATH = Path("docs/rrt-config-reference.toml")
 
 
+def _describe_version_scheme(group: cfg.VersionGroup, root: Path) -> str:
+    """Return the group's configured version scheme, or where it is inferred from."""
+    if group.version_scheme is not None:
+        return group.version_scheme
+    return f"inferred from {group.primary_target().path.relative_to(root)}"
+
+
 def _render_group_details(group: cfg.VersionGroup, root: Path) -> list[str]:
     """Render the text lines for a version-group detail block."""
     g = GLYPHS
@@ -127,6 +136,7 @@ def _render_group_details(group: cfg.VersionGroup, root: Path) -> list[str]:
         f"  {g.bullet.dot} release_branch: {group.release_branch}",
         f"  {g.bullet.dot} changelog: {group.changelog_file.relative_to(root)}",
         f"  {g.bullet.dot} prerelease_base: {group.prerelease_base}",
+        f"  {g.bullet.dot} version_scheme: {_describe_version_scheme(group, root)}",
     ]
     if group.lock_command:
         details.append(f"  {g.bullet.dot} lock_command: {' '.join(group.lock_command)}")

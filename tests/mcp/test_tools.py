@@ -824,6 +824,47 @@ def test_rrt_bump_accepts_base_and_rejects_invalid_base(tmp_path: Path) -> None:
     assert asyncio.run(_run_no_config()) == expected_error
 
 
+def test_rrt_bump_rejects_invalid_scheme(tmp_path: Path) -> None:
+    """D-4: ``scheme`` mirrors the CLI ``--scheme`` flag and the ``version_scheme`` config.
+
+    An unknown scheme is rejected up front with the same error shape as ``base``. A valid
+    scheme (or none) is handed to the shared bump pipeline through ``Options``.
+    """
+    from repo_release_tools.commands import bump as bump_cmd
+
+    tools = _ver_tools(tmp_path)
+    _group, config = _real_group_config(tmp_path)
+    ctx = _ctx(tmp_path, config=config)
+
+    def _bump(context: Any, **kwargs: Any) -> Any:
+        async def _run() -> Any:
+            return await tools["rrt_bump"](context, level="patch", dry_run=True, **kwargs)
+
+        return asyncio.run(_run())
+
+    expected_error = {"error": "scheme must be one of: semver, pep440, calver"}
+    assert _bump(ctx, scheme="semver2") == expected_error
+    assert _bump(ctx, scheme="SemVer") == expected_error
+    # Rejected before the config is even consulted, like ``base``.
+    assert _bump(_ctx(tmp_path, config=None), scheme="bogus") == expected_error
+
+    seen: list[str | None] = []
+    real_resolve = bump_cmd.resolve_bump_target
+
+    def _spy(cfg: Any, opts: Any) -> Any:
+        seen.append(opts.version_scheme)
+        return real_resolve(cfg, opts)
+
+    with patch("repo_release_tools.commands.bump.resolve_bump_target", side_effect=_spy):
+        result = _bump(ctx, scheme="pep440")
+        default = _bump(ctx)
+
+    assert result[0].error is None, result[0]
+    assert result[0].new == "1.0.1"
+    assert default[0].new == "1.0.1"
+    assert seen == ["pep440", None]
+
+
 def test_rrt_bump_base_applies_to_every_group(tmp_path: Path) -> None:
     """Regression: the branch-base local must not clobber the pre-release ``base``.
 

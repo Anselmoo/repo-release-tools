@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -409,6 +410,47 @@ def test_render_group_details_shows_per_group_prerelease_base(tmp_path: Path) ->
     details = config_cmd._render_group_details(group, tmp_path)
 
     assert any(line.endswith("prerelease_base: minor") for line in details)
+
+
+def test_config_renders_version_scheme_configured_and_inferred(tmp_path: Path) -> None:
+    """A configured version_scheme is shown as-is; an unset one names its inference source."""
+    group = VersionGroup(
+        name="sdk",
+        release_branch="release/sdk/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[
+            VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621"),
+            VersionTarget(path=tmp_path / "pkg" / "package.json", kind="package_json"),
+        ],
+        version_source=tmp_path / "pkg" / "package.json",
+        version_scheme="calver",
+    )
+
+    details = config_cmd._render_group_details(group, tmp_path)
+    assert any(line.endswith("version_scheme: calver") for line in details)
+
+    inferred = dataclasses.replace(group, version_scheme=None)
+    details = config_cmd._render_group_details(inferred, tmp_path)
+    expected = f"version_scheme: inferred from {Path('pkg') / 'package.json'}"
+    assert any(line.endswith(expected) for line in details)
+
+
+def test_cmd_config_shows_inferred_version_scheme(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conf = _make_config(tmp_path)
+    import repo_release_tools.config as cfg_mod
+
+    monkeypatch.setattr(cfg_mod, "load_or_autodetect_config", lambda _: conf)
+    monkeypatch.chdir(tmp_path)
+
+    assert config_cmd.cmd_config(argparse.Namespace(raw=False)) == 0
+    expected = f"version_scheme: inferred from {Path('src') / 'pkg' / '__init__.py'}"
+    assert expected in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

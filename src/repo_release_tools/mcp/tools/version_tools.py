@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 
 from repo_release_tools import __version__ as _PKG_VERSION
 from repo_release_tools.mcp.models import BumpGroupResult, ConfigError, VersionGroupResult
+from repo_release_tools.version.scheme import VERSION_SCHEMES
 from repo_release_tools.version.semver import PRERELEASE_BASES
 
 
@@ -61,6 +62,7 @@ def register(mcp: FastMCP) -> None:
         dry_run: bool = True,
         group: str | None = None,
         base: str | None = None,
+        scheme: str | None = None,
     ) -> list[BumpGroupResult] | dict[str, Any]:
         """Preview or apply a version bump — use instead of editing version strings by hand.
 
@@ -80,6 +82,11 @@ def register(mcp: FastMCP) -> None:
         ``auto`` reads Conventional Commits since the last final tag: breaking ->
         major, feat -> minor, else patch. Ignored once the version is already a
         pre-release, so rc.1 -> rc.2 never moves the core.
+        scheme: semver | pep440 | calver — the grammar the version is read, bumped
+        and written in. Same as the CLI's ``rrt bump --scheme``. Omit it to use the
+        group's ``version_scheme`` config; unset there, it is inferred from the
+        primary target (calendar-shaped -> calver, pep621/python_version -> pep440,
+        else semver).
 
         Runs the SAME pipeline as the ``rrt bump`` CLI command (preflight, version
         targets, pin targets, changelog promotion/generation, lockfile and generated-asset
@@ -94,6 +101,8 @@ def register(mcp: FastMCP) -> None:
             return {"error": f"level must be one of: {', '.join(valid_levels)}"}
         if base is not None and base not in PRERELEASE_BASES:
             return {"error": f"base must be one of: {', '.join(PRERELEASE_BASES)}"}
+        if scheme is not None and scheme not in VERSION_SCHEMES:
+            return {"error": f"scheme must be one of: {', '.join(VERSION_SCHEMES)}"}
 
         config_error = ctx.lifespan_context.get("config_error")
         if config_error is not None:
@@ -131,6 +140,7 @@ def register(mcp: FastMCP) -> None:
                 calver_scheme="YYYY.MM.DD",
                 verbose=0,
                 prerelease_base=base,
+                version_scheme=scheme,
             )
             try:
                 resolved = bump_cmd.resolve_bump_target(config, group_opts)

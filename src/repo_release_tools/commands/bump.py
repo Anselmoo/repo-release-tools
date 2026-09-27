@@ -32,6 +32,19 @@ Later pre-release tags never move that range. ``changelog_paths`` and
 The base is ignored once the version is already a pre-release. So ``1.0.1-rc.1``
 bumps to ``1.0.1-rc.2``, whatever ``--base`` says.
 
+## Version scheme
+
+The ``version_scheme`` key names the grammar a group's version follows. It takes
+``semver``, ``pep440`` or ``calver``, globally or per version group.
+
+Left unset, the scheme is inferred from the primary target. A calendar-shaped
+version such as ``2026.05.15`` means ``calver``. Otherwise a ``pep621`` or
+``python_version`` target means ``pep440``, and any other target means ``semver``.
+
+``--scheme SCHEME`` overrides the config for one run. The MCP ``rrt_bump`` tool
+takes the same values as ``scheme``, with the same default. An unknown value in
+config is a config error, so ``rrt bump`` exits 1.
+
 ## What the command updates
 
 Depending on the selected version group, the command can update:
@@ -83,6 +96,7 @@ below it so the placeholder stays at the top of the file.
 * ``rrt bump rc --dry-run``
 * ``rrt bump rc --base minor --dry-run``
 * ``rrt bump beta --base auto``
+* ``rrt bump calver --scheme calver --dry-run``
 """
 
 from __future__ import annotations
@@ -134,6 +148,7 @@ from repo_release_tools.ui import (
     spinner_lines,
 )
 from repo_release_tools.version.calver import CALVER_SCHEMES, CalVersion
+from repo_release_tools.version.scheme import VERSION_SCHEMES
 from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, PRERELEASE_BASES, Version
 from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
@@ -701,6 +716,7 @@ class Options:
     calver_scheme: str
     verbose: int
     prerelease_base: str | None = None
+    version_scheme: str | None = None
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> Options:
@@ -730,6 +746,7 @@ class Options:
             calver_scheme=getattr(args, "calver_scheme", "YYYY.MM.DD"),
             verbose=getattr(args, "verbose", 0) or 0,
             prerelease_base=getattr(args, "prerelease_base", None),
+            version_scheme=getattr(args, "version_scheme", None),
         )
 
 
@@ -1038,6 +1055,25 @@ def add_prerelease_base_flag(parser: argparse._ActionsContainer) -> None:
     )
 
 
+def add_version_scheme_flag(parser: argparse._ActionsContainer) -> None:
+    """Register ``--scheme`` (dest ``version_scheme``), the CLI side of ``version_scheme``.
+
+    The default ``None`` defers to the group's ``version_scheme`` config, then to
+    inference from the primary target.
+    """
+    parser.add_argument(
+        "--scheme",
+        dest="version_scheme",
+        choices=list(VERSION_SCHEMES),
+        default=None,
+        metavar="SCHEME",
+        help=(
+            "Version grammar to read, bump and write in (semver | pep440 | calver). "
+            "Overrides [tool.rrt] version_scheme."
+        ),
+    )
+
+
 @register_command(name="bump", category=CommandCategory.WRITE, group=CommandGroup.VERSION_RELEASE)
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the bump command."""
@@ -1065,6 +1101,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
     prerelease_grp = parser.add_argument_group("Pre-release")
     add_prerelease_base_flag(prerelease_grp)
+
+    scheme_grp = parser.add_argument_group("Version scheme")
+    add_version_scheme_flag(scheme_grp)
 
     release_grp = parser.add_argument_group("Release control")
     add_dry_run_flag(release_grp, verb="writing to disk")
@@ -1241,6 +1280,43 @@ The base only applies when a channel starts from a final version. Inside a
 channel the core stays put: `1.0.1-rc.1` bumps to `1.0.1-rc.2`. Switching
 channel keeps it too, so `1.0.1-beta.2` bumps to `1.0.1-rc.1`.
 
+### `version_scheme`
+
+Names the grammar a group's version is read, bumped and written in:
+
+| Value | Example | Grammar |
+|---|---|---|
+| `"semver"` | `1.2.3-rc.1` | Semantic Versioning 2.0 |
+| `"pep440"` | `1.2.3rc1` | Python PEP 440 spellings |
+| `"calver"` | `2026.05.15` | Calendar versions (`YYYY.MM`, `YYYY.MM.DD`, `YYYY.M.D`) |
+
+There is no default. When the key is unset, the scheme is inferred from the
+group's primary target:
+
+1. A calendar-shaped version, such as `2026.05.15`, means `calver`.
+2. Otherwise a `pep621` or `python_version` target means `pep440`.
+3. Any other target means `semver`.
+
+```toml
+[tool.rrt]
+version_scheme = "pep440"
+
+[[tool.rrt.version_groups]]
+name = "web"
+version_scheme = "semver"   # this group's own value wins over the global one
+```
+
+Any other value, including a different case such as `"SemVer"`, is a config
+error. Override it for one run on either surface, with the same values:
+
+```bash
+rrt bump patch --scheme pep440     # CLI
+```
+
+```python
+rrt_bump(level="patch", scheme="pep440")  # MCP: same values as the CLI
+```
+
 ### `version_groups` — per-component versioning
 
 `version_groups` lets a single repository maintain multiple independently
@@ -1270,12 +1346,17 @@ changelog_paths = ["sdk/"]
 ```
 
 Each group supports: `release_branch`, `changelog_file`,
-`changelog_workflow`, `tag_prefix`, `prerelease_base`, `changelog_paths`,
-`lock_command`, `generated_files`, `version_targets`, and `pin_targets`.
+`changelog_workflow`, `tag_prefix`, `prerelease_base`, `version_scheme`,
+`changelog_paths`, `lock_command`, `generated_files`, `version_targets`, and
+`pin_targets`.
 
 `prerelease_base` (default `"patch"`) picks the core an `alpha`, `beta` or
 `rc` bump targets from a final version; see `prerelease_base` above. A
 group's own value wins over the `[tool.rrt]` one.
+
+`version_scheme` (no default) names the group's version grammar: `semver`,
+`pep440` or `calver`. Unset, it is inferred from the group's primary target;
+see `version_scheme` above. A group's own value wins over the `[tool.rrt]` one.
 
 `tag_prefix` (default `"v"`) names the group's release tags. It is the
 default for `rrt tag create --prefix` / `rrt tag check --prefix`, and it is
