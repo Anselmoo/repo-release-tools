@@ -9,7 +9,27 @@ selected version group.
 The bump value may be one of:
 
 * ``major``, ``minor``, or ``patch`` to increment the current version
+* ``alpha``, ``beta``, or ``rc`` to start or advance a pre-release channel
+* ``release`` to drop the pre-release suffix, or ``pre-release`` to advance it
+* ``calver`` to move to today's calendar version
 * an explicit version string such as ``2.1.0``
+
+## Pre-release base
+
+Starting ``alpha``, ``beta`` or ``rc`` from a final version targets the next
+patch by default. So ``rrt bump rc`` turns ``1.0.0`` into ``1.0.1-rc.1``.
+
+``--base LEVEL`` picks another core for one run. ``minor`` gives
+``1.1.0-rc.1`` and ``major`` gives ``2.0.0-rc.1``. The flag overrides the
+``prerelease_base`` key under ``[tool.rrt]`` or the version group.
+
+``auto`` reads the Conventional Commits since the group's last final tag. A
+breaking change means major, a ``feat`` means minor, anything else means patch.
+Later pre-release tags never move that range. ``changelog_paths`` and
+``extra_commit_types`` apply as they do for changelog generation.
+
+The base is ignored once the version is already a pre-release. So ``1.0.1-rc.1``
+bumps to ``1.0.1-rc.2``, whatever ``--base`` says.
 
 ## What the command updates
 
@@ -59,6 +79,9 @@ below it so the placeholder stays at the top of the file.
 * ``rrt bump minor --dry-run``
 * ``rrt bump 2.1.0 --no-changelog --no-commit``
 * ``rrt bump major --base-branch develop``
+* ``rrt bump rc --dry-run``
+* ``rrt bump rc --base minor --dry-run``
+* ``rrt bump beta --base auto``
 """
 
 from __future__ import annotations
@@ -77,6 +100,7 @@ from repo_release_tools.changelog import (
     get_unreleased_entries,
     has_unreleased_section,
     insert_generated_section,
+    parse_conventional_commit,
     promote_unreleased,
 )
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
@@ -109,7 +133,7 @@ from repo_release_tools.ui import (
     spinner_lines,
 )
 from repo_release_tools.version.calver import CALVER_SCHEMES, CalVersion
-from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, Version
+from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, PRERELEASE_BASES, Version
 from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
     read_group_current_version,
@@ -158,11 +182,16 @@ class BumpTarget:
 def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
     """Resolve the release group and compute the new version.
 
-    Pure w.r.t. the filesystem and git -- no printing, no side effects. This
-    step happens entirely before ``cmd_bump`` prints its "Version bump"
-    header, so extracting it cannot reorder any observable output (unlike
-    preflight/branch-existence, which interleave with that header print and
-    stay inline in ``cmd_bump`` for that reason).
+    No printing and no filesystem writes. This step happens entirely before
+    ``cmd_bump`` prints its "Version bump" header, so extracting it cannot
+    reorder any observable output (unlike preflight/branch-existence, which
+    interleave with that header print and stay inline in ``cmd_bump`` for that
+    reason).
+
+    Starting ``alpha``, ``beta`` or ``rc`` from a FINAL version uses the
+    pre-release base from :func:`resolve_prerelease_base`. That is the only
+    case that reads git: a base of ``auto`` scans the Conventional Commits
+    since the group's last FINAL tag. Every other kind stays git-free.
     """
     try:
         group = config.resolve_group(opts.group)
@@ -181,8 +210,12 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
         else:
             new = str(current_calver.bump())
     elif opts.bump in BUMP_KINDS:
+        base = resolve_prerelease_base(config, group, opts.bump, current, opts.prerelease_base)
         try:
-            new = current.bump(opts.bump)  # type: ignore[assignment]
+            if base is None:
+                new = current.bump(opts.bump)  # type: ignore[assignment]
+            else:
+                new = current.bump(opts.bump, base=base)  # type: ignore[call-arg]
         except ValueError as exc:
             raise BumpResolutionError(str(exc)) from exc
     else:
@@ -195,6 +228,80 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
                 raise BumpResolutionError(f"Invalid bump value: {opts.bump!r}") from None
 
     return BumpTarget(group=group, current=current, new=new)
+
+
+def infer_prerelease_base(
+    root: Path,
+    tag_prefix: str = DEFAULT_TAG_PREFIX,
+    paths: Sequence[str] = (),
+    extra_types: Sequence[str] = (),
+) -> str:
+    """Return the core level implied by Conventional Commits since the last FINAL tag.
+
+    This is how a pre-release base of ``auto`` resolves (decision D-1). The
+    range starts at :func:`git.latest_final_tag` for *tag_prefix*, so commits
+    before that release and later pre-release tags (``v1.0.1-rc.1``) never
+    move it.  Without a final tag the range is all of ``HEAD``.
+
+    Returns ``"major"`` when any commit is breaking (``type!:`` or a
+    ``BREAKING CHANGE:`` / ``BREAKING-CHANGE:`` footer), else ``"minor"`` when
+    any commit is a ``feat``, else ``"patch"``.  *paths* restricts the log to
+    the group's ``changelog_paths``; *extra_types* are the project's
+    ``extra_commit_types``.
+    """
+    latest = git.latest_final_tag(root, tag_prefix)
+    ref = f"{latest}..HEAD" if latest else "HEAD"
+    cmd = ["git", "log", ref, "--pretty=format:%B%x1e"]
+    if paths:
+        cmd += ["--", *paths]
+    out = git.capture(cmd, root)
+
+    level = "patch"
+    for message in out.split("\x1e"):
+        lines = message.strip().splitlines()
+        if not lines:
+            continue
+        if any(line.startswith(("BREAKING CHANGE:", "BREAKING-CHANGE:")) for line in lines):
+            return "major"
+        parsed = parse_conventional_commit(lines[0], tuple(extra_types))
+        if parsed is None:
+            continue
+        if parsed.breaking:
+            return "major"
+        if parsed.type == "feat":
+            level = "minor"
+    return level
+
+
+def resolve_prerelease_base(
+    config: RrtConfig,
+    group: VersionGroup,
+    kind: str,
+    current: Version | CalVersion,
+    override: str | None = None,
+) -> str | None:
+    """Return the concrete pre-release base for *kind*, or ``None`` when none applies.
+
+    A base only matters when *kind* starts ``alpha``, ``beta`` or ``rc`` from a
+    FINAL SemVer *current*; every other case returns ``None`` without touching
+    git.  *override* (the CLI ``--base`` or MCP ``base``) wins over the group's
+    ``prerelease_base``.  ``auto`` resolves through :func:`infer_prerelease_base`
+    against *config*'s root, the rendered group ``tag_prefix``, the group's
+    ``changelog_paths`` and the project's ``extra_commit_types``.
+    """
+    if (
+        kind not in PRE_RELEASE_CHANNELS
+        or not isinstance(current, Version)
+        or current.is_pre_release()
+    ):
+        return None
+    base = override or group.prerelease_base
+    if base == "auto":
+        tag_prefix = group.tag_prefix.replace("{group}", group.name)
+        return infer_prerelease_base(
+            config.root, tag_prefix, group.changelog_paths, config.extra_commit_types
+        )
+    return base
 
 
 def apply_bump_files(
@@ -592,6 +699,7 @@ class Options:
     base_branch: str | None
     calver_scheme: str
     verbose: int
+    prerelease_base: str | None = None
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> Options:
@@ -620,6 +728,7 @@ class Options:
             base_branch=getattr(args, "base_branch", None),
             calver_scheme=getattr(args, "calver_scheme", "YYYY.MM.DD"),
             verbose=getattr(args, "verbose", 0) or 0,
+            prerelease_base=getattr(args, "prerelease_base", None),
         )
 
 
@@ -908,8 +1017,24 @@ _BUMP_EXAMPLES = (
     "  $ rrt bump 2.1.0 --no-changelog --no-commit\n"
     "  $ rrt bump major --base-branch develop\n"
     "  $ rrt bump release --dry-run\n"
+    "  $ rrt bump rc --base minor --dry-run\n"
     "  $ rrt bump patch --group self-assess,cupertino,confab"
 )
+
+
+def add_prerelease_base_flag(parser: argparse._ActionsContainer) -> None:
+    """Register ``--base`` (dest ``prerelease_base``) shared by ``bump`` and ``workspace bump``."""
+    parser.add_argument(
+        "--base",
+        dest="prerelease_base",
+        choices=list(PRERELEASE_BASES),
+        default=None,
+        metavar="LEVEL",
+        help=(
+            "Core level for starting alpha|beta|rc from a final version "
+            "(patch | minor | major | auto). Overrides [tool.rrt] prerelease_base."
+        ),
+    )
 
 
 @register_command(name="bump", category=CommandCategory.WRITE, group=CommandGroup.VERSION_RELEASE)
@@ -936,6 +1061,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="SCHEME",
         help="CalVer scheme to use when bump=calver (YYYY.MM | YYYY.MM.DD | YYYY.M.D).",
     )
+
+    prerelease_grp = parser.add_argument_group("Pre-release")
+    add_prerelease_base_flag(prerelease_grp)
 
     release_grp = parser.add_argument_group("Release control")
     add_dry_run_flag(release_grp, verb="writing to disk")
@@ -1156,6 +1284,10 @@ styles cannot be mixed on the same target.
 `pin_target_missing` only changes `rrt bump` behavior. `rrt release check`
 always reports a missing pin match as a warning, regardless of this
 setting.
+
+`--base` is now a flag of its own that sets the pre-release base. It no longer
+abbreviates `--base-branch`, so spell out `--base-branch` to pick the branch.
+An `auto` base reads git history, so it needs the group's release tags locally.
 
 With more than one `version_group` configured, `--group` becomes required
 unless `default_group_name` names a default. Bumping several groups in one

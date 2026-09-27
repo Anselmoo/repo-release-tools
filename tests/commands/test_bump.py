@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import os
+import subprocess
 import sys
 from argparse import Namespace
 from collections.abc import Generator
@@ -11,8 +13,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from repo_fixtures import init_two_prefix_history
+from repo_fixtures import init_git_repo, init_two_prefix_history
 
+from repo_release_tools import cli
 from repo_release_tools.commands.bump import (
     BumpResolutionError,
     Options,
@@ -21,6 +24,7 @@ from repo_release_tools.commands.bump import (
     cmd_bump,
     finalize_bump_git,
     git_log_since_latest_tag,
+    infer_prerelease_base,
     refresh_bump_generated_assets,
     refresh_bump_lockfile,
     register,
@@ -36,6 +40,7 @@ from repo_release_tools.config import (
     VersionTarget,
 )
 from repo_release_tools.preflight import PreflightError
+from repo_release_tools.ui import GLYPHS
 from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import Version
 from repo_release_tools.version.targets import VersionWriteEvent
@@ -58,6 +63,7 @@ def _options(**overrides: object) -> Options:
         "base_branch": None,
         "calver_scheme": "YYYY.MM.DD",
         "verbose": 0,
+        "prerelease_base": None,
     }
     defaults.update(overrides)
     return Options(**defaults)  # type: ignore[arg-type]
@@ -4063,3 +4069,319 @@ def test_cmd_bump_batch_generated_asset_failure_stops_batch(
     result = _cmd_bump_batch(opts, config, tmp_path, ["alpha"])
 
     assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# Pre-release base: --base / prerelease_base / "auto" (issue #259, T0.2, D-1)
+# ---------------------------------------------------------------------------
+
+
+def _commit(root: Path, message: str, *, path: str = "history.txt", tag: str | None = None) -> None:
+    """Append *message* to *path*, commit it and optionally tag the commit."""
+    target = root / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a", encoding="utf-8") as fh:
+        fh.write(f"{message}\n")
+    subprocess.run(["git", "add", path], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", message], cwd=root, check=True, capture_output=True
+    )
+    if tag is not None:
+        subprocess.run(["git", "tag", tag], cwd=root, check=True, capture_output=True)
+
+
+def _auto_repo(tmp_path: Path, version: str = "1.0.0") -> RrtConfig:
+    """Return a default-group config over a fresh git repo at *version*."""
+    init_git_repo(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "x"\nversion = "{version}"\n', encoding="utf-8"
+    )
+    _, config = _default_group_config(tmp_path)
+    return config
+
+
+@pytest.mark.parametrize(
+    ("messages", "expected"),
+    [
+        pytest.param(["feat: x"], "1.1.0-rc.1", id="feat"),
+        pytest.param(["fix: y", "feat!: x"], "2.0.0-rc.1", id="breaking_bang"),
+        pytest.param(
+            ["fix: y", "fix: x\n\nBREAKING CHANGE: drops the old API"],
+            "2.0.0-rc.1",
+            id="breaking_footer",
+        ),
+        pytest.param(["fix: x", "chore: y"], "1.0.1-rc.1", id="fix_only"),
+    ],
+)
+def test_bump_rc_auto_base_follows_conventional_commits_since_last_final_tag(
+    tmp_path: Path,
+    messages: list[str],
+    expected: str,
+) -> None:
+    """base=auto reads commits since the last FINAL tag: breaking->major, feat->minor."""
+    config = _auto_repo(tmp_path)
+    # A breaking commit before the final tag must not leak into the range.
+    _commit(tmp_path, "feat!: ancient breaking change")
+    _commit(tmp_path, "chore: release 1.0.0", tag="v1.0.0")
+    for message in messages:
+        _commit(tmp_path, message)
+    # A later pre-release tag must not reset the range (it is not FINAL).
+    _commit(tmp_path, "chore: cut rc", tag="v1.0.1-rc.1")
+    _commit(tmp_path, "docs: after the rc tag")
+
+    target = resolve_bump_target(config, _options(bump="rc", prerelease_base="auto"))
+
+    assert str(target.new) == expected
+    assert isinstance(target.new, Version)
+    assert isinstance(target.current, Version)
+    assert target.new > target.current
+
+
+def test_bump_auto_base_applies_to_every_prerelease_channel(tmp_path: Path) -> None:
+    """alpha and beta resolve 'auto' exactly like rc."""
+    config = _auto_repo(tmp_path)
+    _commit(tmp_path, "chore: release", tag="v1.0.0")
+    _commit(tmp_path, "feat: x")
+
+    for channel in ("alpha", "beta"):
+        target = resolve_bump_target(config, _options(bump=channel, prerelease_base="auto"))
+        assert str(target.new) == f"1.1.0-{channel}.1"
+
+
+def test_bump_auto_base_without_final_tag_reads_whole_history(tmp_path: Path) -> None:
+    """With only a pre-release tag (no FINAL one), the range is all of HEAD."""
+    config = _auto_repo(tmp_path)
+    _commit(tmp_path, "feat: early feature")
+    _commit(tmp_path, "fix: later", tag="v1.0.0-rc.1")
+
+    target = resolve_bump_target(config, _options(bump="rc", prerelease_base="auto"))
+
+    assert str(target.new) == "1.1.0-rc.1"
+
+
+def test_bump_auto_base_from_group_config_respects_changelog_paths(tmp_path: Path) -> None:
+    """A group's own prerelease_base='auto' only reads commits touching its changelog_paths."""
+    config = _auto_repo(tmp_path)
+    group = dataclasses.replace(
+        config.version_groups[0], prerelease_base="auto", changelog_paths=["pkg/"]
+    )
+    config = dataclasses.replace(config, version_groups=[group])
+    _commit(tmp_path, "chore: release", tag="v1.0.0")
+    _commit(tmp_path, "feat: other component", path="other/file.txt")
+    _commit(tmp_path, "fix: our component", path="pkg/file.txt")
+
+    assert str(resolve_bump_target(config, _options(bump="rc")).new) == "1.0.1-rc.1"
+
+    unscoped = dataclasses.replace(
+        config, version_groups=[dataclasses.replace(group, changelog_paths=[])]
+    )
+    assert str(resolve_bump_target(unscoped, _options(bump="rc")).new) == "1.1.0-rc.1"
+
+
+def test_bump_auto_base_honours_extra_commit_types(tmp_path: Path) -> None:
+    """A breaking project-specific type counts only when it is in extra_commit_types."""
+    config = _auto_repo(tmp_path)
+    _commit(tmp_path, "chore: release", tag="v1.0.0")
+    _commit(tmp_path, "wip!: rewrite the core")
+    opts = _options(bump="rc", prerelease_base="auto")
+
+    assert str(resolve_bump_target(config, opts).new) == "1.0.1-rc.1"
+
+    extended = dataclasses.replace(config, extra_commit_types=("wip",))
+    assert str(resolve_bump_target(extended, opts).new) == "2.0.0-rc.1"
+
+
+def test_bump_auto_base_uses_rendered_group_tag_prefix(tmp_path: Path) -> None:
+    """The range starts at the group's own ``{group}-v`` tag, not an older ``v`` tag."""
+    config = _auto_repo(tmp_path)
+    group = dataclasses.replace(
+        config.version_groups[0], name="sdk", tag_prefix="{group}-v", prerelease_base="auto"
+    )
+    config = dataclasses.replace(config, version_groups=[group], default_group_name="sdk")
+    _commit(tmp_path, "chore: core release", tag="v1.0.0")
+    _commit(tmp_path, "feat: before the sdk release")
+    _commit(tmp_path, "chore: sdk release", tag="sdk-v1.0.0")
+    _commit(tmp_path, "fix: sdk only")
+
+    assert str(resolve_bump_target(config, _options(bump="rc")).new) == "1.0.1-rc.1"
+
+
+def test_infer_prerelease_base_reads_hyphenated_breaking_footer_and_empty_range(
+    tmp_path: Path,
+) -> None:
+    """``BREAKING-CHANGE:`` counts as breaking; an empty range means patch."""
+    init_git_repo(tmp_path)
+    _commit(tmp_path, "chore: release", tag="v1.0.0")
+
+    assert infer_prerelease_base(tmp_path, "v") == "patch"
+
+    _commit(tmp_path, "refactor: x\n\nBREAKING-CHANGE: renamed module")
+    assert infer_prerelease_base(tmp_path, "v") == "major"
+
+
+def test_bump_auto_base_on_prerelease_ignores_base_and_skips_git(tmp_path: Path) -> None:
+    """Advancing inside a channel never reads git and never changes the core."""
+    _, config = _default_group_config(tmp_path)  # not a git repository
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.1-rc.1"\n', encoding="utf-8"
+    )
+
+    for base in ("auto", "major"):
+        target = resolve_bump_target(config, _options(bump="rc", prerelease_base=base))
+        assert str(target.new) == "1.0.1-rc.2"
+
+
+def test_bump_explicit_base_wins_over_group_base(tmp_path: Path) -> None:
+    """opts.prerelease_base overrides the group's prerelease_base."""
+    group, config = _default_group_config(tmp_path)
+    config = dataclasses.replace(
+        config, version_groups=[dataclasses.replace(group, prerelease_base="major")]
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+
+    assert str(resolve_bump_target(config, _options(bump="rc")).new) == "2.0.0-rc.1"
+    assert (
+        str(resolve_bump_target(config, _options(bump="rc", prerelease_base="minor")).new)
+        == "1.1.0-rc.1"
+    )
+    # Core bump kinds ignore the pre-release base entirely.
+    assert (
+        str(resolve_bump_target(config, _options(bump="minor", prerelease_base="major")).new)
+        == "1.1.0"
+    )
+
+
+def _run_cli(tmp_path: Path, argv: list[str]) -> int:
+    """Parse *argv* with the real ``rrt`` parser and run its handler inside *tmp_path*."""
+    args = cli.build_parser().parse_args(argv)
+    cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        return args.handler(args)
+    finally:
+        os.chdir(cwd)
+
+
+def _write_base_pyproject(tmp_path: Path, version: str, base_line: str) -> Path:
+    path = tmp_path / "pyproject.toml"
+    path.write_text(
+        f"""[tool.rrt]
+release_branch = "release/v{{version}}"
+changelog_file = "CHANGELOG.md"
+{base_line}
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[project]
+name = "example"
+version = "{version}"
+""",
+        encoding="utf-8",
+    )
+    return path
+
+
+@pytest.mark.parametrize(
+    ("base_line", "argv_extra", "expected"),
+    [
+        pytest.param('prerelease_base = "major"', ["--base", "minor"], "1.1.0-rc.1", id="flag"),
+        pytest.param('prerelease_base = "major"', [], "2.0.0-rc.1", id="config"),
+        pytest.param("", [], "1.0.1-rc.1", id="default"),
+    ],
+)
+def test_cli_bump_rc_base_minor_wins_over_config_and_dry_run_shows_version(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    base_line: str,
+    argv_extra: list[str],
+    expected: str,
+) -> None:
+    """`rrt bump rc --base minor --dry-run` beats config and writes nothing."""
+    path = _write_base_pyproject(tmp_path, "1.0.0", base_line)
+    before = path.read_bytes()
+
+    result = _run_cli(tmp_path, ["bump", "rc", *argv_extra, "--dry-run"])
+
+    out = capsys.readouterr().out
+    assert result == 0
+    assert f"1.0.0 {GLYPHS.arrow.right} {expected}" in out
+    assert f"release/v{expected}" in out
+    assert "no files were modified" in out
+    assert path.read_bytes() == before
+
+
+def test_cli_bump_base_is_ignored_on_existing_prerelease(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--base never changes the core of a version already on a pre-release."""
+    _write_base_pyproject(tmp_path, "1.0.1-rc.1", "")
+
+    result = _run_cli(tmp_path, ["bump", "rc", "--base", "major", "--dry-run"])
+
+    assert result == 0
+    assert f"1.0.1-rc.1 {GLYPHS.arrow.right} 1.0.1-rc.2" in capsys.readouterr().out
+
+
+def test_cli_bump_batch_applies_each_groups_own_prerelease_base(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`--group a,b` resolves prerelease_base per group."""
+    toml = _BATCH_TOML.replace(
+        'release_branch = "release/alpha/v{version}"',
+        'release_branch = "release/alpha/v{version}"\nprerelease_base = "minor"',
+    ).replace(
+        'release_branch = "release/beta/v{version}"',
+        'release_branch = "release/beta/v{version}"\nprerelease_base = "major"',
+    )
+    (tmp_path / ".rrt.toml").write_text(toml, encoding="utf-8")
+    (tmp_path / "alpha.json").write_text('{"name":"alpha","version":"1.0.0"}', encoding="utf-8")
+    (tmp_path / "beta.json").write_text('{"name":"beta","version":"2.0.0"}', encoding="utf-8")
+
+    result = _run_cli(
+        tmp_path, ["bump", "rc", "--group", "alpha,beta", "--dry-run", "--no-changelog"]
+    )
+
+    out = capsys.readouterr().out
+    assert result == 0
+    assert "release/alpha/v1.1.0-rc.1" in out
+    assert "release/beta/v3.0.0-rc.1" in out
+
+
+def test_cli_bump_rejects_unknown_base(capsys: pytest.CaptureFixture[str]) -> None:
+    """argparse rejects a --base value outside patch|minor|major|auto."""
+    with pytest.raises(SystemExit) as excinfo:
+        cli.build_parser().parse_args(["bump", "rc", "--base", "bogus"])
+
+    assert excinfo.value.code == 2
+    assert "invalid choice: 'bogus'" in capsys.readouterr().err
+
+
+def test_cli_bump_base_no_longer_abbreviates_base_branch() -> None:
+    """--base is its own flag; --base-branch still sets the release base branch."""
+    args = cli.build_parser().parse_args(["bump", "major", "--base-branch", "develop"])
+    assert args.base_branch == "develop"
+    assert args.prerelease_base is None
+
+    args = cli.build_parser().parse_args(["bump", "rc", "--base", "auto"])
+    assert args.prerelease_base == "auto"
+    assert args.base_branch is None
+
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["bump", "major", "--base", "develop"])
+
+
+def test_bump_help_lists_base_flag_and_example(capsys: pytest.CaptureFixture[str]) -> None:
+    """`rrt bump --help` shows the Pre-release group and the --base example."""
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["bump", "--help"])
+
+    out = capsys.readouterr().out
+    assert "--base LEVEL" in out
+    assert "Overrides [tool.rrt] prerelease_base." in out
+    assert "rrt bump rc --base minor --dry-run" in out
