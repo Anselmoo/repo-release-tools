@@ -19,10 +19,23 @@ _SEMVER_RE = re.compile(
 # Channel names accepted by bump(pre_release=...)
 PRE_RELEASE_CHANNELS = ("alpha", "beta", "rc")
 
+# One pre-release identifier as a precedence key: (kind, numeric value, text).
+# kind 0 = numeric identifier, kind 1 = alphanumeric identifier.
+PreReleaseIdentifierKey = tuple[int, int, str]
+
+# Full precedence key: (major, minor, patch, stable flag, pre-release identifier keys).
+SortKey = tuple[int, int, int, int, tuple[PreReleaseIdentifierKey, ...]]
+
 
 @dataclass(frozen=True)
 class Version:
-    """Semantic version with optional pre-release and build metadata."""
+    """Semantic version with optional pre-release and build metadata.
+
+    Equality (``==``) is structural: it comes from the dataclass and compares every
+    field, including ``build``. Ordering (``<``, ``<=``, ``>``, ``>=``) follows
+    SemVer 2.0 section 11 precedence via :meth:`sort_key` and ignores build metadata,
+    so ``1.0.0+a`` and ``1.0.0+b`` are neither ``<`` nor ``>`` each other yet not ``==``.
+    """
 
     major: int
     minor: int
@@ -124,13 +137,52 @@ class Version:
         """Return True when this version carries a pre-release label."""
         return self.pre is not None
 
-    def sort_key(self) -> tuple[int, int, int, int, str]:
-        """Ordering key. Stable releases sort after pre-releases of the same core.
+    def sort_key(self) -> SortKey:
+        """Return the SemVer 2.0 section 11 precedence key for this version.
 
-        The 4th element is 1 for stable, 0 for pre-release, so that
-        ``1.2.0-rc.1`` < ``1.2.0``. The 5th orders pre-release labels lexically.
+        Precedence compares ``major``, ``minor`` and ``patch`` numerically first. On an
+        equal core, a pre-release sorts before the stable release (4th element: 0 for a
+        pre-release, 1 for stable), so ``1.2.0-rc.1`` < ``1.2.0``.
+
+        Pre-release labels are split on ``.`` and compared identifier by identifier,
+        left to right. Numeric identifiers compare numerically and sort before
+        alphanumeric ones, which compare in ASCII order. When all preceding identifiers
+        are equal, the shorter list sorts first. So ``rc.2`` < ``rc.10`` and
+        ``alpha`` < ``alpha.1`` < ``alpha.beta`` < ``beta``.
+
+        Build metadata never takes part in precedence.
         """
-        return (self.major, self.minor, self.patch, 0 if self.pre else 1, self.pre or "")
+        return (
+            self.major,
+            self.minor,
+            self.patch,
+            0 if self.pre else 1,
+            _pre_release_key(self.pre),
+        )
+
+    def __lt__(self, other: object) -> bool:
+        """Return True when *self* has lower SemVer precedence than *other*."""
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self.sort_key() < other.sort_key()
+
+    def __le__(self, other: object) -> bool:
+        """Return True when *self* has lower or equal SemVer precedence than *other*."""
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self.sort_key() <= other.sort_key()
+
+    def __gt__(self, other: object) -> bool:
+        """Return True when *self* has higher SemVer precedence than *other*."""
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self.sort_key() > other.sort_key()
+
+    def __ge__(self, other: object) -> bool:
+        """Return True when *self* has higher or equal SemVer precedence than *other*."""
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self.sort_key() >= other.sort_key()
 
     def __str__(self) -> str:
         """Return the canonical semver string."""
@@ -142,8 +194,27 @@ class Version:
         return base
 
 
+def _pre_release_key(pre: str | None) -> tuple[PreReleaseIdentifierKey, ...]:
+    """Return the per-identifier precedence key for a pre-release label.
+
+    Numeric identifiers map to ``(0, value, "")`` and alphanumeric ones to
+    ``(1, 0, text)``, so tuple comparison puts numeric before alphanumeric, compares
+    numbers numerically and text in ASCII order. A stable version yields ``()``.
+    """
+    if not pre:
+        return ()
+    return tuple(
+        (0, int(ident), "") if ident.isdigit() else (1, 0, ident) for ident in pre.split(".")
+    )
+
+
 def newer_versions(current: Version, candidates: list[Version]) -> list[Version]:
-    """Return candidates strictly newer than *current*, ascending by version."""
+    """Return candidates strictly newer than *current*, ascending by version.
+
+    "Newer" and the ascending order both use SemVer 2.0 section 11 precedence
+    (:meth:`Version.sort_key`), so ``1.0.0-rc.10`` is newer than ``1.0.0-rc.2``.
+    Build metadata is ignored, so a candidate differing only in build is not newer.
+    """
     ck = current.sort_key()
     fresh = [v for v in candidates if v.sort_key() > ck]
     return sorted(fresh, key=Version.sort_key)

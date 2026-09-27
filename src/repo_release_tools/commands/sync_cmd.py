@@ -463,9 +463,10 @@ pre-commit run rrt-sync --hook-stage manual
 ## Caveats
 
 `rrt sync` skips upstream versions it cannot parse as semver or PEP 440.
-These are silently ignored rather than reported. `--bump` applies newer
-versions strictly in ascending order. It stops at the first failed tag
-creation. The command requires `[tool.rrt.upstream].package` to be
+These are silently ignored rather than reported. "Newer" and "ascending"
+follow SemVer 2.0 precedence, so `1.0.0-rc.10` comes after `1.0.0-rc.2`.
+`--bump` applies newer versions strictly in ascending order. It stops at
+the first failed tag creation. The command requires `[tool.rrt.upstream].package` to be
 configured. Without it, `rrt sync` exits with an error.
 
 ## Related docs

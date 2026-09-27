@@ -2,11 +2,12 @@
 
 Pins the behavior contract from ``analysis/the/MODERNIZATION_BRIEF.md`` §5:
 
-- **C11 + D1** (``version/semver.py:104-126``): stable outranks its own pre-release in
-  ``Version.sort_key()``; ``newer_versions()`` returns only strictly-newer candidates; the
-  4th/5th sort-key elements order pre-release labels *lexically*, which is not SemVer 2.0
-  precedence (``rc.10`` sorts before ``rc.2``) — pinned as-is per the brief's SME
-  recommendation to pin D1 initially (§7-Q2).
+- **C11** (``version/semver.py`` ``Version.sort_key``): stable outranks its own pre-release in
+  ``Version.sort_key()``; ``newer_versions()`` returns only strictly-newer candidates.
+- **D1 (FIXED, issue #259 T0.1)**: pre-release labels now follow SemVer 2.0 §11
+  precedence — dot-separated identifiers compared left to right, numeric identifiers
+  numerically — so ``rc.2`` sorts before ``rc.10``. The D1 tests below were flipped from
+  the old lexical pin to the numeric order.
 - **D9 (FIXED in Phase 5)** (``mcp/tools/version_tools.py`` vs. ``commands/bump.py``'s full
   pipeline): the MCP ``rrt_bump`` tool now calls the SAME stage functions the CLI's
   ``cmd_bump`` uses (``resolve_bump_target`` → ``apply_bump_files`` → ``update_changelog`` →
@@ -115,53 +116,36 @@ def test_c11_newer_versions_excludes_current_prerelease_of_itself() -> None:
     )
 
 
-def test_d1_prerelease_label_ordering_is_lexical_not_semver() -> None:
-    """Pre-release numeric label comparison is lexical string comparison, not numeric.
+def test_d1_prerelease_label_ordering_is_numeric_per_semver() -> None:
+    """Pre-release numeric identifiers compare numerically (SemVer 2.0 §11).
 
-    version/semver.py:104-110 — the 5th sort_key element is the raw pre-release string
-    (``self.pre or ""``), compared lexically by Python tuple comparison. SemVer 2.0 §11
-    requires numeric identifiers to compare numerically, so ``rc.2`` must precede
-    ``rc.10``. This implementation instead sorts the pre-release *label* as a plain
-    string, so ``"rc.10" < "rc.2"`` lexically (the character '1' < '2').
-
-    # D1: lexical label comparison — 'rc.10' sorts before 'rc.2'; pinned as-is,
-    # SME ruling: pin (violates SemVer 2.0 precedence)
+    version/semver.py ``Version.sort_key`` — the 5th element is a tuple of per-identifier
+    keys, so ``rc.2`` < ``rc.10`` (2 < 10), not the old lexical ``"rc.10" < "rc.2"``.
     """
     rc2 = Version.parse("1.0.0-rc.2")
     rc10 = Version.parse("1.0.0-rc.10")
 
-    # NOTE(P1): this is the D1 defect itself — SemVer 2.0 requires rc.2 < rc.10
-    # (numeric identifier comparison), but this implementation sorts rc.10 first.
-    assert rc10.sort_key() < rc2.sort_key(), (
-        f"D1 defect check: expected the (as-is, lexical) sort_key of {rc10} to sort "
-        f"*before* {rc2} because '1' < '2' lexically in the pre-release string; "
-        f"got {rc10.sort_key()!r} vs {rc2.sort_key()!r} — behavior changed, D1 may be fixed"
+    assert rc2.sort_key() < rc10.sort_key(), (
+        f"D1 fixed: expected {rc2} to sort before {rc10} (numeric identifier comparison); "
+        f"got {rc2.sort_key()!r} >= {rc10.sort_key()!r}"
     )
-    assert sorted([rc2, rc10], key=Version.sort_key) == [rc10, rc2], (
-        "D1: lexical pre-release ordering — 'rc.10' sorts before 'rc.2'; pinned as-is, "
-        "SME ruling: pin (violates SemVer 2.0 precedence). Sorting [rc.2, rc.10] should "
-        f"(as-is) yield [rc.10, rc.2]; got "
-        f"{[str(v) for v in sorted([rc2, rc10], key=Version.sort_key)]}"
+    assert rc2 < rc10
+    assert sorted([rc10, rc2], key=Version.sort_key) == [rc2, rc10], (
+        "Sorting [rc.10, rc.2] by Version.sort_key should yield [rc.2, rc.10]; got "
+        f"{[str(v) for v in sorted([rc10, rc2], key=Version.sort_key)]}"
     )
 
 
-def test_d1_newer_versions_lexical_ordering_propagates() -> None:
-    """``newer_versions()``'s ascending sort inherits D1's lexical pre-release ordering.
-
-    # D1: lexical label comparison — 'rc.10' sorts before 'rc.2'; pinned as-is,
-    # SME ruling: pin (violates SemVer 2.0 precedence)
-    """
+def test_d1_newer_versions_numeric_ordering_propagates() -> None:
+    """``newer_versions()``'s ascending sort inherits the numeric pre-release ordering."""
     current = Version.parse("1.0.0-alpha.1")
-    candidates = [Version.parse("1.0.0-rc.2"), Version.parse("1.0.0-rc.10")]
+    candidates = [Version.parse("1.0.0-rc.10"), Version.parse("1.0.0-rc.2")]
 
     result = newer_versions(current, candidates)
     result_strs = [str(v) for v in result]
 
-    # NOTE(P1): D1 defect — numerically rc.2 (2) < rc.10 (10), but the lexical sort_key
-    # orders "rc.10" before "rc.2" because '1' < '2' as characters.
-    assert result_strs == ["1.0.0-rc.10", "1.0.0-rc.2"], (
-        f"newer_versions ascending order should (as-is, lexically) place rc.10 before "
-        f"rc.2; got {result_strs}"
+    assert result_strs == ["1.0.0-rc.2", "1.0.0-rc.10"], (
+        f"newer_versions ascending order should place rc.2 before rc.10; got {result_strs}"
     )
 
 

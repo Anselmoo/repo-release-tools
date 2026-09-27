@@ -1882,6 +1882,24 @@ def test_rrt_sync_check_reports_newer_versions(tmp_path: Path) -> None:
     assert result.newer_versions == ["1.1.0", "1.2.0"]
 
 
+def test_rrt_sync_check_orders_pre_releases_by_semver_precedence(tmp_path: Path) -> None:
+    """rc.10 is reported as newer than rc.2 (SemVer 2.0 section 11), matching the CLI."""
+    config = _sync_group_config(tmp_path)
+    tools = _sync_tools(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.0.0-rc.2"\n', encoding="utf-8"
+    )
+    ctx = _ctx(tmp_path, config=config)
+    with patch(
+        "repo_release_tools.sync.providers.fetch_versions",
+        return_value=["1.0.0-rc.10", "1.0.0-rc.1", "1.0.0-rc.2", "1.0.0-rc.3"],
+    ):
+        result = tools["rrt_sync_check"](ctx)
+    assert result.error is None
+    assert result.current == "1.0.0-rc.2"
+    assert result.newer_versions == ["1.0.0-rc.3", "1.0.0-rc.10"]
+
+
 def test_rrt_sync_check_no_newer_versions(tmp_path: Path) -> None:
     config = _sync_group_config(tmp_path)
     tools = _sync_tools(tmp_path)

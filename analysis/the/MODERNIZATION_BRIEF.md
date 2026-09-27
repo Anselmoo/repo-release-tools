@@ -188,7 +188,7 @@ The extraction workflow's independent P0 panel hit a usage limit, so P0 status b
 | C8 | Branch-name policy: allowed fixed names, `release/v<semver>`, `<type>/<kebab-slug>` ≤60 chars; bot branches exempt from slug format | `workflow/hooks.py:50-105` |
 | C9 | Commit-type → changelog-section mapping incl. `!` → Breaking Changes; Maintenance excluded unless opted in | `changelog.py:29-52,169-219` |
 | C10 | Semver/calver bump math: component resets, pre-release channel start/advance/switch, same-day calver micro counter, leading-zero rejection | `version/semver.py:13-94`, `version/calver.py:52-98` |
-| C11 | Stable-outranks-prerelease ordering; sync reports only strictly-newer versions | `version/semver.py:104-126` — *carries defect D1 (lexical label ordering); pin or fix per §7* |
+| C11 | Stable-outranks-prerelease ordering; sync reports only strictly-newer versions | `version/semver.py:104-126` — *defect D1 (lexical label ordering) fixed in issue #259 T0.1: SemVer 2.0 §11 precedence* |
 | C12 | Auto-stash/checkout/restore lifecycle in `git move`/`sync` never loses uncommitted changes | `commands/git_sync.py:70-209` |
 
 **Suspected defects requiring fix-or-pin ruling before their phase** (D-numbers referenced above; full text in BUSINESS_RULES.md): D1 semver lexical pre-release ordering (`rc.10` < `rc.2`) · D2 opposite-verb changelog cancellation is purely lexical · D3 `rrt init` `--force` inconsistency across manifest formats · D4/D6 MCP force-push confirmation weaker than CLI · D5 upstream fetchers collapse network failure into "no versions" · D7 calver `day < 10` scheme misclassification · D8 **Action changelog grep `^\[Unreleased\]` can never match `## [Unreleased]`** (likely live bug) · D9 MCP bump non-atomic, partial pipeline.
