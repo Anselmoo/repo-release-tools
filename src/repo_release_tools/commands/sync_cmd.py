@@ -255,7 +255,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         try:
             parsed.append(Version.parse(v))
         except ValueError:
-            continue  # skip non-semver / PEP 440 pre-release tags
+            continue  # skip versions that are neither SemVer nor PEP 440
 
     fresh = newer_versions(current, parsed)
 
@@ -465,6 +465,8 @@ pre-commit run rrt-sync --hook-stage manual
 `rrt sync` skips upstream versions it cannot parse as semver or PEP 440.
 These are silently ignored rather than reported. "Newer" and "ascending"
 follow SemVer 2.0 precedence, so `1.0.0-rc.10` comes after `1.0.0-rc.2`.
+A PEP 440 spelling orders like its SemVer twin, so `1.0.0rc1` equals `1.0.0-rc.1`.
+A post release such as `1.0.0.post1` sorts after `1.0.0`.
 `--bump` applies newer versions strictly in ascending order. It stops at
 the first failed tag creation. The command requires `[tool.rrt.upstream].package` to be
 configured. Without it, `rrt sync` exits with an error.

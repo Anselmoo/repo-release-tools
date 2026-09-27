@@ -1,7 +1,8 @@
 """Version-related helpers for repo-release-tools.
 
-``semver`` and ``calver`` are dependency-free leaf modules, so importing them never
-pulls in the config layer. The file-target helpers in ``targets`` depend on
+``semver``, ``pep440`` and ``calver`` depend only on each other (``semver`` reads
+PEP 440 through ``pep440``'s grammar, ``calver`` shares ``semver``'s sort-key
+shape), so importing them never pulls in the config layer. The file-target helpers in ``targets`` depend on
 ``repo_release_tools.config`` (which itself imports ``semver`` constants), so they
 are resolved lazily on first attribute access to keep that import acyclic.
 """

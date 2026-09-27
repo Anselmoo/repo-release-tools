@@ -210,10 +210,14 @@ def _tag_sort_key(tag: str, prefix: str) -> SortKey | None:
 
     A tag counts when it starts with *prefix* (a literal ``startswith``, never a
     glob) and the remainder parses as SemVer (:meth:`Version.parse`) or, failing
-    that, as CalVer (:meth:`CalVersion.parse`).  A CalVer tag maps onto the same
-    key shape as :meth:`Version.sort_key` -- ``(year, month, day or 0, 1,
-    micro identifiers)`` -- so both schemes order consistently under one prefix.
-    The fourth element is ``1`` for a final release and ``0`` for a pre-release.
+    that, as CalVer (:meth:`CalVersion.parse`).  :meth:`Version.parse` reads both
+    the SemVer and the PEP 440 spelling (``v1.0.0rc1`` equals ``v1.0.0-rc.1``).
+    A CalVer tag maps onto the same key shape as :meth:`Version.sort_key` via
+    :meth:`CalVersion.sort_key` -- ``(year, month, day or 0, 1, micro
+    identifiers, (0, 1, 0))`` -- so both schemes order consistently under one
+    prefix.  The fourth element is ``1`` for a final or post release and ``0``
+    for a pre-release; the sixth is the post key, whose middle element is ``0``
+    only for a post-dev release.
     """
     if not tag.startswith(prefix):
         return None
@@ -223,11 +227,9 @@ def _tag_sort_key(tag: str, prefix: str) -> SortKey | None:
     except ValueError:
         pass
     try:
-        cal = CalVersion.parse(remainder)
+        return CalVersion.parse(remainder).sort_key()
     except ValueError:
         return None
-    micro = ((0, cal.micro, ""),) if cal.micro is not None else ()
-    return (cal.year, cal.month, cal.day or 0, 1, micro)
 
 
 def _latest_matching_tag(cwd: Path, prefix: str, *, final_only: bool) -> str | None:
@@ -235,7 +237,8 @@ def _latest_matching_tag(cwd: Path, prefix: str, *, final_only: bool) -> str | N
     candidates: list[tuple[SortKey, str]] = []
     for tag in list_tags(cwd):
         key = _tag_sort_key(tag, prefix)
-        if key is None or (final_only and key[3] == 0):
+        # A pre-release has stable flag 0; a post-dev release has post key (N, 0, M).
+        if key is None or (final_only and (key[3] == 0 or key[5][1] == 0)):
             continue
         candidates.append((key, tag))
     if not candidates:
@@ -246,8 +249,8 @@ def _latest_matching_tag(cwd: Path, prefix: str, *, final_only: bool) -> str | N
 def latest_tag(cwd: Path, prefix: str = "v") -> str | None:
     """Return the newest tag starting with *prefix*, by version precedence.
 
-    Tags whose remainder after *prefix* is not a SemVer or CalVer version are
-    skipped.  A final release outranks its own pre-releases (``v1.0.0`` beats
+    Tags whose remainder after *prefix* is not a SemVer, PEP 440 or CalVer
+    version are skipped.  A final release outranks its own pre-releases (``v1.0.0`` beats
     ``v1.0.0-rc.2``), while a newer core's pre-release outranks an older final
     (``v1.1.0-rc.1`` beats ``v1.0.0``).  Versions equal in precedence (they
     differ only in build metadata) are ordered by tag name, so the result is
@@ -259,9 +262,10 @@ def latest_tag(cwd: Path, prefix: str = "v") -> str | None:
 def latest_final_tag(cwd: Path, prefix: str = "v") -> str | None:
     """Return the newest non-pre-release tag starting with *prefix*.
 
-    Same selection rules as :func:`latest_tag`, restricted to final releases,
-    so ``v1.0.0`` wins over a later ``v1.1.0-rc.1``.  Returns ``None`` when no
-    final tag qualifies.
+    Same selection rules as :func:`latest_tag`, restricted to final and post
+    releases, so ``v1.0.0`` wins over a later ``v1.1.0-rc.1``.  A dev release
+    (``v1.1.0.dev1``, ``v1.0.0.post1.dev2``) counts as a pre-release.  Returns
+    ``None`` when no final tag qualifies.
     """
     return _latest_matching_tag(cwd, prefix, final_only=True)
 

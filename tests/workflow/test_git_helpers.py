@@ -846,6 +846,29 @@ def test_latest_tag_breaks_build_metadata_ties_by_name(
     assert git.latest_final_tag(tmp_path) == "v1.0.0+b"
 
 
+def test_latest_tag_orders_pep440_tags_by_canonical_precedence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["v1.0.0rc2", "v1.0.0-rc.10", "v1.0.0.dev3", "v0.9.0"])
+    assert git.latest_tag(tmp_path) == "v1.0.0-rc.10"
+    assert git.latest_final_tag(tmp_path) == "v0.9.0"
+
+
+def test_latest_final_tag_counts_post_but_not_post_dev_releases(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["v1.0.0", "v1.0.0.post1", "v1.0.0.post2.dev1"])
+    assert git.latest_tag(tmp_path) == "v1.0.0.post2.dev1"
+    assert git.latest_final_tag(tmp_path) == "v1.0.0.post1"
+
+
+def test_latest_tag_orders_calver_and_semver_under_one_key_shape(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_tags(monkeypatch, ["v2024.06.01", "v2024.6.2", "v2024.06.01.3"])
+    assert git.latest_tag(tmp_path) == "v2024.6.2"
+
+
 def test_no_version_refname_sort_left_in_src() -> None:
     src = Path(__file__).resolve().parents[2] / "src" / "repo_release_tools"
     offenders = [

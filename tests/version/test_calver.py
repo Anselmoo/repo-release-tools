@@ -124,3 +124,15 @@ def test_bump_yyyy_mm_same_month() -> None:
         bumped = v.bump()
     assert bumped.micro == 1
     assert bumped.day is None
+
+
+def test_calver_sort_key_matches_version_key_shape() -> None:
+    from repo_release_tools.version.semver import Version
+
+    assert CalVersion.parse("2026.05.15").sort_key() == (2026, 5, 15, 1, (), (0, 1, 0))
+    assert CalVersion.parse("2026.05.15.2").sort_key() == (2026, 5, 15, 1, ((0, 2, ""),), (0, 1, 0))
+    assert CalVersion.parse("2026.05").sort_key() == (2026, 5, 0, 1, (), (0, 1, 0))
+    key = CalVersion.parse("2026.5.1").sort_key()
+    assert len(key) == len(Version.parse("1.0.0").sort_key())
+    assert key == Version.parse("2026.5.1").sort_key()
+    assert CalVersion.parse("2026.05.15").sort_key() < CalVersion.parse("2026.05.15.1").sort_key()

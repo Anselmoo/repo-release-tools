@@ -1328,6 +1328,7 @@ mcp = [
 dev = [
     { name = "fastmcp", extra = ["apps"] },
     { name = "libcst" },
+    { name = "packaging" },
     { name = "pillow" },
     { name = "poethepoet" },
     { name = "pytest" },
@@ -1344,6 +1345,7 @@ provides-extras = ["mcp"]
 dev = [
     { name = "fastmcp", extras = ["apps"], specifier = ">=3.3.0" },
     { name = "libcst", specifier = ">=0.4.0" },
+    { name = "packaging", specifier = ">=24" },
     { name = "pillow", specifier = ">=11.0" },
     { name = "poethepoet", specifier = ">=0.45.0" },
     { name = "pytest", specifier = ">=8.0" },
