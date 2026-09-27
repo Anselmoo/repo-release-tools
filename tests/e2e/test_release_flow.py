@@ -395,10 +395,10 @@ def test_c10_bump_major_from_0_1_0_previews_1_0_0(e2e_repo: Path) -> None:
 
 
 def test_c10_bump_alpha_starts_a_prerelease_channel_on_a_stable_version(e2e_repo: Path) -> None:
-    """``rrt bump alpha`` on a stable 0.1.0 starts ``0.1.0-alpha.1`` (kind='alpha')."""
+    """``rrt bump alpha`` on a stable 0.1.0 starts ``0.1.1-alpha.1`` (next patch, D-1)."""
     result = rrt("bump", "alpha", "--dry-run", cwd=e2e_repo)
     assert result.returncode == 0, result.stderr
-    assert "0.1.0-alpha.1" in result.stdout, (
+    assert "0.1.1-alpha.1" in result.stdout, (
         f"expected the alpha channel preview\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
 

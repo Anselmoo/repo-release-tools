@@ -16,8 +16,18 @@ _SEMVER_RE = re.compile(
     r"(?:\+(?P<build>[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*))?$"
 )
 
-# Channel names accepted by bump(pre_release=...)
+# Channel names accepted as bump kinds by Version.bump().
 PRE_RELEASE_CHANNELS = ("alpha", "beta", "rc")
+
+# Decision D-1: which core a pre-release channel targets when started from a FINAL
+# version. "auto" derives the level from Conventional Commits and must be resolved to
+# one of the other three before reaching Version.bump(). Single source of truth for
+# the config model, the CLI --base flag and the MCP base parameter.
+PRERELEASE_BASES = ("patch", "minor", "major", "auto")
+DEFAULT_PRERELEASE_BASE = "patch"
+
+# The bases Version.bump() applies directly (everything but "auto").
+_CONCRETE_PRERELEASE_BASES = ("patch", "minor", "major")
 
 # One pre-release identifier as a precedence key: (kind, numeric value, text).
 # kind 0 = numeric identifier, kind 1 = alphanumeric identifier.
@@ -57,7 +67,7 @@ class Version:
             build=m.group("build"),
         )
 
-    def bump(self, kind: str) -> Version:
+    def bump(self, kind: str, *, base: str = DEFAULT_PRERELEASE_BASE) -> Version:
         """Return a new :class:`Version` bumped by *kind*.
 
         Accepted kinds:
@@ -71,7 +81,44 @@ class Version:
         - ``pre-release`` — increment the numeric suffix of the current pre-release label
           (requires the version to already carry a pre-release identifier)
         - ``alpha``, ``beta``, ``rc`` — start or advance a named pre-release channel
+
+        Pre-release channels follow decision D-1:
+        - Starting a channel from a FINAL version first increments the core by *base*
+          (``patch`` by default, like node-semver and Poetry), so ``1.0.0`` bumped
+          ``rc`` becomes ``1.0.1-rc.1``; ``base="minor"`` gives ``1.1.0-rc.1`` and
+          ``base="major"`` gives ``2.0.0-rc.1``.
+        - Advancing inside a channel (``rc.1`` -> ``rc.2``) or switching channel
+          (``beta.2`` -> ``rc.1``) never changes ``major.minor.patch``; *base* is
+          ignored once the version is already a pre-release.
+        - *base* must be ``patch``, ``minor`` or ``major``. ``auto`` is a config/CLI
+          value that callers resolve from commit history before calling this method.
+
+        Every returned version is strictly newer than ``self`` by SemVer precedence.
+        A bump that would not move forward -- such as switching ``rc`` back to
+        ``alpha`` on the same core -- raises :class:`ValueError` instead.
         """
+        if base not in _CONCRETE_PRERELEASE_BASES:
+            if base == "auto":
+                raise ValueError(
+                    "Pre-release base 'auto' must be resolved from commit history "
+                    "(breaking -> major, feat -> minor, otherwise patch) before calling "
+                    "Version.bump(); pass 'patch', 'minor' or 'major'."
+                )
+            allowed = ", ".join(repr(b) for b in _CONCRETE_PRERELEASE_BASES)
+            raise ValueError(f"Invalid pre-release base {base!r}; expected one of {allowed}.")
+        result = self._bump_kind(kind, base)
+        if not result > self:
+            raise ValueError(
+                f"Bump {kind!r} from {self} would produce {result}, which is not newer; "
+                "a pre-release can only move forward (e.g. rc cannot switch back to "
+                "alpha or beta on the same core, and a label that sorts after the "
+                "channel name, such as dev.1, cannot switch to it). Bump 'major', "
+                "'minor' or 'patch' first, or 'release' to finalize."
+            )
+        return result
+
+    def _bump_kind(self, kind: str, base: str) -> Version:
+        """Compute the bump for *kind* without the strictly-newer guard."""
         match kind:
             case "major":
                 if self.minor != 0 or self.patch != 0 or self.pre is None:
@@ -90,7 +137,7 @@ class Version:
             case "pre-release":
                 return self._bump_pre_release()
             case _ if kind in PRE_RELEASE_CHANNELS:
-                return self._set_channel(kind)
+                return self._set_channel(kind, base)
             case _:
                 raise ValueError(f"Unknown bump kind: {kind!r}")
 
@@ -108,11 +155,12 @@ class Version:
             new_pre = f"{self.pre}.1"
         return Version(self.major, self.minor, self.patch, pre=new_pre)
 
-    def _set_channel(self, channel: str) -> Version:
-        """Start or advance a named pre-release channel."""
+    def _set_channel(self, channel: str, base: str) -> Version:
+        """Start or advance a named pre-release channel (decision D-1)."""
         if self.pre is None:
-            # Start at channel.1 on the current patch (stable → pre-release)
-            return Version(self.major, self.minor, self.patch, pre=f"{channel}.1")
+            # Stable -> pre-release: target the next *base* core, start at channel.1
+            core = self._bump_kind(base, base)
+            return Version(core.major, core.minor, core.patch, pre=f"{channel}.1")
         # Already on a pre-release: keep the same base version, advance the channel
         existing_channel = self.pre.split(".")[0].lower()
         if existing_channel == channel:
