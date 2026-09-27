@@ -732,7 +732,7 @@ def test_verify_detects_version_target_drift_when_pyproject_lags(
 ) -> None:
     """When the primary target version differs from declared, that drift is reported.
 
-    The declared version is the one ``read_group_current_version`` returns
+    The declared version is the one ``read_group_current_version_for_scheme`` returns
     (the primary target). To produce a version-target drift we mock the
     declared version to be different from what's on disk.
     """
@@ -740,7 +740,7 @@ def test_verify_detects_version_target_drift_when_pyproject_lags(
     monkeypatch.chdir(tmp_path)
     _patch_git(monkeypatch)
     monkeypatch.setattr(
-        "repo_release_tools.commands.release_repair.read_group_current_version",
+        "repo_release_tools.commands.release_repair.read_group_current_version_for_scheme",
         lambda group: "9.9.9",
     )
     rc = release_repair.cmd_release_repair(_args())
@@ -767,7 +767,7 @@ def test_verify_detects_unreadable_version_target(
         lambda target: (_ for _ in ()).throw(RuntimeError("can't read")),
     )
     monkeypatch.setattr(
-        "repo_release_tools.commands.release_repair.read_group_current_version",
+        "repo_release_tools.commands.release_repair.read_group_current_version_for_scheme",
         lambda group: "1.9.0",
     )
     rc = release_repair.cmd_release_repair(_args())
@@ -801,7 +801,7 @@ def test_verify_reports_missing_version_target_file(
 
     monkeypatch.setattr(Path, "exists", fake_exists)
     monkeypatch.setattr(
-        "repo_release_tools.commands.release_repair.read_group_current_version",
+        "repo_release_tools.commands.release_repair.read_group_current_version_for_scheme",
         lambda group: "1.9.0",
     )
     rc = release_repair.cmd_release_repair(_args())
@@ -896,7 +896,7 @@ def test_verify_with_yes_rewrites_version_target_when_lagging(
     monkeypatch.chdir(tmp_path)
     _patch_git(monkeypatch)
     monkeypatch.setattr(
-        "repo_release_tools.commands.release_repair.read_group_current_version",
+        "repo_release_tools.commands.release_repair.read_group_current_version_for_scheme",
         lambda group: "9.9.9",
     )
     rc = release_repair.cmd_release_repair(_args(yes=True))
@@ -913,12 +913,12 @@ def test_recreate_rewrites_version_targets_when_base_is_older(
 ) -> None:
     """When the rewind landed on a base where the version still lags, replay rewrites."""
     _seed_repo(tmp_path, pyproject_version="1.8.0")
-    # Declared version comes from `read_group_current_version`; force it to 1.9.0
+    # Declared version comes from `read_group_current_version_for_scheme`; force it to 1.9.0
     # so the recreate replays 1.9.0 onto a base file that still says 1.8.0.
     monkeypatch.chdir(tmp_path)
     _patch_git(monkeypatch)
     monkeypatch.setattr(
-        "repo_release_tools.commands.release_repair.read_group_current_version",
+        "repo_release_tools.commands.release_repair.read_group_current_version_for_scheme",
         lambda group: "1.9.0",
     )
     rc = release_repair.cmd_release_repair(_args(from_ref="main", yes=True, no_backup=True))
@@ -1005,7 +1005,7 @@ def test_verify_with_yes_skips_pin_when_pattern_does_not_match(
     monkeypatch.chdir(tmp_path)
     _patch_git(monkeypatch)
     monkeypatch.setattr(
-        "repo_release_tools.commands.release_repair.read_group_current_version",
+        "repo_release_tools.commands.release_repair.read_group_current_version_for_scheme",
         lambda group: "9.9.9",
     )
     rc = release_repair.cmd_release_repair(_args(yes=True))

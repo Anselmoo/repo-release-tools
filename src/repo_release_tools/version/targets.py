@@ -12,8 +12,13 @@ from repo_release_tools.config import PinTarget, RrtConfig, VersionGroup, Versio
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.version import pep440
 from repo_release_tools.version.calver import CalVersion
+from repo_release_tools.version.render import UnrepresentableVersionError, render
 from repo_release_tools.version.scheme import infer_version_scheme
 from repo_release_tools.version.semver import Version
+
+# A target's resolved format (RRT-VER-1 tier 2): either a VersionTarget or a
+# PinTarget, both of which expose resolved_format().
+_FormattedTarget = VersionTarget | PinTarget
 
 PEP621_PATTERN = re.compile(r'(?ms)(^\[project\]\s.*?^version\s*=\s*")([^"]+)(")')
 # Allows optional leading whitespace; uses a backreference (\2) to enforce matching
@@ -94,6 +99,47 @@ class VersionWriteEvent:
     dry_run: bool
 
 
+def _resolve_canonical(new_version: str | Version | CalVersion) -> Version | CalVersion | None:
+    """Return the canonical version behind *new_version*, or ``None`` for an opaque string.
+
+    A :class:`Version`/:class:`CalVersion` is returned as-is. A string is parsed
+    as a :class:`Version` (``spelling="any"``, trying SemVer then PEP 440),
+    falling back to :class:`CalVersion`. ``None`` means neither parse succeeded,
+    so *new_version* is an opaque literal (e.g. a CI-computed string not shaped
+    like either grammar) rather than a canonical version.
+    """
+    if isinstance(new_version, Version | CalVersion):
+        return new_version
+    try:
+        return Version.parse(new_version, spelling="any")
+    except ValueError:
+        pass
+    try:
+        return CalVersion.parse(new_version)
+    except ValueError:
+        return None
+
+
+def _render_for(target: _FormattedTarget, new_version: str | Version | CalVersion) -> str:
+    """Return the string to write to *target* for *new_version* (RRT-VER-1 tier 2).
+
+    A :class:`Version`/:class:`CalVersion` (or a string that parses as one) is
+    rendered in *target*'s own format (:meth:`VersionTarget.resolved_format` /
+    :meth:`PinTarget.resolved_format`), so each target gets its own spelling of
+    one canonical version. A string that parses as neither is written verbatim
+    to every target -- the behaviour every target had before per-target
+    rendering existed, kept for a caller that already computed a custom string.
+    """
+    canonical = _resolve_canonical(new_version)
+    if canonical is None:
+        assert isinstance(new_version, str)  # a Version/CalVersion always resolves above
+        return new_version
+    try:
+        return render(canonical, target.resolved_format())
+    except UnrepresentableVersionError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+
 def _validate_pep440_target(target: VersionTarget, new_version: str) -> None:
     """Reject writes that would put a non-publishable version into a PyPI-facing field.
 
@@ -142,72 +188,92 @@ def _compute_updated_content(target: VersionTarget, text: str, new_version: str)
 
 def replace_version_in_file(
     target: VersionTarget,
-    new_version: str,
+    new_version: str | Version | CalVersion,
     *,
     dry_run: bool,
 ) -> VersionWriteEvent:
     """Update a single configured version target.
 
+    *new_version* is the canonical version -- a :class:`Version`,
+    :class:`CalVersion`, or a string parsed as one -- rendered in *target*'s
+    own format (RRT-VER-1 tier 2, :meth:`VersionTarget.resolved_format`). A
+    string that parses as neither is written verbatim, as before per-target
+    rendering existed.
+
     Returns a :class:`VersionWriteEvent` describing the write (or, in
-    dry-run mode, the write that would happen). This function performs no
-    rendering — callers are responsible for printing.
+    dry-run mode, the write that would happen), carrying *target*'s own
+    rendered string. This function performs no rendering — callers are
+    responsible for printing.
     """
     path = target.path
-    _validate_pep440_target(target, new_version)
+    resolved = _render_for(target, new_version)
+    _validate_pep440_target(target, resolved)
     text = path.read_text(encoding="utf-8")
     current_version = read_version_string(target)
 
-    if current_version == new_version:
+    if current_version == resolved:
         raise RuntimeError(f"{path} version replacement had no effect")
 
-    updated = _compute_updated_content(target, text, new_version)
+    updated = _compute_updated_content(target, text, resolved)
 
     if dry_run:
-        return VersionWriteEvent(path=path, new_version=new_version, dry_run=True)
+        return VersionWriteEvent(path=path, new_version=resolved, dry_run=True)
 
     path.write_text(updated, encoding="utf-8")
-    return VersionWriteEvent(path=path, new_version=new_version, dry_run=False)
+    return VersionWriteEvent(path=path, new_version=resolved, dry_run=False)
 
 
 def replace_all_versions_atomic(
     targets: list[VersionTarget],
-    new_version: str,
+    new_version: str | Version | CalVersion,
     *,
     dry_run: bool,
 ) -> list[VersionWriteEvent]:
     """Update all version targets atomically: validate all substitutions first, then flush.
 
-    If any target fails to produce a valid substitution, no files are written and
-    the original content of any already-written files is restored.
+    *new_version* is the canonical version -- a :class:`Version`,
+    :class:`CalVersion`, or a string parsed as one -- rendered in each
+    target's own format (RRT-VER-1 tier 2, :meth:`VersionTarget.resolved_format`),
+    so a mixed-format group's ``pyproject.toml`` and ``package.json`` each get
+    their own spelling of the one canonical version. A string that parses as
+    neither is written verbatim to every target, as before per-target
+    rendering existed.
+
+    Every target's rendering is resolved and validated up front, before any
+    file is written, so a target whose format cannot express *new_version*
+    (e.g. a post release on a ``semver`` target) fails the whole call and
+    leaves every file untouched.
 
     Returns the list of :class:`VersionWriteEvent` describing every write (or,
-    in dry-run mode, every write that would happen), in target order. This
-    function performs no rendering — callers are responsible for printing.
+    in dry-run mode, every write that would happen), in target order, each
+    carrying its own target's rendered string. This function performs no
+    rendering to output — callers are responsible for printing.
     """
-    for target in targets:
-        _validate_pep440_target(target, new_version)
+    resolved_by_target = [(target, _render_for(target, new_version)) for target in targets]
+    for target, resolved in resolved_by_target:
+        _validate_pep440_target(target, resolved)
 
     if dry_run:
         return [
-            VersionWriteEvent(path=target.path, new_version=new_version, dry_run=True)
-            for target in targets
+            VersionWriteEvent(path=target.path, new_version=resolved, dry_run=True)
+            for target, resolved in resolved_by_target
         ]
 
     # Phase 1: compute all updates in memory before touching disk.
-    pending: list[tuple[Path, str, str]] = []  # (path, old_content, new_content)
-    for target in targets:
+    pending: list[tuple[Path, str, str, str]] = []  # (path, old_content, new_content, resolved)
+    for target, resolved in resolved_by_target:
         path = target.path
         text = path.read_text(encoding="utf-8")
         current_version = read_version_string(target)
-        if current_version == new_version:
+        if current_version == resolved:
             raise RuntimeError(f"{path} version replacement had no effect")
-        updated = _compute_updated_content(target, text, new_version)
-        pending.append((path, text, updated))
+        updated = _compute_updated_content(target, text, resolved)
+        pending.append((path, text, updated, resolved))
 
     # Phase 2: flush all files; roll back on any failure.
     written: list[tuple[Path, str]] = []
     try:
-        for path, _old, new_content in pending:
+        for path, _old, new_content, _resolved in pending:
             path.write_text(new_content, encoding="utf-8")
             written.append((path, _old))
     except Exception as exc:
@@ -227,8 +293,8 @@ def replace_all_versions_atomic(
         raise
 
     return [
-        VersionWriteEvent(path=path, new_version=new_version, dry_run=False)
-        for path, _, _ in pending
+        VersionWriteEvent(path=path, new_version=resolved, dry_run=False)
+        for path, _, _, resolved in pending
     ]
 
 
@@ -509,12 +575,18 @@ def _detect_json_indent(text: str) -> int | str | None:
 
 def replace_pin_in_file(
     target: PinTarget,
-    new_version: str,
+    new_version: str | Version | CalVersion,
     *,
     dry_run: bool,
     pin_target_missing: str = "error",
 ) -> None:
-    """Update a single doc/CI pin reference to ``new_version``.
+    """Update a single doc/CI pin reference to *new_version*.
+
+    *new_version* is the canonical version -- a :class:`Version`,
+    :class:`CalVersion`, or a string parsed as one -- rendered in *target*'s
+    own format (RRT-VER-1 tier 2, :meth:`PinTarget.resolved_format`). A string
+    that parses as neither is written verbatim, as before per-target rendering
+    existed.
 
     *pin_target_missing* controls what happens when the pattern does not match:
     - ``"warn"`` (legacy): print a warning and continue without error.
@@ -522,6 +594,7 @@ def replace_pin_in_file(
     """
     path = target.path
     text = path.read_text(encoding="utf-8")
+    resolved = _render_for(target, new_version)
 
     match = search_pattern(text, target.pattern)
     if match is None:
@@ -535,19 +608,19 @@ def replace_pin_in_file(
         )
 
     current = match.group(2)
-    if current == new_version:
+    if current == resolved:
         p = DryRunPrinter(dry_run=dry_run)
-        p.line(f"{path}  already at {new_version}", ok=None)
+        p.line(f"{path}  already at {resolved}", ok=None)
         return
 
-    updated = replace_pattern_version(text, target.pattern, new_version, count=0)
+    updated = replace_pattern_version(text, target.pattern, resolved, count=0)
 
     if dry_run:
         p = DryRunPrinter(dry_run=True)
-        p.would_write(str(path), detail=f'pin = "{new_version}"')
+        p.would_write(str(path), detail=f'pin = "{resolved}"')
         return
 
     path.write_text(updated, encoding="utf-8")
-    msg = f'{path}  {GLYPHS.arrow.right}  pin = "{new_version}"'
+    msg = f'{path}  {GLYPHS.arrow.right}  pin = "{resolved}"'
     p = VerbosePrinter()
     p.ok(msg)

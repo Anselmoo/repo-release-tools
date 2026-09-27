@@ -12,6 +12,7 @@ description: "Generated command reference for the Version & Release command grou
   - [Overview](#overview)
   - [Pre-release base](#pre-release-base)
   - [Version scheme](#version-scheme)
+  - [Per-target format](#per-target-format)
   - [What the command updates](#what-the-command-updates)
   - [Release workflow](#release-workflow)
   - [Changelog behavior](#changelog-behavior)
@@ -132,6 +133,25 @@ config is a config error, so ``rrt bump`` exits 1.
 A ``calver`` scheme only accepts the ``calver`` bump kind or an explicit calendar
 version; ``major``, ``rc``, ``dev`` and the other keyword kinds are refused with a
 clear error, since they have no meaning for a calendar version.
+
+### Per-target format
+
+Each version target renders the new version in its own format (RRT-VER-1
+tier 2). ``format`` on a target picks one explicitly: ``semver``, ``pep440``,
+``python``, ``rubygems``, ``go-tag``, ``oci-tag`` or ``calver``. Left unset,
+``pep621`` and ``python_version`` get ``python``, ``gemspec`` gets
+``rubygems``, and every other kind gets ``semver``. ``ci_format`` is a
+deprecated alias for ``format``.
+
+The ``python`` format keeps the SemVer spelling for finals and channel
+pre-releases, so ``1.2.0-rc.1`` is written as before. Dev and post releases
+switch to PEP 440 spelling, such as ``1.2.1.dev0`` or ``1.2.0.post1``. The
+SemVer dev spelling would sort after the final release on PyPI.
+
+A post release (``.post1``) has no SemVer spelling. ``post_policy`` says what
+happens when a target can't render one: ``"refuse"`` (default) stops the
+bump with an error; ``"patch"`` folds the whole group onto the next patch
+release instead, so every target still gets one canonical version.
 
 ### What the command updates
 

@@ -13,6 +13,13 @@ import importlib
 from typing import TYPE_CHECKING, Any
 
 from .calver import CALVER_SCHEMES, CalVersion
+from .render import (
+    FORMATS,
+    UnrepresentableVersionError,
+    default_format_for_kind,
+    parse_rendered,
+    render,
+)
 from .semver import Version
 
 if TYPE_CHECKING:
@@ -54,15 +61,20 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "CALVER_SCHEMES",
+    "FORMATS",
     "CalVersion",
+    "UnrepresentableVersionError",
     "Version",
     "VersionWriteEvent",
     "check_autodetected_version_consistency",
+    "default_format_for_kind",
+    "parse_rendered",
     "read_current_version",
     "read_group_current_version",
     "read_group_current_version_for_scheme",
     "read_group_version_strings",
     "read_version_string",
+    "render",
     "replace_pin_in_file",
     "replace_version_in_file",
 ]

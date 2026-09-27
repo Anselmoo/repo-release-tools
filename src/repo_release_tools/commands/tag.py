@@ -88,7 +88,7 @@ from repo_release_tools.config import (
     load_or_autodetect_config,
 )
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
-from repo_release_tools.version.targets import read_group_current_version
+from repo_release_tools.version.targets import read_group_current_version_for_scheme
 from repo_release_tools.workflow import git
 
 
@@ -149,7 +149,7 @@ def _load_config_and_version(root: Path, group_name: str | None) -> tuple[Versio
         p.line(str(exc), ok=False, stream=sys.stderr)
         return None
 
-    current = read_group_current_version(group)
+    current = read_group_current_version_for_scheme(group)
     return group, str(current)
 
 
@@ -238,7 +238,7 @@ def _cmd_tag_create_batch(opts: TagCreateOptions, root: Path, group_names: list[
         except ValueError as exc:
             VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
             return 1
-        version = str(read_group_current_version(group))
+        version = str(read_group_current_version_for_scheme(group))
         tag = _tag_name_for_group(version, _resolve_prefix(opts.prefix, group), group.name)
         if tag in existing and not opts.force:
             VerbosePrinter(verbose=verbose).line(
@@ -439,7 +439,7 @@ def _cmd_tag_check_batch(opts: TagCheckOptions, root: Path, group_names: list[st
         except ValueError as exc:
             VerbosePrinter(verbose=verbose).line(str(exc), ok=False, stream=sys.stderr)
             return 1
-        resolved.append((group, str(read_group_current_version(group))))
+        resolved.append((group, str(read_group_current_version_for_scheme(group))))
 
     existing_tags = _existing_tags(root)
     p = VerbosePrinter(verbose=verbose)

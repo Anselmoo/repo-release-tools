@@ -79,7 +79,7 @@ from repo_release_tools.ui import (
 from repo_release_tools.version.pep440 import pep440_dev_to_semver
 from repo_release_tools.version.targets import (
     check_autodetected_version_consistency,
-    read_group_current_version,
+    read_group_current_version_for_scheme,
     replace_version_in_file,
 )
 
@@ -251,7 +251,7 @@ def _resolve_base(opts: ComputeOptions, root: Path) -> str | None:
                 p.line(mismatch, ok=False, stream=sys.stderr)
                 return None
         group = config.resolve_group(opts.group)
-        return str(read_group_current_version(group))
+        return str(read_group_current_version_for_scheme(group))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         err = describe_config_load_error(exc, root)
         p = VerbosePrinter()

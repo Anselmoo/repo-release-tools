@@ -67,7 +67,7 @@ from repo_release_tools.config import (
 )
 from repo_release_tools.ui import VerbosePrinter
 from repo_release_tools.version.targets import (
-    read_group_current_version,
+    read_group_current_version_for_scheme,
     read_version_string,
     replace_all_versions_atomic,
     replace_pin_in_file,
@@ -158,7 +158,7 @@ def cmd_release_repair(args: argparse.Namespace) -> int:
         )
         return 1
 
-    declared_version = str(read_group_current_version(group))
+    declared_version = str(read_group_current_version_for_scheme(group))
     changelog_path = group.changelog_file
     fmt = detect_changelog_format(changelog_path.name)
     existing_changelog = (

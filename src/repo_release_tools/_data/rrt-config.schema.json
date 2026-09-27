@@ -61,6 +61,15 @@
       ],
       "description": "The grammar the version is read, bumped and written in: 'semver' (1.2.3-rc.1), 'pep440' (1.2.3rc1) or 'calver' (2026.05.15). No default: when unset it is inferred from the primary target. A calendar-shaped version (YYYY.MM, YYYY.MM.DD or YYYY.M.D) is calver; otherwise a pep621 or python_version target is pep440, and any other target is semver. A version_groups entry overrides this global value. rrt bump --scheme and the MCP rrt_bump scheme parameter override both for one run."
     },
+    "post_policy": {
+      "type": "string",
+      "enum": [
+        "refuse",
+        "patch"
+      ],
+      "default": "refuse",
+      "description": "What happens when a post release (.post1) reaches a target whose format can't spell it (SemVer has none). 'refuse' (default): the bump errors, naming the offending target. 'patch': the whole group's bump is folded onto the next patch release instead. A version_groups entry overrides this global value."
+    },
     "changelog_paths": {
       "type": "array",
       "items": {
@@ -160,7 +169,20 @@
               "pep440",
               "semver_pre"
             ],
-            "description": "How the CI version string is formatted. Use 'pep440' for Python packages."
+            "description": "Deprecated alias for 'format': 'pep440' -> format='pep440', 'semver_pre' -> format='semver'. Conflicts with an explicit 'format' that names a different value."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "semver",
+              "pep440",
+              "python",
+              "rubygems",
+              "go-tag",
+              "oci-tag",
+              "calver"
+            ],
+            "description": "The spelling this target's version is rendered in (RRT-VER-1 tier 2). Unset defaults to 'python' for pep621 and python_version (SemVer spelling for finals and alpha/beta/rc, PEP 440 spelling for dev and post), 'rubygems' for gemspec and 'semver' for every other kind, so existing output is unchanged for finals and channel pre-releases."
           }
         }
       }
@@ -183,6 +205,19 @@
           "pattern": {
             "type": "string",
             "description": "Regex with 3 capture groups: (prefix)(version)(suffix)."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "semver",
+              "pep440",
+              "python",
+              "rubygems",
+              "go-tag",
+              "oci-tag",
+              "calver"
+            ],
+            "description": "The spelling this pin's version is rendered in (RRT-VER-1 tier 2). Unset defaults to 'semver', the spelling every pin has always received."
           }
         }
       }
@@ -246,6 +281,15 @@
               "calver"
             ],
             "description": "Per-group override of the global version_scheme (semver, pep440 or calver). Unset everywhere, it is inferred from the group's primary target."
+          },
+          "post_policy": {
+            "type": "string",
+            "enum": [
+              "refuse",
+              "patch"
+            ],
+            "default": "refuse",
+            "description": "Per-group override of the global post_policy (refuse or patch)."
           },
           "changelog_paths": {
             "type": "array",

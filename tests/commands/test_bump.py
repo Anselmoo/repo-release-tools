@@ -4571,6 +4571,108 @@ def test_resolve_bump_target_refuses_explicit_downgrade_without_force(tmp_path: 
     assert str(target.new) == "1.0.0"
 
 
+# ---------------------------------------------------------------------------
+# RRT-VER-1 tier 2: `dev`/`post` bump kinds and post_policy resolution.
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_bump_target_dev_kind_starts_a_dev_release(tmp_path: Path) -> None:
+    """`rrt bump dev` on a final version starts a dev release of the next patch."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    target = resolve_bump_target(config, _options(bump="dev"))
+    assert str(target.new) == "1.2.4-0.dev.0"
+
+
+def test_resolve_bump_target_post_kind_stays_post_when_every_target_supports_it(
+    tmp_path: Path,
+) -> None:
+    """A post bump is left alone when every target's format can render it (pep440)."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    target_cfg = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621", format="pep440")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target_cfg],
+        changelog_workflow="incremental",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    target = resolve_bump_target(config, _options(bump="post"))
+
+    assert str(target.new) == "1.2.3.post1"
+
+
+def test_resolve_bump_target_post_kind_refuses_by_default(tmp_path: Path) -> None:
+    """post_policy="refuse" (the default) rejects a post bump a target can't render."""
+    _, config = _default_group_config(tmp_path)
+    semver_target = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621", format="semver")
+    config.version_groups[0] = dataclasses.replace(
+        config.version_groups[0], version_targets=[semver_target]
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+
+    with pytest.raises(BumpResolutionError, match="cannot render post release"):
+        resolve_bump_target(config, _options(bump="post"))
+
+
+def test_resolve_bump_target_post_kind_allowed_for_pure_python_group(tmp_path: Path) -> None:
+    """A pep621-only group renders post releases (python default), so no policy is needed."""
+    _, config = _default_group_config(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+
+    target = resolve_bump_target(config, _options(bump="post"))
+
+    assert isinstance(target.new, Version)
+    assert target.new.to_pep440() == "1.2.3.post1"
+
+
+def test_resolve_bump_target_post_kind_folds_to_patch_with_post_policy_patch(
+    tmp_path: Path,
+) -> None:
+    """post_policy="patch" folds a post bump the group can't render into a patch bump."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    target_cfg = VersionTarget(path=tmp_path / "pyproject.toml", kind="pep621", format="semver")
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[target_cfg],
+        changelog_workflow="incremental",
+        post_policy="patch",
+    )
+    config = RrtConfig(
+        root=tmp_path,
+        config_file=tmp_path / ".rrt.toml",
+        version_groups=[group],
+        default_group_name="default",
+    )
+
+    target = resolve_bump_target(config, _options(bump="post"))
+
+    assert str(target.new) == "1.2.4"
+
+
 def test_cmd_bump_explicit_downgrade_is_a_clean_error_and_force_allows_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

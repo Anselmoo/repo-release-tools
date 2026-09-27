@@ -49,6 +49,25 @@ A ``calver`` scheme only accepts the ``calver`` bump kind or an explicit calenda
 version; ``major``, ``rc``, ``dev`` and the other keyword kinds are refused with a
 clear error, since they have no meaning for a calendar version.
 
+## Per-target format
+
+Each version target renders the new version in its own format (RRT-VER-1
+tier 2). ``format`` on a target picks one explicitly: ``semver``, ``pep440``,
+``python``, ``rubygems``, ``go-tag``, ``oci-tag`` or ``calver``. Left unset,
+``pep621`` and ``python_version`` get ``python``, ``gemspec`` gets
+``rubygems``, and every other kind gets ``semver``. ``ci_format`` is a
+deprecated alias for ``format``.
+
+The ``python`` format keeps the SemVer spelling for finals and channel
+pre-releases, so ``1.2.0-rc.1`` is written as before. Dev and post releases
+switch to PEP 440 spelling, such as ``1.2.1.dev0`` or ``1.2.0.post1``. The
+SemVer dev spelling would sort after the final release on PyPI.
+
+A post release (``.post1``) has no SemVer spelling. ``post_policy`` says what
+happens when a target can't render one: ``"refuse"`` (default) stops the
+bump with an error; ``"patch"`` folds the whole group onto the next patch
+release instead, so every target still gets one canonical version.
+
 ## What the command updates
 
 Depending on the selected version group, the command can update:
@@ -139,6 +158,7 @@ from repo_release_tools.config import (
     DEFAULT_TAG_PREFIX,
     RrtConfig,
     VersionGroup,
+    VersionTarget,
     find_repo_root,
     format_autodetected_config_notice,
     iter_config_files,  # noqa: F401 -- re-exported for test monkeypatch compatibility
@@ -157,6 +177,7 @@ from repo_release_tools.ui import (
     spinner_lines,
 )
 from repo_release_tools.version.calver import CALVER_SCHEMES, CalVersion
+from repo_release_tools.version.render import UnrepresentableVersionError, render
 from repo_release_tools.version.scheme import VERSION_SCHEMES
 from repo_release_tools.version.semver import PRE_RELEASE_CHANNELS, PRERELEASE_BASES, Version
 from repo_release_tools.version.targets import (
@@ -173,7 +194,17 @@ if TYPE_CHECKING:
 PREVIEW_LINES = 8
 
 # Keyword bump kinds shared by ``rrt bump`` and ``rrt workspace bump``.
-BUMP_KINDS = {"major", "minor", "patch", "release", "pre-release", "calver", *PRE_RELEASE_CHANNELS}
+BUMP_KINDS = {
+    "major",
+    "minor",
+    "patch",
+    "release",
+    "pre-release",
+    "calver",
+    "dev",
+    "post",
+    *PRE_RELEASE_CHANNELS,
+}
 
 # Pre-commit's fixed status line for a hook that auto-regenerated files and
 # thereby failed its own pass even though the fix is now correct on disk.
@@ -263,6 +294,9 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
             except ValueError:
                 raise BumpResolutionError(f"Invalid bump value: {opts.bump!r}") from None
 
+    if isinstance(new, Version) and new.post is not None:
+        new = _resolve_post_policy(group, new)
+
     if not opts.force and _is_downgrade_or_equal(current, new):
         raise BumpResolutionError(
             f"Refusing to bump group {group.name!r} from {current} to {new}: {new} is "
@@ -270,6 +304,39 @@ def resolve_bump_target(config: RrtConfig, opts: Options) -> BumpTarget:
         )
 
     return BumpTarget(group=group, current=current, new=new)
+
+
+def _resolve_post_policy(group: VersionGroup, new: Version) -> Version:
+    """Resolve a post release *new* against *group*'s ``post_policy`` (RRT-VER-1 tier 2).
+
+    A post release has no SemVer spelling, so it cannot reach a target whose
+    resolved format is ``semver``, ``go-tag`` or ``oci-tag``. When every target
+    can still render *new*, it is returned unchanged. Otherwise:
+
+    * ``post_policy = "patch"`` (opt-in) folds the whole group onto the next
+      patch release instead -- the same version every target in the group
+      then gets, keeping one canonical version per bump.
+    * ``post_policy = "refuse"`` (default) raises :class:`BumpResolutionError`
+      naming the first target that cannot render *new*.
+    """
+    offending: VersionTarget | None = None
+    for target in group.version_targets:
+        try:
+            render(new, target.resolved_format())
+        except UnrepresentableVersionError:
+            offending = target
+            break
+    if offending is None:
+        return new
+    if group.post_policy == "patch":
+        return Version(new.major, new.minor, new.patch).bump("patch")
+    raise BumpResolutionError(
+        f"Group {group.name!r} target {offending.path} (format="
+        f"{offending.resolved_format()!r}) cannot render post release {new}. "
+        'Set post_policy = "patch" in [tool.rrt] (or on this version group) to fold '
+        "a post bump into the next patch release, or remove this target from the "
+        "group."
+    )
 
 
 def _is_downgrade_or_equal(current: Version | CalVersion, new: Version | CalVersion | str) -> bool:
@@ -374,7 +441,10 @@ def apply_bump_files(
     Thin, named wrapper over :func:`apply_version` -- kept as a distinct
     function so the ``resolve -> apply -> assets -> git-finalize`` stages of
     :func:`cmd_bump` each have a directly testable, directly named
-    counterpart.
+    counterpart. Stringifies *new* first: :func:`apply_version` re-parses a
+    string back into the same canonical version (RRT-VER-1 tier 2's per-target
+    rendering round-trips losslessly), and several callers assert on the exact
+    string this call passes down.
     """
     return apply_version(group, str(new), config, dry_run=dry_run)
 
@@ -547,16 +617,23 @@ def finalize_bump_git(
 
 def apply_version(
     group: VersionGroup,
-    version: str,
+    version: Version | CalVersion | str,
     config: RrtConfig,
     *,
     dry_run: bool = False,
 ) -> list[Path]:
     """Apply *version* to a group's version targets and pin targets.
 
-    This is the shared write-only core used by ``cmd_bump`` and the upcoming
-    ``rrt sync --bump``.  It intentionally has no git, branch, or changelog
-    side-effects — those remain the responsibility of the caller.
+    This is the shared write-only core used by ``cmd_bump`` and ``rrt sync
+    --bump``. It intentionally has no git, branch, or changelog side-effects —
+    those remain the responsibility of the caller.
+
+    *version* is the canonical version -- a :class:`Version`,
+    :class:`CalVersion`, or a string parsed as one -- rendered in each
+    target's own format (RRT-VER-1 tier 2); passing the object instead of a
+    pre-stringified value lets a mixed-format group (say, a ``pep621``
+    ``pyproject.toml`` next to a ``gemspec``) write each file its own
+    spelling of the same release.
 
     Steps performed:
 

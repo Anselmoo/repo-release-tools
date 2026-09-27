@@ -9,6 +9,7 @@ from textwrap import dedent
 
 from repo_release_tools.state import DOCS_LOCK_DEFAULT, DOCS_MAP_LOCK_DEFAULT
 from repo_release_tools.sync.providers import PROVIDERS as VALID_UPSTREAM_PROVIDERS  # noqa: F401
+from repo_release_tools.version.render import FORMATS, default_format_for_kind
 from repo_release_tools.version.scheme import VERSION_SCHEMES
 from repo_release_tools.version.semver import DEFAULT_PRERELEASE_BASE, PRERELEASE_BASES
 
@@ -125,6 +126,12 @@ _RESERVED_BRANCH_TYPES = frozenset(
 _BRANCH_TYPE_IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_-]*")
 
 VALID_CI_FORMATS = frozenset({"pep440", "semver_pre"})
+# RRT-VER-1 tier 2: every render format a version target/pin may request.
+VALID_TARGET_FORMATS = frozenset(FORMATS)
+# ci_format is a deprecated alias for format: pep440 -> pep440, semver_pre -> semver.
+CI_FORMAT_ALIAS: dict[str, str] = {"pep440": "pep440", "semver_pre": "semver"}
+VALID_POST_POLICIES = frozenset({"refuse", "patch"})
+DEFAULT_POST_POLICY = "refuse"
 VALID_FOLDER_MODES = frozenset({"strict", "warn", "off"})
 VALID_TEMPLATE_STRICTNESS = frozenset({"strict", "loose"})
 VALID_BADGE_STYLES = frozenset({"svg", "shields", "text"})
@@ -218,12 +225,13 @@ class VersionTarget:
     section: str | None = None
     field: str | None = None
     ci_format: str | None = None
+    format: str | None = None
 
     def validate(self) -> None:
         """Validate target shape.
 
-        All checks run unconditionally so that ``ci_format`` is always
-        validated regardless of which replacement mechanism is configured.
+        All checks run unconditionally so that ``ci_format`` and ``format`` are
+        always validated regardless of which replacement mechanism is configured.
         """
         if self.kind == "pattern":
             if self.pattern is None:
@@ -281,6 +289,38 @@ class VersionTarget:
                     f"ci_format must be 'pep440' or 'semver_pre', got {self.ci_format!r}",
                 )
 
+        if self.format is not None:
+            if not isinstance(self.format, str):
+                raise ValueError(
+                    f"format must be a string, got {type(self.format).__name__}: {self.format!r}",
+                )
+            if self.format not in VALID_TARGET_FORMATS:
+                allowed = ", ".join(sorted(VALID_TARGET_FORMATS))
+                raise ValueError(f"format must be one of {allowed}, got {self.format!r}")
+
+        if self.format is not None and self.ci_format is not None:
+            implied = CI_FORMAT_ALIAS[self.ci_format]
+            if implied != self.format:
+                raise ValueError(
+                    f"format={self.format!r} conflicts with ci_format={self.ci_format!r} "
+                    f"(ci_format={self.ci_format!r} implies format={implied!r}); set only one",
+                )
+
+    def resolved_format(self) -> str:
+        """Return the effective render format for this target (RRT-VER-1 tier 2).
+
+        ``format`` wins when set. Otherwise the deprecated ``ci_format`` alias
+        applies (``pep440`` -> ``"pep440"``, ``semver_pre`` -> ``"semver"``).
+        Otherwise :func:`~repo_release_tools.version.render.default_format_for_kind`
+        picks the format that keeps this target's output byte-identical to
+        today's (``"semver"`` for every kind but ``gemspec``).
+        """
+        if self.format is not None:
+            return self.format
+        if self.ci_format is not None:
+            return CI_FORMAT_ALIAS[self.ci_format]
+        return default_format_for_kind(self.kind)
+
 
 @dataclass(frozen=True)
 class PinTarget:
@@ -304,6 +344,7 @@ class PinTarget:
 
     path: Path
     pattern: str
+    format: str | None = None
 
     def validate(self) -> None:
         """Validate the pin target."""
@@ -315,6 +356,18 @@ class PinTarget:
             raise ValueError(
                 "pin_targets pattern must have exactly 3 capture groups (prefix, version, suffix)",
             )
+        if self.format is not None and self.format not in VALID_TARGET_FORMATS:
+            allowed = ", ".join(sorted(VALID_TARGET_FORMATS))
+            raise ValueError(f"format must be one of {allowed}, got {self.format!r}")
+
+    def resolved_format(self) -> str:
+        """Return the effective render format: ``format``, else ``"semver"``.
+
+        A pin has no ``kind``, so it defaults the same way an unconfigured
+        version target does (:func:`~repo_release_tools.version.render.default_format_for_kind`
+        of ``None``): the SemVer spelling every pin has always received.
+        """
+        return self.format if self.format is not None else default_format_for_kind(None)
 
 
 @dataclass(frozen=True)
@@ -462,6 +515,9 @@ class VersionGroup:
     prerelease_base: str = DEFAULT_PRERELEASE_BASE
     # None means "infer the scheme from the primary target".
     version_scheme: str | None = None
+    # RRT-VER-1 tier 2: how a post bump resolves when the group has a target
+    # that cannot render a post release ("refuse" errors, "patch" bumps patch).
+    post_policy: str = DEFAULT_POST_POLICY
     upstream_package: str | None = None
     upstream_provider: str = "pypi"
     upstream_commit_message: str = "Mirror: {version}"
@@ -1064,6 +1120,11 @@ class RrtConfig:
     def version_scheme(self) -> str | None:
         """Backward-compatible access to the default group's version scheme (None = inferred)."""
         return self.resolve_group().version_scheme
+
+    @property
+    def post_policy(self) -> str:
+        """Backward-compatible access to the default group's post_policy."""
+        return self.resolve_group().post_policy
 
 
 class MissingRrtConfigError(ValueError):

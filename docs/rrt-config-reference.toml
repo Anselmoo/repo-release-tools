@@ -33,6 +33,14 @@ lock_command = []
 # one of: error, warn
 pin_target_missing = "error"
 
+# What happens when a post release (.post1) reaches a target whose format
+# can't spell it (SemVer has none). 'refuse' (default): the bump errors,
+# naming the offending target. 'patch': the whole group's bump is folded onto
+# the next patch release instead. A version_groups entry overrides this global
+# value.
+# one of: patch, refuse
+post_policy = "patch"
+
 # Which core a pre-release channel (alpha, beta, rc) targets when started from
 # a FINAL version. 'patch' (default): 1.0.0 -> 1.0.1-rc.1; 'minor': 1.0.0 ->
 # 1.1.0-rc.1; 'major': 1.0.0 -> 2.0.0-rc.1; 'auto': level from Conventional
@@ -171,6 +179,11 @@ templates = []
 # pins).
 [[tool.rrt.pin_targets]]
 
+# The spelling this pin's version is rendered in (RRT-VER-1 tier 2). Unset
+# defaults to 'semver', the spelling every pin has always received.
+# one of: calver, go-tag, oci-tag, pep440, python, rubygems, semver
+format = "calver"
+
 # Path to the file containing the pin, relative to the project root.
 path = "..."
 
@@ -208,6 +221,10 @@ name = "..."
 
 # pin_targets: ($ref — see the referenced section for details)
 
+# Per-group override of the global post_policy (refuse or patch).
+# one of: patch, refuse
+post_policy = "patch"
+
 # Per-group override of the global prerelease_base (patch, minor, major or
 # auto).
 # one of: auto, major, minor, patch
@@ -229,13 +246,23 @@ version_scheme = "calver"
 # Files whose version strings rrt will update on bump.
 [[tool.rrt.version_targets]]
 
-# How the CI version string is formatted. Use 'pep440' for Python packages.
+# Deprecated alias for 'format': 'pep440' -> format='pep440', 'semver_pre' ->
+# format='semver'. Conflicts with an explicit 'format' that names a different
+# value.
 # one of: pep440, semver_pre
 ci_format = "pep440"
 
 # Key within 'section' that holds the version string. Must be paired with
 # 'section'.
 field = "..."
+
+# The spelling this target's version is rendered in (RRT-VER-1 tier 2). Unset
+# defaults to 'python' for pep621 and python_version (SemVer spelling for
+# finals and alpha/beta/rc, PEP 440 spelling for dev and post), 'rubygems' for
+# gemspec and 'semver' for every other kind, so existing output is unchanged
+# for finals and channel pre-releases.
+# one of: calver, go-tag, oci-tag, pep440, python, rubygems, semver
+format = "calver"
 
 # Well-known target type. Use 'pattern' with a 1-capture-group regex to read
 # the version from a dependency pin or arbitrary string. All other kinds are

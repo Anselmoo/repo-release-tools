@@ -26,6 +26,7 @@ from .model import (
     DEFAULT_CHANGELOG_WORKFLOW,
     DEFAULT_INIT_CONFIG,
     DEFAULT_LOCK_COMMAND,
+    DEFAULT_POST_POLICY,
     DEFAULT_PRERELEASE_BASE,
     DEFAULT_RELEASE_BRANCH,
     DEFAULT_TAG_PREFIX,
@@ -37,7 +38,9 @@ from .model import (
     VALID_CHANGELOG_WORKFLOWS,
     VALID_CI_FORMATS,
     VALID_PIN_TARGET_MISSING,
+    VALID_POST_POLICIES,
     VALID_PRERELEASE_BASES,
+    VALID_TARGET_FORMATS,
     VALID_TARGET_KINDS,
     VALID_UPSTREAM_PROVIDERS,
     VALID_VERSION_SCHEMES,
@@ -703,6 +706,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
             raw.get("prerelease_base", DEFAULT_PRERELEASE_BASE)
         ),
         "version_scheme": _validate_version_scheme(raw.get("version_scheme")),
+        "post_policy": _validate_post_policy(raw.get("post_policy", DEFAULT_POST_POLICY)),
         "lock_command": raw.get("lock_command", _default_lock_command(config_file)),
         "generated_files": raw.get("generated_files", _default_generated_files(config_file)),
         "generated_assets": raw.get("generated_assets", []),
@@ -1123,6 +1127,7 @@ def _opt_str_field(key: str, message: str) -> FieldSpec:
 _PIN_TARGET_FIELDS = [
     _str_field("path", "Each pin_targets entry must have a non-empty 'path' string"),
     _str_field("pattern", "Each pin_targets entry must have a non-empty 'pattern' string"),
+    _opt_str_field("format", "pin_targets.format must be a string when provided"),
 ]
 
 
@@ -1145,6 +1150,7 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
         fields = _walk_fields(typed_item, _PIN_TARGET_FIELDS)
         raw_path = cast("str", fields["path"])
         raw_pattern = cast("str", fields["pattern"])
+        raw_format = cast("str | None", fields["format"])
 
         # Reject absolute paths early — pin targets must be repository-local
         # relative paths so downstream code can safely call ``relative_to(root)``.
@@ -1169,7 +1175,7 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
                     raise ValueError(
                         f"pin_targets path glob {raw_path!r} resolved to {matched_resolved} which is outside repository root {root_resolved}",
                     )
-                pin = PinTarget(path=matched_resolved, pattern=raw_pattern)
+                pin = PinTarget(path=matched_resolved, pattern=raw_pattern, format=raw_format)
                 pin.validate()
                 pins.append(pin)
             continue
@@ -1183,7 +1189,7 @@ def _load_pin_targets(root: Path, raw_pins: object) -> list[PinTarget]:
             raise ValueError(
                 f"pin_targets path {raw_path!r} resolves to {candidate_resolved} which is outside repository root {root_resolved}",
             )
-        pin = PinTarget(path=candidate_resolved, pattern=raw_pattern)
+        pin = PinTarget(path=candidate_resolved, pattern=raw_pattern, format=raw_format)
         pin.validate()
         pins.append(pin)
     return pins
@@ -1355,6 +1361,7 @@ _VERSION_TARGET_FIELDS = [
     _opt_str_field("section", "section must be a string when provided"),
     _opt_str_field("field", "field must be a string when provided"),
     _opt_str_field("ci_format", "ci_format must be a string when provided"),
+    _opt_str_field("format", "format must be a string when provided"),
 ]
 
 
@@ -1389,6 +1396,20 @@ def _validate_version_scheme(value: object) -> str | None:
     return value
 
 
+def _validate_post_policy(value: object) -> str:
+    """Return *value* when it is a valid ``post_policy`` (RRT-VER-1 tier 2), else raise.
+
+    Shared by the global ``[tool.rrt]`` default and every version group, so an
+    invalid global value is reported even when each group overrides it.
+    """
+    if not isinstance(value, str):
+        raise ValueError("post_policy must be a string")
+    if value not in VALID_POST_POLICIES:
+        allowed = ", ".join(sorted(VALID_POST_POLICIES))
+        raise ValueError(f"post_policy must be one of {allowed}, got {value!r}")
+    return value
+
+
 def _load_version_group(
     root: Path,
     *,
@@ -1416,6 +1437,7 @@ def _load_version_group(
             section=cast("str | None", fields["section"]),
             field=cast("str | None", fields["field"]),
             ci_format=cast("str | None", fields["ci_format"]),
+            format=cast("str | None", fields["format"]),
         )
         target.validate()
         targets.append(target)
@@ -1460,6 +1482,12 @@ def _load_version_group(
                 error="version_scheme must be a string",
                 allow_none_default=True,
             ),
+            FieldSpec(
+                "post_policy",
+                str,
+                default=defaults["post_policy"],
+                error="post_policy must be a string",
+            ),
         ],
     )
     release_branch = cast("str", simple_fields["release_branch"])
@@ -1471,6 +1499,7 @@ def _load_version_group(
         raise ValueError(f"changelog_workflow must be one of {allowed}, got {changelog_workflow!r}")
     prerelease_base = _validate_prerelease_base(simple_fields["prerelease_base"])
     version_scheme = _validate_version_scheme(simple_fields["version_scheme"])
+    post_policy = _validate_post_policy(simple_fields["post_policy"])
 
     lock_command_raw = raw_group.get("lock_command", defaults["lock_command"])
     auto_gen: list[str] = []
@@ -1555,6 +1584,7 @@ def _load_version_group(
         changelog_paths=changelog_paths,
         prerelease_base=prerelease_base,
         version_scheme=version_scheme,
+        post_policy=post_policy,
         upstream_package=upstream_package,
         upstream_provider=upstream_provider,
         upstream_commit_message=upstream_commit_message,
@@ -1579,10 +1609,13 @@ __all__ = [
     "RUST_TOOL_RRT_EXAMPLE",
     "VALID_CHANGELOG_WORKFLOWS",
     "VALID_CI_FORMATS",
+    "VALID_POST_POLICIES",
     "VALID_PRERELEASE_BASES",
+    "VALID_TARGET_FORMATS",
     "VALID_VERSION_SCHEMES",
     "VALID_TARGET_KINDS",
     "VALID_UPSTREAM_PROVIDERS",
+    "DEFAULT_POST_POLICY",
     "_VALID_LANGUAGES",
     "ArtifactProtection",
     "ConsumedArtifact",
