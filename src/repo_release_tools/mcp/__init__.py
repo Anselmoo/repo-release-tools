@@ -76,7 +76,10 @@ After restarting Claude Desktop the full rrt tool palette is available in chat.
 
 **Version management** — `rrt_version`, `rrt_bump` (always dry-run by default for safety)
 
-**Git workflow** — `rrt_branch_new`, `rrt_validate_branch`, `rrt_validate_commit`
+**Git workflow** — `rrt_branch_new`, `rrt_validate_branch`, `rrt_validate_commit`,
+`rrt_git_dirty_tree`, `rrt_git_commits_since`, `rrt_git_land`
+
+**Checks** — `rrt_gate_run` (expected-exit gate list; dry-run by default)
 
 **Changelog** — `rrt_changelog`
 
@@ -99,7 +102,8 @@ After restarting Claude Desktop the full rrt tool palette is available in chat.
 
 ## Safety
 
-All mutating tools (`rrt_bump`, `rrt_branch_new`) default to `dry_run=True` so an AI
+All mutating tools (`rrt_bump`, `rrt_branch_new`, `rrt_publish_snapshot`, `rrt_git_land`,
+`rrt_gate_run`) default to `dry_run=True` so an AI
 assistant cannot inadvertently modify the repo without explicit user confirmation.
 """
 

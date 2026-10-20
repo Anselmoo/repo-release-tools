@@ -146,7 +146,11 @@ def test_server_instructions_trigger_and_cli_boundary() -> None:
     assert "Do NOT use it for" in instructions
     assert "rrt drift generate" in instructions
     assert "rrt drift --snapshot" not in instructions
-    assert "Safety: rrt_bump, rrt_branch_new, and rrt_publish_snapshot mutate" in instructions
+    assert (
+        "Safety: rrt_bump, rrt_branch_new, rrt_publish_snapshot, rrt_git_land, and "
+        "rrt_gate_run mutate" in instructions
+    )
+    assert "land a branch with rrt_git_land" in instructions
     assert "rrt_init_run also mutates but is the submit target" in instructions
 
 
