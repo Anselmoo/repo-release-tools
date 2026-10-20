@@ -657,7 +657,9 @@ def test_run_post_correct_and_main_dispatch(
     monkeypatch.setattr(
         hooks,
         "run_dirty_tree_check",
-        lambda cwd, *, title, verbose=0: calls.append(("dirty", cwd)) or 16,
+        lambda cwd, *, title, verbose=0, ignore_generated=False: (
+            calls.append(("dirty", (cwd, ignore_generated))) or 16
+        ),
     )
     monkeypatch.setattr(
         hooks, "run_docs_check", lambda cwd, verbose=0: calls.append(("docs", cwd)) or 17
@@ -701,6 +703,7 @@ def test_run_post_correct_and_main_dispatch(
     assert hooks.main(["check-branch-name", "--branch", "feat/add-parser"]) == 14
     assert hooks.main(["check-commit-subject", "--subject", "feat: add parser"]) == 15
     assert hooks.main(["check-dirty-tree"]) == 16
+    assert hooks.main(["check-dirty-tree", "--ignore-generated"]) == 16
     assert hooks.main(["check-docs"]) == 17
     assert hooks.main(["doctor"]) == 18
     assert hooks.main(["release-check"]) == 19

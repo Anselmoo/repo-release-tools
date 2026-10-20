@@ -17,6 +17,7 @@ from repo_release_tools.changelog import (
     parse_conventional_commit,
 )
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
+from repo_release_tools.commands._git_shared import split_generated_dirt
 from repo_release_tools.commands.artifacts_cmd import _add_artifacts_strict_argument, cmd_artifacts
 from repo_release_tools.commands.branch import (
     BRANCH_SLUG_RE,
@@ -601,14 +602,37 @@ def run_commit_subject_check(subject: str, *, title: str, verbose: int = 0) -> i
     )
 
 
-def run_dirty_tree_check(cwd: Path, *, title: str, verbose: int = 0) -> int:
-    """Validate that the working tree is clean."""
+def run_dirty_tree_check(
+    cwd: Path, *, title: str, verbose: int = 0, ignore_generated: bool = False
+) -> int:
+    """Validate that the working tree is clean.
+
+    With *ignore_generated*, paths matching ``[tool.rrt.git].generated`` do
+    not count as dirty. The split is the one ``rrt git check-dirty-tree``
+    uses, so both surfaces agree on which entries are generated.
+    """
     p = VerbosePrinter(verbose=verbose)
     p.verbose_line("check-dirty-tree")
     if not git.is_git_repository(cwd):
         return emit_failure(
             title,
             [f"{cwd} is not inside a Git work tree."],
+        )
+
+    if ignore_generated:
+        try:
+            split = split_generated_dirt(cwd)
+        except (RuntimeError, ValueError) as exc:
+            return emit_failure(title, [str(exc)])
+        for entry in split.generated:
+            p.verbose_line(f"  generated (ignored): {entry.path}")
+        if not split.other:
+            p.verbose_line("  working tree clean (generated paths ignored)")
+            return 0
+        changed = ", ".join(entry.short_line for entry in split.other)
+        return emit_failure(
+            title,
+            ["Working tree has uncommitted changes.", f"Changed entries: {changed}."],
         )
 
     if git.working_tree_clean(cwd):
@@ -1109,9 +1133,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Changelog path to update.",
     )
 
-    subparsers.add_parser(
+    dirty_tree_parser = subparsers.add_parser(
         "check-dirty-tree",
         help="Validate that the current working tree is clean.",
+    )
+    dirty_tree_parser.add_argument(
+        "--ignore-generated",
+        action="store_true",
+        help="Do not count paths matching [tool.rrt.git].generated as dirty.",
     )
 
     subparsers.add_parser(
@@ -1323,7 +1352,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         case "check-dirty-tree":
             return run_dirty_tree_check(
-                Path.cwd(), title="Dirty tree validation failed.", verbose=verbose
+                Path.cwd(),
+                title="Dirty tree validation failed.",
+                verbose=verbose,
+                ignore_generated=parsed.ignore_generated,
             )
         case "check-docs":
             return run_docs_check(Path.cwd(), verbose=verbose)

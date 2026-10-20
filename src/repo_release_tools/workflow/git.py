@@ -643,6 +643,13 @@ class DirtyEntry:
         """Return whether git does not track this path yet."""
         return self.status == "??"
 
+    @property
+    def short_line(self) -> str:
+        """Return the entry as a ``git status --short`` line (``R  old -> new``)."""
+        if self.orig_path is not None:
+            return f"{self.status} {self.orig_path} -> {self.path}"
+        return f"{self.status} {self.path}"
+
 
 def generated_pathspecs(patterns: Iterable[str], *, exclude: bool = False) -> list[str]:
     """Turn ``[tool.rrt.git].generated`` patterns into git pathspecs.
