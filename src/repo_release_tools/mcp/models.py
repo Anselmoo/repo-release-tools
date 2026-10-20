@@ -131,6 +131,31 @@ Result of `rrt_docs_check`: whether `.rrt/docs.lock.toml` is current against sou
 docs, with a `messages` list describing any drift found and a `skeleton_issues` list of
 published-docstring skeleton violations.
 
+### `DirtyEntryModel` / `DirtyTreeResult`
+Result of `rrt_git_dirty_tree`: every dirty path, each marked `generated` when it
+matches `[tool.rrt.git].generated`, so a caller can decide instead of guessing.
+
+Fields:
+- `clean` — `True` when no entry counts as dirty (generated entries excluded when
+  `ignore_generated=True`)
+- `entries` — `status` (porcelain `XY`), `path`, `orig_path` (renames), `generated`
+- `patterns` — the configured generated patterns
+
+### `CommitsSinceResult`
+Result of `rrt_git_commits_since`: `%h %s` lines for `<ref>..HEAD` with `exclude`
+pathspecs left out, plus `count`.
+
+### `LandStepModel` / `LandResult`
+Result of `rrt_git_land`. One `LandStepModel` per step (`fast-forward`,
+`restore-generated`, `remove-untracked-generated`, `remove-worktree`,
+`delete-branch`) with `status` one of `done`, `skipped`, `would-run`, `failed`,
+`not-run`. `details` lists precondition problems when nothing ran.
+
+### `GateLineModel` / `GateRunResult`
+Result of `rrt_gate_run`: one `GateLineModel` per gate with `exit`, `expected_exit`
+and `ok`, so "failed as designed" is distinguishable from "failed". `exit` is `None`
+for a dry run, a missing executable, or a timeout.
+
 ### `RawLockData`
 Passthrough wrapper for arbitrary lock-style data when a structured tool model is not needed.
 
@@ -343,3 +368,81 @@ class RawLockData(BaseModel):
     def to_flat(self) -> dict[str, Any]:
         """Return the raw lock data as a flat dict."""
         return self.data
+
+
+class DirtyEntryModel(BaseModel):
+    """One uncommitted path, marked when it matches a generated pattern."""
+
+    status: str
+    path: str
+    orig_path: str | None = None
+    generated: bool = False
+
+
+class DirtyTreeResult(BaseModel):
+    """Result of the dirty-tree check with generated-path awareness."""
+
+    clean: bool
+    ignore_generated: bool
+    entries: list[DirtyEntryModel] = Field(default_factory=list)
+    patterns: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class CommitsSinceResult(BaseModel):
+    """Commits in ``<ref>..HEAD`` with excluded pathspecs left out."""
+
+    ref: str
+    exclude: list[str] = Field(default_factory=list)
+    commits: list[str] = Field(default_factory=list)
+    count: int = 0
+    error: str | None = None
+
+
+class LandStepModel(BaseModel):
+    """One step of ``rrt_git_land`` and what happened to it."""
+
+    name: str
+    command: str
+    status: str
+    detail: str = ""
+
+
+class LandResult(BaseModel):
+    """Result of ``rrt_git_land`` (preview or applied)."""
+
+    branch: str
+    onto: str
+    dry_run: bool
+    landed: bool = False
+    worktree: str | None = None
+    steps: list[LandStepModel] = Field(default_factory=list)
+    worktrees_before: int | None = None
+    worktrees_after: int | None = None
+    branches_before: int | None = None
+    branches_after: int | None = None
+    cwd_removed: bool = False
+    notes: list[str] = Field(default_factory=list)
+    details: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class GateLineModel(BaseModel):
+    """One gate line judged against its expected exit."""
+
+    name: str
+    command: str
+    exit: int | None = None
+    expected_exit: int
+    ok: bool
+    error: str | None = None
+    output_tail: str = ""
+
+
+class GateRunResult(BaseModel):
+    """Result of ``rrt_gate_run``."""
+
+    ok: bool
+    dry_run: bool
+    lines: list[GateLineModel] = Field(default_factory=list)
+    error: str | None = None

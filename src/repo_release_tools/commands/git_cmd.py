@@ -21,7 +21,10 @@ summary first, followed by the details needed to act on the result.
 - `sync-status` reports unresolved conflicts and ahead/behind drift against a
   sync base.
 - `check-dirty-tree` exits non-zero when the worktree is dirty, which makes it
-  useful for hooks and CI.
+  useful for hooks and CI. `--ignore-generated` lists `[tool.rrt.git].generated`
+  paths instead of failing on them.
+- `commits-since` lists commits in `<ref>..HEAD`; `--exclude` leaves out commits
+  that only touch the given pathspecs, so a file that records HEAD can skip itself.
 
 ### Commit drafting
 
@@ -42,6 +45,9 @@ summary first, followed by the details needed to act on the result.
 - `rebootstrap` backs up `.git`, reinitializes the repository, and creates a
   fresh history snapshot or empty bootstrap commit.
 - `purge-cache` expires reflogs and runs `git gc` to reclaim local cache space.
+- `land` fast-forwards `--onto`, removes the branch's worktree and deletes the
+  branch in one process. All checks run before any change, and a re-run after a
+  failure skips the steps that already finished.
 
 ### Publish
 
@@ -74,6 +80,8 @@ $ rrt git squash-local --base-ref origin/main "ship parser"
 $ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
 $ rrt git purge-cache --dry-run
 $ rrt git backport-from-target demo
+$ rrt git land feat/parser --restore-generated --dry-run
+$ rrt git commits-since v1.2.0 --exclude-generated --count
 ```
 
 ## Safety notes
@@ -84,6 +92,8 @@ $ rrt git backport-from-target demo
   when that is intended.
 - `rebootstrap` also guards against accidental use on repositories with
   configured remotes unless explicitly allowed.
+- `land` never pushes and never uses `--force`; `--restore-generated` only
+  discards paths listed in `[tool.rrt.git].generated`.
 """
 
 from __future__ import annotations
@@ -94,6 +104,7 @@ from repo_release_tools.commands._registry import CommandCategory, CommandGroup,
 from repo_release_tools.commands.git_backport import register_backport
 from repo_release_tools.commands.git_commit import register_commit
 from repo_release_tools.commands.git_inspect import register_inspect
+from repo_release_tools.commands.git_land import register_land
 from repo_release_tools.commands.git_sync import register_sync
 
 GIT_EPILOG = (
@@ -102,6 +113,8 @@ GIT_EPILOG = (
     '  $ rrt git commit --type fix "make output clearer"\n'
     "  $ rrt git sync\n"
     "  $ rrt git undo-safe\n"
+    "  $ rrt git land feat/parser --dry-run\n"
+    "  $ rrt git commits-since v1.2.0 --exclude HANDOFF.md\n"
     "  $ rrt git publish-snapshot --remote mirror --dry-run\n"
     "  $ rrt git backport-from-target demo"
 )
@@ -125,4 +138,5 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     register_inspect(git_sub)
     register_commit(git_sub)
     register_sync(git_sub)
+    register_land(git_sub)
     register_backport(git_sub)

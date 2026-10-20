@@ -468,6 +468,89 @@
           }
         }
       }
+    },
+    "git": {
+      "type": "object",
+      "description": "Git workflow settings read by `rrt git check-dirty-tree`, `rrt git land` and `rrt git commits-since`.",
+      "additionalProperties": false,
+      "properties": {
+        "generated": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Git glob pathspecs, anchored at the repository root, for files that tooling or hooks regenerate (`*` stops at `/`; `**` crosses directories). Unrelated to a version group's `generated_files`.",
+          "examples": [
+            [
+              "HANDOFF.md",
+              ".rrt/*.lock.toml",
+              "docs/**/README.md"
+            ]
+          ]
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "description": "Check lines run by `rrt gate run`. Every line runs regardless of earlier results, and each records the exit code it is designed to produce.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "run"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique gate name, shown in the report and accepted as a filter by `rrt gate run NAME`."
+          },
+          "run": {
+            "description": "A string runs through `bash -o pipefail -c`; a list runs as argv with no shell.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            ],
+            "examples": [
+              "uv run pytest -q tests/test_seeded.py",
+              [
+                "uv",
+                "run",
+                "pytest",
+                "-q"
+              ]
+            ]
+          },
+          "expect": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255,
+            "default": 0,
+            "description": "Exit code this line is designed to produce. Use a non-zero value for a deliberately-red check."
+          },
+          "timeout": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Optional per-line timeout in seconds. A timed-out line fails its verdict.",
+            "examples": [
+              600
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional human-readable note shown in dry-run output."
+          }
+        }
+      }
     }
   }
 }

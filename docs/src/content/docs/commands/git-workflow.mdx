@@ -25,6 +25,7 @@ description: "Generated command reference for the Git Workflow command group."
 - [`rrt git`](#rrt-git)
   - [Overview](#overview-1)
   - [Workflow map](#workflow-map)
+  - [Generated paths](#generated-paths)
   - [Responsibilities](#responsibilities-1)
   - [Notable behavior](#notable-behavior)
   - [Examples](#examples-1)
@@ -33,6 +34,7 @@ description: "Generated command reference for the Git Workflow command group."
   - [`rrt git status`](#rrt-git-status)
   - [`rrt git diff`](#rrt-git-diff)
   - [`rrt git log`](#rrt-git-log)
+  - [`rrt git commits-since`](#rrt-git-commits-since)
   - [`rrt git doctor`](#rrt-git-doctor)
   - [`rrt git sync-status`](#rrt-git-sync-status)
   - [`rrt git check-dirty-tree`](#rrt-git-check-dirty-tree)
@@ -45,6 +47,7 @@ description: "Generated command reference for the Git Workflow command group."
   - [`rrt git rebootstrap`](#rrt-git-rebootstrap)
   - [`rrt git purge-cache`](#rrt-git-purge-cache)
   - [`rrt git publish-snapshot`](#rrt-git-publish-snapshot)
+  - [`rrt git land`](#rrt-git-land)
   - [`rrt git backport-from-target`](#rrt-git-backport-from-target)
 {/* rrt:auto:end:toc */}
 
@@ -259,16 +262,33 @@ summary first, followed by the details needed to act on the result.
 ### Workflow map
 
 - **Inspect**: `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
-  `check-dirty-tree`
+  `check-dirty-tree` (`--ignore-generated`), `commits-since`
 - **Draft commits**: `rrt git commit`, `commit-all`, `squash-local`
 - **Move and sync**: `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
-- **Branch workflows**: `rrt branch new`, `rescue`, `rename`
+- **Branch workflows**: `rrt branch new`, `rescue`, `rename`, and `rrt git land`
+  to fast-forward, remove the worktree, and delete the branch in one process
 - **Publish**: `rrt git publish-snapshot` force-pushes a single-commit,
   no-history snapshot of tracked content to a secondary remote (e.g. a public
   mirror); `--exclude` drops specific paths (secrets, internal docs) from
   that snapshot. `rrt git backport-from-target` is the read-only counterpart:
   it fetches a publish target and lists commits pending backport to the
   primary, along with the exact commands to cherry-pick them manually.
+
+### Generated paths
+
+`[tool.rrt.git].generated` lists files that tooling or hooks regenerate. Each
+entry is a git glob pathspec anchored at the repository root. A `*` stops at
+`/`, while `**` crosses directories. The list is empty unless you declare it.
+
+```toml
+[tool.rrt.git]
+generated = ["HANDOFF.md", ".rrt/*.lock.toml"]
+```
+
+Git does the matching on every surface, so a pattern means the same everywhere.
+`check-dirty-tree --ignore-generated` lists matching paths instead of failing.
+`land --restore-generated` restores tracked matches and deletes untracked ones.
+`commits-since --exclude-generated` leaves matching paths out of the count.
 
 ### Responsibilities
 
@@ -302,6 +322,9 @@ summary first, followed by the details needed to act on the result.
 - `rrt git sync --dry-run`
 - `rrt git squash-local --base-ref origin/main "ship parser"`
 - `rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run`
+- `rrt git land feat/parser --restore-generated`
+- `rrt git commits-since v1.2.0 --exclude HANDOFF.md --count`
+- `rrt git check-dirty-tree --ignore-generated`
 
 ### Caveats
 
@@ -317,6 +340,20 @@ summary first, followed by the details needed to act on the result.
 - The latest-tag lookup matches the prefix literally, not as a glob. With
   prefix `v`, a tag named `vnext` is ignored rather than breaking the range.
   Build metadata never decides precedence; equal versions fall back to tag name.
+- `land` is local only and never pushes. It deletes the branch with `-D` only
+  after checking that `--onto` contains it, because `-d` checks against HEAD.
+- A file that records HEAD can never be committed current. Exclude it with
+  `commits-since --exclude`, and "one commit behind" becomes its resting state.
+- Shell exit codes hide errors that rrt reports explicitly. After a pipeline,
+  `$?` is the last element's exit, so gate lines run with `pipefail`.
+- `grep -q` exits 2 on a missing file and 1 on no match. An `if` reads both
+  as false.
+- `git merge-base --is-ancestor` exits 128 on error. The `is_ancestor` helper
+  raises on it instead of answering "no".
+- `git add <dir>` refuses a gitignored directory even when files inside are
+  tracked. Use `git add -u <dir>` for tracked files there.
+- zsh does not word-split unquoted variables. `rrt gate run` executes string
+  lines through explicit `bash`, never the caller's shell.
 
 ### Related docs
 
@@ -334,6 +371,7 @@ Arguments
   status                Show a compact branch and worktree status view.
   diff                  Show a compact diff using rrt glyph formatting.
   log                   Show a compact commit history view.
+  commits-since         List commits since a ref, optionally excluding paths such as generated files.
   doctor                Run a compact repository health report for rrt workflows.
   sync-status           Analyze unresolved conflicts and whether sync/rebase work is needed.
   check-dirty-tree      Exit non-zero when the working tree is dirty. Useful in hooks and CI.
@@ -346,6 +384,7 @@ Arguments
   rebootstrap           Destroy current git history and create a fresh repository history.
   purge-cache           Expire reflogs and run git garbage collection.
   publish-snapshot      Force-push a single-commit snapshot of tracked content to a secondary remote.
+  land                  Fast-forward a branch onto its target, remove its worktree and delete it.
   backport-from-target  List commits pending backport from a publish-snapshot target.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -361,6 +400,8 @@ Examples
   $ rrt git commit --type fix "make output clearer"
   $ rrt git sync
   $ rrt git undo-safe
+  $ rrt git land feat/parser --dry-run
+  $ rrt git commits-since v1.2.0 --exclude HANDOFF.md
   $ rrt git publish-snapshot --remote mirror --dry-run
   $ rrt git backport-from-target demo
 ```
@@ -437,6 +478,34 @@ Examples
   $ rrt git log --limit 20
 ```
 
+### `rrt git commits-since`
+
+```text
+Usage:  rrt git commits-since [OPTIONS] <ref>
+
+List commits in <ref>..HEAD. --exclude drops commits that only touch the given git glob pathspecs, so a file that records HEAD can leave itself out.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <ref>                Starting ref (exclusive), e.g. a tag.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help           Show this message and exit.
+  --exclude PATTERN    Git glob pathspec (repo-root relative) to leave out. Repeatable.
+  --exclude-generated  Also leave out every [tool.rrt.git].generated pattern.
+  --count              Print only the number of commits.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git commits-since v1.2.0
+  $ rrt git commits-since origin/main --exclude HANDOFF.md --count
+  $ rrt git commits-since HEAD~5 --exclude-generated
+```
+
 ### `rrt git doctor`
 
 ```text
@@ -499,12 +568,14 @@ Arguments
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Options
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  -h, --help  Show this message and exit.
+  -h, --help          Show this message and exit.
+  --ignore-generated  Do not count paths matching [tool.rrt.git].generated as dirty; list them instead.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt git check-dirty-tree
+  $ rrt git check-dirty-tree --ignore-generated
 ```
 
 ### `rrt git commit`
@@ -758,6 +829,36 @@ Examples
   $ rrt git publish-snapshot demo --yes-i-know-this-overwrites-remote-history
   $ rrt git publish-snapshot --remote mirror --branch main --message "Initial commit" --yes-i-know-this-overwrites-remote-history
   $ rrt git publish-snapshot --remote mirror --exclude 'docs/internal/*' --dry-run
+```
+
+### `rrt git land`
+
+```text
+Usage:  rrt git land [OPTIONS] <branch>
+
+Land a finished branch in one process: fast-forward --onto, restore generated paths if asked, remove the branch's worktree, and delete the branch. All checks run before any change; re-running after a failure skips finished steps.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <branch>             Local branch to land.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help           Show this message and exit.
+  --onto BRANCH        Branch to fast-forward (default: main).
+  --restore-generated  Discard changes to [tool.rrt.git].generated paths in the worktree first: restore tracked files and delete untracked ones.
+  --keep-branch        Keep the branch after landing it.
+  --dry-run            Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git land feat/parser --dry-run
+  $ rrt git land feat/parser
+  $ rrt git land feat/parser --onto develop --restore-generated
+  $ rrt git land feat/parser --keep-branch
 ```
 
 ### `rrt git backport-from-target`

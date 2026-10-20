@@ -57,12 +57,25 @@ registrations in dependency order.
 - **`rrt_changelog`** — Reads `CHANGELOG.md` and returns the entries for a given section
   (default: `"Unreleased"`). Returns a `ChangelogResponse`.
 
-### `git_tools` → `rrt_branch_new`
+### `git_tools` → `rrt_branch_new`, `rrt_git_dirty_tree`, `rrt_git_commits_since`, `rrt_git_land`
 
 - **`rrt_branch_new`** — Creates (or previews) a conventional branch from a type + slug.
   Uses rrt branch naming helpers and runs `git checkout -b` when `dry_run=False`.
   Always defaults to `dry_run=True`. Returns a `BranchResult` with the full branch name
   and a suggested commit title.
+- **`rrt_git_dirty_tree`** — Lists every dirty path, each marked `generated` when it
+  matches `[tool.rrt.git].generated`. Read-only. Returns a `DirtyTreeResult`.
+- **`rrt_git_commits_since`** — Lists commits in `<ref>..HEAD` with `exclude` pathspecs
+  left out. Read-only. Returns a `CommitsSinceResult`.
+- **`rrt_git_land`** — Fast-forwards `onto`, removes the branch's worktree and deletes the
+  branch in one call, sharing `plan_land` / `apply_land` with `rrt git land`. Always
+  defaults to `dry_run=True`. Returns a `LandResult` with one entry per step.
+
+### `gate_tools` → `rrt_gate_run`
+
+- **`rrt_gate_run`** — Runs `[[tool.rrt.gates]]` lines and returns `exit`,
+  `expected_exit` and `ok` per line. Always defaults to `dry_run=True`, because the lines
+  are repository-declared commands. Returns a `GateRunResult`.
 
 ### `publish_tools` → `rrt_publish_snapshot`
 
@@ -108,8 +121,8 @@ All tools return Pydantic models (see `mcp.models`) serialised to JSON by FastMC
 Tools that can fail return an `error` field rather than raising an exception, so the
 AI assistant can report the failure gracefully without a tool error traceback.
 
-All mutating tools (`rrt_bump`, `rrt_branch_new`, `rrt_publish_snapshot`) default to
-`dry_run=True`.
+All mutating tools (`rrt_bump`, `rrt_branch_new`, `rrt_publish_snapshot`,
+`rrt_git_land`, `rrt_gate_run`) default to `dry_run=True`.
 
 ## Adding a new tool module
 
@@ -127,6 +140,7 @@ from .config_tools import register as register_config
 from .docs_tools import register as register_docs
 from .eol_tools import register as register_eol
 from .folder_tools import register as register_folder
+from .gate_tools import register as register_gate
 from .git_tools import register as register_git
 from .lock_tools import register as register_locks
 from .publish_tools import register as register_publish
@@ -150,3 +164,4 @@ def register_tools(mcp: FastMCP) -> None:
     register_sync(mcp)
     register_folder(mcp)
     register_docs(mcp)
+    register_gate(mcp)

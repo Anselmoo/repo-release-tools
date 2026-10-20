@@ -106,6 +106,10 @@ def test_register_tools_all_present() -> None:
         "rrt_sync_check",
         "rrt_folder_check",
         "rrt_docs_check",
+        "rrt_git_dirty_tree",
+        "rrt_git_commits_since",
+        "rrt_git_land",
+        "rrt_gate_run",
     }
     assert expected <= set(mcp._tools.keys())
 

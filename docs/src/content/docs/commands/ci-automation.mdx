@@ -17,6 +17,13 @@ description: "Generated command reference for the CI & Automation command group.
   - [Caveats](#caveats)
   - [Related docs](#related-docs)
   - [`rrt action init`](#rrt-action-init)
+- [`rrt gate`](#rrt-gate)
+  - [Overview](#overview-1)
+  - [Configuration](#configuration)
+  - [Examples](#examples-1)
+  - [Caveats](#caveats-1)
+  - [Related docs](#related-docs-1)
+  - [`rrt gate run`](#rrt-gate-run)
 {/* rrt:auto:end:toc */}
 
 ## `rrt action`
@@ -125,4 +132,99 @@ Examples
   $ rrt action init
   $ rrt action init --dry-run
   $ rrt action init --force
+```
+
+## `rrt gate`
+
+Run a declared list of check lines, each against the exit code it is designed to produce.
+
+### Overview
+
+`rrt gate run` executes every `[[tool.rrt.gates]]` line and compares its exit
+code with the line's `expect` value. A list joined with `&&` stops at the first
+non-zero exit. That silently skips every later check, even when the red line
+was red on purpose. Here every line runs regardless of earlier results.
+
+The report is a table of expected exit, actual exit, and verdict. The command
+exits 0 only when every verdict matches. A deliberately failing check, such as a
+seeded defect whose test must fail, therefore passes when it fails as designed.
+
+### Configuration
+
+```toml
+[[tool.rrt.gates]]
+name = "unit"
+run = "uv run pytest -q | tail -3"
+
+[[tool.rrt.gates]]
+name = "seeded-defect"
+run = ["uv", "run", "pytest", "tests/test_seeded.py"]
+expect = 1
+timeout = 600
+```
+
+- `run` as a string executes through `bash -o pipefail -c`. The caller's shell
+  is never assumed, and a pipeline reports its first failing element.
+- `run` as a list executes as argv with no shell at all.
+- `expect` defaults to `0`. `timeout` is optional, in seconds.
+
+### Examples
+
+- `rrt gate run`
+- `rrt gate run seeded-defect unit`
+- `rrt gate run --dry-run`
+
+### Caveats
+
+- String-form lines need `bash` on `PATH`. Use the list form where no shell exists.
+- A missing executable or a timeout fails its line with an error, never a crash.
+- Lines run sequentially from the repository root, with stdin closed.
+- Output is captured. The tail of each mismatched line is shown so a failure stays explainable.
+- The MCP `rrt_gate_run` tool defaults to a dry run because it executes repository commands.
+
+### Related docs
+
+- [CI & Automation commands](/repo-release-tools/commands/ci-automation/)
+- [Generated CLI reference](/repo-release-tools/commands/rrt-cli/)
+
+```text
+Usage:  rrt gate [OPTIONS] <gate_command>
+
+Run [[tool.rrt.gates]] check lines. Every line runs regardless of earlier results, and each is judged against the exit code it is designed to produce.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  run         Run every gate line (or the named ones) and report expected / actual / verdict.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+```
+
+### `rrt gate run`
+
+```text
+Usage:  rrt gate run [OPTIONS] NAME
+
+Run gate lines and exit 0 only when every line matched its expected exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  NAME        Gate names to run.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+  --dry-run   Preview without running gate commands.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt gate run
+  $ rrt gate run seeded-defect unit
+  $ rrt gate run --dry-run
 ```

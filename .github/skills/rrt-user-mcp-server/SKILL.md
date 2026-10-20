@@ -138,6 +138,10 @@ Restart Claude Desktop after editing.
 | `rrt_validate_branch` | validation | Conventional branch naming |
 | `rrt_validate_commit` | validation | Conventional commit subject |
 | `rrt_changelog` | changelog | Unreleased entries or full content |
+| `rrt_git_dirty_tree` | git, inspection | Dirty paths, each marked `generated` per `[tool.rrt.git].generated` |
+| `rrt_git_commits_since` | git, inspection | Commits since a ref with `exclude` pathspecs left out |
+| `rrt_git_land` | git, branching | Fast-forward, remove worktree, delete branch in one call (dry_run=True by default) |
+| `rrt_gate_run` | ci, checks | Gate lines judged against expected exits (dry_run=True by default) |
 | `rrt_health_dashboard` | ui, dashboard | Metric row, health Ring, per-lock BarChart, check Cards, detail table (app tool) |
 | `rrt_version_overview` | ui, dashboard, versioning | Version target map with Metric header (app tool) |
 | `rrt_doctor_dashboard` | ui, dashboard, inspection | Pass-rate Ring, per-check Metrics, status Cards, detail table (app tool) |

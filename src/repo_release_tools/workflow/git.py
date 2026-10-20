@@ -13,16 +13,33 @@ summary first, followed by the details needed to act on the result.
 ## Workflow map
 
 - **Inspect**: `rrt git status`, `diff`, `log`, `doctor`, `sync-status`,
-  `check-dirty-tree`
+  `check-dirty-tree` (`--ignore-generated`), `commits-since`
 - **Draft commits**: `rrt git commit`, `commit-all`, `squash-local`
 - **Move and sync**: `rrt git sync`, `move`, `undo-safe`, `rebootstrap`
-- **Branch workflows**: `rrt branch new`, `rescue`, `rename`
+- **Branch workflows**: `rrt branch new`, `rescue`, `rename`, and `rrt git land`
+  to fast-forward, remove the worktree, and delete the branch in one process
 - **Publish**: `rrt git publish-snapshot` force-pushes a single-commit,
   no-history snapshot of tracked content to a secondary remote (e.g. a public
   mirror); `--exclude` drops specific paths (secrets, internal docs) from
   that snapshot. `rrt git backport-from-target` is the read-only counterpart:
   it fetches a publish target and lists commits pending backport to the
   primary, along with the exact commands to cherry-pick them manually.
+
+## Generated paths
+
+`[tool.rrt.git].generated` lists files that tooling or hooks regenerate. Each
+entry is a git glob pathspec anchored at the repository root. A `*` stops at
+`/`, while `**` crosses directories. The list is empty unless you declare it.
+
+```toml
+[tool.rrt.git]
+generated = ["HANDOFF.md", ".rrt/*.lock.toml"]
+```
+
+Git does the matching on every surface, so a pattern means the same everywhere.
+`check-dirty-tree --ignore-generated` lists matching paths instead of failing.
+`land --restore-generated` restores tracked matches and deletes untracked ones.
+`commits-since --exclude-generated` leaves matching paths out of the count.
 
 ## Responsibilities
 
@@ -56,6 +73,9 @@ summary first, followed by the details needed to act on the result.
 - `rrt git sync --dry-run`
 - `rrt git squash-local --base-ref origin/main "ship parser"`
 - `rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run`
+- `rrt git land feat/parser --restore-generated`
+- `rrt git commits-since v1.2.0 --exclude HANDOFF.md --count`
+- `rrt git check-dirty-tree --ignore-generated`
 
 ## Caveats
 
@@ -71,6 +91,20 @@ summary first, followed by the details needed to act on the result.
 - The latest-tag lookup matches the prefix literally, not as a glob. With
   prefix `v`, a tag named `vnext` is ignored rather than breaking the range.
   Build metadata never decides precedence; equal versions fall back to tag name.
+- `land` is local only and never pushes. It deletes the branch with `-D` only
+  after checking that `--onto` contains it, because `-d` checks against HEAD.
+- A file that records HEAD can never be committed current. Exclude it with
+  `commits-since --exclude`, and "one commit behind" becomes its resting state.
+- Shell exit codes hide errors that rrt reports explicitly. After a pipeline,
+  `$?` is the last element's exit, so gate lines run with `pipefail`.
+- `grep -q` exits 2 on a missing file and 1 on no match. An `if` reads both
+  as false.
+- `git merge-base --is-ancestor` exits 128 on error. The `is_ancestor` helper
+  raises on it instead of answering "no".
+- `git add <dir>` refuses a gitignored directory even when files inside are
+  tracked. Use `git add -u <dir>` for tracked files there.
+- zsh does not word-split unquoted variables. `rrt gate run` executes string
+  lines through explicit `bash`, never the caller's shell.
 
 ## Related docs
 
@@ -84,7 +118,8 @@ import datetime as dt
 import posixpath
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
@@ -536,3 +571,208 @@ def classify_status_line(line: str) -> tuple[str, str]:
     if "D" in status_code:
         return ("removed", path_text)
     return ("modified", path_text)
+
+
+def _reject_option_like(*refs: str) -> None:
+    """Raise ``ValueError`` when any ref starts with ``-`` (CWE-88 option injection)."""
+    for ref in refs:
+        if ref.startswith("-"):
+            raise ValueError(f"ref must not start with '-': {ref!r}")
+
+
+def _checked_raw_stdout(cmd: list[str], cwd: Path) -> str:
+    """Return a command's *unstripped* stdout, raising RuntimeError on non-zero exit.
+
+    ``capture_checked`` strips its output, which corrupts formats whose first
+    column may be a space (``git status --porcelain`` reports `` M path``).
+    """
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        detail_text = _failure_detail(result.stdout, result.stderr)
+        detail = f": {detail_text}" if detail_text else ""
+        raise RuntimeError(f"{' '.join(cmd)} failed (exit {result.returncode}){detail}")
+    return result.stdout
+
+
+def is_ancestor(cwd: Path, ancestor: str, descendant: str) -> bool:
+    """Return whether *ancestor* is an ancestor of (or equal to) *descendant*.
+
+    ``git merge-base --is-ancestor`` exits 0 for yes, 1 for no, and 128 on any
+    error such as an unknown ref. An ``if`` would read 128 as "no", so every
+    exit other than 0 and 1 raises ``RuntimeError`` instead.
+    """
+    _reject_option_like(ancestor, descendant)
+    cmd = ["git", "merge-base", "--is-ancestor", ancestor, descendant]
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    detail_text = _failure_detail(result.stdout, result.stderr)
+    detail = f": {detail_text}" if detail_text else ""
+    raise RuntimeError(f"{' '.join(cmd)} failed (exit {result.returncode}){detail}")
+
+
+@dataclass(frozen=True)
+class Worktree:
+    """One entry of ``git worktree list --porcelain``.
+
+    ``branch`` is the short name (``refs/heads/`` stripped), or ``None`` for a
+    detached or bare worktree.
+    """
+
+    path: Path
+    head: str | None = None
+    branch: str | None = None
+    bare: bool = False
+    detached: bool = False
+    locked: bool = False
+    prunable: bool = False
+
+
+def worktree_list(cwd: Path) -> list[Worktree]:
+    """Return every worktree of the repository, main worktree first.
+
+    Raises ``RuntimeError`` when git fails, rather than returning an empty list
+    that a caller would read as "no worktrees".
+    """
+    out = capture_checked(["git", "worktree", "list", "--porcelain"], cwd)
+    worktrees: list[Worktree] = []
+    for block in out.split("\n\n"):
+        fields: dict[str, str] = {}
+        for line in block.splitlines():
+            key, _, value = line.partition(" ")
+            fields[key] = value
+        if "worktree" not in fields:
+            continue
+        branch = fields.get("branch")
+        worktrees.append(
+            Worktree(
+                path=Path(fields["worktree"]),
+                head=fields.get("HEAD"),
+                branch=branch.removeprefix("refs/heads/") if branch else None,
+                bare="bare" in fields,
+                detached="detached" in fields,
+                locked="locked" in fields,
+                prunable="prunable" in fields,
+            )
+        )
+    return worktrees
+
+
+@dataclass(frozen=True)
+class DirtyEntry:
+    """One ``git status --porcelain=v1`` entry.
+
+    *status* is the two-letter ``XY`` code. *path* is repository-root relative;
+    *orig_path* is set only for renames and copies.
+    """
+
+    status: str
+    path: str
+    orig_path: str | None = None
+
+    @property
+    def untracked(self) -> bool:
+        """Return whether git does not track this path yet."""
+        return self.status == "??"
+
+    @property
+    def short_line(self) -> str:
+        """Return the entry as a ``git status --short`` line (``R  old -> new``)."""
+        if self.orig_path is not None:
+            return f"{self.status} {self.orig_path} -> {self.path}"
+        return f"{self.status} {self.path}"
+
+
+def generated_pathspecs(patterns: Iterable[str], *, exclude: bool = False) -> list[str]:
+    """Turn ``[tool.rrt.git].generated`` patterns into git pathspecs.
+
+    This is the single place a pattern becomes a pathspec, so every surface
+    matches it the same way: git ``glob`` magic, anchored at the repository
+    root (``*`` stops at ``/``; ``**`` crosses directories).
+    """
+    magic = "top,exclude,glob" if exclude else "top,glob"
+    return [f":({magic}){pattern}" for pattern in patterns]
+
+
+def literal_pathspecs(paths: Iterable[str]) -> list[str]:
+    """Return root-anchored literal pathspecs for exact repository paths."""
+    return [f":(top,literal){path}" for path in paths]
+
+
+def dirty_entries(cwd: Path, pathspecs: Iterable[str] = ()) -> list[DirtyEntry]:
+    """Return every uncommitted entry, optionally limited to *pathspecs*.
+
+    Uses ``--porcelain=v1 -z --untracked-files=all`` so paths are never quoted,
+    renames carry both paths, and untracked directories list their files.
+    Raises ``RuntimeError`` when git fails, so an error never reads as "clean".
+    """
+    cmd = ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"]
+    specs = list(pathspecs)
+    if specs:
+        cmd += ["--", *specs]
+    tokens = _checked_raw_stdout(cmd, cwd).split("\0")
+    entries: list[DirtyEntry] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        index += 1
+        if len(token) < 4:
+            continue
+        status, path = token[:2], token[3:]
+        orig_path = None
+        if "R" in status or "C" in status:
+            orig_path = tokens[index]
+            index += 1
+        entries.append(DirtyEntry(status=status, path=path, orig_path=orig_path))
+    return entries
+
+
+def split_generated(
+    cwd: Path, patterns: Iterable[str]
+) -> tuple[list[DirtyEntry], list[DirtyEntry]]:
+    """Split dirty entries into ``(other, generated)`` using git's own matching.
+
+    Git, not Python, decides which entries match the generated patterns, so a
+    pattern means the same here as in ``commits_since`` and in a restore.
+
+    An entry counts as generated only when the filtered status reports it
+    exactly as the full status does. A rename from a non-generated path into
+    a generated one reads as ``A`` under the filter but ``R`` in full, so it
+    stays in *other*: restoring it would leave the source deletion behind.
+    """
+    specs = generated_pathspecs(patterns)
+    everything = dirty_entries(cwd)
+    if not specs:
+        return everything, []
+    filtered_keys = {(entry.status, entry.path) for entry in dirty_entries(cwd, specs)}
+    other: list[DirtyEntry] = []
+    generated: list[DirtyEntry] = []
+    for entry in everything:
+        bucket = generated if (entry.status, entry.path) in filtered_keys else other
+        bucket.append(entry)
+    return other, generated
+
+
+def commits_since(
+    cwd: Path,
+    ref: str,
+    *,
+    exclude: Iterable[str] = (),
+    paths: Iterable[str] = (),
+) -> list[str]:
+    """Return ``%h %s`` lines for commits in ``<ref>..HEAD`` touching *paths*.
+
+    *exclude* patterns use the same glob pathspecs as generated paths. A file
+    that records HEAD can exclude itself, so "one commit behind" is its
+    resting state. An unknown ref raises ``RuntimeError`` instead of
+    returning ``[]``.
+    """
+    _reject_option_like(ref)
+    positive = generated_pathspecs(paths) or [":/"]
+    specs = [*positive, *generated_pathspecs(exclude, exclude=True)]
+    out = capture_checked(
+        ["git", "log", f"{ref}..HEAD", "--pretty=format:%h %s", "--", *specs], cwd
+    )
+    return [line for line in out.splitlines() if line]

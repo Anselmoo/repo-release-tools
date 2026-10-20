@@ -70,6 +70,7 @@ Affected entrypoints:
 
 ## CI & Automation
 -   action  Scaffold a starter GitHub Actions workflow for repo-release-tools
+-   gate    Run declared check lines, each against its expected exit code
 
 """
 
