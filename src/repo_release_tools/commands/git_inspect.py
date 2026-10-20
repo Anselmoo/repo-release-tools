@@ -27,7 +27,7 @@ from repo_release_tools.commands._git_shared import (
     split_generated_dirt,
     summarize_status,
 )
-from repo_release_tools.config import load_extra_branch_types
+from repo_release_tools.config import load_extra_branch_types, load_git_config
 from repo_release_tools.ui import GLYPHS, VerbosePrinter
 from repo_release_tools.workflow import git
 from repo_release_tools.workflow.hooks import (
@@ -44,6 +44,11 @@ GIT_STATUS_EXAMPLES = "  $ rrt git status"
 GIT_DIFF_EXAMPLES = "  $ rrt git diff\n  $ rrt git diff --staged\n  $ rrt git diff --against HEAD~1"
 
 GIT_LOG_EXAMPLES = "  $ rrt git log\n  $ rrt git log --limit 20"
+
+GIT_COMMITS_SINCE_EXAMPLES = """\
+  $ rrt git commits-since v1.2.0
+  $ rrt git commits-since origin/main --exclude HANDOFF.md --count
+  $ rrt git commits-since HEAD~5 --exclude-generated"""
 
 GIT_DOCTOR_EXAMPLES = "  $ rrt git doctor\n  $ rrt git doctor --changelog-file docs/CHANGELOG.md"
 
@@ -409,6 +414,70 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     p.warn(f"Doctor found {failures} issue(s).")
     return 1
+
+
+@dataclass(frozen=True)
+class CommitsSinceOptions:
+    """Typed view of ``argparse.Namespace`` for ``rrt git commits-since``."""
+
+    verbose: int
+    ref: str
+    exclude: tuple[str, ...]
+    exclude_generated: bool
+    count: bool
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> CommitsSinceOptions:
+        """Build a :class:`CommitsSinceOptions` from a parsed ``argparse.Namespace``."""
+        return cls(
+            verbose=getattr(args, "verbose", 0) or 0,
+            ref=args.ref,
+            exclude=tuple(getattr(args, "exclude", None) or ()),
+            exclude_generated=bool(getattr(args, "exclude_generated", False)),
+            count=bool(getattr(args, "count", False)),
+        )
+
+
+def cmd_commits_since(args: argparse.Namespace) -> int:
+    """List commits in ``<ref>..HEAD``, optionally excluding paths from the count.
+
+    A generated file that records HEAD can exclude itself, which makes "one
+    commit behind" its correct resting state. An unknown ref exits 1 rather
+    than reporting zero commits.
+    """
+    opts = CommitsSinceOptions.from_args(args)
+    root = Path.cwd()
+    p = VerbosePrinter(verbose=opts.verbose)
+    if not git.is_git_repository(root):
+        p.line(f"{root} is not inside a Git work tree.", ok=False, stream=sys.stderr)
+        return 1
+    exclude = list(opts.exclude)
+    try:
+        if opts.exclude_generated:
+            exclude += load_git_config(root).generated
+        lines = git.commits_since(root, opts.ref, exclude=exclude)
+    except (RuntimeError, ValueError) as exc:
+        p.line(str(exc), ok=False, stream=sys.stderr)
+        return 1
+
+    if opts.count:
+        sys.stdout.write(f"{len(lines)}\n")
+        return 0
+
+    p.blank_line()
+    p.header(
+        f"Commits since {opts.ref}",
+        Count=str(len(lines)),
+        Excluded=", ".join(exclude) or "nothing",
+    )
+    if not lines:
+        p.ok(f"HEAD has no commits beyond {opts.ref} that touch included paths.")
+        return 0
+    p.section("Commits")
+    for line in lines:
+        sha, _, subject = line.partition(" ")
+        p.list_item(GLYPHS.git.log_line(sha, subject))
+    return 0
 
 
 @dataclass(frozen=True)
@@ -876,6 +945,35 @@ def register_inspect(git_sub: argparse._SubParsersAction[argparse.ArgumentParser
         help="Number of commits to show.",
     )
     log_parser.set_defaults(handler=cmd_log)
+
+    commits_since_parser = git_sub.add_parser(
+        "commits-since",
+        help="List commits since a ref, optionally excluding paths such as generated files.",
+        description=(
+            "List commits in <ref>..HEAD. --exclude drops commits that only touch the "
+            "given git glob pathspecs, so a file that records HEAD can leave itself out."
+        ),
+        epilog=GIT_COMMITS_SINCE_EXAMPLES,
+    )
+    commits_since_parser.add_argument("ref", help="Starting ref (exclusive), e.g. a tag.")
+    commits_since_parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help="Git glob pathspec (repo-root relative) to leave out. Repeatable.",
+    )
+    commits_since_parser.add_argument(
+        "--exclude-generated",
+        action="store_true",
+        help="Also leave out every [tool.rrt.git].generated pattern.",
+    )
+    commits_since_parser.add_argument(
+        "--count",
+        action="store_true",
+        help="Print only the number of commits.",
+    )
+    commits_since_parser.set_defaults(handler=cmd_commits_since)
 
     doctor_parser = git_sub.add_parser(
         "doctor",

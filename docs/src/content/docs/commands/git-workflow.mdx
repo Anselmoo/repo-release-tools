@@ -33,6 +33,7 @@ description: "Generated command reference for the Git Workflow command group."
   - [`rrt git status`](#rrt-git-status)
   - [`rrt git diff`](#rrt-git-diff)
   - [`rrt git log`](#rrt-git-log)
+  - [`rrt git commits-since`](#rrt-git-commits-since)
   - [`rrt git doctor`](#rrt-git-doctor)
   - [`rrt git sync-status`](#rrt-git-sync-status)
   - [`rrt git check-dirty-tree`](#rrt-git-check-dirty-tree)
@@ -334,6 +335,7 @@ Arguments
   status                Show a compact branch and worktree status view.
   diff                  Show a compact diff using rrt glyph formatting.
   log                   Show a compact commit history view.
+  commits-since         List commits since a ref, optionally excluding paths such as generated files.
   doctor                Run a compact repository health report for rrt workflows.
   sync-status           Analyze unresolved conflicts and whether sync/rebase work is needed.
   check-dirty-tree      Exit non-zero when the working tree is dirty. Useful in hooks and CI.
@@ -435,6 +437,34 @@ Examples
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   $ rrt git log
   $ rrt git log --limit 20
+```
+
+### `rrt git commits-since`
+
+```text
+Usage:  rrt git commits-since [OPTIONS] <ref>
+
+List commits in <ref>..HEAD. --exclude drops commits that only touch the given git glob pathspecs, so a file that records HEAD can leave itself out.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <ref>                Starting ref (exclusive), e.g. a tag.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help           Show this message and exit.
+  --exclude PATTERN    Git glob pathspec (repo-root relative) to leave out. Repeatable.
+  --exclude-generated  Also leave out every [tool.rrt.git].generated pattern.
+  --count              Print only the number of commits.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git commits-since v1.2.0
+  $ rrt git commits-since origin/main --exclude HANDOFF.md --count
+  $ rrt git commits-since HEAD~5 --exclude-generated
 ```
 
 ### `rrt git doctor`
