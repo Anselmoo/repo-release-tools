@@ -8,6 +8,18 @@
 - **version**: resolve the latest tag per tag_prefix by version precedence
 - **version**: sort pre-releases by SemVer 2.0 precedence (rc.2 < rc.10)
 
+### Added
+- **mcp**: add rrt_git_land, rrt_git_dirty_tree, rrt_git_commits_since, rrt_gate_run
+- **gate**: add rrt gate run for check lines with expected exits
+- **git**: add rrt git land — fast-forward, remove worktree, delete branch
+- **git**: add rrt git commits-since with --exclude pathspecs
+- **git**: check-dirty-tree --ignore-generated on rrt git and rrt-hooks
+- **config**: add [tool.rrt.git].generated and [[tool.rrt.gates]]
+- **git**: add checked worktree, dirty-entry and commits-since primitives
+
+### Documentation
+- **git**: document land, commits-since, generated paths and exit-code hazards
+
 ## [1.18.0] - 2026-09-21
 ### Added
 - **docs**: enforce the published-docstring skeleton
