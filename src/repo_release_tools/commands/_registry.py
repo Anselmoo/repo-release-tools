@@ -191,6 +191,7 @@ def ensure_registered() -> None:
         eol_check,
         fields_cmd,
         folder,
+        gate_cmd,
         git_cmd,
         hooks_cmd,
         init,

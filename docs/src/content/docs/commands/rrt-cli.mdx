@@ -70,6 +70,7 @@ Repository Health
 CI & Automation
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   action  Scaffold a starter GitHub Actions workflow that runs repo-release-tools checks.
+  gate    Run [[tool.rrt.gates]] check lines. Every line runs regardless of earlier results, and each is judged against the exit code it is designed to produce.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 Git Workflow
@@ -111,6 +112,6 @@ Each command group has its own reference page with the full argparse help.
 |---|---|---|
 | **Version & Release** | `bump`, `changelog`, `ci-version`, `release`, `sync`, `tag`, `workspace` | [Version & Release](/repo-release-tools/commands/version-release/) |
 | **Repository Health** | `artifacts`, `config`, `docs`, `doctor`, `drift`, `env`, `eol`, `fields`, `folder`, `project`, `toc`, `tree` | [Repository Health](/repo-release-tools/commands/repo-health/) |
-| **CI & Automation** | `action` | [CI & Automation](/repo-release-tools/commands/ci-automation/) |
+| **CI & Automation** | `action`, `gate` | [CI & Automation](/repo-release-tools/commands/ci-automation/) |
 | **Git Workflow** | `branch`, `git` | [Git Workflow](/repo-release-tools/commands/git-workflow/) |
 | **Setup & Tooling** | `agents`, `hooks`, `init`, `install`, `mcp`, `skill` | [Setup & Tooling](/repo-release-tools/commands/setup-tooling/) |

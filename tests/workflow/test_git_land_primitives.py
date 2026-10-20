@@ -126,6 +126,8 @@ def test_dirty_entries_parses_modified_rename_and_nested_untracked(repo: Path) -
     assert by_path["docs/HANDOFF.md"].status == " M"
     assert by_path["src/main.py"].status == "R "
     assert by_path["src/main.py"].orig_path == "src/app.py"
+    assert by_path["src/main.py"].short_line == "R  src/app.py -> src/main.py"
+    assert by_path["docs/HANDOFF.md"].short_line == " M docs/HANDOFF.md"
     assert by_path["new/deep/x.txt"].untracked is True
     assert by_path["docs/HANDOFF.md"].untracked is False
 
