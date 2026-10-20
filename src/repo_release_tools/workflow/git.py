@@ -736,14 +736,22 @@ def split_generated(
 
     Git, not Python, decides which entries match the generated patterns, so a
     pattern means the same here as in ``commits_since`` and in a restore.
+
+    An entry counts as generated only when the filtered status reports it
+    exactly as the full status does. A rename from a non-generated path into
+    a generated one reads as ``A`` under the filter but ``R`` in full, so it
+    stays in *other*: restoring it would leave the source deletion behind.
     """
     specs = generated_pathspecs(patterns)
     everything = dirty_entries(cwd)
     if not specs:
         return everything, []
-    generated = dirty_entries(cwd, specs)
-    generated_keys = {(entry.status, entry.path) for entry in generated}
-    other = [entry for entry in everything if (entry.status, entry.path) not in generated_keys]
+    filtered_keys = {(entry.status, entry.path) for entry in dirty_entries(cwd, specs)}
+    other: list[DirtyEntry] = []
+    generated: list[DirtyEntry] = []
+    for entry in everything:
+        bucket = generated if (entry.status, entry.path) in filtered_keys else other
+        bucket.append(entry)
     return other, generated
 
 

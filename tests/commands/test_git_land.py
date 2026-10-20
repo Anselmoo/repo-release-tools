@@ -130,6 +130,27 @@ def test_restore_generated_restores_tracked_and_deletes_untracked(
     assert not _wt(repo).exists()
 
 
+def test_restore_generated_handles_staged_new_file(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A staged-but-new generated file (status `A `) is absent from HEAD yet restorable."""
+    (_wt(repo) / "tmp").mkdir()
+    (_wt(repo) / "tmp" / "staged.json").write_text("{}\n")
+    _git(_wt(repo), "add", "tmp/staged.json")
+    monkeypatch.chdir(repo)
+
+    assert git_land.cmd_land(_args(restore_generated=True)) == 0
+    assert not _wt(repo).exists()
+
+
+def test_rename_into_generated_path_is_refused(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _git(_wt(repo), "mv", "feature.txt", "HANDOFF.md", "-f")
+    monkeypatch.chdir(repo)
+    _refused(capsys, _args(restore_generated=True), "has uncommitted changes")
+
+
 def test_dry_run_changes_nothing(
     repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -161,6 +161,15 @@ def test_split_generated_from_subdirectory_is_root_anchored(repo: Path) -> None:
     assert [entry.path for entry in generated] == ["docs/HANDOFF.md"]
 
 
+def test_split_generated_rename_into_generated_path_stays_other(repo: Path) -> None:
+    _git(repo, "mv", "src/app.py", "docs/APP.md")
+    other, generated = git.split_generated(repo, ["docs/*.md"])
+    assert generated == []
+    assert [(entry.status, entry.path, entry.orig_path) for entry in other] == [
+        ("R ", "docs/APP.md", "src/app.py")
+    ]
+
+
 def test_split_generated_without_patterns_marks_nothing(repo: Path) -> None:
     (repo / "docs" / "HANDOFF.md").write_text("head two\n", encoding="utf-8")
     other, generated = git.split_generated(repo, [])
