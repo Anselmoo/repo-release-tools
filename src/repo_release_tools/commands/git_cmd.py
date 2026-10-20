@@ -94,6 +94,7 @@ from repo_release_tools.commands._registry import CommandCategory, CommandGroup,
 from repo_release_tools.commands.git_backport import register_backport
 from repo_release_tools.commands.git_commit import register_commit
 from repo_release_tools.commands.git_inspect import register_inspect
+from repo_release_tools.commands.git_land import register_land
 from repo_release_tools.commands.git_sync import register_sync
 
 GIT_EPILOG = (
@@ -125,4 +126,5 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     register_inspect(git_sub)
     register_commit(git_sub)
     register_sync(git_sub)
+    register_land(git_sub)
     register_backport(git_sub)

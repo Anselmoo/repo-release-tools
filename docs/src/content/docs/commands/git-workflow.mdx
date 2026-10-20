@@ -46,6 +46,7 @@ description: "Generated command reference for the Git Workflow command group."
   - [`rrt git rebootstrap`](#rrt-git-rebootstrap)
   - [`rrt git purge-cache`](#rrt-git-purge-cache)
   - [`rrt git publish-snapshot`](#rrt-git-publish-snapshot)
+  - [`rrt git land`](#rrt-git-land)
   - [`rrt git backport-from-target`](#rrt-git-backport-from-target)
 {/* rrt:auto:end:toc */}
 
@@ -348,6 +349,7 @@ Arguments
   rebootstrap           Destroy current git history and create a fresh repository history.
   purge-cache           Expire reflogs and run git garbage collection.
   publish-snapshot      Force-push a single-commit snapshot of tracked content to a secondary remote.
+  land                  Fast-forward a branch onto its target, remove its worktree and delete it.
   backport-from-target  List commits pending backport from a publish-snapshot target.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -790,6 +792,36 @@ Examples
   $ rrt git publish-snapshot demo --yes-i-know-this-overwrites-remote-history
   $ rrt git publish-snapshot --remote mirror --branch main --message "Initial commit" --yes-i-know-this-overwrites-remote-history
   $ rrt git publish-snapshot --remote mirror --exclude 'docs/internal/*' --dry-run
+```
+
+### `rrt git land`
+
+```text
+Usage:  rrt git land [OPTIONS] <branch>
+
+Land a finished branch in one process: fast-forward --onto, restore generated paths if asked, remove the branch's worktree, and delete the branch. All checks run before any change; re-running after a failure skips finished steps.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <branch>             Local branch to land.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help           Show this message and exit.
+  --onto BRANCH        Branch to fast-forward (default: main).
+  --restore-generated  Discard changes to [tool.rrt.git].generated paths in the worktree first: restore tracked files and delete untracked ones.
+  --keep-branch        Keep the branch after landing it.
+  --dry-run            Preview without changing git.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt git land feat/parser --dry-run
+  $ rrt git land feat/parser
+  $ rrt git land feat/parser --onto develop --restore-generated
+  $ rrt git land feat/parser --keep-branch
 ```
 
 ### `rrt git backport-from-target`
