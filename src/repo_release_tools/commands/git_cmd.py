@@ -21,7 +21,10 @@ summary first, followed by the details needed to act on the result.
 - `sync-status` reports unresolved conflicts and ahead/behind drift against a
   sync base.
 - `check-dirty-tree` exits non-zero when the worktree is dirty, which makes it
-  useful for hooks and CI.
+  useful for hooks and CI. `--ignore-generated` lists `[tool.rrt.git].generated`
+  paths instead of failing on them.
+- `commits-since` lists commits in `<ref>..HEAD`; `--exclude` leaves out commits
+  that only touch the given pathspecs, so a file that records HEAD can skip itself.
 
 ### Commit drafting
 
@@ -42,6 +45,9 @@ summary first, followed by the details needed to act on the result.
 - `rebootstrap` backs up `.git`, reinitializes the repository, and creates a
   fresh history snapshot or empty bootstrap commit.
 - `purge-cache` expires reflogs and runs `git gc` to reclaim local cache space.
+- `land` fast-forwards `--onto`, removes the branch's worktree and deletes the
+  branch in one process. All checks run before any change, and a re-run after a
+  failure skips the steps that already finished.
 
 ### Publish
 
@@ -74,6 +80,8 @@ $ rrt git squash-local --base-ref origin/main "ship parser"
 $ rrt git rebootstrap --yes-i-know-this-destroys-history --dry-run
 $ rrt git purge-cache --dry-run
 $ rrt git backport-from-target demo
+$ rrt git land feat/parser --restore-generated --dry-run
+$ rrt git commits-since v1.2.0 --exclude-generated --count
 ```
 
 ## Safety notes
@@ -84,6 +92,8 @@ $ rrt git backport-from-target demo
   when that is intended.
 - `rebootstrap` also guards against accidental use on repositories with
   configured remotes unless explicitly allowed.
+- `land` never pushes and never uses `--force`; `--restore-generated` only
+  discards paths listed in `[tool.rrt.git].generated`.
 """
 
 from __future__ import annotations
@@ -103,6 +113,8 @@ GIT_EPILOG = (
     '  $ rrt git commit --type fix "make output clearer"\n'
     "  $ rrt git sync\n"
     "  $ rrt git undo-safe\n"
+    "  $ rrt git land feat/parser --dry-run\n"
+    "  $ rrt git commits-since v1.2.0 --exclude HANDOFF.md\n"
     "  $ rrt git publish-snapshot --remote mirror --dry-run\n"
     "  $ rrt git backport-from-target demo"
 )
