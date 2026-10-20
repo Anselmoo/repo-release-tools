@@ -963,6 +963,48 @@ class ArtifactProtection:
             entry.validate()
 
 
+@dataclass(frozen=True)
+class GitConfig:
+    """Git workflow settings under ``[tool.rrt.git]``.
+
+    ``generated`` lists git glob pathspecs (root-anchored; ``*`` stops at
+    ``/``, ``**`` crosses directories) for files that tooling or hooks
+    regenerate. ``rrt git check-dirty-tree --ignore-generated``,
+    ``rrt git land --restore-generated`` and ``rrt git commits-since
+    --exclude-generated`` all read it. It is unrelated to a version group's
+    ``generated_files`` (lockfiles staged after a bump).
+    """
+
+    generated: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class GateSpec:
+    """One ``[[tool.rrt.gates]]`` entry run by ``rrt gate run``.
+
+    A string ``run`` executes through ``bash -o pipefail -c``; a list ``run``
+    executes as argv with no shell. ``expect`` is the exit code the line is
+    designed to produce, so a deliberately-red check can pass.
+    """
+
+    name: str
+    run: str | tuple[str, ...]
+    expect: int = 0
+    timeout: float | None = None
+    description: str = ""
+
+    def validate(self) -> None:
+        """Validate one gate entry."""
+        if not self.name.strip():
+            raise ValueError("gate name must be a non-empty string")
+        if not self.run:
+            raise ValueError(f"gate {self.name!r} run must not be empty")
+        if not 0 <= self.expect <= 255:
+            raise ValueError(f"gate {self.name!r} expect must be between 0 and 255")
+        if self.timeout is not None and self.timeout <= 0:
+            raise ValueError(f"gate {self.name!r} timeout must be positive")
+
+
 VALID_PIN_TARGET_MISSING = frozenset({"warn", "error"})
 
 
@@ -983,6 +1025,8 @@ class RrtConfig:
     docs: DocsConfig | None = None
     folders: FolderPolicyConfig | None = None
     artifact_protection: ArtifactProtection | None = None
+    git: GitConfig = field(default_factory=GitConfig)
+    gates: tuple[GateSpec, ...] = ()
     artifact_targets: list[ArtifactTarget] = field(default_factory=list)
     field_targets: list[FieldTarget] = field(default_factory=list)
     pin_target_missing: str = "error"

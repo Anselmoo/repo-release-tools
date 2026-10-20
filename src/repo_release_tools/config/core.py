@@ -13,6 +13,7 @@ from typing import cast
 from .artifact_protection import _load_artifact_protection
 from .docs_config import _VALID_LANGUAGES, _load_docs_config, _load_eol_config
 from .folders_config import _load_folders_config
+from .git_config import _load_gates, _load_git_config
 from .model import (
     _AUTO,
     _BRANCH_TYPE_IDENTIFIER_RE,
@@ -56,7 +57,9 @@ from .model import (
     FolderRule,
     FolderScaffoldFile,
     FolderTemplate,
+    GateSpec,
     GeneratedAsset,
+    GitConfig,
     MapConfig,
     MissingRrtConfigError,
     PinTarget,
@@ -130,6 +133,39 @@ def load_primary_remote(cwd: Path) -> str:
         if is_missing_tool_rrt_error(exc):
             return "origin"
         raise ValueError(f"Failed to load primary_remote configuration: {exc}") from exc
+
+
+def load_git_config(cwd: Path) -> GitConfig:
+    """Load ``[tool.rrt.git]`` from the rrt config in *cwd*, if available.
+
+    Returns an empty :class:`GitConfig` when no config file exists or when the
+    config has no ``[tool.rrt]`` section. Any other configuration error raises
+    ``ValueError`` so misconfiguration stays visible.
+    """
+    try:
+        return load_config(cwd).git
+    except FileNotFoundError:
+        return GitConfig()
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return GitConfig()
+        raise ValueError(f"Failed to load [tool.rrt.git] configuration: {exc}") from exc
+
+
+def load_gates(cwd: Path) -> tuple[GateSpec, ...]:
+    """Load ``[[tool.rrt.gates]]`` from the rrt config in *cwd*, if available.
+
+    Returns ``()`` when no config file or ``[tool.rrt]`` section exists. Any
+    other configuration error raises ``ValueError``.
+    """
+    try:
+        return load_config(cwd).gates
+    except FileNotFoundError:
+        return ()
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return ()
+        raise ValueError(f"Failed to load [[tool.rrt.gates]] configuration: {exc}") from exc
 
 
 def ignore_dir_names() -> frozenset[str]:
@@ -763,6 +799,8 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         docs=_load_docs_config(raw.get("docs"), root=root),
         folders=_load_folders_config(raw.get("folders")),
         artifact_protection=_load_artifact_protection(raw.get("artifact_protection")),
+        git=_load_git_config(raw.get("git")),
+        gates=_load_gates(raw.get("gates")),
         artifact_targets=_load_artifact_targets(raw.get("artifact_targets", [])),
         field_targets=_load_field_targets(raw.get("field_targets", [])),
         pin_target_missing=_load_pin_target_missing(raw.get("pin_target_missing")),
@@ -1596,7 +1634,9 @@ __all__ = [
     "FolderRule",
     "FolderScaffoldFile",
     "FolderTemplate",
+    "GateSpec",
     "GeneratedAsset",
+    "GitConfig",
     "MapConfig",
     "MissingRrtConfigError",
     "PinTarget",
@@ -1630,6 +1670,8 @@ __all__ = [
     "load_config",
     "load_config_from_path",
     "load_extra_branch_types",
+    "load_gates",
+    "load_git_config",
     "load_or_autodetect_config",
     "load_primary_remote",
     "recommend_init_config",

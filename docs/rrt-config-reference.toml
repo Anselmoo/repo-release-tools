@@ -167,6 +167,37 @@ rules = []
 
 templates = []
 
+# Check lines run by `rrt gate run`. Every line runs regardless of earlier
+# results, and each records the exit code it is designed to produce.
+[[tool.rrt.gates]]
+
+# Optional human-readable note shown in dry-run output.
+description = "..."
+
+# Exit code this line is designed to produce. Use a non-zero value for a
+# deliberately-red check.
+expect = 0
+
+# Unique gate name, shown in the report and accepted as a filter by `rrt gate
+# run NAME`.
+name = "..."
+
+# A string runs through `bash -o pipefail -c`; a list runs as argv with no
+# shell.
+run = "..."
+
+# Optional per-line timeout in seconds. A timed-out line fails its verdict.
+timeout = 0
+
+# Git workflow settings read by `rrt git check-dirty-tree`, `rrt git land` and
+# `rrt git commits-since`.
+[tool.rrt.git]
+
+# Git glob pathspecs, anchored at the repository root, for files that tooling
+# or hooks regenerate (`*` stops at `/`; `**` crosses directories). Unrelated
+# to a version group's `generated_files`.
+generated = []
+
 # Additional files kept in sync with the release version (e.g. CI action
 # pins).
 [[tool.rrt.pin_targets]]
