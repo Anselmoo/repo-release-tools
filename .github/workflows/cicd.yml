@@ -85,7 +85,7 @@ jobs:
       - name: Generate tree manifest (for diagnostics)
         run: uv run rrt tree --manifest --compress
       - name: Upload tree manifest artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: tree-manifest
           path: .rrt/tree.manifest.json.gz
@@ -235,7 +235,7 @@ jobs:
         run: uvx twine check dist/*
 
       - name: Upload distribution artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: python-package-distributions
           path: dist/
@@ -262,7 +262,7 @@ jobs:
           from-dist: dist/
           attach-to-release: 'false'
       - name: Upload .mcpb artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: mcpb-package
           path: dist/*.mcpb
@@ -287,7 +287,7 @@ jobs:
           path: .
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: sbom
           path: sbom.spdx.json
