@@ -53,6 +53,7 @@ from repo_release_tools.config import (
     DEFAULT_CHANGELOG_WORKFLOW,
     is_missing_tool_rrt_error,
     load_extra_branch_types,
+    load_extra_commit_types,
     load_or_autodetect_config,
 )
 from repo_release_tools.ui import VerbosePrinter
@@ -578,17 +579,28 @@ def run_branch_name_check(
     )
 
 
-def run_commit_subject_check(subject: str, *, title: str, verbose: int = 0) -> int:
-    """Validate an explicit commit subject."""
+def run_commit_subject_check(
+    subject: str,
+    *,
+    title: str,
+    extra_types: tuple[str, ...] = (),
+    verbose: int = 0,
+) -> int:
+    """Validate an explicit commit subject.
+
+    *extra_types* are the project's ``extra_commit_types``; they are accepted
+    alongside the built-in Conventional Commit types.
+    """
     p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"check-commit-subject: {subject!r}")
-    parsed_commit = parse_conventional_commit(subject)
+    p.verbose_line(f"  extra commit types: {extra_types}", level=3)
+    parsed_commit = parse_conventional_commit(subject, extra_types)
     if parsed_commit is not None:
         p.verbose_line(
             f"  type={parsed_commit.type!r}, scope={parsed_commit.scope!r}",
             level=2,
         )
-    problem = validate_commit_subject(subject)
+    problem = validate_commit_subject(subject, extra_types)
     if problem is None:
         p.verbose_line("  subject OK")
         return 0
@@ -758,14 +770,24 @@ def run_pre_commit_changelog(
     )
 
 
-def run_commit_msg(message_path: Path, *, verbose: int = 0) -> int:
-    """Validate the commit subject during commit-msg."""
+def run_commit_msg(
+    message_path: Path,
+    *,
+    extra_types: tuple[str, ...] = (),
+    verbose: int = 0,
+) -> int:
+    """Validate the commit subject during commit-msg.
+
+    *extra_types* are the project's ``extra_commit_types``, forwarded to
+    :func:`run_commit_subject_check`.
+    """
     subject = read_commit_subject(message_path)
     p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"commit-msg: file={message_path!s}", level=2)
     return run_commit_subject_check(
         subject,
         title="Commit blocked by commit message policy.",
+        extra_types=extra_types,
         verbose=verbose,
     )
 
@@ -1337,7 +1359,11 @@ def main(argv: list[str] | None = None) -> int:
                 Path.cwd(), changelog_file=parsed.changelog_file, verbose=verbose
             )
         case "commit-msg":
-            return run_commit_msg(Path(parsed.message_file), verbose=verbose)
+            return run_commit_msg(
+                Path(parsed.message_file),
+                extra_types=load_extra_commit_types(Path.cwd()),
+                verbose=verbose,
+            )
         case "check-branch-name":
             extra_types = load_extra_branch_types(Path.cwd())
             return run_branch_name_check(
@@ -1348,7 +1374,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         case "check-commit-subject":
             return run_commit_subject_check(
-                parsed.subject, title="Commit subject validation failed.", verbose=verbose
+                parsed.subject,
+                title="Commit subject validation failed.",
+                extra_types=load_extra_commit_types(Path.cwd()),
+                verbose=verbose,
             )
         case "check-dirty-tree":
             return run_dirty_tree_check(

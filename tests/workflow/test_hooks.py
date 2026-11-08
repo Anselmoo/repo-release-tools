@@ -303,7 +303,7 @@ def test_run_commit_msg_uses_read_commit_subject(
     monkeypatch.setattr(
         hooks,
         "run_commit_subject_check",
-        lambda subject, *, title, verbose=0: captured.append((subject, title)) or 7,
+        lambda subject, *, title, extra_types=(), verbose=0: captured.append((subject, title)) or 7,
     )
 
     assert hooks.run_commit_msg(message_file) == 7
@@ -640,7 +640,9 @@ def test_run_post_correct_and_main_dispatch(
     monkeypatch.setattr(
         hooks,
         "run_commit_msg",
-        lambda path, verbose=0: calls.append(("commit-msg", path)) or 13,
+        lambda path, *, extra_types=(), verbose=0: (
+            calls.append(("commit-msg", (path, extra_types))) or 13
+        ),
     )
     monkeypatch.setattr(
         hooks,
@@ -652,7 +654,9 @@ def test_run_post_correct_and_main_dispatch(
     monkeypatch.setattr(
         hooks,
         "run_commit_subject_check",
-        lambda subject, *, title, verbose=0: calls.append(("subject", subject)) or 15,
+        lambda subject, *, title, extra_types=(), verbose=0: (
+            calls.append(("subject", (subject, extra_types))) or 15
+        ),
     )
     monkeypatch.setattr(
         hooks,
@@ -696,12 +700,15 @@ def test_run_post_correct_and_main_dispatch(
         ),
     )
     monkeypatch.setattr(hooks, "load_extra_branch_types", lambda cwd: ("custom",))
+    monkeypatch.setattr(hooks, "load_extra_commit_types", lambda cwd: ("ux",))
 
     assert hooks.main(["pre-commit"]) == 11
     assert hooks.main(["pre-commit-changelog", "--changelog-file", "CHANGELOG.md"]) == 12
     assert hooks.main(["commit-msg", "msg.txt"]) == 13
     assert hooks.main(["check-branch-name", "--branch", "feat/add-parser"]) == 14
     assert hooks.main(["check-commit-subject", "--subject", "feat: add parser"]) == 15
+    assert ("commit-msg", (Path("msg.txt"), ("ux",))) in calls
+    assert ("subject", ("feat: add parser", ("ux",))) in calls
     assert hooks.main(["check-dirty-tree"]) == 16
     assert hooks.main(["check-dirty-tree", "--ignore-generated"]) == 16
     assert hooks.main(["check-docs"]) == 17
@@ -1656,3 +1663,102 @@ def test_main_artifacts_generate_hook_command(monkeypatch: pytest.MonkeyPatch) -
     assert gen_args.snapshot is False
     assert gen_args.check is False
     assert gen_args.list is False
+
+
+# ---------------------------------------------------------------------------
+# extra_commit_types reach the commit-subject hooks
+# ---------------------------------------------------------------------------
+
+_EXTRA_COMMIT_TYPES_CONFIG = """\
+[tool.rrt]
+extra_commit_types = ["security", "ux"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+"""
+
+
+def _write_extra_commit_types_config(root: Path) -> None:
+    (root / ".rrt.toml").write_text(_EXTRA_COMMIT_TYPES_CONFIG, encoding="utf-8")
+
+
+def test_check_commit_subject_accepts_configured_extra_type(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _write_extra_commit_types_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["check-commit-subject", "--subject", "security: pin the token scope"]) == 0
+    assert hooks.main(["check-commit-subject", "--subject", "ux(cli): clearer prompt"]) == 0
+
+
+def test_check_commit_subject_rejects_unknown_type_and_lists_extra_types(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_extra_commit_types_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["check-commit-subject", "--subject", "spike: try a thing"]) == 1
+    err = capsys.readouterr().err
+    assert "Allowed types:" in err
+    assert "security" in err
+    assert "ux" in err
+
+
+def test_commit_msg_accepts_configured_extra_type(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _write_extra_commit_types_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    message_file = tmp_path / "COMMIT_EDITMSG"
+    message_file.write_text("security: pin the token scope\n\nbody\n", encoding="utf-8")
+
+    assert hooks.main(["commit-msg", str(message_file)]) == 0
+
+
+def test_commit_msg_rejects_unknown_type_and_lists_extra_types(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_extra_commit_types_config(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    message_file = tmp_path / "COMMIT_EDITMSG"
+    message_file.write_text("spike: try a thing\n", encoding="utf-8")
+
+    assert hooks.main(["commit-msg", str(message_file)]) == 1
+    err = capsys.readouterr().err
+    assert "Commit blocked by commit message policy." in err
+    assert "security" in err
+
+
+def test_check_commit_subject_without_config_keeps_builtin_types(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert hooks.main(["check-commit-subject", "--subject", "feat: add parser"]) == 0
+    assert hooks.main(["check-commit-subject", "--subject", "security: pin scope"]) == 1
+
+
+def test_run_commit_subject_check_verbose_reports_extra_type(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert (
+        hooks.run_commit_subject_check(
+            "security(auth): pin scope",
+            title="t",
+            extra_types=("security",),
+            verbose=2,
+        )
+        == 0
+    )
+    err = capsys.readouterr().err
+    assert "type='security'" in err
+    assert "scope='auth'" in err

@@ -52,14 +52,14 @@ def register(mcp: FastMCP) -> None:
 
         Prefer this over `rrt-hooks commit-msg` in a shell: the subject is passed as a
         string argument, so backticks, quotes, `!`, and `$` in the message cannot be
-        mangled by shell quoting.
+        mangled by shell quoting. Honors extra_commit_types from config, as the hook does.
         """
-        from repo_release_tools.config import load_extra_branch_types
+        from repo_release_tools.config import load_extra_commit_types
         from repo_release_tools.workflow.hooks import validate_commit_subject
 
         root = ctx.lifespan_context.get("root", Path.cwd())
         try:
-            extra = load_extra_branch_types(root)
+            extra = load_extra_commit_types(root)
         except FileNotFoundError:
             extra = ()
         error = validate_commit_subject(subject, extra)

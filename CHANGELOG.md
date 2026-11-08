@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **hooks**: honour extra_commit_types in commit-msg, check-commit-subject and MCP rrt_validate_commit
 - **version**: add prerelease_base config, rrt bump --base and MCP rrt_bump base (patch|minor|major|auto)
 - **version**: start alpha/beta/rc from a final version on the next patch (1.0.0 -> 1.0.1-rc.1, was 1.0.0-rc.1)
 - **version**: make the Action detect-version step call rrt ci-version compute

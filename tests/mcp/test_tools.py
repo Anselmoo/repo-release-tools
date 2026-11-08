@@ -989,7 +989,7 @@ def test_rrt_validate_commit_valid(tmp_path: Path) -> None:
     tools = _val_tools(tmp_path)
     ctx = _ctx(tmp_path)
     with (
-        patch("repo_release_tools.config.load_extra_branch_types", return_value=()),
+        patch("repo_release_tools.config.load_extra_commit_types", return_value=()),
         patch("repo_release_tools.workflow.hooks.validate_commit_subject", return_value=None),
     ):
         result = tools["rrt_validate_commit"](ctx, subject="feat: add thing")
@@ -1001,7 +1001,7 @@ def test_rrt_validate_commit_invalid(tmp_path: Path) -> None:
     tools = _val_tools(tmp_path)
     ctx = _ctx(tmp_path)
     with (
-        patch("repo_release_tools.config.load_extra_branch_types", return_value=()),
+        patch("repo_release_tools.config.load_extra_commit_types", return_value=()),
         patch("repo_release_tools.workflow.hooks.validate_commit_subject", return_value="no colon"),
     ):
         result = tools["rrt_validate_commit"](ctx, subject="bad")
@@ -1013,13 +1013,36 @@ def test_rrt_validate_commit_load_error(tmp_path: Path) -> None:
     ctx = _ctx(tmp_path)
     with (
         patch(
-            "repo_release_tools.config.load_extra_branch_types",
+            "repo_release_tools.config.load_extra_commit_types",
             side_effect=FileNotFoundError("no file"),
         ),
         patch("repo_release_tools.workflow.hooks.validate_commit_subject", return_value=None),
     ):
         result = tools["rrt_validate_commit"](ctx, subject="feat: good")
     assert result.valid is True
+
+
+def test_rrt_validate_commit_honours_extra_commit_types(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_commit_types = ["security"]
+extra_branch_types = ["snyk"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    tools = _val_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    assert tools["rrt_validate_commit"](ctx, subject="security: pin scope").valid is True
+    rejected = tools["rrt_validate_commit"](ctx, subject="snyk: bump")
+    assert rejected.valid is False
+    assert rejected.reason is not None
+    assert "security" in rejected.reason
 
 
 # ── changelog tools ───────────────────────────────────────────────────────────
