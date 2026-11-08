@@ -116,6 +116,25 @@ def load_extra_branch_types(cwd: Path) -> tuple[str, ...]:
         raise ValueError(f"Failed to load extra_branch_types configuration: {exc}") from exc
 
 
+def load_extra_commit_types(cwd: Path) -> tuple[str, ...]:
+    """Load extra_commit_types from the rrt config in *cwd*, if available.
+
+    Returns an empty tuple when no config file exists or when the config does not
+    contain an ``[tool.rrt]`` section.  Raises ``ValueError`` for any other
+    configuration error (e.g. TOML parse errors or invalid ``extra_commit_types``
+    values) so that misconfiguration is visible rather than silently ignored.
+    """
+    try:
+        cfg = load_config(cwd)
+        return cfg.extra_commit_types
+    except FileNotFoundError:
+        return ()
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return ()
+        raise ValueError(f"Failed to load extra_commit_types configuration: {exc}") from exc
+
+
 def load_primary_remote(cwd: Path) -> str:
     """Load primary_remote from the rrt config in *cwd*, if available.
 
@@ -1670,6 +1689,7 @@ __all__ = [
     "load_config",
     "load_config_from_path",
     "load_extra_branch_types",
+    "load_extra_commit_types",
     "load_gates",
     "load_git_config",
     "load_or_autodetect_config",

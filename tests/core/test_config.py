@@ -42,6 +42,7 @@ from repo_release_tools.config import (
     load_config,
     load_config_from_path,
     load_extra_branch_types,
+    load_extra_commit_types,
     load_or_autodetect_config,
     load_primary_remote,
     recommend_init_config,
@@ -1083,6 +1084,48 @@ kind = "package_json"
     )
 
     assert load_extra_branch_types(tmp_path) == ("snyk", "greenkeeper")
+
+
+def test_load_extra_commit_types_returns_empty_when_no_config(tmp_path: Path) -> None:
+    assert load_extra_commit_types(tmp_path) == ()
+
+
+def test_load_extra_commit_types_returns_empty_when_no_rrt_section(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[tool.other]\n", encoding="utf-8")
+    assert load_extra_commit_types(tmp_path) == ()
+
+
+def test_load_extra_commit_types_surfaces_invalid_config_error(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_commit_types = ["Not Valid"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Failed to load extra_commit_types configuration"):
+        load_extra_commit_types(tmp_path)
+
+
+def test_load_extra_commit_types_returns_configured_types(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_commit_types = ["security", "UX"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    assert load_extra_commit_types(tmp_path) == ("security", "ux")
 
 
 # ---------------------------------------------------------------------------
