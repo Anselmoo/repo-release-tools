@@ -28,7 +28,7 @@ from __future__ import annotations
 import argparse
 import inspect
 import os
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Generator, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -418,7 +418,7 @@ def iter_help_sections() -> Iterator[HelpSection]:
 
 
 @contextmanager
-def pinned_help_environment() -> Iterator[None]:
+def pinned_help_environment() -> Generator[None, None, None]:
     """Pin environment settings so help rendering is deterministic."""
     original_columns = os.environ.get("COLUMNS")
     original_no_color = os.environ.get("NO_COLOR")

@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-08
 ### Fixed
 - **hooks**: honour extra_commit_types in commit-msg, check-commit-subject and MCP rrt_validate_commit
 - **version**: add prerelease_base config, rrt bump --base and MCP rrt_bump base (patch|minor|major|auto)

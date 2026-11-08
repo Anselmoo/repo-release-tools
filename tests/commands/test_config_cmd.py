@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -580,7 +580,7 @@ def test_load_schema_fallback_reads_repo_root_schema(
     import repo_release_tools.commands.config_cmd as _mod
 
     @contextmanager
-    def _failing_as_file(ref: object) -> Iterator[object]:
+    def _failing_as_file(ref: object) -> Generator[object, None, None]:
         raise FileNotFoundError("no bundled data")
         yield  # pragma: no cover
 
@@ -607,7 +607,7 @@ def test_load_schema_fallback_returns_empty_when_no_schema(
     import repo_release_tools.commands.config_cmd as _mod
 
     @contextmanager
-    def _failing_as_file(ref: object) -> Iterator[object]:
+    def _failing_as_file(ref: object) -> Generator[object, None, None]:
         raise TypeError("no bundled data")
         yield  # pragma: no cover
 
