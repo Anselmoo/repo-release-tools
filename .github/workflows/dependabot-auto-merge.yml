@@ -1,0 +1,66 @@
+name: 🤖 Dependabot auto-merge
+
+# Squash-merges a Dependabot pull request once every other check on its head
+# commit has finished green. main has no required status checks, so native
+# `gh pr merge --auto` would merge at once; this job waits for CI itself.
+#
+# Dependabot runs get a read-only GITHUB_TOKEN; the job-level `permissions`
+# key raises it for this job only. No pull-request code is checked out or run.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: 🤖 Squash-merge when CI is green
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      checks: read
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      SELF_NAME: 🤖 Squash-merge when CI is green
+      # Checks that must exist and pass before a merge; the rest must not fail.
+      REQUIRED: '["🔍 Lint", "🧪 Tests (3.12)", "🧪 Tests (3.13)", "🧪 Tests (3.14)"]'
+    steps:
+      - name: Wait for CI and squash-merge
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 40 * 60))
+          while :; do
+            runs=$(gh api "repos/$REPO/commits/$HEAD_SHA/check-runs?per_page=100" \
+              --jq '[.check_runs[] | select(.name != env.SELF_NAME) | {name, status, conclusion}]')
+            failed=$(jq -r '[.[] | select(.conclusion as $c
+              | ["failure", "cancelled", "timed_out", "action_required", "startup_failure"]
+              | index($c)) | .name] | join(", ")' <<<"$runs")
+            if [ -n "$failed" ]; then
+              echo "::warning::Not merging: failed checks: $failed"
+              exit 0
+            fi
+            pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
+            missing=$(jq -r --argjson req "$REQUIRED" \
+              '[$req[] as $n | select([.[] | select(.name == $n and .conclusion == "success")] | length == 0) | $n]
+              | join(", ")' <<<"$runs")
+            if [ "$pending" -eq 0 ] && [ -z "$missing" ]; then
+              break
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::warning::Not merging: still waiting for: ${missing:-$pending pending checks}"
+              exit 0
+            fi
+            sleep 30
+          done
+          gh pr merge "$PR_URL" --squash --match-head-commit "$HEAD_SHA"
