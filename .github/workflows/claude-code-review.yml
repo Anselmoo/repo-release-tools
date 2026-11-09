@@ -3,21 +3,21 @@ name: 🤖 Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    # Review only real code changes: lockfile, docs and workflow-only PRs skip it.
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "actions/**"
+      - "action.yml"
+      - "Dockerfile"
 
 jobs:
   claude-review:
     name: 🤖 Claude Review
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Bot PRs (Dependabot, Renovate) get no repository secrets, so the review
+    # could only fail; skip them.
+    if: github.event.pull_request.user.type != 'Bot'
 
     runs-on: ubuntu-latest
     permissions:
