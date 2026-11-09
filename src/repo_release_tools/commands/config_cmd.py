@@ -104,6 +104,7 @@ from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._common import describe_config_load_error
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
 from repo_release_tools.config.reference import render_reference_toml
+from repo_release_tools.conventions import BranchType, CommitType
 from repo_release_tools.ui import (
     GLYPHS,
     DryRunPrinter,
@@ -336,6 +337,24 @@ class Options:
         )
 
 
+def _render_commit_type(ct: CommitType) -> str:
+    """Render one commit type line for the config tree."""
+    section = ct.changelog_section or "not in changelog"
+    required = "required" if ct.changelog_required else "optional"
+    detail = f"section: {section}, changelog: {required}, bump: {ct.bump}"
+    label = f"{ct.name} — {ct.description}" if ct.description else ct.name
+    return f"  {label}  [{detail}]"
+
+
+def _render_branch_type(bt: BranchType) -> str:
+    """Render one branch type line for the config tree."""
+    allowed = ", ".join(bt.commit_types) if bt.commit_types else "any"
+    required = "required" if bt.changelog_required else "optional"
+    detail = f"commit types: {allowed}, slug: {bt.slug}, changelog: {required}"
+    label = f"{bt.name} — {bt.description}" if bt.description else bt.name
+    return f"  {label}  [{detail}]"
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     """Print the resolved rrt config as a tree."""
     opts = Options.from_args(args)
@@ -404,6 +423,15 @@ def cmd_config(args: argparse.Namespace) -> int:
         for detail_line in _render_group_details(group, root):
             p.line(detail_line)
         p.blank_line()
+
+    p.section("Commit types")
+    for commit_type in conf.types.commit_types:
+        p.line(_render_commit_type(commit_type))
+    p.blank_line()
+    p.section("Branch types")
+    for branch_type in conf.types.branch_types:
+        p.line(_render_branch_type(branch_type))
+    p.blank_line()
     return 0
 
 

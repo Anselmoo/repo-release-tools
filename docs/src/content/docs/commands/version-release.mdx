@@ -109,9 +109,10 @@ patch by default. So ``rrt bump rc`` turns ``1.0.0`` into ``1.0.1-rc.1``.
 ``rrt_bump`` tool takes the same values as ``base``, with the same default.
 
 ``auto`` reads the Conventional Commits since the group's last final tag. A
-breaking change means major, a ``feat`` means minor, anything else means patch.
-Later pre-release tags never move that range. ``changelog_paths`` and
-``extra_commit_types`` apply as they do for changelog generation.
+breaking change means major. A type with ``bump = "minor"`` (``feat`` by default)
+means minor, anything else means patch. Later pre-release tags never move that
+range. ``changelog_paths`` and the project's commit types apply as they do for
+changelog generation.
 
 The base is ignored once the version is already a pre-release. So ``1.0.1-rc.1``
 bumps to ``1.0.1-rc.2``, whatever ``--base`` says.

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from repo_release_tools.changelog import (
     append_to_unreleased,
     get_unreleased_entries,
@@ -688,24 +686,65 @@ def test_build_changelog_section_skips_maintenance_when_disabled() -> None:
     assert "### Maintenance" not in rendered
 
 
-def test_build_changelog_section_skips_unmapped_type_via_section_map(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from repo_release_tools import changelog as changelog_module
+def test_build_changelog_section_skips_type_without_section() -> None:
+    from repo_release_tools.changelog import build_changelog_section
+    from repo_release_tools.conventions import build_registry
 
-    original = dict(changelog_module.SECTION_MAP)
-    monkeypatch.setitem(changelog_module.SECTION_MAP, "feat", None)
-    try:
-        rendered = changelog_module.build_changelog_section(
-            "1.2.3",
-            ["feat: brand new feature"],
-            include_maintenance=True,
-        )
-    finally:
-        changelog_module.SECTION_MAP.clear()
-        changelog_module.SECTION_MAP.update(original)
+    registry = build_registry(commit_types=[{"name": "feat", "changelog_section": False}])
+    rendered = build_changelog_section(
+        "1.2.3",
+        ["feat: brand new feature"],
+        include_maintenance=True,
+        registry=registry,
+    )
 
     assert "brand new feature" not in rendered
+
+
+def test_build_changelog_section_renders_custom_types_and_sections() -> None:
+    from repo_release_tools.changelog import build_changelog_section
+    from repo_release_tools.conventions import build_registry
+
+    registry = build_registry(
+        extra_commit_types=("security",),
+        extra_section_map={"security": "Security"},
+        commit_types=[{"name": "ux", "description": "UX polish", "changelog_section": "UX"}],
+    )
+    rendered = build_changelog_section(
+        "1.2.3",
+        ["security: patch hole", "ux(cli): nicer table", "feat: thing", "chore: tidy"],
+        include_maintenance=True,
+        registry=registry,
+    )
+
+    headings = [line for line in rendered.splitlines() if line.startswith("### ")]
+    assert headings == ["### Added", "### Security", "### UX", "### Maintenance"]
+    assert "- patch hole" in rendered
+    assert "- **cli**: nicer table" in rendered
+
+
+def test_append_to_unreleased_uses_registry_section() -> None:
+    from repo_release_tools.changelog import append_to_unreleased
+    from repo_release_tools.conventions import build_registry
+
+    registry = build_registry(
+        extra_commit_types=("security",), extra_section_map={"security": "Security"}
+    )
+    content = "# Changelog\n\n## [Unreleased]\n"
+    assert append_to_unreleased(content, "security: patch hole") == content
+    updated = append_to_unreleased(content, "security: patch hole", registry=registry)
+    assert "### Security\n- patch hole" in updated
+
+
+def test_parse_conventional_commit_strict_requires_one_space_after_colon() -> None:
+    from repo_release_tools.changelog import parse_conventional_commit
+
+    assert parse_conventional_commit("feat:missing space") is not None
+    assert parse_conventional_commit("feat:missing space", strict=True) is None
+    assert parse_conventional_commit("feat : x", strict=True) is None
+    assert parse_conventional_commit("feat:  x", strict=True) is None
+    parsed = parse_conventional_commit("feat(cli)!: add thing", strict=True)
+    assert parsed is not None and parsed.breaking and parsed.scope == "cli"
 
 
 def test_append_to_unreleased_no_title_uses_separator_before_existing_content() -> None:
@@ -715,19 +754,13 @@ def test_append_to_unreleased_no_title_uses_separator_before_existing_content() 
     assert "patch edge case" in result
 
 
-def test_append_to_unreleased_returns_unchanged_when_section_mapping_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from repo_release_tools import changelog as changelog_module
+def test_append_to_unreleased_returns_unchanged_when_section_mapping_missing() -> None:
+    from repo_release_tools.changelog import append_to_unreleased
+    from repo_release_tools.conventions import build_registry
 
-    original = dict(changelog_module.SECTION_MAP)
-    monkeypatch.setitem(changelog_module.SECTION_MAP, "feat", None)
-    try:
-        content = "# Changelog\n"
-        result = changelog_module.append_to_unreleased(content, "feat: x")
-    finally:
-        changelog_module.SECTION_MAP.clear()
-        changelog_module.SECTION_MAP.update(original)
+    registry = build_registry(commit_types=[{"name": "feat", "changelog_section": False}])
+    content = "# Changelog\n"
+    result = append_to_unreleased(content, "feat: x", registry=registry)
 
     assert result == content
 

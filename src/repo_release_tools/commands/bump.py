@@ -25,9 +25,10 @@ patch by default. So ``rrt bump rc`` turns ``1.0.0`` into ``1.0.1-rc.1``.
 ``rrt_bump`` tool takes the same values as ``base``, with the same default.
 
 ``auto`` reads the Conventional Commits since the group's last final tag. A
-breaking change means major, a ``feat`` means minor, anything else means patch.
-Later pre-release tags never move that range. ``changelog_paths`` and
-``extra_commit_types`` apply as they do for changelog generation.
+breaking change means major. A type with ``bump = "minor"`` (``feat`` by default)
+means minor, anything else means patch. Later pre-release tags never move that
+range. ``changelog_paths`` and the project's commit types apply as they do for
+changelog generation.
 
 The base is ignored once the version is already a pre-release. So ``1.0.1-rc.1``
 bumps to ``1.0.1-rc.2``, whatever ``--base`` says.
@@ -144,6 +145,7 @@ from repo_release_tools.config import (
     iter_config_files,  # noqa: F401 -- re-exported for test monkeypatch compatibility
     load_or_autodetect_config,
 )
+from repo_release_tools.conventions import TypeRegistry, build_registry
 from repo_release_tools.preflight import (
     PreflightError,
     check_config_consistent,
@@ -293,6 +295,7 @@ def infer_prerelease_base(
     tag_prefix: str = DEFAULT_TAG_PREFIX,
     paths: Sequence[str] = (),
     extra_types: Sequence[str] = (),
+    registry: TypeRegistry | None = None,
 ) -> str:
     """Return the core level implied by Conventional Commits since the last FINAL tag.
 
@@ -303,10 +306,12 @@ def infer_prerelease_base(
 
     Returns ``"major"`` when any commit is breaking (``type!:`` or a
     ``BREAKING CHANGE:`` / ``BREAKING-CHANGE:`` footer), else ``"minor"`` when
-    any commit is a ``feat``, else ``"patch"``.  *paths* restricts the log to
-    the group's ``changelog_paths``; *extra_types* are the project's
-    ``extra_commit_types``.
+    any commit's type has ``bump = "minor"`` (``feat`` by default), else
+    ``"patch"``.  *paths* restricts the log to the group's ``changelog_paths``;
+    *registry* holds the commit types and their bump impact (without it the
+    built-ins plus the *extra_types* shorthand apply).
     """
+    types = registry or build_registry(extra_commit_types=tuple(extra_types))
     latest = git.latest_final_tag(root, tag_prefix)
     ref = f"{latest}..HEAD" if latest else "HEAD"
     cmd = ["git", "log", ref, "--pretty=format:%B%x1e"]
@@ -321,12 +326,12 @@ def infer_prerelease_base(
             continue
         if any(line.startswith(("BREAKING CHANGE:", "BREAKING-CHANGE:")) for line in lines):
             return "major"
-        parsed = parse_conventional_commit(lines[0], tuple(extra_types))
+        parsed = parse_conventional_commit(lines[0], registry=types)
         if parsed is None:
             continue
         if parsed.breaking:
             return "major"
-        if parsed.type == "feat":
+        if types.bump_for(parsed.type) == "minor":
             level = "minor"
     return level
 
@@ -345,7 +350,7 @@ def resolve_prerelease_base(
     git.  *override* (the CLI ``--base`` or MCP ``base``) wins over the group's
     ``prerelease_base``.  ``auto`` resolves through :func:`infer_prerelease_base`
     against *config*'s root, the rendered group ``tag_prefix``, the group's
-    ``changelog_paths`` and the project's ``extra_commit_types``.
+    ``changelog_paths`` and the project's commit types (``config.types``).
     """
     if (
         kind not in PRE_RELEASE_CHANNELS
@@ -357,7 +362,7 @@ def resolve_prerelease_base(
     if base == "auto":
         tag_prefix = group.tag_prefix.replace("{group}", group.name)
         return infer_prerelease_base(
-            config.root, tag_prefix, group.changelog_paths, config.extra_commit_types
+            config.root, tag_prefix, group.changelog_paths, registry=config.types
         )
     return base
 
@@ -715,6 +720,7 @@ def update_changelog(
         git_log_since_latest_tag(config.root, tag_prefix, group.changelog_paths),
         include_maintenance=include_maintenance,
         fmt=fmt,
+        registry=config.types,
     )
     # insert_generated_section handles both an empty [Unreleased] placeholder
     # (inserts after it) and a missing [Unreleased] section (health-mode prepend).

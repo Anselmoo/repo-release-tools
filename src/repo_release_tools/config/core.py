@@ -10,6 +10,8 @@ from glob import has_magic
 from pathlib import Path
 from typing import cast
 
+from repo_release_tools.conventions import TypeRegistry, build_registry
+
 from .artifact_protection import _load_artifact_protection
 from .docs_config import _VALID_LANGUAGES, _load_docs_config, _load_eol_config
 from .folders_config import _load_folders_config
@@ -133,6 +135,24 @@ def load_extra_commit_types(cwd: Path) -> tuple[str, ...]:
         if is_missing_tool_rrt_error(exc):
             return ()
         raise ValueError(f"Failed to load extra_commit_types configuration: {exc}") from exc
+
+
+def load_type_registry(cwd: Path) -> TypeRegistry:
+    """Load the resolved commit and branch types for the repository in *cwd*.
+
+    Returns the built-in registry when no config file exists or when the
+    config has no ``[tool.rrt]`` section. Raises ``ValueError`` for any other
+    configuration error, so a broken type definition is never silently
+    replaced by the defaults.
+    """
+    try:
+        return load_config(cwd).types
+    except FileNotFoundError:
+        return TypeRegistry()
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return TypeRegistry()
+        raise ValueError(f"Failed to load commit/branch type configuration: {exc}") from exc
 
 
 def load_primary_remote(cwd: Path) -> str:
@@ -748,6 +768,8 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
             seen_extra.add(normalized)
             extra_branch_types_list.append(normalized)
     extra_branch_types = tuple(extra_branch_types_list)
+    extra_commit_types = _load_extra_commit_types(raw.get("extra_commit_types", []))
+    extra_section_map = _load_extra_section_map(raw.get("extra_section_map", {}))
 
     group_defaults: dict[str, object] = {
         "release_branch": raw.get("release_branch", DEFAULT_RELEASE_BRANCH),
@@ -824,8 +846,15 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         field_targets=_load_field_targets(raw.get("field_targets", [])),
         pin_target_missing=_load_pin_target_missing(raw.get("pin_target_missing")),
         primary_remote=_load_primary_remote(raw.get("primary_remote")),
-        extra_commit_types=_load_extra_commit_types(raw.get("extra_commit_types", [])),
-        extra_section_map=_load_extra_section_map(raw.get("extra_section_map", {})),
+        extra_commit_types=extra_commit_types,
+        extra_section_map=extra_section_map,
+        types=build_registry(
+            extra_commit_types=extra_commit_types,
+            extra_branch_types=extra_branch_types,
+            extra_section_map=extra_section_map,
+            commit_types=raw.get("commit_types"),
+            branch_types=raw.get("branch_types"),
+        ),
     )
 
 
@@ -1690,6 +1719,7 @@ __all__ = [
     "load_config_from_path",
     "load_extra_branch_types",
     "load_extra_commit_types",
+    "load_type_registry",
     "load_gates",
     "load_git_config",
     "load_or_autodetect_config",

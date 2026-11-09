@@ -295,3 +295,51 @@ def test_cmd_squash_local_dry_run_success(
     assert result == 0
     assert commands == [["git", "reset", "--soft", "abc123"], ["git", "commit", "-m", "feat: add"]]
     assert "dry-run" in capsys.readouterr().out
+
+
+def test_commit_types_follow_repository_config(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.commit_types]]
+name = "security"
+description = "Security fix"
+
+[[tool.rrt.branch_types]]
+name = "design"
+description = "Design records"
+commit_types = ["docs"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    from repo_release_tools.config import load_type_registry
+
+    registry = load_type_registry(tmp_path)
+    assert git_commit.parse_commit_subject_type("SECURITY") == "security"
+    with pytest.raises(argparse.ArgumentTypeError, match="invalid commit type"):
+        git_commit.parse_commit_subject_type("wizard")
+    assert git_commit.infer_commit_type("design/adr-one", registry) == "docs"
+
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.commit_types]]
+name = "security"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(argparse.ArgumentTypeError, match="needs a non-empty description"):
+        git_commit.parse_commit_subject_type("security")

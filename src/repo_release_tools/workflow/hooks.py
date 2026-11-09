@@ -23,7 +23,6 @@ from repo_release_tools.commands.branch import (
     BRANCH_SLUG_RE,
     CONVENTIONAL_TYPES,
     SLUG_MAX,
-    normalize_commit_type,
 )
 from repo_release_tools.commands.changelog_lint import cmd_changelog_lint
 from repo_release_tools.commands.config_cmd import cmd_config
@@ -52,26 +51,50 @@ from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
     is_missing_tool_rrt_error,
-    load_extra_branch_types,
-    load_extra_commit_types,
     load_or_autodetect_config,
+    load_type_registry,
+)
+from repo_release_tools.conventions import (
+    BOT_BRANCH_TYPES,
+    MAGIC_BRANCH_TYPES,
+    TypeRegistry,
+    build_registry,
+    format_type_lines,
 )
 from repo_release_tools.ui import VerbosePrinter
 from repo_release_tools.version.semver import Version
 from repo_release_tools.workflow import git
 
 ALLOWED_BRANCH_NAMES = ("main", "master", "develop")
-MAGIC_BRANCH_TYPES = ("claude", "codex", "copilot")
-BOT_BRANCH_TYPES = ("dependabot", "renovate")
 ALLOWED_BRANCH_TYPES = (*CONVENTIONAL_TYPES, *MAGIC_BRANCH_TYPES, *BOT_BRANCH_TYPES)
+
+
+def _branch_registry(registry: TypeRegistry | None, extra_types: tuple[str, ...]) -> TypeRegistry:
+    """Return *registry*, or the built-ins plus the ``extra_branch_types`` shorthand."""
+    if registry is not None:
+        return registry
+    return build_registry(extra_branch_types=extra_types)
+
+
+def _commit_registry(registry: TypeRegistry | None, extra_types: tuple[str, ...]) -> TypeRegistry:
+    """Return *registry*, or the built-ins plus the ``extra_commit_types`` shorthand."""
+    if registry is not None:
+        return registry
+    return build_registry(extra_commit_types=extra_types)
 
 
 def validate_branch_name(
     branch_name: str,
     *,
     extra_types: tuple[str, ...] = (),
+    registry: TypeRegistry | None = None,
 ) -> str | None:
-    """Validate the current branch name."""
+    """Validate a branch name against the repository's branch types.
+
+    *registry* holds the resolved types; without it the built-ins plus the
+    *extra_types* shorthand apply. A type with ``slug = "any"`` (bots and
+    ``extra_branch_types``) only needs a non-empty slug.
+    """
     if not branch_name:
         return None
 
@@ -90,18 +113,16 @@ def validate_branch_name(
         return f"Branch {branch_name!r} must use <type>/<kebab-case-description>."
 
     type_part, slug = branch_name.split("/", 1)
-    passthrough_types = (*MAGIC_BRANCH_TYPES, *BOT_BRANCH_TYPES, *extra_types)
-    if type_part not in passthrough_types:
-        try:
-            normalize_commit_type(type_part)
-        except argparse.ArgumentTypeError:
-            allowed = ", ".join((*ALLOWED_BRANCH_TYPES, *extra_types))
-            return f"Branch type {type_part!r} is invalid. Choose one of: {allowed}."
+    types = _branch_registry(registry, extra_types)
+    branch_type = types.branch_type(type_part)
+    if branch_type is None:
+        allowed = ", ".join(types.branch_type_names)
+        return f"Branch type {type_part!r} is invalid. Choose one of: {allowed}."
 
-    # Bot and passthrough branches (dependabot, renovate, extra_branch_types)
-    # use externally-generated slugs that may contain slashes and underscores,
+    # Bot branches and slug="any" types (including extra_branch_types) use
+    # externally-generated slugs that may contain slashes and underscores,
     # so skip slug format and length validation for them.
-    if type_part in (*BOT_BRANCH_TYPES, *extra_types):
+    if branch_type.slug == "any":
         if not slug:
             return f"Branch {branch_name!r} must have a non-empty slug after '/'."
         return None
@@ -130,39 +151,69 @@ def read_commit_subject(message_file: Path) -> str:
 def validate_commit_subject(
     subject: str,
     extra_types: tuple[str, ...] = (),
+    *,
+    registry: TypeRegistry | None = None,
+    branch: str = "",
 ) -> str | None:
-    """Validate a commit subject against the project's conventional commit rules."""
+    """Validate a commit subject against the project's conventional commit rules.
+
+    *registry* holds the resolved types; without it the built-ins plus the
+    *extra_types* shorthand apply. The separator is checked strictly:
+    ``type(scope)!: description`` with no space before the colon and one
+    after it. When *branch* is given and its branch type restricts
+    ``commit_types``, a subject of any other type is rejected.
+    """
     if not subject:
         return "Commit message is empty."
 
     if subject.startswith("Merge "):
         return None
 
+    types = _commit_registry(registry, extra_types)
     if subject.startswith(("fixup! ", "squash! ")):
         _, _, rewritten = subject.partition(" ")
-        if parse_conventional_commit(rewritten, extra_types) is not None:
+        if parse_conventional_commit(rewritten, registry=types, strict=True) is not None:
             return None
 
-    if parse_conventional_commit(subject, extra_types) is not None:
-        return None
+    parsed = parse_conventional_commit(subject, registry=types, strict=True)
+    if parsed is None:
+        if parse_conventional_commit(subject, registry=types) is not None:
+            return (
+                "Commit subject must put the colon right after the type or scope and "
+                "exactly one space after it, for example 'feat(cli): add hook installer'."
+            )
+        return "\n".join(
+            [
+                "Commit subject must follow Conventional Commits, for example "
+                "'feat(cli): add hook installer'. Allowed types:",
+                *format_type_lines(types.commit_types),
+            ],
+        )
 
-    allowed_types = (*CONVENTIONAL_TYPES, "deps", *extra_types)
-    allowed = ", ".join(allowed_types)
-    return (
-        "Commit subject must follow Conventional Commits, for example "
-        f"'feat(cli): add hook installer'. Allowed types: {allowed}."
-    )
+    allowed_on_branch = types.allowed_commit_types_on(branch)
+    if allowed_on_branch and parsed.type not in allowed_on_branch:
+        allowed = [ct for name in allowed_on_branch if (ct := types.commit_type(name))]
+        return "\n".join(
+            [
+                f"Commit type {parsed.type!r} is not allowed on branch {branch!r}. "
+                "Allowed types on this branch:",
+                *format_type_lines(allowed),
+            ],
+        )
+    return None
 
 
 def _parse_subject_for_changelog(
     subject: str,
     extra_types: tuple[str, ...] = (),
+    *,
+    registry: TypeRegistry | None = None,
 ) -> ParsedCommit | None:
     """Parse a commit subject while tolerating fixup and squash prefixes."""
     candidate = subject
     if candidate.startswith(("fixup! ", "squash! ")):
         _, _, candidate = candidate.partition(" ")
-    return parse_conventional_commit(candidate, extra_types)
+    return parse_conventional_commit(candidate, extra_types, registry=registry)
 
 
 def commit_type_requires_changelog(
@@ -170,17 +221,28 @@ def commit_type_requires_changelog(
     *,
     breaking: bool = False,
     extra_section_map: dict[str, str] | None = None,
+    registry: TypeRegistry | None = None,
 ) -> bool:
-    """Return whether a conventional commit type should update the changelog."""
+    """Return whether a conventional commit type should update the changelog.
+
+    With *registry* the type's own ``changelog_required`` decides; otherwise
+    the built-in section map (merged with *extra_section_map*) applies.
+    """
     if breaking:
         return True
+    if registry is not None:
+        return registry.requires_changelog(commit_type)
     merged_map = {**SECTION_MAP, **(extra_section_map or {})}
     section = merged_map.get(commit_type.lower())
     return section is not None and section != "Maintenance"
 
 
-def branch_requires_changelog(branch_name: str) -> bool:
-    """Return whether a branch type should stage a changelog update."""
+def branch_requires_changelog(branch_name: str, *, registry: TypeRegistry | None = None) -> bool:
+    """Return whether a branch type should stage a changelog update.
+
+    The branch type's ``changelog_required`` decides; *registry* defaults to
+    the built-in types.
+    """
     if (
         not branch_name
         or branch_name in ALLOWED_BRANCH_NAMES
@@ -191,19 +253,18 @@ def branch_requires_changelog(branch_name: str) -> bool:
         return False
 
     type_part, _ = branch_name.split("/", 1)
-    try:
-        normalized_type = normalize_commit_type(type_part)
-    except argparse.ArgumentTypeError:
-        return False
-    return commit_type_requires_changelog(normalized_type)
+    return (registry or TypeRegistry()).branch_requires_changelog(type_part)
 
 
-def commit_subject_requires_changelog(subject: str) -> bool:
+def commit_subject_requires_changelog(
+    subject: str, *, registry: TypeRegistry | None = None
+) -> bool:
     """Return whether a commit subject should include a changelog update."""
-    parsed = _parse_subject_for_changelog(subject)
+    types = registry or TypeRegistry()
+    parsed = _parse_subject_for_changelog(subject, registry=types)
     if parsed is None:
         return False
-    return commit_type_requires_changelog(parsed.type, breaking=parsed.breaking)
+    return commit_type_requires_changelog(parsed.type, breaking=parsed.breaking, registry=types)
 
 
 _CHANGELOG_META_RE = re.compile(
@@ -551,29 +612,30 @@ def run_branch_name_check(
     *,
     title: str,
     extra_types: tuple[str, ...] = (),
+    registry: TypeRegistry | None = None,
     verbose: int = 0,
 ) -> int:
-    """Validate an explicit branch name."""
+    """Validate an explicit branch name.
+
+    *registry* holds the resolved branch types; without it the built-ins plus
+    the *extra_types* shorthand apply.
+    """
     p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"check-branch-name: {branch_name!r}")
-    problem = validate_branch_name(branch_name, extra_types=extra_types)
+    types = _branch_registry(registry, extra_types)
+    problem = validate_branch_name(branch_name, registry=types)
     if problem is None:
         p.verbose_line("  branch name OK")
         return 0
 
-    all_types = (*ALLOWED_BRANCH_TYPES, *extra_types)
-    p.verbose_line(f"  allowed types: {', '.join(all_types)}", level=2)
+    p.verbose_line(f"  allowed types: {', '.join(types.branch_type_names)}", level=2)
     return emit_failure(
         title,
         [
             problem,
             "Expected: <type>/<kebab-case-description>.",
-            (
-                "Allowed types: "
-                f"{', '.join(all_types)} "
-                "(including AI helper branches: claude, codex, copilot"
-                " and bot branches: dependabot, renovate)."
-            ),
+            "Allowed types:",
+            *format_type_lines(types.branch_types),
             f"Also allowed: {', '.join(ALLOWED_BRANCH_NAMES)}, release/v<semver>.",
         ],
     )
@@ -584,23 +646,27 @@ def run_commit_subject_check(
     *,
     title: str,
     extra_types: tuple[str, ...] = (),
+    registry: TypeRegistry | None = None,
+    branch: str = "",
     verbose: int = 0,
 ) -> int:
     """Validate an explicit commit subject.
 
-    *extra_types* are the project's ``extra_commit_types``; they are accepted
-    alongside the built-in Conventional Commit types.
+    *registry* holds the resolved commit types; without it the built-ins plus
+    the *extra_types* shorthand (``extra_commit_types``) apply. *branch*
+    enables the branch type's ``commit_types`` restriction.
     """
     p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"check-commit-subject: {subject!r}")
-    p.verbose_line(f"  extra commit types: {extra_types}", level=3)
-    parsed_commit = parse_conventional_commit(subject, extra_types)
+    types = _commit_registry(registry, extra_types)
+    p.verbose_line(f"  commit types: {', '.join(types.commit_type_names)}", level=3)
+    parsed_commit = parse_conventional_commit(subject, registry=types)
     if parsed_commit is not None:
         p.verbose_line(
             f"  type={parsed_commit.type!r}, scope={parsed_commit.scope!r}",
             level=2,
         )
-    problem = validate_commit_subject(subject, extra_types)
+    problem = validate_commit_subject(subject, registry=types, branch=branch)
     if problem is None:
         p.verbose_line("  subject OK")
         return 0
@@ -608,7 +674,7 @@ def run_commit_subject_check(
     return emit_failure(
         title,
         [
-            problem,
+            *problem.splitlines(),
             f"Found subject: {subject!r}.",
         ],
     )
@@ -718,19 +784,25 @@ def run_docs_check(cwd: Path, lock_file: str = ".rrt/docs.lock.toml", verbose: i
     )
 
 
+def _load_registry(cwd: Path, title: str) -> TypeRegistry | int:
+    """Return the repository's type registry, or the failure exit code for *title*."""
+    try:
+        return load_type_registry(cwd)
+    except ValueError as exc:
+        return emit_failure(title, [str(exc)])
+
+
 def run_pre_commit(cwd: Path, *, verbose: int = 0) -> int:
     """Validate the active branch during pre-commit."""
+    title = "Commit blocked by branch naming policy."
     p = VerbosePrinter(verbose=verbose)
     branch_name = git.current_branch(cwd)
     p.verbose_line(f"pre-commit: branch={branch_name!r}")
-    extra_types = load_extra_branch_types(cwd)
-    p.verbose_line(f"  extra branch types: {extra_types}", level=3)
-    return run_branch_name_check(
-        branch_name,
-        title="Commit blocked by branch naming policy.",
-        extra_types=extra_types,
-        verbose=verbose,
-    )
+    registry = _load_registry(cwd, title)
+    if isinstance(registry, int):
+        return registry
+    p.verbose_line(f"  branch types: {', '.join(registry.branch_type_names)}", level=3)
+    return run_branch_name_check(branch_name, title=title, registry=registry, verbose=verbose)
 
 
 def run_pre_commit_changelog(
@@ -748,8 +820,11 @@ def run_pre_commit_changelog(
     except RuntimeError as exc:
         return emit_failure("Commit blocked by changelog policy.", [str(exc)])
 
+    registry = _load_registry(cwd, "Commit blocked by changelog policy.")
+    if isinstance(registry, int):
+        return registry
     branch_name = git.current_branch(cwd)
-    if not branch_requires_changelog(branch_name):
+    if not branch_requires_changelog(branch_name, registry=registry):
         p.verbose_line(f"  skipped (branch {branch_name!r} does not require changelog)")
         return 0
 
@@ -774,20 +849,25 @@ def run_commit_msg(
     message_path: Path,
     *,
     extra_types: tuple[str, ...] = (),
+    registry: TypeRegistry | None = None,
+    branch: str = "",
     verbose: int = 0,
 ) -> int:
     """Validate the commit subject during commit-msg.
 
-    *extra_types* are the project's ``extra_commit_types``, forwarded to
-    :func:`run_commit_subject_check`.
+    *registry* (or the *extra_types* shorthand) and *branch* are forwarded to
+    :func:`run_commit_subject_check`; an empty *branch* (detached HEAD during
+    a rebase) skips the branch's ``commit_types`` restriction.
     """
     subject = read_commit_subject(message_path)
     p = VerbosePrinter(verbose=verbose)
-    p.verbose_line(f"commit-msg: file={message_path!s}", level=2)
+    p.verbose_line(f"commit-msg: file={message_path!s} branch={branch!r}", level=2)
     return run_commit_subject_check(
         subject,
         title="Commit blocked by commit message policy.",
         extra_types=extra_types,
+        registry=registry,
+        branch=branch,
         verbose=verbose,
     )
 
@@ -818,7 +898,10 @@ def run_update_unreleased(
     except RuntimeError as exc:
         return emit_failure("Changelog update failed.", [str(exc)])
 
-    if not commit_subject_requires_changelog(subject):
+    registry = _load_registry(cwd, "Changelog update failed.")
+    if isinstance(registry, int):
+        return registry
+    if not commit_subject_requires_changelog(subject, registry=registry):
         p.verbose_line("  skipped (non-changelog commit type)")
         return 0
     if is_changelog_meta_commit(subject):
@@ -840,7 +923,7 @@ def run_update_unreleased(
     original = changelog_path.read_text(encoding="utf-8")
     fmt = detect_changelog_format(changelog_file)
     p.verbose_line(f"  format: {fmt}", level=2)
-    updated = append_to_unreleased(original, subject, fmt)
+    updated = append_to_unreleased(original, subject, fmt, registry=registry)
     if updated != original:
         changelog_path.write_text(updated, encoding="utf-8")
         git.run(["git", "add", "--", changelog_file], cwd, dry_run=False, label="stage changelog")
@@ -884,7 +967,10 @@ def run_changelog_check(
     """
     p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"check-changelog: subject={subject!r}")
-    if not commit_subject_requires_changelog(subject):
+    registry = _load_registry(cwd, title)
+    if isinstance(registry, int):
+        return registry
+    if not commit_subject_requires_changelog(subject, registry=registry):
         p.verbose_line("  skipped (non-changelog commit type)")
         return 0
 
@@ -1081,6 +1167,11 @@ def main(argv: list[str] | None = None) -> int:
         "--subject",
         required=True,
         help="Commit subject to validate.",
+    )
+    subject_check_parser.add_argument(
+        "--branch",
+        default=None,
+        help="Branch the commit lands on; applies that branch type's commit_types restriction.",
     )
 
     changelog_check_parser = subparsers.add_parser(
@@ -1359,24 +1450,34 @@ def main(argv: list[str] | None = None) -> int:
                 Path.cwd(), changelog_file=parsed.changelog_file, verbose=verbose
             )
         case "commit-msg":
+            title = "Commit blocked by commit message policy."
+            registry = _load_registry(Path.cwd(), title)
+            if isinstance(registry, int):
+                return registry
             return run_commit_msg(
                 Path(parsed.message_file),
-                extra_types=load_extra_commit_types(Path.cwd()),
+                registry=registry,
+                branch=git.current_branch(Path.cwd()),
                 verbose=verbose,
             )
         case "check-branch-name":
-            extra_types = load_extra_branch_types(Path.cwd())
+            title = "Branch name validation failed."
+            registry = _load_registry(Path.cwd(), title)
+            if isinstance(registry, int):
+                return registry
             return run_branch_name_check(
-                parsed.branch,
-                title="Branch name validation failed.",
-                extra_types=extra_types,
-                verbose=verbose,
+                parsed.branch, title=title, registry=registry, verbose=verbose
             )
         case "check-commit-subject":
+            title = "Commit subject validation failed."
+            registry = _load_registry(Path.cwd(), title)
+            if isinstance(registry, int):
+                return registry
             return run_commit_subject_check(
                 parsed.subject,
-                title="Commit subject validation failed.",
-                extra_types=load_extra_commit_types(Path.cwd()),
+                title=title,
+                registry=registry,
+                branch=parsed.branch or "",
                 verbose=verbose,
             )
         case "check-dirty-tree":

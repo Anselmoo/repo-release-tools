@@ -104,6 +104,41 @@
       },
       "description": "Map extra commit types to changelog sections (e.g. {security = 'Fixed', ux = 'Changed'})."
     },
+    "commit_types": {
+      "type": "array",
+      "description": "Typed commit type definitions. Adds new types or overrides fields of a built-in type (feat, fix, chore, docs, refactor, test, ci, perf, style, build, deps).",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "description": "Commit type name as written in the subject (e.g. 'security')." },
+          "description": { "type": "string", "description": "Shown in hook and MCP error messages and in `rrt config`. Required for a new type." },
+          "changelog_section": {
+            "description": "Changelog section the type lands in. false keeps it out of the changelog. Custom sections render after the built-in ones and before Maintenance.",
+            "oneOf": [{ "type": "string", "minLength": 1 }, { "const": false }]
+          },
+          "changelog_required": { "type": "boolean", "description": "Whether a commit of this type must update the changelog. Default: true when the section is set and is not 'Maintenance'." },
+          "bump": { "type": "string", "enum": ["none", "patch", "minor"], "default": "patch", "description": "Bump impact for `prerelease_base = \"auto\"`. A breaking marker (`!` or BREAKING CHANGE) always means major." }
+        }
+      }
+    },
+    "branch_types": {
+      "type": "array",
+      "description": "Typed branch type definitions (`<type>/<slug>`). Adds new types or overrides fields of a built-in one.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$", "description": "Branch type prefix (e.g. 'design')." },
+          "description": { "type": "string", "description": "Shown in hook and MCP error messages and in `rrt config`. Required for a new type." },
+          "commit_types": { "type": "array", "items": { "type": "string" }, "description": "Commit types allowed on this branch type. Empty or omitted allows any." },
+          "slug": { "type": "string", "enum": ["kebab", "any"], "default": "kebab", "description": "'kebab' validates a lowercase kebab-case slug of at most 60 characters; 'any' only requires a non-empty slug." },
+          "changelog_required": { "type": "boolean", "description": "Whether commits on this branch must stage a changelog update. Default: the policy of the commit type with the same name, else false." }
+        }
+      }
+    },
     "pin_target_missing": {
       "type": "string",
       "enum": [

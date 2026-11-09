@@ -55,7 +55,30 @@ Branches created by assistant-driven workflows or dependency bots are accepted w
 - `claude/...`, `codex/...`, `copilot/...`
 - `dependabot/...`, `renovate/...`
 
-Custom prefixes can be added via the `extra_branch_types` config key.
+## Custom branch and commit types
+
+A repository defines its own types in `[tool.rrt]`. Each table entry is a full definition:
+
+```toml
+[[tool.rrt.commit_types]]
+name = "security"
+description = "Security fix or hardening"
+changelog_section = "Security"   # false keeps it out of the changelog
+bump = "patch"                   # none | patch | minor
+
+[[tool.rrt.branch_types]]
+name = "design"
+description = "Design records and decisions"
+commit_types = ["docs", "chore"] # omitted allows any commit type
+slug = "kebab"                   # kebab | any
+```
+
+An entry with a built-in name overrides only the fields it sets. Hooks, MCP
+validators, changelog rendering, bump inference and `rrt branch new` read the
+same definitions. On a `design/...` branch the commit-msg hook rejects any
+type outside `commit_types`. The flat `extra_branch_types` and
+`extra_commit_types` lists stay as shorthand. `rrt config` lists every
+resolved type with its description.
 
 ## Behavior
 
@@ -75,6 +98,7 @@ Custom prefixes can be added via the `extra_branch_types` config key.
 
 - Branch slugs are limited to 60 characters by default.
 - Custom branch types can be added via configuration.
+- Agent and bot prefixes are accepted by the hooks but never created by `rrt branch new`.
 
 ## Related docs
 

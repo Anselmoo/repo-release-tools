@@ -6,6 +6,7 @@ import pathlib
 import pytest
 
 from repo_release_tools.commands import git_inspect
+from repo_release_tools.conventions import TypeRegistry
 
 
 def test_cmd_status_renders_summary_and_entries(
@@ -748,7 +749,7 @@ def test_cmd_doctor_reports_missing_changelog_entry(
     monkeypatch.setattr(git_inspect.git, "in_progress_operation", lambda cwd: None)
     monkeypatch.setattr(git_inspect.git, "status_porcelain", lambda cwd: [])
     monkeypatch.setattr(git_inspect.git, "ahead_behind", lambda cwd, ref: (0, 0))
-    monkeypatch.setattr(git_inspect, "load_extra_branch_types", lambda cwd: ())
+    monkeypatch.setattr(git_inspect, "load_type_registry", lambda cwd: TypeRegistry())
 
     def fake_capture(cmd: list[str], cwd: pathlib.Path) -> str:
         if cmd[:4] == ["git", "log", "-1", "--pretty=%s"]:

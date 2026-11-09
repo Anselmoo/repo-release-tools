@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent
 
+from repo_release_tools.conventions import BUILTIN_BRANCH_TYPES, TypeRegistry
 from repo_release_tools.state import DOCS_LOCK_DEFAULT, DOCS_MAP_LOCK_DEFAULT
 from repo_release_tools.sync.providers import PROVIDERS as VALID_UPSTREAM_PROVIDERS  # noqa: F401
 from repo_release_tools.version.scheme import VERSION_SCHEMES
@@ -94,29 +95,8 @@ _IGNORE_DIR_NAMES: frozenset[str] = frozenset(
 _PYTHON_VERSION_VAR_RE: re.Pattern[str] = re.compile(r"(?m)^\s*__version__\s*=\s*['\"]")
 
 # Branch type prefixes that are built-in and must not appear in extra_branch_types.
-# Mirrors CONVENTIONAL_TYPES, MAGIC_BRANCH_TYPES, and BOT_BRANCH_TYPES from hooks.py.
-_RESERVED_BRANCH_TYPES = frozenset(
-    {
-        # conventional commit types
-        "feat",
-        "fix",
-        "chore",
-        "docs",
-        "refactor",
-        "test",
-        "ci",
-        "perf",
-        "style",
-        "build",
-        # AI agent magic types
-        "claude",
-        "codex",
-        "copilot",
-        # dependency bot types
-        "dependabot",
-        "renovate",
-    },
-)
+# Derived from the one type registry so the reserved set cannot drift.
+_RESERVED_BRANCH_TYPES = frozenset(bt.name for bt in BUILTIN_BRANCH_TYPES)
 
 # Valid identifier pattern for extra_branch_types entries (after normalization).
 # Must start with a lowercase letter; remaining chars may be lowercase letters,
@@ -1032,6 +1012,7 @@ class RrtConfig:
     pin_target_missing: str = "error"
     extra_commit_types: tuple[str, ...] = ()
     extra_section_map: dict[str, str] = field(default_factory=dict)
+    types: TypeRegistry = field(default_factory=TypeRegistry)
 
     def resolve_group(self, name: str | None = None) -> VersionGroup:
         """Resolve a version group by name or default selection rules."""
