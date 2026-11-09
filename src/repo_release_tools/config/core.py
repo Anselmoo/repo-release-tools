@@ -118,6 +118,24 @@ def load_extra_branch_types(cwd: Path) -> tuple[str, ...]:
         raise ValueError(f"Failed to load extra_branch_types configuration: {exc}") from exc
 
 
+def load_release_branch_templates(cwd: Path) -> tuple[str, ...]:
+    """Load the ``release_branch`` templates of every version group in *cwd*.
+
+    Returns the default template when no config file exists or when the config
+    does not contain an ``[tool.rrt]`` section.  Raises ``ValueError`` for any
+    other configuration error, like :func:`load_extra_branch_types`.
+    """
+    try:
+        cfg = load_config(cwd)
+    except FileNotFoundError:
+        return (DEFAULT_RELEASE_BRANCH,)
+    except ValueError as exc:
+        if is_missing_tool_rrt_error(exc):
+            return (DEFAULT_RELEASE_BRANCH,)
+        raise ValueError(f"Failed to load release_branch configuration: {exc}") from exc
+    return tuple(dict.fromkeys(group.release_branch for group in cfg.version_groups))
+
+
 def load_extra_commit_types(cwd: Path) -> tuple[str, ...]:
     """Load extra_commit_types from the rrt config in *cwd*, if available.
 
@@ -1718,6 +1736,7 @@ __all__ = [
     "load_config",
     "load_config_from_path",
     "load_extra_branch_types",
+    "load_release_branch_templates",
     "load_extra_commit_types",
     "load_type_registry",
     "load_gates",

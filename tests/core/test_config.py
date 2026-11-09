@@ -4934,3 +4934,42 @@ def test_recommended_config_writers_round_trip_version_scheme(tmp_path: Path) ->
     unset = dataclasses.replace(group, version_scheme=None)
     assert "version_scheme" not in _render_recommended_rrt_toml(tmp_path, unset)
     assert "version_scheme" not in _render_recommended_rrt_dict(tmp_path, unset)
+
+
+def test_load_release_branch_templates(tmp_path: Path) -> None:
+    from repo_release_tools.config import load_release_branch_templates
+
+    assert load_release_branch_templates(tmp_path) == ("release/v{version}",)
+    (tmp_path / "pyproject.toml").write_text("[tool.other]\n", encoding="utf-8")
+    assert load_release_branch_templates(tmp_path) == ("release/v{version}",)
+    (tmp_path / "pyproject.toml").write_text(
+        """\
+[project]
+name = "demo"
+version = "1.0.0"
+
+[tool.rrt]
+default_group = "backend"
+
+[[tool.rrt.version_groups]]
+name = "backend"
+release_branch = "release/backend/v{version}"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_groups]]
+name = "sdk"
+release_branch = "release/backend/v{version}"
+
+[[tool.rrt.version_groups.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+""",
+        encoding="utf-8",
+    )
+    assert load_release_branch_templates(tmp_path) == ("release/backend/v{version}",)
+    (tmp_path / "pyproject.toml").write_text("[tool.rrt]\nrelease_branch = 3\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Failed to load release_branch configuration"):
+        load_release_branch_templates(tmp_path)

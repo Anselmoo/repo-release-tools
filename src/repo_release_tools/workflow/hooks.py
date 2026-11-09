@@ -50,8 +50,10 @@ from repo_release_tools.commands.tree import cmd_tree
 from repo_release_tools.config import (
     DEFAULT_CHANGELOG,
     DEFAULT_CHANGELOG_WORKFLOW,
+    DEFAULT_RELEASE_BRANCH,
     is_missing_tool_rrt_error,
     load_or_autodetect_config,
+    load_release_branch_templates,
     load_type_registry,
 )
 from repo_release_tools.conventions import (
@@ -62,6 +64,7 @@ from repo_release_tools.conventions import (
     format_type_lines,
 )
 from repo_release_tools.ui import VerbosePrinter
+from repo_release_tools.version.calver import CalVersion
 from repo_release_tools.version.semver import Version
 from repo_release_tools.workflow import git
 
@@ -83,17 +86,71 @@ def _commit_registry(registry: TypeRegistry | None, extra_types: tuple[str, ...]
     return build_registry(extra_commit_types=extra_types)
 
 
+DEFAULT_RELEASE_BRANCHES = (DEFAULT_RELEASE_BRANCH,)
+
+
+def _is_release_version(raw: str) -> bool:
+    """Return whether *raw* is a SemVer, PEP 440 or CalVer version string."""
+    try:
+        Version.parse(raw)
+    except ValueError:
+        pass
+    else:
+        return True
+    try:
+        CalVersion.parse(raw)
+    except ValueError:
+        return False
+    return True
+
+
+def _release_branch_problem(
+    branch_name: str, release_branches: tuple[str, ...]
+) -> tuple[bool, str | None]:
+    """Match *branch_name* against the ``release_branch`` templates.
+
+    Returns ``(matched, problem)``: ``matched`` is true when the name has the
+    shape of a template, and ``problem`` is an error when no template accepts
+    the version part.
+    """
+    rejected: list[str] = []
+    for template in release_branches:
+        prefix, placeholder, suffix = template.partition("{version}")
+        if not placeholder:
+            if branch_name == template:
+                return True, None
+            continue
+        if (
+            len(branch_name) > len(prefix) + len(suffix)
+            and branch_name.startswith(prefix)
+            and branch_name.endswith(suffix)
+        ):
+            version = branch_name[len(prefix) : len(branch_name) - len(suffix)]
+            if _is_release_version(version):
+                return True, None
+            rejected.append(template.replace("{version}", "<version>"))
+    if rejected:
+        shapes = " or ".join(rejected)
+        return True, f"Release branch {branch_name!r} must use {shapes} with a valid version."
+    return False, None
+
+
 def validate_branch_name(
     branch_name: str,
     *,
     extra_types: tuple[str, ...] = (),
     registry: TypeRegistry | None = None,
+    release_branches: tuple[str, ...] = DEFAULT_RELEASE_BRANCHES,
 ) -> str | None:
     """Validate a branch name against the repository's branch types.
 
     *registry* holds the resolved types; without it the built-ins plus the
     *extra_types* shorthand apply. A type with ``slug = "any"`` (bots and
     ``extra_branch_types``) only needs a non-empty slug.
+
+    *release_branches* holds the ``release_branch`` templates of every version
+    group; a name matching one of them with a SemVer, PEP 440 or CalVer
+    version is a valid release branch.
     """
     if not branch_name:
         return None
@@ -101,13 +158,9 @@ def validate_branch_name(
     if branch_name in ALLOWED_BRANCH_NAMES:
         return None
 
-    if branch_name.startswith("release/v"):
-        version = branch_name.removeprefix("release/v")
-        try:
-            Version.parse(version)
-        except ValueError:
-            return f"Release branch {branch_name!r} must use release/v<semver>."
-        return None
+    matched, problem = _release_branch_problem(branch_name, release_branches)
+    if matched:
+        return problem
 
     if "/" not in branch_name:
         return f"Branch {branch_name!r} must use <type>/<kebab-case-description>."
@@ -619,6 +672,7 @@ def run_branch_name_check(
     title: str,
     extra_types: tuple[str, ...] = (),
     registry: TypeRegistry | None = None,
+    release_branches: tuple[str, ...] = DEFAULT_RELEASE_BRANCHES,
     verbose: int = 0,
 ) -> int:
     """Validate an explicit branch name.
@@ -629,7 +683,7 @@ def run_branch_name_check(
     p = VerbosePrinter(verbose=verbose)
     p.verbose_line(f"check-branch-name: {branch_name!r}")
     types = _branch_registry(registry, extra_types)
-    problem = validate_branch_name(branch_name, registry=types)
+    problem = validate_branch_name(branch_name, registry=types, release_branches=release_branches)
     if problem is None:
         p.verbose_line("  branch name OK")
         return 0
@@ -642,7 +696,10 @@ def run_branch_name_check(
             "Expected: <type>/<kebab-case-description>.",
             "Allowed types:",
             *format_type_lines(types.branch_types),
-            f"Also allowed: {', '.join(ALLOWED_BRANCH_NAMES)}, release/v<semver>.",
+            (
+                f"Also allowed: {', '.join(ALLOWED_BRANCH_NAMES)}, "
+                f"{', '.join(t.replace('{version}', '<version>') for t in release_branches)}."
+            ),
         ],
     )
 
@@ -808,7 +865,13 @@ def run_pre_commit(cwd: Path, *, verbose: int = 0) -> int:
     if isinstance(registry, int):
         return registry
     p.verbose_line(f"  branch types: {', '.join(registry.branch_type_names)}", level=3)
-    return run_branch_name_check(branch_name, title=title, registry=registry, verbose=verbose)
+    return run_branch_name_check(
+        branch_name,
+        title=title,
+        registry=registry,
+        release_branches=load_release_branch_templates(cwd),
+        verbose=verbose,
+    )
 
 
 def run_pre_commit_changelog(
@@ -1472,7 +1535,11 @@ def main(argv: list[str] | None = None) -> int:
             if isinstance(registry, int):
                 return registry
             return run_branch_name_check(
-                parsed.branch, title=title, registry=registry, verbose=verbose
+                parsed.branch,
+                title=title,
+                registry=registry,
+                release_branches=load_release_branch_templates(Path.cwd()),
+                verbose=verbose,
             )
         case "check-commit-subject":
             title = "Commit subject validation failed."

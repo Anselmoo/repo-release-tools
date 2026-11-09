@@ -86,7 +86,8 @@ Conventional branch types are accepted out of the box:
 
 These branch names are also valid:
 - `main`, `master`, `develop`
-- `release/v<semver>` (validated as a semver-aware special case)
+- release branches built from each version group's `release_branch` template
+  (default `release/v<version>`), with a SemVer, PEP 440 or CalVer version
 
 #### AI helper and Bot branches
 

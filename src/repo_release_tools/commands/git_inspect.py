@@ -27,7 +27,11 @@ from repo_release_tools.commands._git_shared import (
     split_generated_dirt,
     summarize_status,
 )
-from repo_release_tools.config import load_git_config, load_type_registry
+from repo_release_tools.config import (
+    load_git_config,
+    load_release_branch_templates,
+    load_type_registry,
+)
 from repo_release_tools.conventions import TypeRegistry
 from repo_release_tools.ui import GLYPHS, VerbosePrinter
 from repo_release_tools.workflow import git
@@ -349,7 +353,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     latest_subject = git.capture(["git", "log", "-1", "--pretty=%s"], root).strip()
 
     types = load_type_registry(root)
-    branch_problem = validate_branch_name(branch_name, registry=types)
+    branch_problem = validate_branch_name(
+        branch_name, registry=types, release_branches=load_release_branch_templates(root)
+    )
     subject_problem = (
         validate_commit_subject(latest_subject, registry=types, branch=branch_name)
         if latest_subject
