@@ -468,9 +468,11 @@ def append_to_unreleased(
         if bullet in section_body.splitlines():
             return content
 
-        sub_header = f"### {section}"
-        if sub_header in section_body:
-            sub_pos = section_body.index(sub_header) + len(sub_header)
+        # Match the whole heading line: a substring test would let ``### Sec``
+        # match ``### Security`` now that section names are user-defined.
+        sub_match = re.search(rf"^### {re.escape(section)}[ \t]*$", section_body, re.MULTILINE)
+        if sub_match is not None:
+            sub_pos = sub_match.end()
             new_body = section_body[:sub_pos] + f"\n{bullet}" + section_body[sub_pos:]
         else:
             stripped = section_body.rstrip("\n")

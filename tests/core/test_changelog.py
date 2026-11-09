@@ -736,6 +736,17 @@ def test_append_to_unreleased_uses_registry_section() -> None:
     assert "### Security\n- patch hole" in updated
 
 
+def test_append_to_unreleased_matches_sub_header_as_whole_line() -> None:
+    from repo_release_tools.changelog import append_to_unreleased
+    from repo_release_tools.conventions import build_registry
+
+    registry = build_registry(extra_commit_types=("sec",), extra_section_map={"sec": "Sec"})
+    content = "# Changelog\n\n## [Unreleased]\n\n### Security\n- old entry\n"
+    updated = append_to_unreleased(content, "sec: new entry", registry=registry)
+    assert "### Security\n- old entry\n" in updated
+    assert "### Sec\n- new entry" in updated
+
+
 def test_parse_conventional_commit_strict_requires_one_space_after_colon() -> None:
     from repo_release_tools.changelog import parse_conventional_commit
 

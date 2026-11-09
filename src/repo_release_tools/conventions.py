@@ -222,7 +222,8 @@ class TypeRegistry:
         """Return the commit type to suggest for a new ``<branch_type_name>/...`` branch.
 
         The inferred type when unambiguous, else the first allowed commit type,
-        else the branch type name itself.
+        else ``chore``. The result is always a registered commit type, so a
+        suggested title passes the commit-msg check.
         """
         inferred = self.inferred_commit_type(branch_type_name)
         if inferred is not None:
@@ -230,7 +231,7 @@ class TypeRegistry:
         bt = self.branch_type(branch_type_name)
         if bt is not None and bt.commit_types:
             return bt.commit_types[0]
-        return branch_type_name.lower()
+        return "chore"
 
     @property
     def creatable_branch_types(self) -> tuple[BranchType, ...]:
@@ -408,7 +409,18 @@ def _resolve_branch_types(
     raw_tables: object,
     commits: TypeRegistry,
 ) -> tuple[BranchType, ...]:
-    branches: dict[str, BranchType] = {bt.name: bt for bt in BUILTIN_BRANCH_TYPES}
+    # Conventional branch types take their changelog policy from the resolved
+    # commit type, so a commit-type override (e.g. a new changelog_section)
+    # reaches the branch of the same name.
+    builtins: dict[str, BranchType] = {
+        bt.name: (
+            replace(bt, changelog_required=commits.requires_changelog(bt.name))
+            if bt.kind == "conventional"
+            else bt
+        )
+        for bt in BUILTIN_BRANCH_TYPES
+    }
+    branches: dict[str, BranchType] = dict(builtins)
     shorthand = {name.strip().lower() for name in extra_branch_types}
     for name in (n.strip().lower() for n in extra_branch_types):
         branches.setdefault(name, BranchType(name=name, description="", slug="any"))
@@ -417,7 +429,7 @@ def _resolve_branch_types(
     for entry in _table_entries(raw_tables, _BRANCH_TABLE):
         name = _entry_name(entry, _BRANCH_TABLE, _BRANCH_KEYS)
         _check_duplicate(name, seen, "branch", _BRANCH_TABLE)
-        base = next((bt for bt in BUILTIN_BRANCH_TYPES if bt.name == name), None)
+        base = builtins.get(name)
         if name in shorthand and base is None:
             raise _shorthand_conflict(name, "extra_branch_types", _BRANCH_TABLE)
         description = _entry_description(entry, _BRANCH_TABLE, name, required=base is None)

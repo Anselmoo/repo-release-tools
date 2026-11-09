@@ -396,8 +396,25 @@ def test_suggested_commit_type_and_creatable_branch_types() -> None:
     )
     assert reg.suggested_commit_type("feat") == "feat"
     assert reg.suggested_commit_type("wip") == "chore"
-    assert reg.suggested_commit_type("Free") == "free"
+    assert reg.suggested_commit_type("Free") == "chore"
     creatable = [bt.name for bt in reg.creatable_branch_types]
     assert "wip" in creatable
     assert "claude" not in creatable
     assert "renovate" not in creatable
+
+
+def test_suggested_commit_type_for_branch_only_type_is_a_registered_commit_type() -> None:
+    reg = build_registry(branch_types=[{"name": "free", "description": "Free-form work"}])
+    suggested = reg.suggested_commit_type("free")
+    assert reg.commit_type(suggested) is not None
+
+
+def test_builtin_branch_changelog_policy_follows_overridden_commit_type() -> None:
+    reg = build_registry(commit_types=[{"name": "refactor", "changelog_section": "Maintenance"}])
+    assert reg.requires_changelog("refactor") is False
+    assert reg.branch_requires_changelog("refactor") is False
+    explicit = build_registry(
+        commit_types=[{"name": "refactor", "changelog_section": "Maintenance"}],
+        branch_types=[{"name": "refactor", "changelog_required": True}],
+    )
+    assert explicit.branch_requires_changelog("refactor") is True
