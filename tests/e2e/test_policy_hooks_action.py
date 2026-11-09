@@ -6,7 +6,7 @@ Pins contract items from ``analysis/the/MODERNIZATION_BRIEF.md`` §5:
   exact-duplicate and lexical opposite-verb bullet cancellation, restricted to the
   squash commit's own diff hunks.
 * **C8** — branch-name policy (``rrt-hooks check-branch-name``): fixed names,
-  ``release/v<semver>``, ``<type>/<kebab-slug>`` (<=60 chars), bot-branch slug exemption.
+  ``release/v<version>``, ``<type>/<kebab-slug>`` (<=60 chars), bot-branch slug exemption.
 * **C9** — commit-type -> changelog-section mapping (``rrt-hooks update-unreleased`` /
   ``check-changelog``): feat->Added, fix->Fixed, chore->Maintenance (no changelog
   required), ``fix!:``->Breaking Changes, scope rendered bold.
@@ -52,7 +52,7 @@ def test_c8_fixed_branch_names_are_accepted(e2e_repo: Path, branch: str) -> None
 
 
 def test_c8_release_branch_with_valid_semver_is_accepted(e2e_repo: Path) -> None:
-    """C8: ``release/v<semver>`` is accepted when the suffix parses as a valid semver."""
+    """C8: ``release/v<version>`` is accepted when the suffix parses as a valid semver."""
     result = rrt_hooks("check-branch-name", "--branch", "release/v1.2.3", cwd=e2e_repo)
     assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
 
@@ -62,7 +62,7 @@ def test_c8_release_branch_with_invalid_semver_is_rejected(e2e_repo: Path) -> No
     result = rrt_hooks("check-branch-name", "--branch", "release/v1.2", cwd=e2e_repo)
     assert result.returncode != 0, f"stdout={result.stdout}\nstderr={result.stderr}"
     assert "release/v1.2" in result.stderr, f"stdout={result.stdout}\nstderr={result.stderr}"
-    assert "release/v<semver>" in result.stderr, f"stdout={result.stdout}\nstderr={result.stderr}"
+    assert "release/v<version>" in result.stderr, f"stdout={result.stdout}\nstderr={result.stderr}"
 
 
 def test_c8_conventional_type_slug_branch_is_accepted(e2e_repo: Path) -> None:

@@ -9,6 +9,7 @@
 - **changelog**: apply `extra_section_map` and custom commit types when rendering the changelog and `[Unreleased]` (custom-type commits were dropped)
 - **branch**: `rrt branch new`, `rrt git commit` and MCP `rrt_branch_new` accept the repository's custom types, as the hooks do
 - **hooks**: accept the Revert "…" and Reapply "…" subjects that git revert writes
+- **hooks**: accept release branches from every version group's release_branch template, with SemVer, PEP 440 or CalVer versions
 
 ## [1.19.0] - 2026-11-08
 ### Fixed

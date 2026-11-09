@@ -40,7 +40,7 @@ def test_branch_validation_and_commit_helpers() -> None:
     assert hooks.validate_branch_name("main") is None
     assert hooks.validate_branch_name("release/v1.2.3") is None
     assert hooks.validate_branch_name("feat/add-parser") is None
-    assert "release/v<semver>" in _require_message(hooks.validate_branch_name("release/vbad"))
+    assert "release/v<version>" in _require_message(hooks.validate_branch_name("release/vbad"))
     assert "<type>/<kebab-case-description>" in _require_message(hooks.validate_branch_name("feat"))
     assert "Branch type" in _require_message(hooks.validate_branch_name("bogus/add-parser"))
     assert hooks.validate_branch_name("custom/add-parser", extra_types=("custom",)) is None
@@ -651,7 +651,7 @@ def test_run_post_correct_and_main_dispatch(
     monkeypatch.setattr(
         hooks,
         "run_branch_name_check",
-        lambda branch_name, *, title, registry, verbose=0: (
+        lambda branch_name, *, title, registry, release_branches=(), verbose=0: (
             calls.append(("branch", (branch_name, registry.branch_type_names[-1]))) or 14
         ),
     )
@@ -1873,3 +1873,64 @@ def test_hooks_report_broken_type_config(
     assert hooks.main(["check-branch-name", "--branch", "feat/x"]) == 1
     assert hooks.main(["check-commit-subject", "--subject", "feat: x"]) == 1
     assert capsys.readouterr().err.count("broken type config") == 7
+
+
+def test_release_branch_follows_configured_templates() -> None:
+    templates = ("release/backend/v{version}", "release/sdk-v{version}", "release/v{version}")
+    assert hooks.validate_branch_name("release/backend/v1.2.0", release_branches=templates) is None
+    assert hooks.validate_branch_name("release/sdk-v2.0.0rc1", release_branches=templates) is None
+    assert hooks.validate_branch_name("release/v2026.05.15", release_branches=templates) is None
+    assert hooks.validate_branch_name("release/v1.2.3-rc.1", release_branches=templates) is None
+    message = _require_message(
+        hooks.validate_branch_name("release/backend/vnext", release_branches=templates)
+    )
+    assert "release/backend/v<version> with a valid version" in message
+    both = _require_message(
+        hooks.validate_branch_name(
+            "release/vnext", release_branches=("release/v{version}", "release/{version}")
+        )
+    )
+    assert "release/v<version> or release/<version>" in both
+    # A name outside every template falls through to the type check.
+    assert "Branch type 'release'" in _require_message(
+        hooks.validate_branch_name("release/backend-next", release_branches=templates)
+    )
+    # The default template no longer applies once a repo configures its own.
+    assert "Branch type 'release'" in _require_message(
+        hooks.validate_branch_name(
+            "release/v1.2.3", release_branches=("release/backend/v{version}",)
+        )
+    )
+    # A template without a placeholder names one fixed branch.
+    assert hooks.validate_branch_name("release/next", release_branches=("release/next",)) is None
+    assert (
+        hooks.validate_branch_name(
+            "release/v1.2.3", release_branches=("release/next", "release/v{version}")
+        )
+        is None
+    )
+
+
+def test_run_branch_name_check_uses_release_templates() -> None:
+    assert (
+        hooks.run_branch_name_check(
+            "release/backend/v1.2.0",
+            title="Branch name validation failed.",
+            release_branches=("release/backend/v{version}",),
+        )
+        == 0
+    )
+
+
+def test_release_templates_combine_with_typed_registry() -> None:
+    templates = ("release/backend/v{version}",)
+    assert (
+        hooks.validate_branch_name(
+            "release/backend/v1.2.0", registry=_TYPED, release_branches=templates
+        )
+        is None
+    )
+    assert (
+        hooks.validate_branch_name("design/adr-one", registry=_TYPED, release_branches=templates)
+        is None
+    )

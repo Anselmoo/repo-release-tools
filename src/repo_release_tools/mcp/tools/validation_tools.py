@@ -28,15 +28,16 @@ def register(mcp: FastMCP) -> None:
         [[tool.rrt.branch_types]] and extra_branch_types from config, which a
         hardcoded regex would miss.
         """
-        from repo_release_tools.config import load_type_registry
+        from repo_release_tools.config import load_release_branch_templates, load_type_registry
         from repo_release_tools.workflow.hooks import validate_branch_name
 
         root = ctx.lifespan_context.get("root", Path.cwd())
         try:
             types = load_type_registry(root)
+            release_branches = load_release_branch_templates(root)
         except ValueError as exc:
             return BranchValidationResult(valid=False, branch=branch_name, reason=str(exc))
-        error = validate_branch_name(branch_name, registry=types)
+        error = validate_branch_name(branch_name, registry=types, release_branches=release_branches)
         if error is None:
             return BranchValidationResult(valid=True, branch=branch_name)
         return BranchValidationResult(valid=False, branch=branch_name, reason=error)
