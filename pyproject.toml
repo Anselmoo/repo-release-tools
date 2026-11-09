@@ -1,6 +1,6 @@
 [project]
 name = "repo-release-tools"
-version = "1.18.0"
+version = "1.19.0"
 description = "Config-driven branch and release helpers for Git repositories"
 readme = "README.md"
 license = "MIT"
@@ -560,7 +560,7 @@ output-format = "full"
 
 [tool.ty.rules]
 possibly-unresolved-reference = "error"
-unresolved-import = "error"
+import-not-found = "error"
 missing-argument = "error"
 invalid-return-type = "error"
 unused-ignore-comment = "warn"
