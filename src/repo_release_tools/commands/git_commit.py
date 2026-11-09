@@ -16,16 +16,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from repo_release_tools.commands._git_shared import add_dry_run_flag
-from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, join_description
+from repo_release_tools.commands.branch import join_description, load_cwd_type_registry
+from repo_release_tools.config import load_type_registry
+from repo_release_tools.conventions import TypeRegistry
 from repo_release_tools.ui import DryRunPrinter, VerbosePrinter
 from repo_release_tools.workflow import git
-from repo_release_tools.workflow.hooks import (
-    ALLOWED_BRANCH_NAMES,
-    BOT_BRANCH_TYPES,
-    MAGIC_BRANCH_TYPES,
-)
+from repo_release_tools.workflow.hooks import ALLOWED_BRANCH_NAMES
 
-COMMIT_TYPES = (*CONVENTIONAL_TYPES, "deps")
+# Built-in commit types, derived from the type registry.
+COMMIT_TYPES = TypeRegistry().commit_type_names
 
 
 @dataclass(frozen=True)
@@ -44,19 +43,32 @@ class CommitSubject:
         return f"{self.type}{scope_part}{breaking_part}: {self.description}"
 
 
-def normalize_commit_subject_type(value: str) -> str:
-    """Validate a commit type accepted by commit helpers."""
+def normalize_commit_subject_type(value: str, registry: TypeRegistry | None = None) -> str:
+    """Validate a commit type accepted by commit helpers.
+
+    *registry* defaults to the built-in types.
+    """
     normalized = value.lower()
-    if normalized not in COMMIT_TYPES:
-        allowed = ", ".join(COMMIT_TYPES)
+    types = registry or TypeRegistry()
+    if types.commit_type(normalized) is None:
+        allowed = ", ".join(types.commit_type_names)
         raise argparse.ArgumentTypeError(
             f"invalid commit type: {value!r} (choose one of: {allowed})",
         )
     return normalized
 
 
-def infer_commit_type(branch_name: str) -> str | None:
-    """Infer a conventional commit type from the current branch name."""
+def parse_commit_subject_type(value: str) -> str:
+    """Argparse type: validate *value* against the current repository's commit types."""
+    return normalize_commit_subject_type(value, load_cwd_type_registry())
+
+
+def infer_commit_type(branch_name: str, registry: TypeRegistry | None = None) -> str | None:
+    """Infer a conventional commit type from the current branch name.
+
+    Uses the branch type's own commit type, or its single allowed
+    ``commit_types`` entry; agent and bot branches infer nothing.
+    """
     if (
         not branch_name
         or branch_name in ALLOWED_BRANCH_NAMES
@@ -66,15 +78,13 @@ def infer_commit_type(branch_name: str) -> str | None:
         return None
 
     type_part, _ = branch_name.split("/", 1)
-    if type_part in MAGIC_BRANCH_TYPES or type_part in BOT_BRANCH_TYPES:
-        return None
-    return type_part if type_part in CONVENTIONAL_TYPES else None
+    return (registry or TypeRegistry()).inferred_commit_type(type_part)
 
 
 def resolve_commit_subject(args: argparse.Namespace, root: Path) -> tuple[str, str]:
     """Resolve the current branch and conventional commit subject."""
     branch_name = git.current_branch(root)
-    commit_type = args.type or infer_commit_type(branch_name)
+    commit_type = args.type or infer_commit_type(branch_name, load_type_registry(root))
     if commit_type is None:
         raise ValueError(
             "Could not infer a conventional commit type from the current branch. "
@@ -252,7 +262,7 @@ def add_commit_arguments(parser: argparse.ArgumentParser) -> None:
         "--type",
         dest="type",
         default=None,
-        type=normalize_commit_subject_type,
+        type=parse_commit_subject_type,
         metavar="TYPE",
         help="Explicit conventional commit type. Defaults to the current branch type.",
     )

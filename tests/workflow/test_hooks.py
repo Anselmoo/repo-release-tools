@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from repo_release_tools.conventions import TypeRegistry, build_registry
 from repo_release_tools.workflow import hooks
 
 
@@ -261,7 +262,7 @@ def test_run_branch_commit_and_dirty_checks(
 
 def test_run_pre_commit_and_changelog_gate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "feat/add-parser")
-    monkeypatch.setattr(hooks, "load_extra_branch_types", lambda cwd: ())
+    monkeypatch.setattr(hooks, "load_type_registry", lambda cwd: TypeRegistry())
     assert hooks.run_pre_commit(tmp_path) == 0
 
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "squash")
@@ -303,7 +304,7 @@ def test_run_commit_msg_uses_read_commit_subject(
     monkeypatch.setattr(
         hooks,
         "run_commit_subject_check",
-        lambda subject, *, title, extra_types=(), verbose=0: captured.append((subject, title)) or 7,
+        lambda subject, *, title, verbose=0, **_: captured.append((subject, title)) or 7,
     )
 
     assert hooks.run_commit_msg(message_file) == 7
@@ -318,13 +319,13 @@ def test_run_update_unreleased_and_changelog_checks(
     changelog.write_text("# Changelog\n\n## [Unreleased]\n\n", encoding="utf-8")
 
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
-    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject, **_: True)
     monkeypatch.setattr(hooks, "is_changelog_meta_commit", lambda subject: False)
     monkeypatch.setattr(hooks, "detect_changelog_format", lambda changelog_file: "markdown")
     monkeypatch.setattr(
         hooks,
         "append_to_unreleased",
-        lambda content, subject, fmt: content + "### Added\n- add parser\n",
+        lambda content, subject, fmt, **_: content + "### Added\n- add parser\n",
     )
     git_runs: list[list[str]] = []
     monkeypatch.setattr(
@@ -358,13 +359,13 @@ def test_run_update_unreleased_uses_dashdash_separator_for_dash_prefixed_filenam
     changelog.write_text("# Changelog\n\n## [Unreleased]\n\n", encoding="utf-8")
 
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
-    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject, **_: True)
     monkeypatch.setattr(hooks, "is_changelog_meta_commit", lambda subject: False)
     monkeypatch.setattr(hooks, "detect_changelog_format", lambda changelog_file: "markdown")
     monkeypatch.setattr(
         hooks,
         "append_to_unreleased",
-        lambda content, subject, fmt: content + "### Added\n- add parser\n",
+        lambda content, subject, fmt, **_: content + "### Added\n- add parser\n",
     )
     git_runs: list[list[str]] = []
     monkeypatch.setattr(
@@ -487,13 +488,13 @@ def test_run_update_unreleased_and_changelog_check_error_branches(
     )
 
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
-    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: False)
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject, **_: False)
     assert (
         hooks.run_update_unreleased(tmp_path, subject="chore: tidy", changelog_file="CHANGELOG.md")
         == 0
     )
 
-    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject, **_: True)
     monkeypatch.setattr(
         hooks, "_resolve_changelog_strategy", lambda cwd, strategy: _raise_runtime_error(cwd)
     )
@@ -569,7 +570,7 @@ def test_run_update_unreleased_and_changelog_check_error_branches(
     )
 
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
-    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject, **_: True)
     monkeypatch.setattr(hooks, "is_changelog_meta_commit", lambda subject: True)
     assert (
         hooks.run_update_unreleased(
@@ -640,22 +641,22 @@ def test_run_post_correct_and_main_dispatch(
     monkeypatch.setattr(
         hooks,
         "run_commit_msg",
-        lambda path, *, extra_types=(), verbose=0: (
-            calls.append(("commit-msg", (path, extra_types))) or 13
+        lambda path, *, registry, branch, verbose=0: (
+            calls.append(("commit-msg", (path, registry.commit_type_names[-1], branch))) or 13
         ),
     )
     monkeypatch.setattr(
         hooks,
         "run_branch_name_check",
-        lambda branch_name, *, title, extra_types=(), verbose=0: (
-            calls.append(("branch", branch_name)) or 14
+        lambda branch_name, *, title, registry, verbose=0: (
+            calls.append(("branch", (branch_name, registry.branch_type_names[-1]))) or 14
         ),
     )
     monkeypatch.setattr(
         hooks,
         "run_commit_subject_check",
-        lambda subject, *, title, extra_types=(), verbose=0: (
-            calls.append(("subject", (subject, extra_types))) or 15
+        lambda subject, *, title, registry, branch, verbose=0: (
+            calls.append(("subject", (subject, registry.commit_type_names[-1], branch))) or 15
         ),
     )
     monkeypatch.setattr(
@@ -699,16 +700,28 @@ def test_run_post_correct_and_main_dispatch(
             or 23
         ),
     )
-    monkeypatch.setattr(hooks, "load_extra_branch_types", lambda cwd: ("custom",))
-    monkeypatch.setattr(hooks, "load_extra_commit_types", lambda cwd: ("ux",))
+    monkeypatch.setattr(
+        hooks,
+        "load_type_registry",
+        lambda cwd: build_registry(extra_branch_types=("custom",), extra_commit_types=("ux",)),
+    )
+    monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "feat/add-parser")
 
     assert hooks.main(["pre-commit"]) == 11
     assert hooks.main(["pre-commit-changelog", "--changelog-file", "CHANGELOG.md"]) == 12
     assert hooks.main(["commit-msg", "msg.txt"]) == 13
     assert hooks.main(["check-branch-name", "--branch", "feat/add-parser"]) == 14
     assert hooks.main(["check-commit-subject", "--subject", "feat: add parser"]) == 15
-    assert ("commit-msg", (Path("msg.txt"), ("ux",))) in calls
-    assert ("subject", ("feat: add parser", ("ux",))) in calls
+    assert (
+        hooks.main(
+            ["check-commit-subject", "--subject", "feat: add parser", "--branch", "docs/x"],
+        )
+        == 15
+    )
+    assert ("commit-msg", (Path("msg.txt"), "ux", "feat/add-parser")) in calls
+    assert ("branch", ("feat/add-parser", "custom")) in calls
+    assert ("subject", ("feat: add parser", "ux", "")) in calls
+    assert ("subject", ("feat: add parser", "ux", "docs/x")) in calls
     assert hooks.main(["check-dirty-tree"]) == 16
     assert hooks.main(["check-dirty-tree", "--ignore-generated"]) == 16
     assert hooks.main(["check-docs"]) == 17
@@ -1052,7 +1065,7 @@ def test_run_update_unreleased_handles_missing_file(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
-    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject, **_: True)
     monkeypatch.setattr(hooks, "is_changelog_meta_commit", lambda subject: False)
 
     assert (
@@ -1070,7 +1083,7 @@ def test_run_update_unreleased_rejects_path_outside_repo_root(
 ) -> None:
     """SEC-003: a changelog_file that resolves outside cwd must be rejected."""
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
-    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject, **_: True)
     monkeypatch.setattr(hooks, "is_changelog_meta_commit", lambda subject: False)
 
     repo_root = tmp_path / "repo"
@@ -1096,10 +1109,10 @@ def test_run_update_unreleased_no_change_path(
     changelog.write_text(content, encoding="utf-8")
 
     monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
-    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject: True)
+    monkeypatch.setattr(hooks, "commit_subject_requires_changelog", lambda subject, **_: True)
     monkeypatch.setattr(hooks, "is_changelog_meta_commit", lambda subject: False)
     monkeypatch.setattr(hooks, "detect_changelog_format", lambda f: "markdown")
-    monkeypatch.setattr(hooks, "append_to_unreleased", lambda original, subject, fmt: original)
+    monkeypatch.setattr(hooks, "append_to_unreleased", lambda original, subject, fmt, **_: original)
 
     assert (
         hooks.run_update_unreleased(
@@ -1430,7 +1443,7 @@ def test_main_verbose_flag_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         hooks,
         "run_branch_name_check",
-        lambda branch_name, *, title, extra_types=(), verbose=0: captured.append(verbose) or 0,
+        lambda branch_name, *, title, verbose=0, **_: captured.append(verbose) or 0,
     )
     hooks.main(["-v", "check-branch-name", "--branch", "feat/foo"])
     assert captured == [1]
@@ -1762,3 +1775,96 @@ def test_run_commit_subject_check_verbose_reports_extra_type(
     err = capsys.readouterr().err
     assert "type='security'" in err
     assert "scope='auth'" in err
+
+
+# ---------------------------------------------------------------------------
+# Typed commit/branch types and strict subject spacing
+# ---------------------------------------------------------------------------
+
+_TYPED = build_registry(
+    commit_types=[{"name": "security", "description": "Security fix", "changelog_section": "Sec"}],
+    branch_types=[
+        {"name": "design", "description": "Design records", "commit_types": ["docs", "chore"]},
+        {"name": "spike", "description": "Spike", "slug": "any"},
+    ],
+)
+
+
+@pytest.mark.parametrize("subject", ["feat:missing space", "feat : x", "feat:  x", "feat(cli) : x"])
+def test_validate_commit_subject_rejects_bad_colon_spacing(subject: str) -> None:
+    problem = hooks.validate_commit_subject(subject)
+    assert problem is not None
+    assert "exactly one space" in problem
+
+
+def test_validate_commit_subject_lists_types_with_descriptions() -> None:
+    problem = hooks.validate_commit_subject("nope: x", registry=_TYPED)
+    assert problem is not None
+    assert "  feat — A new feature" in problem.splitlines()
+    assert "  security — Security fix" in problem.splitlines()
+
+
+def test_validate_commit_subject_enforces_branch_commit_types() -> None:
+    problem = hooks.validate_commit_subject("feat: x", registry=_TYPED, branch="design/adr")
+    assert problem is not None
+    assert "not allowed on branch 'design/adr'" in problem
+    assert "  docs — Documentation only" in problem.splitlines()
+    assert hooks.validate_commit_subject("docs: adr", registry=_TYPED, branch="design/adr") is None
+    assert hooks.validate_commit_subject("feat: x", registry=_TYPED, branch="feat/x") is None
+    assert hooks.validate_commit_subject("feat: x", registry=_TYPED, branch="") is None
+    assert (
+        hooks.validate_commit_subject("Merge branch 'x'", registry=_TYPED, branch="design/a")
+        is None
+    )
+    assert (
+        hooks.validate_commit_subject("fixup! feat: x", registry=_TYPED, branch="design/a") is None
+    )
+
+
+def test_validate_branch_name_uses_registry_slug_policy() -> None:
+    assert hooks.validate_branch_name("design/adr-one", registry=_TYPED) is None
+    assert hooks.validate_branch_name("design/Bad_Slug", registry=_TYPED) is not None
+    assert hooks.validate_branch_name("spike/Any_Slug/ok", registry=_TYPED) is None
+    assert hooks.validate_branch_name("spike/", registry=_TYPED) is not None
+    problem = hooks.validate_branch_name("ghost/x", registry=_TYPED)
+    assert problem is not None
+    assert "design" in problem
+
+
+def test_run_branch_name_check_lists_branch_type_descriptions(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert hooks.run_branch_name_check("ghost/x", title="t", registry=_TYPED) == 1
+    err = capsys.readouterr().err
+    assert "design — Design records" in err
+    assert "renovate — Renovate update" in err
+
+
+def test_commit_type_requires_changelog_with_registry() -> None:
+    assert hooks.commit_type_requires_changelog("security", registry=_TYPED) is True
+    assert hooks.commit_type_requires_changelog("chore", registry=_TYPED) is False
+    assert hooks.commit_subject_requires_changelog("security: x", registry=_TYPED) is True
+    assert hooks.branch_requires_changelog("design/adr", registry=_TYPED) is False
+
+
+def test_hooks_report_broken_type_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def _broken(cwd: Path) -> TypeRegistry:
+        raise ValueError("broken type config")
+
+    monkeypatch.setattr(hooks, "load_type_registry", _broken)
+    monkeypatch.setattr(hooks.git, "current_branch", lambda cwd: "feat/x")
+    monkeypatch.setattr(hooks, "_detect_changelog_workflow", lambda cwd: "incremental")
+    monkeypatch.setattr(hooks, "_resolve_changelog_strategy", lambda cwd, strategy: "per-commit")
+    message = tmp_path / "msg.txt"
+    message.write_text("feat: x\n", encoding="utf-8")
+
+    assert hooks.run_pre_commit(tmp_path) == 1
+    assert hooks.run_pre_commit_changelog(tmp_path) == 1
+    assert hooks.run_update_unreleased(tmp_path, subject="feat: x") == 1
+    assert hooks.run_changelog_check("feat: x", cwd=tmp_path, title="t") == 1
+    assert hooks.main(["commit-msg", str(message)]) == 1
+    assert hooks.main(["check-branch-name", "--branch", "feat/x"]) == 1
+    assert hooks.main(["check-commit-subject", "--subject", "feat: x"]) == 1
+    assert capsys.readouterr().err.count("broken type config") == 7

@@ -40,25 +40,43 @@ def register(mcp: FastMCP) -> None:
         hand-written name — it also returns a matching Conventional Commit title to use
         for the first commit, though nothing enforces that the caller actually uses it.
 
-        commit_type: feat|fix|chore|docs|refactor|test|ci|perf|style|build. dry_run=True by default.
+        commit_type: a branch type of this repo — the built-ins feat|fix|chore|docs|refactor|
+        test|ci|perf|style|build plus any [[tool.rrt.branch_types]] / extra_branch_types.
+        dry_run=True by default.
         """
         from pathlib import Path
 
-        from repo_release_tools.commands.branch import CONVENTIONAL_TYPES, BranchName
+        from repo_release_tools.commands.branch import BranchName
+        from repo_release_tools.config import load_type_registry
         from repo_release_tools.workflow import git
 
-        if commit_type not in CONVENTIONAL_TYPES:
-            allowed = ", ".join(CONVENTIONAL_TYPES)
+        root: Path = ctx.lifespan_context.get("root", Path.cwd())
+        try:
+            types = load_type_registry(root)
+        except ValueError as exc:
             return BranchResult(
                 branch="",
                 created=False,
                 dry_run=dry_run,
                 suggested_commit_title="",
-                error=f"Invalid commit type. Choose one of: {allowed}",
+                error=str(exc),
+            )
+        creatable = [bt.name for bt in types.creatable_branch_types]
+        if commit_type not in creatable:
+            return BranchResult(
+                branch="",
+                created=False,
+                dry_run=dry_run,
+                suggested_commit_title="",
+                error=f"Invalid commit type. Choose one of: {', '.join(creatable)}",
             )
 
-        root: Path = ctx.lifespan_context.get("root", Path.cwd())
-        branch = BranchName(type=commit_type, description=description, scope=scope)
+        branch = BranchName(
+            type=commit_type,
+            description=description,
+            scope=scope,
+            commit_type=types.suggested_commit_type(commit_type),
+        )
         branch_name = branch.slug()
         commit_title = branch.commit_title()
 

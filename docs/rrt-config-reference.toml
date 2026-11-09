@@ -100,6 +100,54 @@ reason = "..."
 # `job` as the join key — a match on `job` alone is not sufficient.
 ref = "..."
 
+# Typed branch type definitions (`<type>/<slug>`). Adds new types or overrides
+# fields of a built-in one.
+[[tool.rrt.branch_types]]
+
+# Whether commits on this branch must stage a changelog update. Default: the
+# policy of the commit type with the same name, else false.
+changelog_required = false
+
+# Commit types allowed on this branch type. Empty or omitted allows any.
+commit_types = []
+
+# Shown in hook and MCP error messages and in `rrt config`. Required for a new
+# type.
+description = "..."
+
+# Branch type prefix (e.g. 'design').
+name = "..."
+
+# 'kebab' validates a lowercase kebab-case slug of at most 60 characters;
+# 'any' only requires a non-empty slug.
+# one of: any, kebab
+slug = "any"
+
+# Typed commit type definitions. Adds new types or overrides fields of a
+# built-in type (feat, fix, chore, docs, refactor, test, ci, perf, style,
+# build, deps).
+[[tool.rrt.commit_types]]
+
+# Bump impact for `prerelease_base = "auto"`. A breaking marker (`!` or
+# BREAKING CHANGE) always means major.
+# one of: minor, none, patch
+bump = "minor"
+
+# Whether a commit of this type must update the changelog. Default: true when
+# the section is set and is not 'Maintenance'.
+changelog_required = false
+
+# Changelog section the type lands in. false keeps it out of the changelog.
+# Custom sections render after the built-in ones and before Maintenance.
+changelog_section = "..."
+
+# Shown in hook and MCP error messages and in `rrt config`. Required for a new
+# type.
+description = "..."
+
+# Commit type name as written in the subject (e.g. 'security').
+name = "..."
+
 # Documentation tree injection configuration.
 [tool.rrt.docs]
 

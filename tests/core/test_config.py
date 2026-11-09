@@ -1128,6 +1128,73 @@ kind = "package_json"
     assert load_extra_commit_types(tmp_path) == ("security", "ux")
 
 
+def test_load_type_registry_defaults_without_config(tmp_path: Path) -> None:
+    from repo_release_tools.config import load_type_registry
+    from repo_release_tools.conventions import TypeRegistry
+
+    assert load_type_registry(tmp_path) == TypeRegistry()
+    (tmp_path / "pyproject.toml").write_text("[tool.other]\n", encoding="utf-8")
+    assert load_type_registry(tmp_path) == TypeRegistry()
+
+
+def test_load_type_registry_reads_typed_tables(tmp_path: Path) -> None:
+    from repo_release_tools.config import load_type_registry
+
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+extra_commit_types = ["security"]
+extra_branch_types = ["snyk"]
+extra_section_map = { security = "Security" }
+
+[[tool.rrt.commit_types]]
+name = "ux"
+description = "UX polish"
+changelog_section = "UX"
+bump = "minor"
+
+[[tool.rrt.branch_types]]
+name = "design"
+description = "Design records"
+commit_types = ["docs", "chore"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    registry = load_type_registry(tmp_path)
+    assert registry.section_for("security") == "Security"
+    assert registry.bump_for("ux") == "minor"
+    assert registry.allowed_commit_types_on("design/adr") == ("docs", "chore")
+    assert registry.branch_type("snyk") is not None
+
+
+def test_load_type_registry_surfaces_invalid_definition(tmp_path: Path) -> None:
+    from repo_release_tools.config import load_type_registry
+
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.branch_types]]
+name = "design"
+description = "Design records"
+commit_types = ["ghost"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Failed to load commit/branch type configuration"):
+        load_type_registry(tmp_path)
+
+
 # ---------------------------------------------------------------------------
 # primary_remote
 # ---------------------------------------------------------------------------

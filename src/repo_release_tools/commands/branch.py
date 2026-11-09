@@ -48,7 +48,30 @@ Branches created by assistant-driven workflows or dependency bots are accepted w
 - `claude/...`, `codex/...`, `copilot/...`
 - `dependabot/...`, `renovate/...`
 
-Custom prefixes can be added via the `extra_branch_types` config key.
+## Custom branch and commit types
+
+A repository defines its own types in `[tool.rrt]`. Each table entry is a full definition:
+
+```toml
+[[tool.rrt.commit_types]]
+name = "security"
+description = "Security fix or hardening"
+changelog_section = "Security"   # false keeps it out of the changelog
+bump = "patch"                   # none | patch | minor
+
+[[tool.rrt.branch_types]]
+name = "design"
+description = "Design records and decisions"
+commit_types = ["docs", "chore"] # omitted allows any commit type
+slug = "kebab"                   # kebab | any
+```
+
+An entry with a built-in name overrides only the fields it sets. Hooks, MCP
+validators, changelog rendering, bump inference and `rrt branch new` read the
+same definitions. On a `design/...` branch the commit-msg hook rejects any
+type outside `commit_types`. The flat `extra_branch_types` and
+`extra_commit_types` lists stay as shorthand. `rrt config` lists every
+resolved type with its description.
 
 ## Behavior
 
@@ -68,6 +91,7 @@ Custom prefixes can be added via the `extra_branch_types` config key.
 
 - Branch slugs are limited to 60 characters by default.
 - Custom branch types can be added via configuration.
+- Agent and bot prefixes are accepted by the hooks but never created by `rrt branch new`.
 
 ## Related docs
 
@@ -86,6 +110,7 @@ from pathlib import Path
 
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._registry import CommandCategory, CommandGroup, register_command
+from repo_release_tools.conventions import CONVENTIONAL_BRANCH_TYPE_NAMES, TypeRegistry
 from repo_release_tools.ui import GLYPHS, DryRunPrinter, VerbosePrinter
 from repo_release_tools.workflow import git
 
@@ -96,18 +121,8 @@ SEMANTIC_BRANCHES_DOC = __doc__ or ""
 # Ordered source-owned topic docs for future generic docs generation.
 SOURCE_OWNED_TOPIC_DOCS: tuple[tuple[str, str], ...] = (("branch", SEMANTIC_BRANCHES_DOC),)
 
-CONVENTIONAL_TYPES = (
-    "feat",
-    "fix",
-    "chore",
-    "docs",
-    "refactor",
-    "test",
-    "ci",
-    "perf",
-    "style",
-    "build",
-)
+# Built-in conventional branch types, derived from the type registry.
+CONVENTIONAL_TYPES = CONVENTIONAL_BRANCH_TYPE_NAMES
 
 SLUG_MAX = 60
 STATUS_MAX = 15
@@ -128,6 +143,7 @@ class BranchName:
     type: str
     description: str
     scope: str | None = None
+    commit_type: str | None = None
 
     def slug(self) -> str:
         """Build the branch name."""
@@ -139,18 +155,47 @@ class BranchName:
     def commit_title(self) -> str:
         """Build the suggested commit title."""
         scope_part = f"({self.scope})" if self.scope else ""
-        return f"{self.type}{scope_part}: {self.description}"
+        return f"{self.commit_type or self.type}{scope_part}: {self.description}"
 
 
-def normalize_commit_type(value: str) -> str:
-    """Validate the conventional commit type."""
+def load_cwd_type_registry() -> TypeRegistry:
+    """Load the type registry of the repository in the current directory.
+
+    Raises ``argparse.ArgumentTypeError`` for a broken type definition so
+    argparse reports it like any other invalid argument.
+    """
+    from repo_release_tools.config import load_type_registry
+
+    try:
+        return load_type_registry(Path.cwd())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def normalize_commit_type(value: str, registry: TypeRegistry | None = None) -> str:
+    """Validate a branch type that ``rrt branch`` may create.
+
+    *registry* defaults to the built-in types; agent and bot types are
+    never created by hand.
+    """
     normalized = value.lower()
-    if normalized not in CONVENTIONAL_TYPES:
-        allowed = ", ".join(CONVENTIONAL_TYPES)
+    creatable = (registry or TypeRegistry()).creatable_branch_types
+    if normalized not in (bt.name for bt in creatable):
+        allowed = ", ".join(bt.name for bt in creatable)
         raise argparse.ArgumentTypeError(
             f"invalid conventional type: {value!r} (choose one of: {allowed})",
         )
     return normalized
+
+
+def parse_branch_type(value: str) -> str:
+    """Argparse type: validate *value* against the current repository's branch types."""
+    return normalize_commit_type(value, load_cwd_type_registry())
+
+
+def suggested_commit_type(branch_type: str) -> str:
+    """Return the commit type to suggest for a new branch of *branch_type*."""
+    return load_cwd_type_registry().suggested_commit_type(branch_type)
 
 
 def join_description(parts: list[str]) -> str:
@@ -162,7 +207,7 @@ def join_description(parts: list[str]) -> str:
 
 def add_common_branch_arguments(parser: argparse.ArgumentParser) -> None:
     """Register shared arguments."""
-    parser.add_argument("type", type=normalize_commit_type, metavar="TYPE")
+    parser.add_argument("type", type=parse_branch_type, metavar="TYPE")
     parser.add_argument("description", nargs="+", help="Short branch description.")
     parser.add_argument("--scope", metavar="SCOPE", default=None, help="Optional scope.")
     add_dry_run_flag(parser, verb="touching git")
@@ -220,7 +265,12 @@ def cmd_new(args: argparse.Namespace) -> int:
     verbose = opts.verbose
     root = Path.cwd()
     description = join_description(opts.description)
-    branch = BranchName(type=opts.type, description=description, scope=opts.scope)
+    branch = BranchName(
+        type=opts.type,
+        description=description,
+        scope=opts.scope,
+        commit_type=suggested_commit_type(opts.type),
+    )
     branch_name = branch.slug()
     commit_title = branch.commit_title()
 
@@ -381,7 +431,12 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
         description = join_description(description_words)
         effective_scope = None if no_scope else scope
-        branch = BranchName(type=new_type, description=description, scope=effective_scope)
+        branch = BranchName(
+            type=new_type,
+            description=description,
+            scope=effective_scope,
+            commit_type=suggested_commit_type(new_type),
+        )
         new_name = branch.slug()
         commit_title = branch.commit_title()
     else:
@@ -421,7 +476,7 @@ def cmd_rename(args: argparse.Namespace) -> int:
 
         new_name = f"{new_type}/{new_slug}"
         scope_part = f"({scope})" if scope else ""
-        commit_title = f"{new_type}{scope_part}: <preserved description>"
+        commit_title = f"{suggested_commit_type(new_type)}{scope_part}: <preserved description>"
 
     if new_name == current_branch:
         VerbosePrinter(verbose=verbose).line(
@@ -506,7 +561,12 @@ def cmd_rescue(args: argparse.Namespace) -> int:
     verbose = opts.verbose
     root = Path.cwd()
     description = join_description(opts.description)
-    branch = BranchName(type=opts.type, description=description, scope=opts.scope)
+    branch = BranchName(
+        type=opts.type,
+        description=description,
+        scope=opts.scope,
+        commit_type=suggested_commit_type(opts.type),
+    )
     branch_name = branch.slug()
     commit_title = branch.commit_title()
 
@@ -644,7 +704,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     rename_parser.add_argument(
         "--type",
         dest="type",
-        type=normalize_commit_type,
+        type=parse_branch_type,
         metavar="TYPE",
         default=None,
         help="New conventional commit type (e.g. feat, fix, build).",

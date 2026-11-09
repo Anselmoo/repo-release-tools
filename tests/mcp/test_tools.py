@@ -24,6 +24,7 @@ from repo_release_tools.config import (
     VersionTarget,
     load_or_autodetect_config,
 )
+from repo_release_tools.conventions import TypeRegistry
 from repo_release_tools.eol import EolRecord
 from repo_release_tools.mcp.models import (
     BranchResult,
@@ -951,7 +952,7 @@ def test_rrt_validate_branch_valid(tmp_path: Path) -> None:
     tools = _val_tools(tmp_path)
     ctx = _ctx(tmp_path)
     with (
-        patch("repo_release_tools.config.load_extra_branch_types", return_value=()),
+        patch("repo_release_tools.config.load_type_registry", return_value=TypeRegistry()),
         patch("repo_release_tools.workflow.hooks.validate_branch_name", return_value=None),
     ):
         result = tools["rrt_validate_branch"](ctx, branch_name="feat/foo")
@@ -963,7 +964,7 @@ def test_rrt_validate_branch_invalid(tmp_path: Path) -> None:
     tools = _val_tools(tmp_path)
     ctx = _ctx(tmp_path)
     with (
-        patch("repo_release_tools.config.load_extra_branch_types", return_value=()),
+        patch("repo_release_tools.config.load_type_registry", return_value=TypeRegistry()),
         patch("repo_release_tools.workflow.hooks.validate_branch_name", return_value="bad format"),
     ):
         result = tools["rrt_validate_branch"](ctx, branch_name="bad")
@@ -974,22 +975,20 @@ def test_rrt_validate_branch_invalid(tmp_path: Path) -> None:
 def test_rrt_validate_branch_load_error(tmp_path: Path) -> None:
     tools = _val_tools(tmp_path)
     ctx = _ctx(tmp_path)
-    with (
-        patch(
-            "repo_release_tools.config.load_extra_branch_types",
-            side_effect=FileNotFoundError("no file"),
-        ),
-        patch("repo_release_tools.workflow.hooks.validate_branch_name", return_value=None),
+    with patch(
+        "repo_release_tools.config.load_type_registry",
+        side_effect=ValueError("broken type config"),
     ):
         result = tools["rrt_validate_branch"](ctx, branch_name="feat/ok")
-    assert result.valid is True
+    assert result.valid is False
+    assert result.reason == "broken type config"
 
 
 def test_rrt_validate_commit_valid(tmp_path: Path) -> None:
     tools = _val_tools(tmp_path)
     ctx = _ctx(tmp_path)
     with (
-        patch("repo_release_tools.config.load_extra_commit_types", return_value=()),
+        patch("repo_release_tools.config.load_type_registry", return_value=TypeRegistry()),
         patch("repo_release_tools.workflow.hooks.validate_commit_subject", return_value=None),
     ):
         result = tools["rrt_validate_commit"](ctx, subject="feat: add thing")
@@ -1001,7 +1000,7 @@ def test_rrt_validate_commit_invalid(tmp_path: Path) -> None:
     tools = _val_tools(tmp_path)
     ctx = _ctx(tmp_path)
     with (
-        patch("repo_release_tools.config.load_extra_commit_types", return_value=()),
+        patch("repo_release_tools.config.load_type_registry", return_value=TypeRegistry()),
         patch("repo_release_tools.workflow.hooks.validate_commit_subject", return_value="no colon"),
     ):
         result = tools["rrt_validate_commit"](ctx, subject="bad")
@@ -1011,15 +1010,13 @@ def test_rrt_validate_commit_invalid(tmp_path: Path) -> None:
 def test_rrt_validate_commit_load_error(tmp_path: Path) -> None:
     tools = _val_tools(tmp_path)
     ctx = _ctx(tmp_path)
-    with (
-        patch(
-            "repo_release_tools.config.load_extra_commit_types",
-            side_effect=FileNotFoundError("no file"),
-        ),
-        patch("repo_release_tools.workflow.hooks.validate_commit_subject", return_value=None),
+    with patch(
+        "repo_release_tools.config.load_type_registry",
+        side_effect=ValueError("broken type config"),
     ):
         result = tools["rrt_validate_commit"](ctx, subject="feat: good")
-    assert result.valid is True
+    assert result.valid is False
+    assert result.reason == "broken type config"
 
 
 def test_rrt_validate_commit_honours_extra_commit_types(tmp_path: Path) -> None:
@@ -1043,6 +1040,44 @@ kind = "package_json"
     assert rejected.valid is False
     assert rejected.reason is not None
     assert "security" in rejected.reason
+
+
+def test_rrt_validate_commit_typed_types_and_branch_restriction(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.commit_types]]
+name = "security"
+description = "Security fix or hardening"
+changelog_section = "Security"
+
+[[tool.rrt.branch_types]]
+name = "design"
+description = "Design records"
+commit_types = ["docs", "chore"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    tools = _val_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    assert tools["rrt_validate_commit"](ctx, subject="security: pin scope").valid is True
+    assert tools["rrt_validate_commit"](ctx, subject="feat: x", branch="design/adr").valid is False
+    ok = tools["rrt_validate_commit"](ctx, subject="docs: adr 1", branch="design/adr")
+    assert ok.valid is True
+    rejected = tools["rrt_validate_commit"](ctx, subject="feat:missing space")
+    assert rejected.valid is False
+    assert rejected.reason is not None
+    assert "exactly one space" in rejected.reason
+    unknown = tools["rrt_validate_commit"](ctx, subject="nope: x")
+    assert unknown.reason is not None
+    assert "security — Security fix or hardening" in unknown.reason
+    assert tools["rrt_validate_branch"](ctx, branch_name="design/adr-1").valid is True
 
 
 # ── changelog tools ───────────────────────────────────────────────────────────
@@ -1114,6 +1149,41 @@ def test_rrt_branch_new_invalid_type(tmp_path: Path) -> None:
     result = asyncio.run(_run())
     assert result.created is False
     assert result.error is not None
+
+
+def test_rrt_branch_new_custom_type_and_config_error(tmp_path: Path) -> None:
+    (tmp_path / ".rrt.toml").write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.branch_types]]
+name = "design"
+description = "Design records"
+commit_types = ["docs"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    tools = _git_tools(tmp_path)
+    ctx = _ctx(tmp_path)
+
+    async def _run(commit_type: str) -> BranchResult:
+        return await tools["rrt_branch_new"](ctx, commit_type=commit_type, description="adr one")
+
+    result = asyncio.run(_run("design"))
+    assert result.branch == "design/adr-one"
+    assert result.suggested_commit_title == "docs: adr one"
+    assert asyncio.run(_run("claude")).error is not None
+
+    with patch(
+        "repo_release_tools.config.load_type_registry",
+        side_effect=ValueError("broken type config"),
+    ):
+        broken = asyncio.run(_run("feat"))
+    assert broken.error == "broken type config"
 
 
 def test_rrt_branch_new_dry_run(tmp_path: Path) -> None:

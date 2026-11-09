@@ -827,3 +827,46 @@ def test_branch_registers_subcommands_and_handlers() -> None:
     rename_args = parser.parse_args(["branch", "rename", "--type", "fix", "patch"])
     assert rename_args.branch_command == "rename"
     assert rename_args.handler is cmd_rename
+
+
+def test_branch_type_follows_repository_config(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from repo_release_tools.commands import branch as branch_cmd
+
+    config = tmp_path / ".rrt.toml"
+    config.write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.branch_types]]
+name = "design"
+description = "Design records"
+commit_types = ["docs"]
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert branch_cmd.parse_branch_type("Design") == "design"
+    with pytest.raises(argparse.ArgumentTypeError):
+        branch_cmd.parse_branch_type("claude")
+
+    config.write_text(
+        """\
+[tool.rrt]
+
+[[tool.rrt.branch_types]]
+name = "design"
+
+[[tool.rrt.version_targets]]
+path = "package.json"
+kind = "package_json"
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(argparse.ArgumentTypeError, match="needs a non-empty description"):
+        branch_cmd.load_cwd_type_registry()

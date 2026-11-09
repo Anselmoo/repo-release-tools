@@ -1,4 +1,13 @@
 ## [Unreleased]
+### Added
+- **config**: typed `[[tool.rrt.commit_types]]` and `[[tool.rrt.branch_types]]` definitions (description, changelog section, changelog_required, bump impact, allowed commit types per branch type, slug policy); built-in types can be overridden field by field and `extra_*` lists stay as shorthand
+- **hooks**: commit-msg rejects a commit type the current branch type does not allow; errors list each type with its description; `check-commit-subject --branch` and MCP `rrt_validate_commit(branch=...)` apply the same restriction
+- **config**: `rrt config` lists every resolved commit and branch type
+
+### Fixed
+- **hooks**: require exactly one space after the colon and none before it in commit subjects (`feat:x` and `feat : x` were accepted); changelog and bump history parsing stay lenient
+- **changelog**: apply `extra_section_map` and custom commit types when rendering the changelog and `[Unreleased]` (custom-type commits were dropped)
+- **branch**: `rrt branch new`, `rrt git commit` and MCP `rrt_branch_new` accept the repository's custom types, as the hooks do
 
 ## [1.19.0] - 2026-11-08
 ### Fixed

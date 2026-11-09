@@ -40,6 +40,7 @@ from repo_release_tools.config import (
     VersionGroup,
     VersionTarget,
 )
+from repo_release_tools.conventions import build_registry
 from repo_release_tools.preflight import PreflightError
 from repo_release_tools.ui import GLYPHS
 from repo_release_tools.version.calver import CalVersion
@@ -4188,8 +4189,38 @@ def test_bump_auto_base_honours_extra_commit_types(tmp_path: Path) -> None:
 
     assert str(resolve_bump_target(config, opts).new) == "1.0.1-rc.1"
 
-    extended = dataclasses.replace(config, extra_commit_types=("wip",))
+    extended = dataclasses.replace(
+        config,
+        extra_commit_types=("wip",),
+        types=build_registry(extra_commit_types=("wip",)),
+    )
     assert str(resolve_bump_target(extended, opts).new) == "2.0.0-rc.1"
+
+
+def test_bump_auto_base_uses_commit_type_bump_impact(tmp_path: Path) -> None:
+    """A typed commit type's ``bump`` decides minor vs patch; ``feat`` can be demoted."""
+    config = _auto_repo(tmp_path)
+    _commit(tmp_path, "chore: release", tag="v1.0.0")
+    _commit(tmp_path, "ux: nicer table")
+    opts = _options(bump="rc", prerelease_base="auto")
+
+    custom = dataclasses.replace(
+        config,
+        types=build_registry(commit_types=[{"name": "ux", "description": "UX", "bump": "minor"}]),
+    )
+    assert str(resolve_bump_target(custom, opts).new) == "1.1.0-rc.1"
+
+    _commit(tmp_path, "feat: small thing")
+    demoted = dataclasses.replace(
+        config,
+        types=build_registry(
+            commit_types=[
+                {"name": "ux", "description": "UX", "bump": "none"},
+                {"name": "feat", "bump": "patch"},
+            ]
+        ),
+    )
+    assert str(resolve_bump_target(demoted, opts).new) == "1.0.1-rc.1"
 
 
 def test_bump_auto_base_uses_rendered_group_tag_prefix(tmp_path: Path) -> None:

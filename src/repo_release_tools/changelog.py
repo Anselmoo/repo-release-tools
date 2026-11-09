@@ -3,53 +3,59 @@
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from repo_release_tools.conventions import TypeRegistry
 
-def _build_commit_re(extra_types: tuple[str, ...] = ()) -> re.Pattern[str]:
-    """Build the conventional commit regex, optionally extending with extra types."""
-    base_types = "feat|fix|docs|style|refactor|perf|test|build|ci|chore|deps"
-    if extra_types:
-        joined = "|".join(re.escape(t) for t in extra_types)
-        type_pattern = f"{base_types}|{joined}"
-    else:
-        type_pattern = base_types
+_DEFAULT_REGISTRY = TypeRegistry()
+
+
+@functools.lru_cache(maxsize=64)
+def _commit_re(type_names: tuple[str, ...], *, strict: bool) -> re.Pattern[str]:
+    """Build the Conventional Commit subject regex for *type_names*.
+
+    The lenient form (history parsing for changelog and bump) tolerates any
+    whitespace around the colon. The strict form (hook and MCP validation)
+    requires the spec's ``type(scope)!: description``: no space before the
+    colon and exactly one space after it.
+    """
+    type_pattern = "|".join(re.escape(name) for name in type_names)
+    separator = r": (?P<desc>\S.*)$" if strict else r"\s*:\s*(?P<desc>.+)$"
     return re.compile(
         rf"^(?P<type>{type_pattern})"
         r"(?:\((?P<scope>[^)]+)\))?"
-        r"(?P<breaking>!)?"
-        r"\s*:\s*(?P<desc>.+)$",
+        r"(?P<breaking>!)?" + separator,
         re.IGNORECASE,
     )
 
 
+def _build_commit_re(
+    extra_types: tuple[str, ...] = (),
+    *,
+    registry: TypeRegistry | None = None,
+    strict: bool = False,
+) -> re.Pattern[str]:
+    """Return the commit regex for the registry's types plus *extra_types*."""
+    names = (registry or _DEFAULT_REGISTRY).commit_type_names
+    names = (*names, *(name for name in extra_types if name not in names))
+    return _commit_re(names, strict=strict)
+
+
 CONVENTIONAL_COMMIT_RE = _build_commit_re()
 
-SECTION_MAP = {
-    "feat": "Added",
-    "fix": "Fixed",
-    "refactor": "Changed",
-    "perf": "Changed",
-    "style": "Changed",
-    "docs": "Documentation",
-    "chore": "Maintenance",
-    "ci": "Maintenance",
-    "build": "Maintenance",
-    "test": "Maintenance",
-    "deps": "Maintenance",
+# Built-in type → section map and section order, kept as module constants for
+# callers that predate the type registry. New code reads a TypeRegistry.
+SECTION_MAP: dict[str, str] = {
+    ct.name: ct.changelog_section
+    for ct in _DEFAULT_REGISTRY.commit_types
+    if ct.changelog_section is not None
 }
 
-SECTION_ORDER = [
-    "Breaking Changes",
-    "Added",
-    "Fixed",
-    "Changed",
-    "Documentation",
-    "Maintenance",
-]
+SECTION_ORDER: list[str] = list(_DEFAULT_REGISTRY.section_order)
 
 
 @dataclass(frozen=True)
@@ -65,15 +71,20 @@ class ParsedCommit:
 def parse_conventional_commit(
     subject: str,
     extra_types: tuple[str, ...] = (),
+    *,
+    registry: TypeRegistry | None = None,
+    strict: bool = False,
 ) -> ParsedCommit | None:
     """Parse a commit subject.
 
-    *extra_types* allows project-specific types beyond the standard set.
+    The types come from *registry* (built-in types when omitted) plus
+    *extra_types*. *strict* enforces exactly one space after the colon and
+    none before it; history parsing leaves it off so old subjects still land
+    in generated changelogs.
     """
     if subject.startswith("Merge ") or subject.lower().startswith("release:"):
         return None
-    regex = _build_commit_re(extra_types) if extra_types else CONVENTIONAL_COMMIT_RE
-    match = regex.match(subject)
+    match = _build_commit_re(extra_types, registry=registry, strict=strict).match(subject)
     if match is None:
         return None
     return ParsedCommit(
@@ -172,20 +183,24 @@ def build_changelog_section(
     *,
     include_maintenance: bool,
     fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
+    registry: TypeRegistry | None = None,
 ) -> str:
     r"""Render a Keep-a-Changelog style section.
 
     The *fmt* parameter controls whether Markdown (``## [version]``,
     ``### Sub``) or RST underline (``version - date\\n---``, ``Sub\\n~~~``)
-    notation is used.
+    notation is used. *registry* supplies the commit types and their
+    sections (built-in types when omitted).
     """
-    sections: dict[str, list[str]] = {section: [] for section in SECTION_ORDER}
+    types = registry or _DEFAULT_REGISTRY
+    section_order = types.section_order
+    sections: dict[str, list[str]] = {section: [] for section in section_order}
 
     for subject in commit_subjects:
-        parsed = parse_conventional_commit(subject)
+        parsed = parse_conventional_commit(subject, registry=types)
         if parsed is None:
             continue
-        section = "Breaking Changes" if parsed.breaking else SECTION_MAP.get(parsed.type)
+        section = types.section_for(parsed.type, breaking=parsed.breaking)
         if section is None:
             continue
         scope_part = f"**{parsed.scope}**: " if parsed.scope else ""
@@ -199,7 +214,7 @@ def build_changelog_section(
         lines = [f"## [{version}] - {today}", ""]
 
     rendered_any = False
-    for section_name in SECTION_ORDER:
+    for section_name in section_order:
         entries = sections[section_name]
         if not entries:
             continue
@@ -410,6 +425,7 @@ def append_to_unreleased(
     content: str,
     commit_subject: str,
     fmt: ChangelogFormat = ChangelogFormat.MARKDOWN,
+    registry: TypeRegistry | None = None,
 ) -> str:
     """Insert a parsed bullet from *commit_subject* into the ``[Unreleased]`` section.
 
@@ -417,17 +433,19 @@ def append_to_unreleased(
     file (after a title line when present).
 
     Returns the updated content.  If the commit subject is not a conventional
-    commit subject, or its parsed type is not mapped in ``SECTION_MAP``, the
-    content is returned unchanged.  If the exact bullet is already present in
-    the ``[Unreleased]`` section the content is also returned unchanged.
+    commit subject, or its type has no changelog section in *registry*
+    (built-in types when omitted), the content is returned unchanged.  If the
+    exact bullet is already present in the ``[Unreleased]`` section the
+    content is also returned unchanged.
 
     The *fmt* parameter selects Markdown (default) or RST underline notation.
     """
-    parsed = parse_conventional_commit(commit_subject)
+    types = registry or _DEFAULT_REGISTRY
+    parsed = parse_conventional_commit(commit_subject, registry=types)
     if parsed is None:
         return content
 
-    section = "Breaking Changes" if parsed.breaking else SECTION_MAP.get(parsed.type)
+    section = types.section_for(parsed.type, breaking=parsed.breaking)
     if section is None:
         return content
 
@@ -450,9 +468,11 @@ def append_to_unreleased(
         if bullet in section_body.splitlines():
             return content
 
-        sub_header = f"### {section}"
-        if sub_header in section_body:
-            sub_pos = section_body.index(sub_header) + len(sub_header)
+        # Match the whole heading line: a substring test would let ``### Sec``
+        # match ``### Security`` now that section names are user-defined.
+        sub_match = re.search(rf"^### {re.escape(section)}[ \t]*$", section_body, re.MULTILINE)
+        if sub_match is not None:
+            sub_pos = sub_match.end()
             new_body = section_body[:sub_pos] + f"\n{bullet}" + section_body[sub_pos:]
         else:
             stripped = section_body.rstrip("\n")

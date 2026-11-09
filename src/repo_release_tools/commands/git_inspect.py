@@ -27,7 +27,8 @@ from repo_release_tools.commands._git_shared import (
     split_generated_dirt,
     summarize_status,
 )
-from repo_release_tools.config import load_extra_branch_types, load_git_config
+from repo_release_tools.config import load_git_config, load_type_registry
+from repo_release_tools.conventions import TypeRegistry
 from repo_release_tools.ui import GLYPHS, VerbosePrinter
 from repo_release_tools.workflow import git
 from repo_release_tools.workflow.hooks import (
@@ -242,6 +243,7 @@ def _compute_changelog_problem(
     branch_name: str,
     changelog_file: str,
     root: Path,
+    registry: TypeRegistry | None = None,
 ) -> str | None:
     """Return a changelog problem message, or ``None`` when no changelog work is required.
 
@@ -249,7 +251,9 @@ def _compute_changelog_problem(
     HEAD's changed files (via ``git diff-tree``) when *latest_subject*
     indicates changelog work is expected for this commit type.
     """
-    if not latest_subject or not commit_subject_requires_changelog(latest_subject):
+    if not latest_subject or not commit_subject_requires_changelog(
+        latest_subject, registry=registry
+    ):
         return None
     changed_files = git.capture(
         ["git", "diff-tree", "--no-commit-id", "--name-only", "--root", "-r", "HEAD"],
@@ -344,9 +348,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     ahead, behind = (0, 0) if upstream is None else git.ahead_behind(root, upstream)
     latest_subject = git.capture(["git", "log", "-1", "--pretty=%s"], root).strip()
 
-    branch_problem = validate_branch_name(branch_name, extra_types=load_extra_branch_types(root))
+    types = load_type_registry(root)
+    branch_problem = validate_branch_name(branch_name, registry=types)
     subject_problem = (
-        validate_commit_subject(latest_subject) if latest_subject else "No commits found."
+        validate_commit_subject(latest_subject, registry=types, branch=branch_name)
+        if latest_subject
+        else "No commits found."
     )
     dirty_problem = "Working tree has uncommitted changes." if status_lines else None
     operation_problem = (
@@ -363,6 +370,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         branch_name=branch_name,
         changelog_file=opts.changelog_file,
         root=root,
+        registry=types,
     )
 
     summary = summarize_status(branch_name, status_lines, upstream=upstream, root=root)
