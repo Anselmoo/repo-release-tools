@@ -8,6 +8,7 @@
 - **hooks**: require exactly one space after the colon and none before it in commit subjects (`feat:x` and `feat : x` were accepted); changelog and bump history parsing stay lenient
 - **changelog**: apply `extra_section_map` and custom commit types when rendering the changelog and `[Unreleased]` (custom-type commits were dropped)
 - **branch**: `rrt branch new`, `rrt git commit` and MCP `rrt_branch_new` accept the repository's custom types, as the hooks do
+- **hooks**: accept the Revert "…" and Reapply "…" subjects that git revert writes
 
 ## [1.19.0] - 2026-11-08
 ### Fixed
