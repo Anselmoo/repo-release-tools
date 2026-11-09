@@ -56,6 +56,9 @@ def test_branch_validation_and_commit_helpers() -> None:
 
     assert hooks.validate_commit_subject("") == "Commit message is empty."
     assert hooks.validate_commit_subject("Merge pull request #1") is None
+    assert hooks.validate_commit_subject('Revert "feat: add parser"') is None
+    assert hooks.validate_commit_subject('Reapply "feat: add parser"') is None
+    assert hooks.validate_commit_subject("Revert feat: add parser") is not None
     assert hooks.validate_commit_subject("fixup! feat(cli): add hook") is None
     assert hooks.validate_commit_subject("squash! fix: typo") is None
     assert "Conventional Commits" in _require_message(
@@ -1819,6 +1822,8 @@ def test_validate_commit_subject_enforces_branch_commit_types() -> None:
     assert (
         hooks.validate_commit_subject("fixup! feat: x", registry=_TYPED, branch="design/a") is None
     )
+    for generated in ('Revert "feat: x"', 'Reapply "feat: x"'):
+        assert hooks.validate_commit_subject(generated, registry=_TYPED, branch="design/a") is None
 
 
 def test_validate_branch_name_uses_registry_slug_policy() -> None:

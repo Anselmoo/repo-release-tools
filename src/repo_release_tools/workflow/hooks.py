@@ -148,6 +148,9 @@ def read_commit_subject(message_file: Path) -> str:
     return ""
 
 
+GIT_GENERATED_SUBJECT_PREFIXES = ("Merge ", 'Revert "', 'Reapply "')
+
+
 def validate_commit_subject(
     subject: str,
     extra_types: tuple[str, ...] = (),
@@ -162,11 +165,14 @@ def validate_commit_subject(
     ``type(scope)!: description`` with no space before the colon and one
     after it. When *branch* is given and its branch type restricts
     ``commit_types``, a subject of any other type is rejected.
+
+    Subjects that git writes itself are exempt: ``Merge …`` from a merge, and
+    ``Revert "…"`` / ``Reapply "…"`` from ``git revert``.
     """
     if not subject:
         return "Commit message is empty."
 
-    if subject.startswith("Merge "):
+    if subject.startswith(GIT_GENERATED_SUBJECT_PREFIXES):
         return None
 
     types = _commit_registry(registry, extra_types)
