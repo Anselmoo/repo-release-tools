@@ -1801,7 +1801,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.19.0
+    rev: v1.20.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-update-unreleased
@@ -1828,7 +1828,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.19.0
+    rev: v1.20.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-commit-subject
@@ -1885,7 +1885,7 @@ clean repository before publishing work:
 ```yaml
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.19.0
+    rev: v1.20.0
     hooks:
       - id: rrt-dirty-tree
         stages: [pre-push]
@@ -1929,7 +1929,7 @@ layout changes before they reach the remote:
 ```yaml
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.19.0
+    rev: v1.20.0
     hooks:
       - id: rrt-tree-check
         stages: [pre-push]
@@ -1947,7 +1947,7 @@ Generate or refresh the lock with `rrt tree --lock`.
 ```yaml
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.19.0
+    rev: v1.20.0
     hooks:
       - id: rrt-arch-check
         args: [--check-templates]
@@ -1964,7 +1964,7 @@ Pair it with `pre-push` to prevent publishing stale agent interfaces:
 ```yaml
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.19.0
+    rev: v1.20.0
     hooks:
       - id: rrt-drift-check
         stages: [pre-push]
@@ -2303,7 +2303,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/Anselmoo/repo-release-tools
-    rev: v1.19.0
+    rev: v1.20.0
     hooks:
       - id: rrt-branch-name
       - id: rrt-update-unreleased
