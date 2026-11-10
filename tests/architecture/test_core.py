@@ -85,8 +85,8 @@ def test_finding_id_order_and_equality_ignore_message() -> None:
 
 def test_root_module_name_plain_and_nested(tmp_path: Path) -> None:
     """Walk up while the parent is a package: ``src/a/b`` below ``a/__init__.py`` is ``a.b``."""
-    (tmp_path / "src" / "spectrafit").mkdir(parents=True)
-    assert root_module_name(tmp_path / "src" / "spectrafit") == "spectrafit"
+    (tmp_path / "src" / "acme").mkdir(parents=True)
+    assert root_module_name(tmp_path / "src" / "acme") == "acme"
 
     (tmp_path / "src" / "a" / "b").mkdir(parents=True)
     (tmp_path / "src" / "a" / "__init__.py").write_text("")
@@ -104,13 +104,13 @@ def test_root_module_name_relative_path_and_filesystem_root(
 
 
 # ---------------------------------------------------------------------------
-# insider-shaped fixture (design section 1, verbatim)
+# sample fixture: a door, nine units and a foundation
 # ---------------------------------------------------------------------------
 
-INSIDER_RAW = {
-    "root": "src/spectrafit",
+SAMPLE_RAW = {
+    "root": "src/acme",
     "top_level_files": ["__init__.py", "errors.py", "py.typed", "README.md"],
-    "layers": ["mcp", "model | project", "steps | schema", "errors"],
+    "layers": ["api", "domain | storage", "core | models", "errors"],
     "layers_sync": "importlinter",
     "required_files": {
         "door": ["__init__.py", "README.md"],
@@ -118,83 +118,81 @@ INSIDER_RAW = {
         "foundation": ["__init__.py", "README.md"],
     },
     "units": [
-        {"name": "mcp", "role": "door"},
-        {"name": "model"},
-        {"name": "project"},
-        {"name": "prepare", "package": "prep", "prefix": "prep"},
-        {"name": "read"},
-        {"name": "fit"},
-        {"name": "assess"},
-        {"name": "show"},
-        {"name": "report"},
-        {"name": "steps"},
-        {"name": "schema", "role": "foundation"},
+        {"name": "api", "role": "door"},
+        {"name": "domain"},
+        {"name": "storage"},
+        {"name": "transform", "package": "xform", "prefix": "xform"},
+        {"name": "fetch"},
+        {"name": "solve"},
+        {"name": "audit"},
+        {"name": "render"},
+        {"name": "export"},
+        {"name": "core"},
+        {"name": "models", "role": "foundation"},
         {"name": "errors", "module": "errors", "role": "foundation"},
     ],
 }
 
-INSIDER_PYPROJECT = """
+SAMPLE_PYPROJECT = """
 [tool.importlinter]
-root_package = "spectrafit"
+root_package = "acme"
 
 [[tool.importlinter.contracts]]
 name = "layers"
 type = "layers"
-containers = ["spectrafit"]
-layers = ["mcp", "model | project", "steps | schema", "errors"]
+containers = ["acme"]
+layers = ["api", "domain | storage", "core | models", "errors"]
 """
 
 
-def insider_repo(repo: Path) -> Path:
-    """Build the insider tree where only six of twelve declared units exist."""
+def sample_repo(repo: Path) -> Path:
+    """Build the sample tree where only six of twelve declared units exist."""
     files = {
-        "src/spectrafit/__init__.py": "",
-        "src/spectrafit/py.typed": "",
-        "src/spectrafit/README.md": "",
-        "src/spectrafit/errors.py": "class SpectraError(Exception): ...\n",
-        "pyproject.toml": INSIDER_PYPROJECT,
+        "src/acme/__init__.py": "",
+        "src/acme/py.typed": "",
+        "src/acme/README.md": "",
+        "src/acme/errors.py": "class AcmeError(Exception): ...\n",
+        "pyproject.toml": SAMPLE_PYPROJECT,
     }
-    for unit in ("mcp", "model", "project", "steps", "schema"):
-        files[f"src/spectrafit/{unit}/__init__.py"] = ""
-        files[f"src/spectrafit/{unit}/README.md"] = ""
-    files["src/spectrafit/mcp/tool.py"] = (
-        "from spectrafit.model import data\nimport spectrafit.errors\n"
-    )
-    files["src/spectrafit/model/data.py"] = "from spectrafit.steps import run\n"
-    files["src/spectrafit/steps/run.py"] = "from spectrafit.errors import SpectraError\n"
+    for unit in ("api", "domain", "storage", "core", "models"):
+        files[f"src/acme/{unit}/__init__.py"] = ""
+        files[f"src/acme/{unit}/README.md"] = ""
+    files["src/acme/api/tool.py"] = "from acme.domain import data\nimport acme.errors\n"
+    files["src/acme/domain/data.py"] = "from acme.core import run\n"
+    files["src/acme/core/run.py"] = "from acme.errors import AcmeError\n"
     (repo / "src").mkdir(parents=True, exist_ok=True)
     return build(repo, files)
 
 
-def test_insider_fixture_reports_only_the_six_missing_units(tmp_path: Path) -> None:
+def test_sample_fixture_reports_only_the_six_missing_units(tmp_path: Path) -> None:
     """Six declared-but-absent units are the only findings; layers-sync matches."""
-    repo = insider_repo(tmp_path)
-    config = _load_architecture_config(INSIDER_RAW)
+    repo = sample_repo(tmp_path)
+    config = _load_architecture_config(SAMPLE_RAW)
     assert config is not None
 
     findings = collect_findings(config, repo)
 
     assert ids(findings) == [
-        "missing-unit:src/spectrafit/assess",
-        "missing-unit:src/spectrafit/fit",
-        "missing-unit:src/spectrafit/prep",
-        "missing-unit:src/spectrafit/read",
-        "missing-unit:src/spectrafit/report",
-        "missing-unit:src/spectrafit/show",
+        "missing-unit:src/acme/audit",
+        "missing-unit:src/acme/export",
+        "missing-unit:src/acme/fetch",
+        "missing-unit:src/acme/render",
+        "missing-unit:src/acme/solve",
+        "missing-unit:src/acme/xform",
     ]
-    assert "prepare" in findings[2].message
+    assert "transform" in findings[5].message
 
 
-def test_insider_fixture_missing_module_unit(tmp_path: Path) -> None:
+def test_sample_fixture_missing_module_unit(tmp_path: Path) -> None:
     """A module unit whose ``<module>.py`` is absent is a missing-unit with the file path."""
-    repo = insider_repo(tmp_path)
-    (repo / "src/spectrafit/errors.py").unlink()
-    config = _load_architecture_config(INSIDER_RAW)
+    repo = sample_repo(tmp_path)
+    (repo / "src/acme/errors.py").unlink()
+    config = _load_architecture_config(SAMPLE_RAW)
     assert config is not None
 
     findings = collect_findings(config, repo)
 
-    assert "missing-unit:src/spectrafit/errors.py" in ids(findings)
+    assert "missing-unit:src/acme/errors.py" in ids(findings)
     assert ids(findings, "missing-file") == []
 
 
@@ -803,10 +801,10 @@ def test_relative_cwd_root_yields_same_ids_as_absolute_root(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Resolving ``.`` after ``chdir`` gives byte-identical ids to the absolute tmp root."""
-    repo = insider_repo(tmp_path / "repo")
-    (repo / "src/spectrafit/stray.py").write_text("from spectrafit.steps import run\n")
-    (repo / "src/spectrafit/steps/bad.py").write_text("from spectrafit.mcp import tool\n")
-    config = _load_architecture_config(INSIDER_RAW)
+    repo = sample_repo(tmp_path / "repo")
+    (repo / "src/acme/stray.py").write_text("from acme.core import run\n")
+    (repo / "src/acme/core/bad.py").write_text("from acme.api import tool\n")
+    config = _load_architecture_config(SAMPLE_RAW)
     assert config is not None
 
     absolute = collect_findings(config, repo.resolve())
@@ -814,5 +812,5 @@ def test_relative_cwd_root_yields_same_ids_as_absolute_root(
     relative = collect_findings(config, Path(".").resolve())
 
     assert ids(relative) == ids(absolute)
-    assert "layer-import:src/spectrafit/steps/bad.py -> src/spectrafit/mcp/tool.py" in ids(absolute)
-    assert "undeclared:src/spectrafit/stray.py" in ids(absolute)
+    assert "layer-import:src/acme/core/bad.py -> src/acme/api/tool.py" in ids(absolute)
+    assert "undeclared:src/acme/stray.py" in ids(absolute)
