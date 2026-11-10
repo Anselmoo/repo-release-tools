@@ -223,7 +223,7 @@ def test_requires_unit_without_unit(tmp_path: Path) -> None:
         render(tmp_path, "step", unit=None)
 
 
-@pytest.mark.parametrize("name", ["", "Bad", "1abc", "has-dash", "a b", "../x"])
+@pytest.mark.parametrize("name", ["", "Bad", "1abc", "has-dash", "a b", "../x", "abc\n"])
 def test_bad_name(tmp_path: Path, name: str) -> None:
     """Names must match NAME_RE."""
     make_kind(tmp_path, "plain", {"a.py.tmpl": "x"})
@@ -358,6 +358,15 @@ def test_target_is_directory(tmp_path: Path) -> None:
     (tmp_path / "out").mkdir()
     with pytest.raises(t.TemplateError, match="is a directory"):
         render(tmp_path, "fn", force=True)
+
+
+def test_target_parent_is_a_file(tmp_path: Path) -> None:
+    """A target whose parent path is an existing file is refused, even with force."""
+    make_kind(tmp_path, "fn", {"a/first.py.tmpl": "x = 1\n", "out/deep/x.py.tmpl": "y = 2\n"})
+    (tmp_path / "out").write_text("not a dir\n", encoding="utf-8")
+    with pytest.raises(t.TemplateError, match="needs directory 'out', which is a file"):
+        render(tmp_path, "fn", force=True)
+    assert not (tmp_path / "a").exists()
 
 
 def test_existing_target_refused_unless_force(tmp_path: Path) -> None:

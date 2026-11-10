@@ -26,6 +26,7 @@ FINDING_KINDS: tuple[str, ...] = (
     "missing-file",
     "unplaced",
     "layer-import",
+    "unparsable",
     "layers-sync",
 )
 
@@ -68,17 +69,24 @@ class _Placement:
     independent: bool
 
 
-def root_module_name(root_dir: Path) -> str:
+def root_module_name(root_dir: Path, stop: Path | None = None) -> str:
     """Return the dotted module name of *root_dir*.
 
     Walks up while the parent directory has an ``__init__.py``:
     ``src/spectrafit`` gives ``spectrafit``; ``src/a/b`` with
-    ``src/a/__init__.py`` gives ``a.b``.
+    ``src/a/__init__.py`` gives ``a.b``. The walk never reaches *stop*
+    (normally the repo root), so a stray ``__init__.py`` above it is ignored.
     """
     root_dir = root_dir.absolute()
+    limit = stop.absolute() if stop is not None else None
     parts = [root_dir.name]
     parent = root_dir.parent
-    while parent != parent.parent and (parent / "__init__.py").is_file():
+    while (
+        parent != parent.parent
+        and parent != limit
+        and (limit is None or parent.is_relative_to(limit))
+        and (parent / "__init__.py").is_file()
+    ):
         parts.append(parent.name)
         parent = parent.parent
     return ".".join(reversed(parts))
@@ -99,7 +107,7 @@ def collect_findings(
     ``ignore_dir_names()``.
     """
     root_dir = repo_root / config.root
-    root_module = root_module_name(root_dir)
+    root_module = root_module_name(root_dir, repo_root)
     existing = [unit for unit in config.units if _unit_exists(unit, root_dir)]
 
     findings: list[Finding] = []
@@ -144,9 +152,19 @@ def _missing_units(config: ArchitectureConfig, root_dir: Path, repo_root: Path) 
     return findings
 
 
+def _hidden_name(name: str) -> bool:
+    """Return whether a directory entry is never scanned for modules (cache or dot-entry)."""
+    return name == "__pycache__" or name.startswith(".")
+
+
 def _skipped_name(name: str) -> bool:
-    """Return whether a directory entry is never reported or scanned."""
-    return name == "__pycache__" or name.startswith(".") or name in ignore_dir_names()
+    """Return whether a root entry is never reported as ``undeclared``.
+
+    Adds ``ignore_dir_names()`` (``build``, ``env``, ...) to the hidden names.
+    That list describes tool output at the top of a tree, so it is not applied
+    to the module walk, where ``build`` may be a real subpackage.
+    """
+    return _hidden_name(name) or name in ignore_dir_names()
 
 
 def _undeclared(
@@ -232,7 +250,7 @@ def _collect_modules(root_dir: Path, repo_root: Path, root_module: str) -> dict[
     """Return every ``.py`` module under *root_dir*, keyed by dotted name (sorted walk)."""
     modules: dict[str, _Module] = {}
     for current, dirnames, filenames in os.walk(root_dir):
-        dirnames[:] = sorted(name for name in dirnames if not _skipped_name(name))
+        dirnames[:] = sorted(name for name in dirnames if not _hidden_name(name))
         for filename in sorted(filenames):
             if not filename.endswith(".py") or filename.startswith("."):
                 continue
@@ -295,16 +313,31 @@ def _imported_modules(
     return found
 
 
-def _build_import_graph(modules: dict[str, _Module], repo_root: Path) -> dict[str, dict[str, int]]:
-    """Return ``{importer: {imported: first line}}`` for every parsable module."""
+def _build_import_graph(
+    modules: dict[str, _Module], repo_root: Path
+) -> tuple[dict[str, dict[str, int]], list[Finding]]:
+    """Return ``{importer: {imported: first line}}`` plus an ``unparsable`` finding per failure.
+
+    A module that cannot be read or parsed has unknown imports, so it is
+    reported instead of being treated as importing nothing.
+    """
     graph: dict[str, dict[str, int]] = {}
+    unparsable: list[Finding] = []
     for module in modules.values():
         try:
             tree = ast.parse((repo_root / module.path).read_bytes())
-        except (OSError, SyntaxError, ValueError):
+        except (OSError, SyntaxError, ValueError) as exc:
+            reason = exc.msg if isinstance(exc, SyntaxError) else str(exc)
+            unparsable.append(
+                Finding(
+                    "unparsable",
+                    module.path,
+                    f"{module.path} could not be parsed, so its imports are unchecked: {reason}",
+                )
+            )
             continue
         graph[module.name] = _imported_modules(tree, module, modules)
-    return graph
+    return graph, unparsable
 
 
 def _placements(config: ArchitectureConfig) -> dict[str, _Placement]:
@@ -352,9 +385,8 @@ def _layer_imports(
     if not placements:
         return []
     modules = _collect_modules(root_dir, repo_root, root_module)
-    graph = _build_import_graph(modules, repo_root)
+    graph, findings = _build_import_graph(modules, repo_root)
     layers = config.layers
-    findings: list[Finding] = []
 
     for start in sorted(graph):
         start_place = _module_placement(start, root_module, placements)
@@ -436,6 +468,15 @@ def _importlinter_layer_specs(pyproject: Path, root_module: str) -> list[list[st
     ]
 
 
+def _comparable(signatures: list[_LayerSignature]) -> list[tuple[frozenset[tuple[str, bool]], str]]:
+    """Return *signatures* with each layer's entries as a set.
+
+    Siblings within one layer have no order in import-linter, so
+    ``a | b`` and ``b | a`` are the same layer.
+    """
+    return [(frozenset(entries), separator) for entries, separator in signatures]
+
+
 def _parse_specs(specs: list[str]) -> list[_LayerSignature] | None:
     """Return the signatures of import-linter layer strings, or ``None`` if any is invalid.
 
@@ -454,8 +495,11 @@ def _layers_sync(config: ArchitectureConfig, repo_root: Path, root_module: str) 
     import_names = {unit.name: unit.import_name for unit in config.units}
     expected = [_signature(layer, import_names) for layer in config.parsed_layers()]
     candidates = _importlinter_layer_specs(repo_root / "pyproject.toml", root_module)
-    if any(_parse_specs(specs) == expected for specs in candidates):
-        return []
+    wanted_layers = _comparable(expected)
+    for specs in candidates:
+        parsed = _parse_specs(specs)
+        if parsed is not None and _comparable(parsed) == wanted_layers:
+            return []
     wanted = ", ".join(repr(_render(signature)) for signature in expected)
     if not candidates:
         message = (

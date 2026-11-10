@@ -80,7 +80,7 @@ def test_finding_id_order_and_equality_ignore_message() -> None:
     assert first < later
     assert sorted([later, first]) == [first, later]
     assert FINDING_KINDS[0] == "missing-unit"
-    assert len(set(FINDING_KINDS)) == len(FINDING_KINDS) == 6
+    assert len(set(FINDING_KINDS)) == len(FINDING_KINDS) == 7
 
 
 def test_root_module_name_plain_and_nested(tmp_path: Path) -> None:
@@ -558,7 +558,7 @@ def test_module_unit_and_unplaced_units_in_layers(tmp_path: Path) -> None:
 
 
 def test_unparsable_unreadable_and_skipped_files(tmp_path: Path) -> None:
-    """Syntax errors, broken symlinks, non-py, dot and ignored dirs never crash or count."""
+    """Unparsable files are findings; non-py, dot and cache entries never count."""
     build(
         tmp_path,
         {
@@ -567,7 +567,7 @@ def test_unparsable_unreadable_and_skipped_files(tmp_path: Path) -> None:
             f"{PKG}/low/data.txt": "from pkg.top import a\n",
             f"{PKG}/low/.hidden.py": "from pkg.top import a\n",
             f"{PKG}/low/__pycache__/c.py": "from pkg.top import a\n",
-            f"{PKG}/low/build/c.py": "from pkg.top import a\n",
+            f"{PKG}/low/.venv/c.py": "from pkg.top import a\n",
             f"{PKG}/low/nul.py": "x = 1\x00\n",
         },
     )
@@ -577,6 +577,48 @@ def test_unparsable_unreadable_and_skipped_files(tmp_path: Path) -> None:
     findings = collect_findings(config, tmp_path)
 
     assert [f for f in findings if f.kind == "layer-import"] == []
+    unparsable = [f for f in findings if f.kind == "unparsable"]
+    assert ids(unparsable) == [
+        f"unparsable:{PKG}/low/bad.py",
+        f"unparsable:{PKG}/low/dangling.py",
+        f"unparsable:{PKG}/low/nul.py",
+    ]
+    assert "imports are unchecked" in unparsable[0].message
+
+
+def test_subpackage_named_like_tool_output_is_scanned(tmp_path: Path) -> None:
+    """``build``/``env``/``dist`` inside a unit are real subpackages, not ignored output."""
+    build(
+        tmp_path,
+        {
+            **pkg_files("top", "low"),
+            f"{PKG}/low/build/__init__.py": "",
+            f"{PKG}/low/build/c.py": "from pkg.top import a\n",
+            f"{PKG}/low/env/d.py": "import pkg.top\n",
+        },
+    )
+    config = make_config(["top", "low"], layers=["top", "low"])
+
+    findings = [f for f in collect_findings(config, tmp_path) if f.kind == "layer-import"]
+
+    assert ids(findings) == [
+        f"layer-import:{PKG}/low/build/c.py -> {PKG}/top/__init__.py",
+        f"layer-import:{PKG}/low/env/d.py -> {PKG}/top/__init__.py",
+    ]
+
+
+def test_root_module_name_stops_at_the_repo_root(tmp_path: Path) -> None:
+    """A stray ``__init__.py`` at or above the repo root never leaks into the module name."""
+    repo = tmp_path / "repo"
+    build(tmp_path, {"__init__.py": "", "repo/__init__.py": "", "repo/src/__init__.py": ""})
+    (repo / "src" / "pkg").mkdir()
+
+    root_dir = repo / "src" / "pkg"
+
+    assert root_module_name(root_dir) == f"{tmp_path.name}.repo.src.pkg"
+    assert root_module_name(root_dir, repo) == "src.pkg"
+    assert root_module_name(root_dir, repo / "src") == "pkg"
+    assert root_module_name(root_dir, tmp_path / "elsewhere") == "pkg"
 
 
 def test_nested_root_module_and_namespace_root(tmp_path: Path) -> None:
@@ -706,6 +748,13 @@ def test_layers_sync_mismatch_shows_expected_and_found(tmp_path: Path) -> None:
         assert ids(found) == ["layers-sync:pyproject.toml"], label
         assert "expected: 'a', 'b'" in found[0].message, label
         assert "found: " + ", ".join(repr(s) for s in specs) in found[0].message, label
+
+
+def test_layers_sync_sibling_order_within_a_layer_is_ignored(tmp_path: Path) -> None:
+    """``b | c`` equals ``c | b``; the separator and the layer order still count."""
+    assert sync_findings(tmp_path / "same", contract("a", "c | b"), ["a", "b | c"]) == []
+    colon = sync_findings(tmp_path / "colon", contract("a", "c : b"), ["a", "b | c"])
+    assert ids(colon) == ["layers-sync:pyproject.toml"]
 
 
 def test_layers_sync_second_contract_may_match(tmp_path: Path) -> None:

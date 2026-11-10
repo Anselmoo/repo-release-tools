@@ -158,6 +158,8 @@ def _with(**changes: object) -> dict[str, object]:
         (_with(units=[{"role": "unit"}]), r"units\[0\].name must be a non-empty string"),
         (_with(units=[{"name": "a", "role": ""}]), r"units\[0\].role must be a non-empty"),
         (_with(units=[{"name": "a b"}]), "name must be an identifier"),
+        (_with(units=[{"name": "a\n"}]), "name must be an identifier"),
+        (_with(units=[{"name": "a", "package": "p\n"}]), "package/module must be an identifier"),
         (_with(units=[{"name": "a"}, {"name": "a"}]), "duplicate name 'a'"),
         (_with(units=[{"name": "a", "package": "p", "module": "m"}]), "both package and module"),
         (_with(units=[{"name": "a", "package": "p-q"}]), "package/module must be an identifier"),

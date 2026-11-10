@@ -138,13 +138,14 @@ Architecture skeleton command family: `rrt arch check`, `baseline` and `new`.
 The table names a root package, its units, their roles and the layer order.
 `rrt arch check` reports what the tree does not match.
 
-Findings come in six kinds:
+Findings come in seven kinds:
 
 - `missing-unit` — a declared unit's package or module does not exist.
 - `undeclared` — an entry under the root is neither a unit nor a top-level file.
 - `missing-file` — a unit package lacks a required file for its role.
 - `unplaced` — an existing unit is not named in `layers`.
 - `layer-import` — a Python import goes against the layer order.
+- `unparsable` — a Python file under a layered root cannot be parsed, so its imports are unchecked.
 - `layers-sync` — the import-linter layers contract differs from `layers`.
 
 `rrt arch baseline` records today's findings in `.rrt/architecture.baseline.toml`.

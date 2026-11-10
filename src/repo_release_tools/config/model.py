@@ -979,7 +979,7 @@ def parse_arch_layer(spec: str) -> ArchLayer:
         part = raw_part.strip()
         optional = part.startswith("(") and part.endswith(")")
         name = part[1:-1].strip() if optional else part
-        if not _ARCH_IDENTIFIER_RE.match(name):
+        if not _ARCH_IDENTIFIER_RE.fullmatch(name):
             raise ValueError(f"layer {spec!r} has an invalid name {part!r}")
         entries.append(ArchLayerEntry(name=name, optional=optional))
     return ArchLayer(entries=tuple(entries), separator=separator)
@@ -1041,14 +1041,14 @@ class ArchitectureConfig:
         seen_entries: set[str] = set()
         for unit in self.units:
             label = f"{prefix}.units[{unit.name!r}]"
-            if not _ARCH_IDENTIFIER_RE.match(unit.name):
+            if not _ARCH_IDENTIFIER_RE.fullmatch(unit.name):
                 raise ValueError(f"{label}.name must be an identifier")
             if unit.name in seen_names:
                 raise ValueError(f"{prefix}.units has duplicate name {unit.name!r}")
             seen_names.add(unit.name)
             if unit.package is not None and unit.module is not None:
                 raise ValueError(f"{label} sets both package and module")
-            if not _ARCH_IDENTIFIER_RE.match(unit.import_name):
+            if not _ARCH_IDENTIFIER_RE.fullmatch(unit.import_name):
                 raise ValueError(f"{label} package/module must be an identifier")
             if unit.role not in VALID_ARCH_ROLES:
                 allowed = ", ".join(sorted(VALID_ARCH_ROLES))

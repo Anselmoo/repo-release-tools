@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from repo_release_tools.cli import build_parser
+from repo_release_tools.commands import arch_cmd
 from repo_release_tools.state import arch_baseline_path, read_arch_baseline
 
 _HEADER = (
@@ -272,6 +273,21 @@ def test_new_writes_and_prints_next_steps(
     out = capsys.readouterr().out
     assert "create: src/pkg/core/normalize.py" in out
     assert "wire it" in out
+
+
+def test_new_reports_a_failed_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An OSError during the write is an error message and exit 1, not a traceback."""
+    repo = _repo(tmp_path)
+    _templates(repo)
+
+    def fail(_files: object) -> None:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(arch_cmd, "write_rendered", fail)
+    assert _run("new", "step", "normalize", "--unit", "core", "--root", str(repo)) == 1
+    assert "Writing the rendered files failed: denied" in capsys.readouterr().err
 
 
 def test_new_refuses_existing_target_even_in_dry_run(

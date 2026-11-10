@@ -6,13 +6,14 @@
 The table names a root package, its units, their roles and the layer order.
 `rrt arch check` reports what the tree does not match.
 
-Findings come in six kinds:
+Findings come in seven kinds:
 
 - `missing-unit` — a declared unit's package or module does not exist.
 - `undeclared` — an entry under the root is neither a unit nor a top-level file.
 - `missing-file` — a unit package lacks a required file for its role.
 - `unplaced` — an existing unit is not named in `layers`.
 - `layer-import` — a Python import goes against the layer order.
+- `unparsable` — a Python file under a layered root cannot be parsed, so its imports are unchecked.
 - `layers-sync` — the import-linter layers contract differs from `layers`.
 
 `rrt arch baseline` records today's findings in `.rrt/architecture.baseline.toml`.
@@ -277,7 +278,7 @@ def cmd_arch_new(args: argparse.Namespace) -> int:
     arch, code = _load_architecture(p, repo_root)
     if arch is None:
         return code
-    root_module = root_module_name(repo_root / arch.root)
+    root_module = root_module_name(repo_root / arch.root, repo_root)
 
     if opts.check_templates:
         if opts.kind or opts.name:
@@ -313,7 +314,10 @@ def cmd_arch_new(args: argparse.Namespace) -> int:
         else:
             p.action(f"{detail}: {rendered.target}")
     if not p.dry_run:
-        write_rendered(files)
+        try:
+            write_rendered(files)
+        except OSError as exc:
+            return _error(p, f"Writing the rendered files failed: {exc}")
         for step in kind.next_steps:
             p.meta("Next step", step)
     p.footer(f"Done. {len(files)} file(s)")

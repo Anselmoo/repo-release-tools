@@ -129,7 +129,7 @@ def build_variables(
     Raises :class:`TemplateError` for a bad *name*, a kind that requires a
     unit when *unit* is ``None``, or a kind constant that shadows a built-in.
     """
-    if not NAME_RE.match(name):
+    if not NAME_RE.fullmatch(name):
         raise TemplateError(
             f"Invalid name {name!r}. Use lowercase letters, digits and underscores; "
             "it must start with a letter.",
@@ -290,6 +290,14 @@ def _checked_target(target: str, root: Path, label: str) -> Path:
         raise TemplateError(f"{label}: target {target!r} resolves outside the repo root.")
     if path.is_dir():
         raise TemplateError(f"{label}: target {target!r} is a directory.")
+    for parent in path.parents:
+        if parent == root:
+            break
+        if parent.exists() and not parent.is_dir():
+            blocker = parent.relative_to(root).as_posix()
+            raise TemplateError(
+                f"{label}: target {target!r} needs directory {blocker!r}, which is a file."
+            )
     return path
 
 
