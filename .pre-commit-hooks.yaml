@@ -203,6 +203,16 @@
   stages: [pre-push]
   minimum_pre_commit_version: "3.2.0"
 
+- id: rrt-arch-check
+  name: repo-release-tools architecture check
+  description: Check the tree against [tool.rrt.architecture] and its baseline (rrt arch check --strict)
+  entry: rrt-hooks arch-check
+  language: python
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit, pre-push]
+  minimum_pre_commit_version: "3.2.0"
+
 - id: rrt-drift-check
   name: repo-release-tools drift check
   description: Verify agent-facing surfaces match the committed .rrt/drift.lock.toml

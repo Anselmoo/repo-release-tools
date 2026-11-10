@@ -18,6 +18,7 @@ from repo_release_tools.changelog import (
 )
 from repo_release_tools.commands._cli_shared import add_dry_run_flag
 from repo_release_tools.commands._git_shared import split_generated_dirt
+from repo_release_tools.commands.arch_cmd import _add_arch_hook_arguments, cmd_arch_hook
 from repo_release_tools.commands.artifacts_cmd import _add_artifacts_strict_argument, cmd_artifacts
 from repo_release_tools.commands.branch import (
     BRANCH_SLUG_RE,
@@ -1394,6 +1395,13 @@ def main(argv: list[str] | None = None) -> int:
         "tree-check",
         help="Validate project tree structure against .rrt/tree.lock.toml (strict).",
     )
+    arch_check_parser = subparsers.add_parser(
+        "arch-check",
+        help="Check the declared architecture skeleton (rrt arch check --strict).",
+    )
+    # Flags are shared with commands/arch_cmd.py, so --root and
+    # --check-templates cannot drift between the CLI and the hook.
+    _add_arch_hook_arguments(arch_check_parser)
     drift_check_parser = subparsers.add_parser(
         "drift-check",
         help="Verify agent-surface drift lockfile is current (rrt drift check).",
@@ -1587,6 +1595,9 @@ def main(argv: list[str] | None = None) -> int:
                 format="classic",
             )
             return cmd_tree(tree_args)
+        case "arch-check":
+            parsed.verbose = verbose
+            return cmd_arch_hook(parsed)
         case "drift-check":
             parsed.verbose = verbose
             return cmd_drift_check(parsed)
@@ -1850,6 +1861,7 @@ changelog bullets from becoming one giant release footnote monster. Pair it with
 | `rrt-artifacts-check` | manual | Verify artifact hashes match the committed lock (strict by default) |
 | `rrt-artifacts-snapshot` | manual | Snapshot artifact hashes without running generation commands |
 | `rrt-tree-check` | pre-push | Validate project tree structure against the committed `.rrt/tree.lock.toml` |
+| `rrt-arch-check` | pre-commit / pre-push | Check the tree against `[tool.rrt.architecture]` and its findings baseline |
 | `rrt-drift-check` | pre-push | Verify agent-facing surfaces match the committed `.rrt/drift.lock.toml` |
 | `rrt-changelog-postcorrect` | manual | Consolidate fragmented changelog entries after a squash merge |
 | `rrt-sync` | manual | List upstream releases newer than the current version |
@@ -1924,6 +1936,24 @@ repos:
 ```
 
 Generate or refresh the lock with `rrt tree --lock`.
+
+### Architecture check
+
+`rrt-arch-check` runs `rrt arch check --strict` against
+`[tool.rrt.architecture]`. It fails on a finding missing from
+`.rrt/architecture.baseline.toml`, or on a stale baseline entry. Add
+`--check-templates` to also self-test every `.rrt/templates/` kind:
+
+```yaml
+repos:
+  - repo: https://github.com/Anselmoo/repo-release-tools
+    rev: v1.19.0
+    hooks:
+      - id: rrt-arch-check
+        args: [--check-templates]
+```
+
+Seed or shrink the baseline with `rrt arch baseline`.
 
 ### Drift check
 

@@ -4,6 +4,7 @@
 - **hooks**: commit-msg rejects a commit type the current branch type does not allow; errors list each type with its description; `check-commit-subject --branch` and MCP `rrt_validate_commit(branch=...)` apply the same restriction
 - **config**: `rrt config` lists every resolved commit and branch type
 - **arch**: `rrt arch check [--strict]`, `rrt arch baseline` and `rrt arch new` check and scaffold a declared `[tool.rrt.architecture]` skeleton: units, roles, layers, required files, Python layer imports read with `ast`, import-linter `layers-sync`, a shrink-only `.rrt/architecture.baseline.toml`, and `string.Template` kinds under `.rrt/templates/`
+- **arch**: `rrt-arch-check` pre-commit hook (`rrt-hooks arch-check [--check-templates] [--root PATH]`) and read-only MCP tool `rrt_arch_check`, which classifies each finding as new, baselined or stale
 
 ### Fixed
 - **hooks**: require exactly one space after the colon and none before it in commit subjects (`feat:x` and `feat : x` were accepted); changelog and bump history parsing stay lenient
