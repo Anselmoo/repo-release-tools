@@ -95,3 +95,56 @@ def test_cmd_docs_routes_map_action(tmp_path: Path) -> None:
         verbose=0,
     )
     assert cmd_docs(args) == 0
+
+
+# ---------------------------------------------------------------------------
+# Relative root (B1): the CLI default is "." — every test above passes an
+# absolute root, which hid a relative_to() mismatch against the resolved
+# map root.
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_map_generate_with_default_relative_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Generate succeeds when run from the repo with the default root ``"."``."""
+    repo = _make_repo_with_map(tmp_path)
+    monkeypatch.chdir(repo)
+    args = argparse.Namespace(root=".", check=False, dry_run=False, verbose=0)
+    assert _cmd_map(args) == 0
+    assert (repo / "src" / "a" / "README.md").exists()
+    assert (repo / ".rrt" / "docs_map.lock.toml").exists()
+
+
+def test_cmd_map_dry_run_with_default_relative_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dry run with the default root lists targets without raising."""
+    repo = _make_repo_with_map(tmp_path)
+    monkeypatch.chdir(repo)
+    args = argparse.Namespace(root=".", check=False, dry_run=True, verbose=0)
+    assert _cmd_map(args) == 0
+    assert not (repo / "src" / "a" / "README.md").exists()
+
+
+def test_cmd_map_check_with_default_relative_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--check`` with the default root passes after a generate."""
+    repo = _make_repo_with_map(tmp_path)
+    monkeypatch.chdir(repo)
+    assert _cmd_map(argparse.Namespace(root=".", check=False, dry_run=False, verbose=0)) == 0
+    assert _cmd_map(argparse.Namespace(root=".", check=True, dry_run=False, verbose=0)) == 0
+
+
+def test_docs_map_hooks_with_default_relative_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ``docs-map-update`` and ``docs-map-check`` hooks work from the repo cwd."""
+    from repo_release_tools.workflow import hooks
+
+    repo = _make_repo_with_map(tmp_path)
+    monkeypatch.chdir(repo)
+    assert hooks.main(["docs-map-update"]) == 0
+    assert (repo / "src" / "a" / "README.md").exists()
+    assert hooks.main(["docs-map-check"]) == 0
