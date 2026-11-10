@@ -13,13 +13,14 @@ the full phase history.
 
 ## 1. `.rrt/` lock-file schema and ownership
 
-All six lock/manifest filenames used under `.rrt/` are constants owned by
+All seven lock/manifest filenames used under `.rrt/` are constants owned by
 [`state.py`](https://github.com/Anselmoo/repo-release-tools/blob/main/src/repo_release_tools/state.py) —
 no command module defines its own filename string. Each lock has a path
 helper (`docs_lock_path`, `health_lock_path`, `tree_lock_path`,
-`artifacts_lock_path`, `drift_lock_path`, `docs_map_lock_path`) and, for the
-four with drift-detection semantics, an `*_is_current()` comparator that also
-lives in `state.py`.
+`artifacts_lock_path`, `drift_lock_path`, `docs_map_lock_path`,
+`arch_baseline_path`) and, for the four with drift-detection semantics, an
+`*_is_current()` comparator that also lives in `state.py`. The architecture
+baseline has `arch_baseline_compare()` in the same shape.
 
 | Lock file | Guarantees (what it snapshots) | Invalidated by | Owning command |
 |---|---|---|---|
@@ -29,6 +30,7 @@ lives in `state.py`.
 | `artifacts.lock.toml` | Per-file SHA-256 + size for every file matched by `artifact_targets` globs, plus an optional combined `inputs_hash` per target (for source→output staleness) | A tracked file's hash changing, a new file matching the glob, a locked file going missing, or (when `inputs` is configured) the input-file hash changing | `rrt artifacts --snapshot` (write), `rrt artifacts --check` (verify), `rrt artifacts --regenerate` (runs each target's generation command, then re-snapshots) |
 | `drift.lock.toml` | SHA-256 of every tracked agent-facing surface file (`.claude/settings.json`, `.claude/hooks/*.py`, `.github/copilot-instructions.md`, `.github/instructions/*.md`, `.github/skills/*/SKILL.md`, `.github/agents/*.agent.md`) | Any tracked surface file's content changing, or a tracked file appearing/disappearing | `rrt drift generate` (write), `rrt drift check` / `rrt-drift-check` hook at pre-push (verify) |
 | `docs_map.lock.toml` | Per-directory hash of the generated Purpose+Tree README block emitted by `rrt docs map` | The generated block's content changing (new/removed files in the directory, purpose-doc edits) | `rrt docs map` (write/update), `rrt docs map --check` / `rrt-docs-map-check` hook (verify) |
+| `architecture.baseline.toml` | Sorted ids (`<kind>:<path>`) of accepted `rrt arch check` findings; shrink-only, rewritten only when the list changes | A baselined finding disappearing (stale) or a finding appearing that is not baselined (new) | `rrt arch baseline` (seed/shrink; `--force` adds), `rrt arch check --strict` (verify) |
 
 Two lock files intentionally overlap in *subject matter* but stay separate
 files by design: `docs.lock.toml` tracks source-doc extraction blocks used by

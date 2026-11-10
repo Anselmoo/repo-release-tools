@@ -886,6 +886,206 @@ class FolderPolicyConfig:
             seen_rule_names.add(rule.name)
 
 
+VALID_ARCH_ROLES = frozenset({"door", "unit", "foundation"})
+VALID_ARCH_LAYERS_SYNC = frozenset({"importlinter", "none"})
+#: Rank of each role in ``layers``: a lower rank must never sit below a higher one.
+ARCH_ROLE_RANK: dict[str, int] = {"door": 0, "unit": 1, "foundation": 2}
+_ARCH_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+@dataclass(frozen=True)
+class ArchUnit:
+    """One unit under ``[[tool.rrt.architecture.units]]``.
+
+    A unit is either a package (``package``, default ``name``) or a single
+    module (``module``, the file ``<module>.py``), never both.
+    """
+
+    name: str
+    role: str = "unit"
+    package: str | None = None
+    module: str | None = None
+    prefix: str | None = None
+    required_files: tuple[str, ...] = ()
+
+    @property
+    def is_module(self) -> bool:
+        """Return whether this unit is a single module rather than a package."""
+        return self.module is not None
+
+    @property
+    def import_name(self) -> str:
+        """Return the unit's importable name directly under the root package."""
+        if self.module is not None:
+            return self.module
+        return self.package or self.name
+
+    @property
+    def entry_name(self) -> str:
+        """Return the unit's file-system entry name directly under the root."""
+        if self.module is not None:
+            return f"{self.module}.py"
+        return self.import_name
+
+    @property
+    def template_prefix(self) -> str:
+        """Return the ``unit_prefix`` template variable (default: the import name)."""
+        return self.prefix or self.import_name
+
+
+@dataclass(frozen=True)
+class ArchLayerEntry:
+    """One name inside a parsed layer; ``optional`` marks ``(name)``."""
+
+    name: str
+    optional: bool = False
+
+
+@dataclass(frozen=True)
+class ArchLayer:
+    """One parsed layer string in import-linter 2.x grammar.
+
+    ``separator`` is ``"|"`` (independent siblings), ``":"`` (siblings that
+    may import each other), or ``""`` for a single-name layer.
+    """
+
+    entries: tuple[ArchLayerEntry, ...]
+    separator: str = ""
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        """Return the layer's names in declaration order."""
+        return tuple(entry.name for entry in self.entries)
+
+    @property
+    def independent(self) -> bool:
+        """Return whether siblings in this layer must not import each other."""
+        return self.separator == "|"
+
+
+def parse_arch_layer(spec: str) -> ArchLayer:
+    """Parse one ``layers`` string (``"a"``, ``"a | b"``, ``"a : b"``, ``"(a)"``)."""
+    text = spec.strip()
+    if not text:
+        raise ValueError("layer must be a non-empty string")
+    has_pipe = "|" in text
+    has_colon = ":" in text
+    if has_pipe and has_colon:
+        raise ValueError(f"layer {spec!r} mixes '|' and ':' separators")
+    separator = "|" if has_pipe else ":" if has_colon else ""
+    parts = text.split(separator) if separator else [text]
+    entries: list[ArchLayerEntry] = []
+    for raw_part in parts:
+        part = raw_part.strip()
+        optional = part.startswith("(") and part.endswith(")")
+        name = part[1:-1].strip() if optional else part
+        if not _ARCH_IDENTIFIER_RE.fullmatch(name):
+            raise ValueError(f"layer {spec!r} has an invalid name {part!r}")
+        entries.append(ArchLayerEntry(name=name, optional=optional))
+    return ArchLayer(entries=tuple(entries), separator=separator)
+
+
+@dataclass(frozen=True)
+class ArchitectureConfig:
+    """Declared architecture skeleton under ``[tool.rrt.architecture]``.
+
+    ``layers`` names *units* (``units[].name``), high to low. Imports and the
+    import-linter sync translate each name to the unit's import name.
+    """
+
+    root: str
+    top_level_files: tuple[str, ...] = ()
+    layers: tuple[str, ...] = ()
+    layers_sync: str = "none"
+    required_files: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    units: tuple[ArchUnit, ...] = ()
+
+    def parsed_layers(self) -> tuple[ArchLayer, ...]:
+        """Return ``layers`` parsed, high to low."""
+        return tuple(parse_arch_layer(spec) for spec in self.layers)
+
+    def unit_named(self, name: str) -> ArchUnit | None:
+        """Return the unit called *name*, or ``None``."""
+        for unit in self.units:
+            if unit.name == name:
+                return unit
+        return None
+
+    def required_files_for(self, unit: ArchUnit) -> tuple[str, ...]:
+        """Return role-default plus unit-specific required files (packages only)."""
+        if unit.is_module:
+            return ()
+        merged: list[str] = []
+        for entry in (*self.required_files.get(unit.role, ()), *unit.required_files):
+            if entry not in merged:
+                merged.append(entry)
+        return tuple(merged)
+
+    def validate(self) -> None:
+        """Validate the declaration; tree-dependent problems are findings, not errors."""
+        prefix = "tool.rrt.architecture"
+        root_path = Path(self.root)
+        if not self.root.strip() or root_path.is_absolute() or ".." in root_path.parts:
+            raise ValueError(f"{prefix}.root must be a relative path inside the repository")
+        if self.layers_sync not in VALID_ARCH_LAYERS_SYNC:
+            allowed = ", ".join(sorted(VALID_ARCH_LAYERS_SYNC))
+            raise ValueError(f"{prefix}.layers_sync must be one of {allowed}")
+        for role in self.required_files:
+            if role not in VALID_ARCH_ROLES:
+                allowed = ", ".join(sorted(VALID_ARCH_ROLES))
+                raise ValueError(
+                    f"{prefix}.required_files has unknown role {role!r}; allowed: {allowed}"
+                )
+
+        seen_names: set[str] = set()
+        seen_entries: set[str] = set()
+        for unit in self.units:
+            label = f"{prefix}.units[{unit.name!r}]"
+            if not _ARCH_IDENTIFIER_RE.fullmatch(unit.name):
+                raise ValueError(f"{label}.name must be an identifier")
+            if unit.name in seen_names:
+                raise ValueError(f"{prefix}.units has duplicate name {unit.name!r}")
+            seen_names.add(unit.name)
+            if unit.package is not None and unit.module is not None:
+                raise ValueError(f"{label} sets both package and module")
+            if not _ARCH_IDENTIFIER_RE.fullmatch(unit.import_name):
+                raise ValueError(f"{label} package/module must be an identifier")
+            if unit.role not in VALID_ARCH_ROLES:
+                allowed = ", ".join(sorted(VALID_ARCH_ROLES))
+                raise ValueError(f"{label}.role must be one of {allowed}")
+            if unit.is_module and unit.required_files:
+                raise ValueError(f"{label}.required_files applies to package units only")
+            if unit.import_name in seen_entries:
+                kind = "module" if unit.is_module else "package"
+                raise ValueError(f"{prefix}.units has duplicate {kind} {unit.import_name!r}")
+            seen_entries.add(unit.import_name)
+
+        try:
+            layers = self.parsed_layers()
+        except ValueError as exc:
+            raise ValueError(f"{prefix}.layers: {exc}") from exc
+        placed: dict[str, int] = {}
+        for index, layer in enumerate(layers):
+            for name in layer.names:
+                if self.unit_named(name) is None:
+                    raise ValueError(f"{prefix}.layers names {name!r}, which is no declared unit")
+                if name in placed:
+                    raise ValueError(f"{prefix}.layers places {name!r} more than once")
+                placed[name] = index
+        roles = {unit.name: unit.role for unit in self.units}
+        for upper_name, upper_index in placed.items():
+            for lower_name, lower_index in placed.items():
+                upper_role, lower_role = roles[upper_name], roles[lower_name]
+                if (
+                    upper_index < lower_index
+                    and ARCH_ROLE_RANK[upper_role] > ARCH_ROLE_RANK[lower_role]
+                ):
+                    raise ValueError(
+                        f"{prefix}.layers places {upper_role} {upper_name!r} above "
+                        f"{lower_role} {lower_name!r}"
+                    )
+
+
 @dataclass(frozen=True)
 class ConsumedArtifact:
     """A single declared-consumed-artifact entry under [[tool.rrt.artifact_protection.consumed]].
@@ -1004,6 +1204,7 @@ class RrtConfig:
     eol: EolConfig | None = None
     docs: DocsConfig | None = None
     folders: FolderPolicyConfig | None = None
+    architecture: ArchitectureConfig | None = None
     artifact_protection: ArtifactProtection | None = None
     git: GitConfig = field(default_factory=GitConfig)
     gates: tuple[GateSpec, ...] = ()

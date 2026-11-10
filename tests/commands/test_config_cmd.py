@@ -978,3 +978,43 @@ def test_register_adds_dry_run_flag() -> None:
     config_cmd.register(subs)
     parsed = root_parser.parse_args(["config", "--reference", "--dry-run"])
     assert parsed.dry_run is True
+
+
+def _arch_validate_conf(tmp_path: Path, architecture: object) -> RrtConfig:
+    """Return a minimal RrtConfig carrying *architecture*."""
+    group = VersionGroup(
+        name="default",
+        release_branch="release/v{version}",
+        changelog_file=tmp_path / "CHANGELOG.md",
+        lock_command=[],
+        generated_files=[],
+        version_targets=[],
+        pin_targets=[],
+    )
+    conf = RrtConfig(root=tmp_path, config_file=tmp_path / "pyproject.toml", version_groups=[group])
+    object.__setattr__(conf, "architecture", architecture)
+    return conf
+
+
+@pytest.mark.parametrize(
+    ("side_effect", "expected_rc", "expected_text"),
+    [(None, 0, "architecture config: valid"), (ValueError("bad arch"), 1, "architecture config")],
+)
+def test_cmd_validate_architecture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    side_effect: Exception | None,
+    expected_rc: int,
+    expected_text: str,
+) -> None:
+    """The architecture block reports valid, or appends the validate() error."""
+    from unittest.mock import MagicMock
+
+    monkeypatch.chdir(tmp_path)
+    mock_arch = MagicMock()
+    mock_arch.validate.side_effect = side_effect
+    conf = _arch_validate_conf(tmp_path, mock_arch)
+    monkeypatch.setattr(config_cmd.cfg, "load_or_autodetect_config", lambda _: conf)
+    assert config_cmd._cmd_validate(tmp_path) == expected_rc
+    assert expected_text in capsys.readouterr().out

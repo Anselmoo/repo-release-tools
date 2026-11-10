@@ -8,33 +8,41 @@ description: "Generated command reference for the Repository Health command grou
 {/* Auto-generated from repo_release_tools.cli.build_parser(); run `rrt docs publish` to refresh. */}
 
 {/* rrt:auto:start:toc */}
-- [`rrt artifacts`](#rrt-artifacts)
+- [`rrt arch`](#rrt-arch)
   - [Overview](#overview)
-  - [Configuration](#configuration)
-  - [Subcommands](#subcommands)
   - [Examples](#examples)
   - [Caveats](#caveats)
   - [Related docs](#related-docs)
-- [`rrt config`](#rrt-config)
+  - [`rrt arch check`](#rrt-arch-check)
+  - [`rrt arch baseline`](#rrt-arch-baseline)
+  - [`rrt arch new`](#rrt-arch-new)
+- [`rrt artifacts`](#rrt-artifacts)
   - [Overview](#overview-1)
+  - [Configuration](#configuration)
+  - [Subcommands](#subcommands)
+  - [Examples](#examples-1)
+  - [Caveats](#caveats-1)
+  - [Related docs](#related-docs-1)
+- [`rrt config`](#rrt-config)
+  - [Overview](#overview-2)
   - [What the command reports](#what-the-command-reports)
   - [Raw mode](#raw-mode)
   - [Validate mode](#validate-mode)
   - [Schema mode](#schema-mode)
   - [Failure behavior](#failure-behavior)
-  - [Examples](#examples-1)
-  - [Caveats](#caveats-1)
-  - [Related docs](#related-docs-1)
+  - [Examples](#examples-2)
+  - [Caveats](#caveats-2)
+  - [Related docs](#related-docs-2)
 - [`rrt docs`](#rrt-docs)
-  - [Overview](#overview-2)
+  - [Overview](#overview-3)
   - [Responsibilities](#responsibilities)
   - [Sub-actions](#sub-actions)
   - [Extraction modes](#extraction-modes)
   - [Supported languages](#supported-languages)
   - [Lockfile](#lockfile)
-  - [Examples](#examples-2)
-  - [Caveats](#caveats-2)
-  - [Related docs](#related-docs-2)
+  - [Examples](#examples-3)
+  - [Caveats](#caveats-3)
+  - [Related docs](#related-docs-3)
   - [`rrt docs generate`](#rrt-docs-generate)
   - [`rrt docs check`](#rrt-docs-check)
   - [`rrt docs publish`](#rrt-docs-publish)
@@ -44,81 +52,242 @@ description: "Generated command reference for the Repository Health command grou
   - [`rrt docs api`](#rrt-docs-api)
   - [`rrt docs map`](#rrt-docs-map)
 - [`rrt doctor`](#rrt-doctor)
-  - [Overview](#overview-3)
+  - [Overview](#overview-4)
   - [What it checks](#what-it-checks)
   - [Artifact protection](#artifact-protection)
   - [Output and severity](#output-and-severity)
   - [Config discovery behavior](#config-discovery-behavior)
-  - [Examples](#examples-3)
-  - [Caveats](#caveats-3)
-  - [Related docs](#related-docs-3)
-- [`rrt drift`](#rrt-drift)
-  - [Overview](#overview-4)
-  - [Responsibilities](#responsibilities-1)
-  - [Tracked Surfaces](#tracked-surfaces)
-  - [Behavior](#behavior)
   - [Examples](#examples-4)
   - [Caveats](#caveats-4)
   - [Related docs](#related-docs-4)
-  - [`rrt drift generate`](#rrt-drift-generate)
-  - [`rrt drift check`](#rrt-drift-check)
-- [`rrt env`](#rrt-env)
+- [`rrt drift`](#rrt-drift)
   - [Overview](#overview-5)
-  - [What it reports](#what-it-reports)
-  - [JSON mode](#json-mode)
+  - [Responsibilities](#responsibilities-1)
+  - [Tracked Surfaces](#tracked-surfaces)
+  - [Behavior](#behavior)
   - [Examples](#examples-5)
   - [Caveats](#caveats-5)
   - [Related docs](#related-docs-5)
+  - [`rrt drift generate`](#rrt-drift-generate)
+  - [`rrt drift check`](#rrt-drift-check)
+- [`rrt env`](#rrt-env)
+  - [Overview](#overview-6)
+  - [What it reports](#what-it-reports)
+  - [JSON mode](#json-mode)
+  - [Examples](#examples-6)
+  - [Caveats](#caveats-6)
+  - [Related docs](#related-docs-6)
   - [`rrt env check`](#rrt-env-check)
 - [`rrt eol`](#rrt-eol)
-  - [Overview](#overview-6)
+  - [Overview](#overview-7)
   - [What the command checks](#what-the-command-checks)
   - [Data sources](#data-sources)
   - [Policy behavior](#policy-behavior)
   - [Output](#output)
-  - [Examples](#examples-6)
-  - [Caveats](#caveats-6)
-  - [`rrt eol check`](#rrt-eol-check)
-- [`rrt fields`](#rrt-fields)
-  - [Overview](#overview-7)
-  - [Configuration](#configuration-1)
-  - [Subcommands](#subcommands-1)
   - [Examples](#examples-7)
   - [Caveats](#caveats-7)
-  - [Related docs](#related-docs-6)
-- [`rrt folder`](#rrt-folder)
+  - [`rrt eol check`](#rrt-eol-check)
+- [`rrt fields`](#rrt-fields)
   - [Overview](#overview-8)
+  - [Configuration](#configuration-1)
+  - [Subcommands](#subcommands-1)
   - [Examples](#examples-8)
   - [Caveats](#caveats-8)
   - [Related docs](#related-docs-7)
-  - [`rrt folder check`](#rrt-folder-check)
-  - [`rrt folder scaffold`](#rrt-folder-scaffold)
-  - [`rrt folder design`](#rrt-folder-design)
-- [`rrt project`](#rrt-project)
+- [`rrt folder`](#rrt-folder)
   - [Overview](#overview-9)
   - [Examples](#examples-9)
   - [Caveats](#caveats-9)
   - [Related docs](#related-docs-8)
-  - [`rrt project info`](#rrt-project-info)
-- [`rrt toc`](#rrt-toc)
+  - [`rrt folder check`](#rrt-folder-check)
+  - [`rrt folder scaffold`](#rrt-folder-scaffold)
+  - [`rrt folder design`](#rrt-folder-design)
+- [`rrt project`](#rrt-project)
   - [Overview](#overview-10)
-  - [Usage](#usage)
-  - [Anchors](#anchors)
-  - [Options](#options)
   - [Examples](#examples-10)
   - [Caveats](#caveats-10)
   - [Related docs](#related-docs-9)
-- [`rrt tree`](#rrt-tree)
+  - [`rrt project info`](#rrt-project-info)
+- [`rrt toc`](#rrt-toc)
   - [Overview](#overview-11)
+  - [Usage](#usage)
+  - [Anchors](#anchors)
+  - [Options](#options)
+  - [Examples](#examples-11)
+  - [Caveats](#caveats-11)
+  - [Related docs](#related-docs-10)
+- [`rrt tree`](#rrt-tree)
+  - [Overview](#overview-12)
   - [Ignore behavior](#ignore-behavior)
   - [Output formats](#output-formats)
   - [Common options](#common-options)
   - [Failure behavior](#failure-behavior-1)
-  - [Examples](#examples-11)
+  - [Examples](#examples-12)
   - [Embedding a tree into a Markdown file](#embedding-a-tree-into-a-markdown-file)
-  - [Caveats](#caveats-11)
-  - [Related docs](#related-docs-10)
+  - [Caveats](#caveats-12)
+  - [Related docs](#related-docs-11)
 {/* rrt:auto:end:toc */}
+
+## `rrt arch`
+
+Architecture skeleton command family: `rrt arch check`, `baseline` and `new`.
+
+### Overview
+
+`rrt arch` enforces a declared architecture skeleton from `[tool.rrt.architecture]`.
+The table names a root package, its units, their roles and the layer order.
+`rrt arch check` reports what the tree does not match.
+
+Findings come in seven kinds:
+
+- `missing-unit` — a declared unit's package or module does not exist.
+- `undeclared` — an entry under the root is neither a unit nor a top-level file.
+- `missing-file` — a unit package lacks a required file for its role.
+- `unplaced` — an existing unit is not named in `layers`.
+- `layer-import` — a Python import goes against the layer order.
+- `unparsable` — a Python file under a layered root cannot be parsed, so its imports are unchecked.
+- `layers-sync` — the import-linter layers contract differs from `layers`.
+
+`rrt arch baseline` records today's findings in `.rrt/architecture.baseline.toml`.
+The baseline only shrinks: `check --strict` fails on new findings and on stale entries.
+`rrt arch new` renders a kind from `.rrt/templates/<kind>/` into the repository.
+
+### Examples
+
+```bash
+rrt arch check
+rrt arch check --strict
+rrt arch baseline --dry-run
+rrt arch new step normalize --unit prepare --dry-run
+rrt arch new --check-templates
+```
+
+```toml
+[tool.rrt.architecture]
+root = "src/pkg"
+top_level_files = ["__init__.py", "README.md"]
+layers = ["api", "core", "errors"]
+
+[tool.rrt.architecture.required_files]
+unit = ["__init__.py", "README.md"]
+
+[[tool.rrt.architecture.units]]
+name = "api"
+role = "door"
+
+[[tool.rrt.architecture.units]]
+name = "core"
+
+[[tool.rrt.architecture.units]]
+name = "errors"
+module = "errors"
+role = "foundation"
+```
+
+### Caveats
+
+`check` is advisory and exits 0 unless `--strict` is given.
+The import check reads Python files with `ast` only. Dynamic imports are not seen.
+Imports inside `if TYPE_CHECKING:` blocks count as dependencies.
+Other languages get no import check.
+`layers` names units, not packages. The import-linter comparison translates each name.
+Gitignored entries, `__pycache__` and dot-entries are never `undeclared`.
+`baseline` without `--force` only removes resolved entries. It exits 1 when new findings remain.
+`new` never edits a registry. It prints the kind's next steps instead.
+`new` refuses an existing target unless `--force` is given, even in a dry run.
+
+### Related docs
+
+- [Repository health](/repo-release-tools/commands/repo-health/)
+- [Internal contracts](/repo-release-tools/reference/internal-contracts/)
+
+```text
+Usage:  rrt arch [OPTIONS] <arch_command>
+
+Check the tree against [tool.rrt.architecture], keep a shrink-only findings baseline, and render templates from .rrt/templates/.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  check       Report architecture findings against the baseline.
+  baseline    Seed or shrink .rrt/architecture.baseline.toml.
+  new         Render a template kind from .rrt/templates/<kind>/.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help  Show this message and exit.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Examples
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  $ rrt arch check --strict
+  $ rrt arch baseline --dry-run
+  $ rrt arch new step normalize --unit prepare --dry-run
+```
+
+### `rrt arch check`
+
+```text
+Usage:  rrt arch check [OPTIONS]
+
+Report findings; advisory unless --strict.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --strict     Exit 1 on any finding not in the baseline, or a stale baseline entry.
+  --root PATH  Project root directory (default: current directory).
+```
+
+### `rrt arch baseline`
+
+```text
+Usage:  rrt arch baseline [OPTIONS]
+
+Without a baseline, record today's findings. With one, remove resolved entries only; --force also adds new findings.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help   Show this message and exit.
+  --force      Rewrite the baseline with today's findings, including new ones.
+  --root PATH  Project root directory (default: current directory).
+  --dry-run    Preview without writing the baseline.
+```
+
+### `rrt arch new`
+
+```text
+Usage:  rrt arch new [OPTIONS] <kind> <name>
+
+Render every file of a kind with string.Template. All targets are checked before anything is written.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Arguments
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  <kind>             Template kind (a .rrt/templates/ dir).
+  <name>             Snake_case name, e.g. normalize.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Options
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -h, --help         Show this message and exit.
+  --unit UNIT        Declared unit to render into.
+  --force            Overwrite existing target files.
+  --check-templates  Self-test every kind with sample values; write nothing.
+  --root PATH        Project root directory (default: current directory).
+  --dry-run          Print each target and its body instead of writing.
+```
 
 ## `rrt artifacts`
 

@@ -448,6 +448,64 @@
         }
       }
     },
+    "architecture": {
+      "type": "object",
+      "description": "Declared architecture skeleton checked and scaffolded by `rrt arch`: a root package, its units, their roles and the layer order.",
+      "required": ["root"],
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Repo-relative path of the root package; unit paths are relative to it.",
+          "examples": ["src/mypkg"]
+        },
+        "top_level_files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files allowed directly under root besides unit packages and modules.",
+          "examples": [["__init__.py", "py.typed", "README.md"]]
+        },
+        "layers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Unit names from high to low in import-linter grammar: `a | b` independent siblings, `a : b` siblings that may import each other, `(a)` optional.",
+          "examples": [["api", "model | project", "errors"]]
+        },
+        "layers_sync": {
+          "type": "string",
+          "enum": ["importlinter", "none"],
+          "default": "none",
+          "description": "`importlinter` requires a [tool.importlinter] layers contract with containers = [root module] equal to `layers`."
+        },
+        "required_files": {
+          "type": "object",
+          "description": "Required files per role, checked in every existing package unit of that role.",
+          "additionalProperties": false,
+          "properties": {
+            "door": { "type": "array", "items": { "type": "string" } },
+            "unit": { "type": "array", "items": { "type": "string" } },
+            "foundation": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "units": {
+          "type": "array",
+          "description": "Declared units. A unit is a package (default: its name) or a single module, never both.",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "description": "Unit name, used in `layers` and `--unit`." },
+              "role": { "type": "string", "enum": ["door", "unit", "foundation"], "default": "unit" },
+              "package": { "type": "string", "description": "Package directory under root (default: name)." },
+              "module": { "type": "string", "description": "Single module `<module>.py` under root instead of a package." },
+              "prefix": { "type": "string", "description": "Template variable `unit_prefix` (default: the package or module name)." },
+              "required_files": { "type": "array", "items": { "type": "string" }, "description": "Extra required files beyond the role's (package units only)." }
+            }
+          }
+        }
+      }
+    },
     "artifact_protection": {
       "type": "object",
       "description": "Cross-pipeline artifact protection policy checked by the `rrt doctor` artifact-protection lens.",

@@ -3,6 +3,7 @@
 - **config**: typed `[[tool.rrt.commit_types]]` and `[[tool.rrt.branch_types]]` definitions (description, changelog section, changelog_required, bump impact, allowed commit types per branch type, slug policy); built-in types can be overridden field by field and `extra_*` lists stay as shorthand
 - **hooks**: commit-msg rejects a commit type the current branch type does not allow; errors list each type with its description; `check-commit-subject --branch` and MCP `rrt_validate_commit(branch=...)` apply the same restriction
 - **config**: `rrt config` lists every resolved commit and branch type
+- **arch**: `rrt arch check [--strict]`, `rrt arch baseline` and `rrt arch new` check and scaffold a declared `[tool.rrt.architecture]` skeleton: units, roles, layers, required files, Python layer imports read with `ast`, import-linter `layers-sync`, a shrink-only `.rrt/architecture.baseline.toml`, and `string.Template` kinds under `.rrt/templates/`
 
 ### Fixed
 - **hooks**: require exactly one space after the colon and none before it in commit subjects (`feat:x` and `feat : x` were accepted); changelog and bump history parsing stay lenient
