@@ -17,9 +17,9 @@ from repo_release_tools.config.arch_config import _load_architecture_config
 from repo_release_tools.config.model import parse_arch_layer
 
 DESIGN_EXAMPLE = {
-    "root": "src/spectrafit",
+    "root": "src/acme",
     "top_level_files": ["__init__.py", "errors.py", "py.typed", "README.md"],
-    "layers": ["mcp", "model | project", "steps | schema", "errors"],
+    "layers": ["api", "domain | storage", "core | models", "errors"],
     "layers_sync": "importlinter",
     "required_files": {
         "door": ["__init__.py", "README.md"],
@@ -27,12 +27,12 @@ DESIGN_EXAMPLE = {
         "foundation": ["__init__.py", "README.md"],
     },
     "units": [
-        {"name": "mcp", "role": "door"},
-        {"name": "model"},
-        {"name": "project"},
-        {"name": "prepare", "package": "prep", "role": "unit", "prefix": "prep"},
-        {"name": "steps", "role": "foundation"},
-        {"name": "schema", "role": "foundation", "required_files": ["py.typed"]},
+        {"name": "api", "role": "door"},
+        {"name": "domain"},
+        {"name": "storage"},
+        {"name": "transform", "package": "xform", "role": "unit", "prefix": "xform"},
+        {"name": "core", "role": "foundation"},
+        {"name": "models", "role": "foundation", "required_files": ["py.typed"]},
         {"name": "errors", "module": "errors", "role": "foundation"},
     ],
 }
@@ -44,30 +44,30 @@ def test_none_means_not_configured() -> None:
 
 
 def test_design_example_loads() -> None:
-    """The design's §1 example loads with every default applied."""
+    """The sample configuration loads with every default applied."""
     cfg = _load_architecture_config(DESIGN_EXAMPLE)
     assert cfg is not None
-    assert cfg.root == "src/spectrafit"
+    assert cfg.root == "src/acme"
     assert cfg.layers_sync == "importlinter"
-    prepare = cfg.unit_named("prepare")
-    assert prepare is not None
-    assert prepare.import_name == "prep"
-    assert prepare.entry_name == "prep"
-    assert prepare.template_prefix == "prep"
-    assert not prepare.is_module
+    transform = cfg.unit_named("transform")
+    assert transform is not None
+    assert transform.import_name == "xform"
+    assert transform.entry_name == "xform"
+    assert transform.template_prefix == "xform"
+    assert not transform.is_module
     errors = cfg.unit_named("errors")
     assert errors is not None
     assert errors.is_module
     assert errors.entry_name == "errors.py"
     assert errors.template_prefix == "errors"
     assert cfg.required_files_for(errors) == ()
-    schema = cfg.unit_named("schema")
-    assert schema is not None
-    assert cfg.required_files_for(schema) == ("__init__.py", "README.md", "py.typed")
-    model = cfg.unit_named("model")
-    assert model is not None
-    assert model.role == "unit"
-    assert model.import_name == "model"
+    models = cfg.unit_named("models")
+    assert models is not None
+    assert cfg.required_files_for(models) == ("__init__.py", "README.md", "py.typed")
+    domain = cfg.unit_named("domain")
+    assert domain is not None
+    assert domain.role == "unit"
+    assert domain.import_name == "domain"
     assert cfg.unit_named("nope") is None
 
 

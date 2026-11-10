@@ -73,7 +73,7 @@ def root_module_name(root_dir: Path, stop: Path | None = None) -> str:
     """Return the dotted module name of *root_dir*.
 
     Walks up while the parent directory has an ``__init__.py``:
-    ``src/spectrafit`` gives ``spectrafit``; ``src/a/b`` with
+    ``src/acme`` gives ``acme``; ``src/a/b`` with
     ``src/a/__init__.py`` gives ``a.b``. The walk never reaches *stop*
     (normally the repo root), so a stray ``__init__.py`` above it is ignored.
     """
