@@ -106,6 +106,7 @@ def test_register_tools_all_present() -> None:
         "rrt_release_check",
         "rrt_sync_check",
         "rrt_folder_check",
+        "rrt_arch_check",
         "rrt_docs_check",
         "rrt_git_dirty_tree",
         "rrt_git_commits_since",

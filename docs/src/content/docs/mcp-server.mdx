@@ -165,6 +165,7 @@ for a person to look at.
 | `rrt_sync_check` | sync, inspection | Newer upstream package versions (not idempotent — network) |
 | `rrt_folder_check` | folders, inspection | Folder structure policy violations |
 | `rrt_docs_check` | docs, inspection | `.rrt/docs.lock.toml` drift status |
+| `rrt_arch_check` | architecture, inspection | Findings against `[tool.rrt.architecture]` and its baseline, each `new`, `baselined` or `stale` |
 | `rrt_git_dirty_tree` | git, inspection | Every dirty path, each marked `generated` when it matches `[tool.rrt.git].generated` |
 | `rrt_git_commits_since` | git, inspection | Commits in `<ref>..HEAD` with `exclude` pathspecs left out; an unknown ref is an `error`, never a count of 0 |
 

@@ -126,6 +126,11 @@ Result of `rrt_folder_check`: one `FolderViolationEntry` per policy violation, g
 a `FolderTargetEntry` per matched target path, aggregated into `FolderCheckResponse` with
 an overall `ok` flag and `violation_count`.
 
+### `ArchFindingEntry` / `ArchTemplateEntry` / `ArchCheckResponse`
+Result of `rrt_arch_check`: one `ArchFindingEntry` per finding or stale baseline entry,
+each with a `new`, `baselined` or `stale` status. `ArchTemplateEntry` holds the optional
+template self-test. `ArchCheckResponse` carries the counts, `ok` and the CLI `exit_code`.
+
 ### `DocsCheckResponse`
 Result of `rrt_docs_check`: whether `.rrt/docs.lock.toml` is current against source-owned
 docs, with a `messages` list describing any drift found and a `skeleton_issues` list of
@@ -169,7 +174,7 @@ Methods:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -348,6 +353,44 @@ class FolderCheckResponse(BaseModel):
     ok: bool
     violation_count: int
     targets: list[FolderTargetEntry] = Field(default_factory=list)
+    error: str | None = None
+
+
+class ArchFindingEntry(BaseModel):
+    """One `rrt arch check` finding, classified against the baseline."""
+
+    kind: str
+    id: str
+    path: str
+    message: str
+    status: Literal["new", "baselined", "stale"]
+
+
+class ArchTemplateEntry(BaseModel):
+    """Self-test result for one `.rrt/templates/` kind."""
+
+    kind: str
+    ok: bool
+    problems: list[str] = Field(default_factory=list)
+
+
+class ArchCheckResponse(BaseModel):
+    """Architecture findings against `.rrt/architecture.baseline.toml`.
+
+    `exit_code` is what `rrt arch check` (plus `rrt arch new --check-templates`
+    when requested) would return with the same `strict` setting.
+    """
+
+    ok: bool
+    exit_code: int
+    strict: bool
+    root: str | None = None
+    baseline: str | None = None
+    new_count: int = 0
+    baselined_count: int = 0
+    stale_count: int = 0
+    findings: list[ArchFindingEntry] = Field(default_factory=list)
+    templates: list[ArchTemplateEntry] | None = None
     error: str | None = None
 
 

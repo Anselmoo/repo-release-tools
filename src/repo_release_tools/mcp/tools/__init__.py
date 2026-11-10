@@ -115,6 +115,13 @@ registrations in dependency order.
   source-owned docs. Read-only — never regenerates or writes files. Returns a
   `DocsCheckResponse` with `is_current` and any drift `messages`.
 
+### `arch_tools` → `rrt_arch_check`
+
+- **`rrt_arch_check`** — Checks the tree against `[tool.rrt.architecture]` and
+  `.rrt/architecture.baseline.toml`, optionally self-testing `.rrt/templates/` kinds.
+  Read-only — never writes the baseline or renders a template. Returns an
+  `ArchCheckResponse` with one `ArchFindingEntry` per finding (`new`, `baselined`, `stale`).
+
 ## Response conventions
 
 All tools return Pydantic models (see `mcp.models`) serialised to JSON by FastMCP.
@@ -135,6 +142,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from .arch_tools import register as register_arch
 from .changelog_tools import register as register_changelog
 from .config_tools import register as register_config
 from .docs_tools import register as register_docs
@@ -164,4 +172,5 @@ def register_tools(mcp: FastMCP) -> None:
     register_sync(mcp)
     register_folder(mcp)
     register_docs(mcp)
+    register_arch(mcp)
     register_gate(mcp)

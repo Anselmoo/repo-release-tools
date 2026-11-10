@@ -141,15 +141,40 @@ def _error(p: DryRunPrinter, message: str) -> int:
     return 1
 
 
-def _load_architecture(p: DryRunPrinter, repo_root: Path) -> tuple[ArchitectureConfig | None, int]:
-    """Return the architecture config, or ``(None, 1)`` after printing why."""
+class ArchCheckError(Exception):
+    """Raised when the architecture check cannot run; the message says why."""
+
+
+def load_architecture(repo_root: Path) -> ArchitectureConfig:
+    """Return the ``[tool.rrt.architecture]`` config, or raise :class:`ArchCheckError`."""
     try:
         config = load_config(repo_root)
     except (FileNotFoundError, ValueError) as exc:
-        return None, _error(p, f"Could not load [tool.rrt] config: {exc}")
+        raise ArchCheckError(f"Could not load [tool.rrt] config: {exc}") from exc
     if config.architecture is None:
-        return None, _error(p, "[tool.rrt.architecture] is not configured.")
-    return config.architecture, 0
+        raise ArchCheckError("[tool.rrt.architecture] is not configured.")
+    return config.architecture
+
+
+def load_arch_findings(repo_root: Path) -> tuple[ArchitectureConfig, list[Finding]]:
+    """Return the config and its findings for a resolved *repo_root*.
+
+    Shared by ``rrt arch check``, ``rrt-hooks arch-check`` and the
+    ``rrt_arch_check`` MCP tool. Raises :class:`ArchCheckError` when the
+    config is missing or its root does not exist.
+    """
+    arch = load_architecture(repo_root)
+    if not (repo_root / arch.root).is_dir():
+        raise ArchCheckError(f"Architecture root {arch.root!r} does not exist.")
+    return arch, collect_findings(arch, repo_root, is_ignored=_git_ignore_filter(repo_root))
+
+
+def _load_architecture(p: DryRunPrinter, repo_root: Path) -> tuple[ArchitectureConfig | None, int]:
+    """Return the architecture config, or ``(None, 1)`` after printing why."""
+    try:
+        return load_architecture(repo_root), 0
+    except ArchCheckError as exc:
+        return None, _error(p, str(exc))
 
 
 def _git_ignore_filter(repo_root: Path) -> Callable[[list[str]], set[str]]:
@@ -167,12 +192,10 @@ def _findings(
 ) -> tuple[Path, ArchitectureConfig | None, list[Finding], int]:
     """Resolve the root, load config and collect findings; exit code 1 on failure."""
     repo_root = Path(opts.root).resolve()
-    arch, code = _load_architecture(p, repo_root)
-    if arch is None:
-        return repo_root, None, [], code
-    if not (repo_root / arch.root).is_dir():
-        return repo_root, None, [], _error(p, f"Architecture root {arch.root!r} does not exist.")
-    findings = collect_findings(arch, repo_root, is_ignored=_git_ignore_filter(repo_root))
+    try:
+        arch, findings = load_arch_findings(repo_root)
+    except ArchCheckError as exc:
+        return repo_root, None, [], _error(p, str(exc))
     return repo_root, arch, findings, 0
 
 
@@ -346,6 +369,34 @@ def _check_templates(
         return _error(p, f"{failed} of {len(results)} kind(s) failed the self-test.")
     p.footer(f"Done. {len(results)} kind(s) ok")
     return 0
+
+
+def cmd_arch_hook(args: argparse.Namespace) -> int:
+    """Run ``rrt-hooks arch-check``: a strict check, then the optional template self-test.
+
+    Both steps always run, so one hook run reports every problem; the exit
+    code is 1 if either step fails.
+    """
+    opts = ArchOptions.from_args(args)
+    check_args = argparse.Namespace(root=opts.root, verbose=opts.verbose, strict=True)
+    code = cmd_arch_check(check_args)
+    if opts.check_templates:
+        new_args = argparse.Namespace(
+            root=opts.root, verbose=opts.verbose, check_templates=True, dry_run=False
+        )
+        code = max(code, cmd_arch_new(new_args))
+    return code
+
+
+def _add_arch_hook_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the ``rrt-hooks arch-check`` flags; the shared spec for that hook."""
+    parser.add_argument(
+        "--check-templates",
+        action="store_true",
+        default=False,
+        help="Also self-test every .rrt/templates/ kind (rrt arch new --check-templates).",
+    )
+    _add_root_flag(parser)
 
 
 def _add_root_flag(parser: argparse.ArgumentParser) -> None:
