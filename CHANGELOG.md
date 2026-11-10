@@ -1,4 +1,6 @@
 ## [Unreleased]
+
+## [1.20.0] - 2026-11-10
 ### Added
 - **config**: typed `[[tool.rrt.commit_types]]` and `[[tool.rrt.branch_types]]` definitions (description, changelog section, changelog_required, bump impact, allowed commit types per branch type, slug policy); built-in types can be overridden field by field and `extra_*` lists stay as shorthand
 - **hooks**: commit-msg rejects a commit type the current branch type does not allow; errors list each type with its description; `check-commit-subject --branch` and MCP `rrt_validate_commit(branch=...)` apply the same restriction

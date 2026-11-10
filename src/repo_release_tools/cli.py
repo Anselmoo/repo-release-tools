@@ -377,7 +377,7 @@ class RrtArgumentParser(argparse.ArgumentParser):
             help_text += cast("RrtHelpFormatter", formatter).format_epilog(self.epilog)
         return help_text
 
-    def print_help(self, file: IO[str] | None = None) -> None:  # type: ignore[override]  # ty: ignore[invalid-method-override]
+    def print_help(self, file: IO[str] | None = None) -> None:  # type: ignore[override]  # ty: ignore[incompatible-method-override]
         """Write help text to *file* (defaults to stdout)."""
         if file is None:
             file = sys.stdout
