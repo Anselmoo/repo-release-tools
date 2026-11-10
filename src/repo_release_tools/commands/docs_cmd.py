@@ -1125,7 +1125,9 @@ def _cmd_map(args: argparse.Namespace) -> int:
     )
 
     opts = MapOptions.from_args(args)
-    cwd = Path(opts.root)
+    # Resolve once at the boundary: the map helpers resolve the map root and
+    # call ``relative_to(repo_root)``, which fails against a relative ``"."``.
+    cwd = Path(opts.root).resolve()
     docs_cfg = _config_for_cwd(cwd)
     p = DryRunPrinter(dry_run=opts.dry_run, verbose=opts.verbose)
 
