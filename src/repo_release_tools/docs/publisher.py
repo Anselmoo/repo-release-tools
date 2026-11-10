@@ -220,6 +220,7 @@ def _get_command_doc_modules() -> dict[str, object]:
     from repo_release_tools.commands import (  # noqa: PLC0415
         action_cmd,
         agents_cmd,
+        arch_cmd,
         artifacts_cmd,
         changelog_cmd,
         ci_version,
@@ -242,6 +243,7 @@ def _get_command_doc_modules() -> dict[str, object]:
     return {
         "action": action_cmd,
         "agents": agents_cmd,
+        "arch": arch_cmd,
         "artifacts": artifacts_cmd,
         "branch": branch_module,
         "bump": bump_module,

@@ -4,6 +4,7 @@ from repo_release_tools.folders.core import (
     check_folders,
     resolve_template_catalog,
     scaffold_folders,
+    scan_directory,
 )
 from repo_release_tools.folders.designer import (
     capture_template,
@@ -16,4 +17,5 @@ __all__ = [
     "render_captured_template_toml",
     "resolve_template_catalog",
     "scaffold_folders",
+    "scan_directory",
 ]

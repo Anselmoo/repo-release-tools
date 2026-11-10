@@ -12,6 +12,7 @@ from typing import cast
 
 from repo_release_tools.conventions import TypeRegistry, build_registry
 
+from .arch_config import _load_architecture_config
 from .artifact_protection import _load_artifact_protection
 from .docs_config import _VALID_LANGUAGES, _load_docs_config, _load_eol_config
 from .folders_config import _load_folders_config
@@ -44,6 +45,10 @@ from .model import (
     VALID_TARGET_KINDS,
     VALID_UPSTREAM_PROVIDERS,
     VALID_VERSION_SCHEMES,
+    ArchitectureConfig,
+    ArchLayer,
+    ArchLayerEntry,
+    ArchUnit,
     ArtifactProtection,
     ArtifactTarget,
     CommandGroupEntry,
@@ -857,6 +862,7 @@ def load_config_from_path(root: Path, config_file: Path) -> RrtConfig:
         eol=_load_eol_config(raw.get("eol")),
         docs=_load_docs_config(raw.get("docs"), root=root),
         folders=_load_folders_config(raw.get("folders")),
+        architecture=_load_architecture_config(raw.get("architecture")),
         artifact_protection=_load_artifact_protection(raw.get("artifact_protection")),
         git=_load_git_config(raw.get("git")),
         gates=_load_gates(raw.get("gates")),
@@ -1688,6 +1694,10 @@ __all__ = [
     "VALID_TARGET_KINDS",
     "VALID_UPSTREAM_PROVIDERS",
     "_VALID_LANGUAGES",
+    "ArchitectureConfig",
+    "ArchLayer",
+    "ArchLayerEntry",
+    "ArchUnit",
     "ArtifactProtection",
     "ConsumedArtifact",
     "DocsConfig",

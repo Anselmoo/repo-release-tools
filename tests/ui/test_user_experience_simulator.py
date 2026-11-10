@@ -54,6 +54,7 @@ Affected entrypoints:
 -   tree    Show a project tree with gitignore-aware filtering
 -   docs    Extract and manage source-owned documentation blocks
 -   drift   Lock and check agent-surface drift
+-   arch    Check and scaffold a declared architecture skeleton
 
 ## Git Workflow
 -   branch  Branch management helpers for conventional branch naming

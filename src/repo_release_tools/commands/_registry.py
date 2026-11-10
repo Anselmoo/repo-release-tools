@@ -178,6 +178,7 @@ def ensure_registered() -> None:
     from repo_release_tools.commands import (  # noqa: F401
         action_cmd,
         agents_cmd,
+        arch_cmd,
         artifacts_cmd,
         branch,
         bump,

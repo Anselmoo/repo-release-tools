@@ -214,12 +214,12 @@ def test_ensure_registered_is_idempotent() -> None:
         assert _registry.registry._specs[name] is spec
 
 
-def test_real_registry_has_all_29_top_level_commands() -> None:
+def test_real_registry_has_all_30_top_level_commands() -> None:
     _registry.ensure_registered()
     names = set(_registry.registry._specs)
 
-    assert len(names) == 29
-    assert {"mcp", "project"} <= names
+    assert len(names) == 30
+    assert {"arch", "mcp", "project"} <= names
 
 
 def test_every_registered_command_is_visible_in_groups_by_label() -> None:
@@ -246,7 +246,7 @@ def test_docs_publisher_import_without_cli_first_populates_all_groups() -> None:
             "-c",
             "from repo_release_tools.docs import publisher\n"
             "names = {n for _, _, cmds in publisher.COMMAND_GROUPS_CONFIG for n in cmds}\n"
-            "assert len(names) == 29, sorted(names)\n",
+            "assert len(names) == 30, sorted(names)\n",
         ],
         capture_output=True,
         check=False,

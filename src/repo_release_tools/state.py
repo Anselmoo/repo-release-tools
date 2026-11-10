@@ -19,6 +19,8 @@ _TREE_LOCK_NAME = "tree.lock.toml"
 _ARTIFACTS_LOCK_NAME = "artifacts.lock.toml"
 _DRIFT_LOCK_NAME = "drift.lock.toml"
 _DOCS_MAP_LOCK_NAME = "docs_map.lock.toml"
+_ARCH_BASELINE_NAME = "architecture.baseline.toml"
+_ARCH_TEMPLATES_NAME = "templates"
 _TREE_MANIFEST_NAME = "tree.manifest.json"
 _TREE_MANIFEST_GZ_NAME = "tree.manifest.json.gz"
 
@@ -31,6 +33,7 @@ TREE_LOCK_NAME = _TREE_LOCK_NAME
 ARTIFACTS_LOCK_NAME = _ARTIFACTS_LOCK_NAME
 DRIFT_LOCK_NAME = _DRIFT_LOCK_NAME
 DOCS_MAP_LOCK_NAME = _DOCS_MAP_LOCK_NAME
+ARCH_BASELINE_NAME = _ARCH_BASELINE_NAME
 TREE_MANIFEST_NAME = _TREE_MANIFEST_NAME
 TREE_MANIFEST_GZ_NAME = _TREE_MANIFEST_GZ_NAME
 
@@ -44,6 +47,7 @@ TREE_LOCK_DEFAULT = f"{_RRT_DIR}/{_TREE_LOCK_NAME}"
 ARTIFACTS_LOCK_DEFAULT = f"{_RRT_DIR}/{_ARTIFACTS_LOCK_NAME}"
 DRIFT_LOCK_DEFAULT = f"{_RRT_DIR}/{_DRIFT_LOCK_NAME}"
 DOCS_MAP_LOCK_DEFAULT = f"{_RRT_DIR}/{_DOCS_MAP_LOCK_NAME}"
+ARCH_BASELINE_DEFAULT = f"{_RRT_DIR}/{_ARCH_BASELINE_NAME}"
 
 
 def rrt_dir(root: Path) -> Path:
@@ -89,6 +93,16 @@ def docs_map_lock_path(root: Path, lock_file: str = _DOCS_MAP_LOCK_NAME) -> Path
     if p.is_absolute():
         return p
     return root / p if p.parts[0] == _RRT_DIR else root / _RRT_DIR / p
+
+
+def arch_baseline_path(root: Path) -> Path:
+    """Return the path to the architecture findings baseline."""
+    return root / _RRT_DIR / _ARCH_BASELINE_NAME
+
+
+def arch_templates_dir(root: Path) -> Path:
+    """Return the ``.rrt/templates/`` directory read by ``rrt arch new``."""
+    return root / _RRT_DIR / _ARCH_TEMPLATES_NAME
 
 
 def tree_manifest_path(root: Path) -> Path:
@@ -614,3 +628,61 @@ def _dict_to_toml(d: dict[str, Any], _prefix: str = "") -> str:
             out += "\n".join(scalars)
 
     return out.rstrip() + "\n"
+
+
+# ---------------------------------------------------------------------------
+# Architecture baseline (shrink-only list of accepted `rrt arch check` findings)
+# ---------------------------------------------------------------------------
+
+
+def read_arch_baseline(path: Path) -> list[str] | None:
+    """Return the baselined finding ids, or ``None`` when no baseline exists."""
+    if not path.exists():
+        return None
+    baseline = read_lock(path).get("baseline", {})
+    findings = baseline.get("findings", []) if isinstance(baseline, dict) else []
+    return sorted(str(item) for item in findings)
+
+
+def arch_baseline_diff(path: Path, findings: list[str]) -> tuple[list[str], list[str]]:
+    """Return ``(new, stale)``: findings absent from the baseline, and entries no longer found."""
+    recorded = set(read_arch_baseline(path) or [])
+    current = set(findings)
+    return sorted(current - recorded), sorted(recorded - current)
+
+
+def arch_baseline_compare(path: Path, findings: list[str]) -> tuple[bool, list[str]]:
+    """Return ``(is_current, diffs)`` in the ``*_is_current`` shape.
+
+    Each diff line is ``"new: <id>"`` or ``"stale: <id>"``.
+    """
+    new, stale = arch_baseline_diff(path, findings)
+    diffs = [f"new: {item}" for item in new] + [f"stale: {item}" for item in stale]
+    return not diffs, diffs
+
+
+def write_arch_baseline(path: Path, findings: list[str]) -> bool:
+    """Write *findings* as the baseline when the list changed; return whether it wrote.
+
+    The file is never rewritten for an unchanged list, so ``generated_at``
+    does not churn. Arrays are written one id per line for reviewable diffs.
+    """
+    entries = sorted(set(findings))
+    if read_arch_baseline(path) == entries:
+        return False
+    lines = [
+        "[meta]",
+        f"generated_at = {_toml_value(now_utc())}",
+        f"rrt_version = {_toml_value(__version__)}",
+        "",
+        "[baseline]",
+    ]
+    if entries:
+        lines.append("findings = [")
+        lines.extend(f"    {_toml_value(item)}," for item in entries)
+        lines.append("]")
+    else:
+        lines.append("findings = []")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return True

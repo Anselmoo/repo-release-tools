@@ -98,6 +98,40 @@ def check_folders(
     )
 
 
+def scan_directory(
+    *,
+    base_path: Path,
+    root: Path,
+    name: str,
+    required_files: tuple[str, ...] = (),
+    allowed_files: tuple[str, ...] = (),
+    allowed_dirs: tuple[str, ...] = (),
+    allow_patterns: tuple[str, ...] = (),
+    exact: bool = False,
+) -> tuple[FolderViolation, ...]:
+    """Check one directory with the folder scanners, outside any folder policy.
+
+    Reports ``missing-file`` for each absent *required_files* entry and, when
+    *exact* is set, ``unexpected-entry`` for each child not allowed. Paths
+    are relative to *root*. ``rrt arch check`` reuses this.
+    """
+    rule = _EffectiveRule(
+        name=name,
+        selector=".",
+        mode="strict",
+        exact=exact,
+        required_files=required_files,
+        required_dirs=(),
+        allowed_files=allowed_files,
+        allowed_dirs=allowed_dirs,
+        allow_patterns=allow_patterns,
+        scaffold_dirs=(),
+        scaffold_files=(),
+        content_checks=(),
+    )
+    return _check_one_target(base_path=base_path, root=root, rule=rule).violations
+
+
 def scaffold_folders(
     *,
     root: Path,

@@ -227,6 +227,13 @@ def _cmd_validate(root: Path) -> int:
         except ValueError as exc:
             errors.append(f"folders config: {exc}")
 
+    if conf.architecture is not None:
+        try:
+            conf.architecture.validate()
+            p.ok("architecture config: valid")
+        except ValueError as exc:
+            errors.append(f"architecture config: {exc}")
+
     if errors:
         p.blank_line()
         p.line(f"{len(errors)} validation error(s):", ok=False)
